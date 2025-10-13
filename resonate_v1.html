@@ -1,0 +1,1021 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>Resonate</title>
+<style>
+  :root {
+    --bg:#0f1115; --fg:#e7e9ee; --muted:#9aa3af; --accent:#6ee7b7; --card:#171922; --btn:#1f2330;
+    --error:#ff6b6b;
+  }
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font:16px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial}
+  .wrap{display:flex;flex-direction:column;min-height:100%}
+  header{padding:14px 16px;background:linear-gradient(180deg,#111423,#0f1115);}
+  h1{font-size:18px;margin:0 0 8px}
+  .sub{color:var(--muted);font-size:13px}
+  .art{aspect-ratio:1/1;width:100%;margin:16px auto;border-radius:16px;overflow:hidden;background:var(--card);display:grid;place-items:center}
+  .art img{width:100%;height:100%;object-fit:cover}
+  .meta{max-width:100%;margin:0 auto;padding:0 16px}
+  .title{font-weight:600;font-size:18px;margin:8px 0 4px}
+  .creator{color:var(--muted);font-size:14px;margin:0 0 8px}
+  .controls{position:sticky;bottom:0;background:rgba(15,17,21,.9);backdrop-filter:saturate(140%) blur(8px);box-shadow:0 -10px 30px rgba(0,0,0,.35);z-index:5}
+  .bar{display:flex;gap:6px;align-items:center;padding:12px 12px;max-width:880px;margin:0 auto}
+  select,button{appearance:none;border:0;border-radius:12px;background:var(--btn);color:var(--fg);padding:12px 14px;font-size:16px}
+  button{cursor:pointer}
+  .pill{padding:10px 12px;border-radius:999px;background:#121522}
+  .grow{flex:1}
+  .time{font-variant-numeric:tabular-nums;color:var(--muted);font-size:12px}
+  .next{background:var(--accent);color:#0a0f0c;font-weight:700}
+  .hint{color:var(--muted);font-size:12px;margin-top:4px}
+  .overlay{position:fixed;inset:0;background:#0a0f0c;display:flex;align-items:center;justify-content:center;z-index:10}
+  .card{background:rgb(110, 231, 183);padding:22px;border-radius:16px;text-align:center;max-width:360px}
+  .card h2{margin:0 0 8px}
+  .sr{position:absolute;left:-9999px}
+  
+  /* Nuevos estilos para la descripción mejorada */
+  .description-section {
+    padding: 0 16px 16px;
+    max-width: 880px;
+    margin: 0 auto;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .view-desc-btn {
+    background: transparent;
+    border: 1px solid var(--muted);
+    color: var(--muted);
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    margin: 8px 0 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    opacity: 0.7;
+  }
+  .view-desc-btn:hover {
+    opacity: 1;
+    background: rgba(158, 158, 158, 0.1);
+  }
+  .description-container {
+    display: none;
+    background: var(--card);
+    border-radius: 8px;
+    margin: 8px 0 0;
+    padding: 12px;
+    border-left: 3px solid var(--accent);
+  }
+  .description-container.expanded {
+    display: block;
+    animation: fadeIn 0.3s ease;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .description-content {
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.4;
+  }
+  /* Estilos para contenido HTML dentro de la descripción */
+  .description-content p {
+    margin: 0 0 8px 0;
+  }
+  .description-content ul, .description-content ol {
+    margin: 8px 0;
+    padding-left: 20px;
+  }
+  .description-content li {
+    margin: 4px 0;
+  }
+  .description-content strong {
+    color: var(--fg);
+  }
+  .description-content em {
+    font-style: italic;
+  }
+  .description-content a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .description-content a:hover {
+    text-decoration: underline;
+  }
+  .description-content blockquote {
+    border-left: 3px solid var(--muted);
+    padding-left: 12px;
+    margin: 8px 0;
+    color: var(--fg);
+  }
+  
+  /* Mejora de usabilidad - botón más discreto */
+  .desc-btn-container {
+    text-align: right;
+    margin-top: 4px;
+  }
+
+  /* Indicador de carga */
+  .loader {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--muted);
+    border-radius: 50%;
+    border-top-color: var(--accent);
+    animation: spin 0.8s ease infinite;
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* Estilos para la sección de errores de audio */
+  .audio-errors-section {
+    padding: 0 16px 16px;
+    max-width: 880px;
+    margin: 0 auto;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .audio-errors-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .view-errors-btn {
+    background: transparent;
+    border: 1px solid var(--muted);
+    color: var(--muted);
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    opacity: 0.7;
+  }
+  .view-errors-btn:hover {
+    opacity: 1;
+    background: rgba(158, 158, 158, 0.1);
+  }
+  .audio-errors-container {
+    display: none;
+    background: var(--card);
+    border-radius: 8px;
+    margin: 8px 0 0;
+    padding: 12px;
+    border-left: 3px solid var(--error);
+    max-height: 200px;
+    overflow-y: auto;
+    font-size: 12px;
+  }
+  .audio-errors-container.expanded {
+    display: block;
+    animation: fadeIn 0.3s ease;
+  }
+  .error-item {
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(158, 158, 158, 0.2);
+  }
+  .error-item:last-child {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+  }
+  .error-time {
+    color: var(--error);
+    font-weight: bold;
+    margin-right: 8px;
+  }
+  .error-message {
+    color: var(--muted);
+    word-break: break-word;
+  }
+  .clear-errors-btn {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 12px;
+    text-decoration: underline;
+  }
+  .clear-errors-btn:hover {
+    color: var(--error);
+  }
+  
+  /* Formato de audio indicador */
+  .format-indicator {
+    font-size: 10px;
+    color: var(--muted);
+    margin-left: 8px;
+    padding: 2px 6px;
+    background: rgba(158, 158, 158, 0.1);
+    border-radius: 4px;
+  }
+  
+  /* Mensaje de advertencia */
+  .warning {
+    color: var(--error);
+    font-size: 12px;
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .warning::before {
+    content: "⚠";
+  }
+  
+  /* Estado del proxy */
+  .proxy-status {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  .proxy-status.working {
+    color: var(--accent);
+  }
+  .proxy-status.failed {
+    color: var(--error);
+  }
+
+  /* Botón deshabilitado */
+  button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Resonate</h1>
+    <div class="sub" id="proxy-status">Proxy: Probando servicios disponibles...</div>
+  </header>
+
+  <main class="meta">
+    <div class="art" id="art"><span class="hint">Sin portada.</span></div>
+    <div class="title" id="t">Cargando música…</div>
+    <div class="creator" id="c"></div>
+    
+    <div class="hint">Algunas pistas pueden tomar segundos en iniciar.</div>
+    <div class="hint">Fuente: archive.org</div>
+    <div class="warning" id="format-warning" style="display: none;">
+      Esta pista podría no ser compatible con tu navegador. Probaremos formatos alternativos.
+    </div>
+  </main>
+
+  <div class="controls">
+    <div class="bar">
+      <button id="play" aria-label="Reproducir/Pausar">Play</button>
+      <button id="next" class="next" title="Saltar">Next</button>
+      <div class="grow"></div>
+      <label class="sr" for="genre">Género</label>
+      <select id="genre" title="Género">
+        <option value="classical" selected>Classical</option>
+        <option value="blues">Blues</option>
+        <option value="jazz">Jazz</option>
+        <option value="rock">Rock</option>
+      </select>
+      <span class="pill time"><span id="cur">0:00</span> : <span id="dur">0:00</span></span>
+    </div>
+    
+    <!-- Sección de descripción integrada en controles -->
+    <div class="description-section">
+      <div class="desc-btn-container">
+        <button class="view-desc-btn" id="view-desc-btn" style="display: none;">
+          info
+        </button>
+      </div>
+      <div class="description-container" id="desc-container">
+        <div class="description-content" id="d"></div>
+      </div>
+    </div>
+
+    <!-- Nueva sección para visualización de errores de audio -->
+    <div class="audio-errors-section">
+      <div class="audio-errors-header">
+        <button class="view-errors-btn" id="view-errors-btn">
+          Ver errores de audio
+        </button>
+        <button class="clear-errors-btn" id="clear-errors-btn">Limpiar</button>
+      </div>
+      <div class="audio-errors-container" id="errors-container">
+        <div id="errors-list"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Overlay para habilitar autoplay en móvil -->
+<div class="overlay" id="gate">
+    <button id="start">Start Resonate</button>
+</div>
+
+<audio id="audio" crossorigin="anonymous" preload="auto"></audio>
+
+<script>
+/* ===== Config de géneros → consultas de búsqueda en IA ===== */
+const GENRE_QUERIES = {
+  blues:     'mediatype:(audio) AND (subject:("Blues" OR "blues"))',
+  classical: 'mediatype:(audio) AND (subject:("Classical" OR "classical"))',
+  jazz:      'mediatype:(audio) AND (subject:("Jazz" OR "jazz"))',
+  rock:      'mediatype:(audio) AND (subject:("Rock" OR "rock"))',
+};
+
+// Formatos de archivo reproducibles en orden de preferencia
+const AUDIO_FORMATS = [
+  'MP3', 'VBR MP3', '64Kbps MP3', '128Kbps MP3', 
+  'Ogg Vorbis', 'VBR Ogg', 
+  'Flac'
+];
+
+// Formatos compatibles con el elemento audio de HTML5
+const HTML5_SUPPORTED_FORMATS = {
+  'mp3': 'audio/mpeg',
+  'ogg': 'audio/ogg',
+  'wav': 'audio/wav',
+  'flac': 'audio/flac',
+  'm4a': 'audio/mp4'
+};
+
+// Lista de proxies CORS con sus URLs y métodos
+const CORS_PROXIES = [
+  {
+    name: 'CorsProxy.io',
+    url: 'https://corsproxy.io/?',
+    encode: true,
+    testUrl: 'https://corsproxy.io/'
+  },
+  {
+    name: 'AllOrigins',
+    url: 'https://api.allorigins.win/raw?url=',
+    encode: true,
+    testUrl: 'https://api.allorigins.win/'
+  },
+  {
+    name: 'CorsAnywhere',
+    url: 'https://cors-anywhere.herokuapp.com/',
+    encode: false,
+    testUrl: 'https://cors-anywhere.herokuapp.com/'
+  }
+];
+
+// Proxy actual seleccionado
+let currentProxy = null;
+let proxyTestInProgress = false;
+
+const $ = sel => document.querySelector(sel);
+const audio = $('#audio');
+const art   = $('#art');
+const title = $('#t');
+const creator = $('#c');
+const description = $('#d');
+const descContainer = $('#desc-container');
+const viewDescBtn = $('#view-desc-btn');
+const cur = $('#cur');
+const dur = $('#dur');
+const playBtn = $('#play');
+const nextBtn = $('#next');
+const genreSel = $('#genre');
+const gate = $('#gate');
+const startBtn = $('#start');
+const viewErrorsBtn = $('#view-errors-btn');
+const clearErrorsBtn = $('#clear-errors-btn');
+const errorsContainer = $('#errors-container');
+const errorsList = $('#errors-list');
+const formatWarning = $('#format-warning');
+const proxyStatus = $('#proxy-status');
+
+let currentGenre = 'classical';
+let cache = {}; // cache por género: lista de {id, file, title, creator, image}
+let currentDescription = '';
+let audioErrors = [];
+let currentTrack = null;
+let formatAttempts = 0;
+let isLoading = false;
+let currentAudioLoad = null;
+let abortController = null;
+
+/* ===== Utilidades ===== */
+const pad = n => String(Math.floor(n)).padStart(2,'0');
+function fmtTime(s){
+  if(!isFinite(s) || s<0) return '0:00';
+  const m = Math.floor(s/60), r = Math.floor(s%60);
+  return `${m}:${pad(r)}`;
+}
+
+function setArt(id){
+  art.innerHTML = '';
+  const img = new Image();
+  img.alt = 'Portada';
+  img.referrerPolicy = 'no-referrer';
+  img.crossOrigin = 'Anonymous'; // Añadido para evitar problemas CORS con imágenes
+  // Usar proxy para imágenes si es necesario
+  const imageUrl = `https://archive.org/services/img/${encodeURIComponent(id)}`;
+  img.src = imageUrl;
+  img.onerror = () => { 
+    // Intentar con proxy si falla la carga directa
+    if (currentProxy) {
+      img.src = getProxyUrl(imageUrl);
+      img.onerror = () => { 
+        art.innerHTML = '<span class="hint">Sin portada</span>'; 
+      };
+    } else {
+      art.innerHTML = '<span class="hint">Sin portada</span>'; 
+    }
+  };
+  art.appendChild(img);
+}
+
+// Función para obtener URL con proxy
+function getProxyUrl(url) {
+  if (!currentProxy) return url;
+  
+  if (currentProxy.encode) {
+    return currentProxy.url + encodeURIComponent(url);
+  } else {
+    return currentProxy.url + url;
+  }
+}
+
+// Función para probar proxies y seleccionar uno que funcione
+async function testProxies() {
+  if (proxyTestInProgress) return;
+  proxyTestInProgress = true;
+  
+  proxyStatus.textContent = "Proxy: Probando servicios disponibles...";
+  
+  // Probar cada proxy
+  for (const proxy of CORS_PROXIES) {
+    try {
+      proxyStatus.textContent = `Proxy: Probando ${proxy.name}...`;
+      
+      // Hacer una solicitud de prueba simple
+      const testResponse = await fetch(proxy.testUrl, { 
+        method: 'HEAD',
+        cache: 'no-cache'
+      });
+      
+      // Si la solicitud tiene éxito, usar este proxy
+      if (testResponse.status < 400) {
+        currentProxy = proxy;
+        proxyStatus.textContent = `Proxy: ${proxy.name} (Activo)`;
+        proxyStatus.className = 'sub proxy-status working';
+        proxyTestInProgress = false;
+        return true;
+      }
+    } catch (error) {
+      console.log(`Proxy ${proxy.name} falló:`, error);
+      continue;
+    }
+  }
+  
+  // Si ningún proxy funciona, intentar sin proxy
+  proxyStatus.textContent = "Proxy: Ninguno disponible - intentando sin proxy";
+  proxyStatus.className = 'sub proxy-status failed';
+  currentProxy = null;
+  proxyTestInProgress = false;
+  return false;
+}
+
+// Función para hacer fetch con manejo de errores CORS
+async function fetchWithCorsFallback(url, options = {}) {
+  // Cancelar cualquier solicitud anterior
+  if (abortController) {
+    abortController.abort();
+  }
+  abortController = new AbortController();
+  
+  const fetchOptions = {
+    ...options,
+    signal: abortController.signal
+  };
+  
+  // Primero intentar sin proxy
+  try {
+    const response = await fetch(url, fetchOptions);
+    if (response.ok) return response;
+    throw new Error(`HTTP ${response.status}`);
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw error;
+    }
+    
+    console.log('Direct fetch failed, trying with proxy...');
+    
+    // Si no hay proxy configurado, probar encontrar uno
+    if (!currentProxy) {
+      await testProxies();
+    }
+    
+    // Si tenemos un proxy, intentar con él
+    if (currentProxy) {
+      try {
+        const proxyUrl = getProxyUrl(url);
+        const response = await fetch(proxyUrl, fetchOptions);
+        if (response.ok) return response;
+        throw new Error(`Proxy HTTP ${response.status}`);
+      } catch (proxyError) {
+        if (proxyError.name === 'AbortError') {
+          throw proxyError;
+        }
+        
+        console.error('Proxy fetch failed:', proxyError);
+        
+        // Marcar proxy como fallado y probar otro
+        const failedProxy = currentProxy;
+        currentProxy = null;
+        addAudioError({message: `Proxy ${failedProxy.name} falló, probando alternativas...`});
+        
+        // Probar otros proxies
+        await testProxies();
+        
+        if (currentProxy) {
+          // Reintentar con el nuevo proxy
+          const proxyUrl = getProxyUrl(url);
+          return await fetch(proxyUrl, fetchOptions);
+        }
+        
+        throw new Error('Todos los proxies fallaron');
+      }
+    }
+    
+    throw new Error('No se pudo cargar el recurso');
+  }
+}
+
+// Función para verificar si un formato es compatible con HTML5
+function isFormatSupported(filename) {
+  if (!filename) return false;
+  
+  const ext = filename.split('.').pop().toLowerCase();
+  return HTML5_SUPPORTED_FORMATS.hasOwnProperty(ext);
+}
+
+// Función para obtener el tipo MIME de un archivo
+function getMimeType(filename) {
+  if (!filename) return 'audio/mpeg'; // Valor por defecto
+  
+  const ext = filename.split('.').pop().toLowerCase();
+  return HTML5_SUPPORTED_FORMATS[ext] || 'audio/mpeg';
+}
+
+// Función para sanitizar y procesar HTML de forma segura
+function processDescriptionHTML(html) {
+  // Crear elemento temporal para procesar el HTML
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = html;
+  
+  // Permitir solo etiquetas básicas y seguras
+  const allowedTags = ['p', 'br', 'strong', 'em', 'b', 'i', 'u', 'a', 'ul', 'ol', 'li', 'blockquote'];
+  const allowedAttributes = ['href', 'target'];
+  
+  // Recorrer todos los elementos y limpiar
+  const cleanNodes = (node) => {
+    if (node.nodeType === 3) { // Text node
+      return document.createTextNode(node.textContent);
+    }
+    
+    if (node.nodeType === 1 && allowedTags.includes(node.tagName.toLowerCase())) {
+      const newNode = document.createElement(node.tagName);
+      
+      // Copiar atributos permitidos
+      if (node.attributes) {
+        for (const attr of node.attributes) {
+          if (allowedAttributes.includes(attr.name.toLowerCase())) {
+            newNode.setAttribute(attr.name, attr.value);
+          }
+        }
+      }
+      
+      // Procesar hijos recursivamente
+      for (const child of node.childNodes) {
+        const cleanChild = cleanNodes(child);
+        if (cleanChild) {
+          newNode.appendChild(cleanChild);
+        }
+      }
+      
+      return newNode;
+    }
+    
+    return null;
+  };
+  
+  const cleanDiv = document.createElement('div');
+  for (const child of tempDiv.childNodes) {
+    const cleanChild = cleanNodes(child);
+    if (cleanChild) {
+      cleanDiv.appendChild(cleanChild);
+    }
+  }
+  
+  return cleanDiv.innerHTML;
+}
+
+// Función para agregar errores de audio a la lista
+function addAudioError(error) {
+  const timestamp = new Date().toLocaleTimeString();
+  const errorMessage = error.message || 'Error desconocido';
+  const errorSrc = audio.src || 'Sin URL';
+  
+  audioErrors.push({
+    timestamp,
+    message: errorMessage,
+    src: errorSrc
+  });
+  
+  updateErrorsDisplay();
+}
+
+// Función para actualizar la visualización de errores
+function updateErrorsDisplay() {
+  errorsList.innerHTML = '';
+  
+  if (audioErrors.length === 0) {
+    errorsList.innerHTML = '<div class="error-item">No hay errores registrados</div>';
+    return;
+  }
+  
+  audioErrors.slice().reverse().forEach(error => {
+    const errorItem = document.createElement('div');
+    errorItem.className = 'error-item';
+    errorItem.innerHTML = `
+      <div><span class="error-time">[${error.timestamp}]</span> <span class="error-message">${error.message}</span></div>
+      <div class="error-message">URL: ${error.src.length > 60 ? error.src.substring(0, 60) + '...' : error.src}</div>
+    `;
+    errorsList.appendChild(errorItem);
+  });
+}
+
+// Función para limpiar la lista de errores
+function clearAudioErrors() {
+  audioErrors = [];
+  updateErrorsDisplay();
+}
+
+/* ===== Búsqueda y selección aleatoria ===== */
+async function queryItems(genre){
+  const q = encodeURIComponent(GENRE_QUERIES[genre]);
+  // Traemos hasta ~x ítems variados por descargas/fecha para más diversidad
+  const url = `https://archive.org/advancedsearch.php?q=${q}&fl[]=identifier&fl[]=title&fl[]=creator&sort[]=downloads+&sort[]=&rows=200&page=1&output=json`;
+  
+  try {
+    const res = await fetchWithCorsFallback(url);
+    const data = await res.json();
+    return (data?.response?.docs || []);
+  } catch (error) {
+    if (error.name === 'AbortError') return [];
+    console.error('Error fetching items:', error);
+    addAudioError({message: `Error al consultar items: ${error.message}`});
+    return [];
+  }
+}
+
+async function fetchPlayableFiles(identifier){
+  const url = `https://archive.org/metadata/${encodeURIComponent(identifier)}`;
+  
+  try {
+    const res = await fetchWithCorsFallback(url);
+    const meta = await res.json();
+    
+    // Filtrar archivos por formatos compatibles
+    const files = (meta?.files || [])
+      .filter(f => AUDIO_FORMATS.some(format => f.format === format))
+      .sort((a, b) => {
+        // Priorizar formatos compatibles con HTML5
+        const aSupported = isFormatSupported(a.name);
+        const bSupported = isFormatSupported(b.name);
+        
+        if (aSupported && !bSupported) return -1;
+        if (!aSupported && bSupported) return 1;
+        
+        // Si ambos son compatibles o no compatibles, mantener el orden original
+        return 0;
+      });
+    
+    // Obtener descripción de los metadatos
+    let desc = '';
+    if (meta && meta.metadata && meta.metadata.description) {
+      if (Array.isArray(meta.metadata.description)) {
+        desc = meta.metadata.description[0] || '';
+      } else {
+        desc = meta.metadata.description;
+      }
+      
+      // Procesar HTML de forma segura
+      if (desc.includes('<') && desc.includes('>')) {
+        desc = processDescriptionHTML(desc);
+      }
+      
+      // Limitar la longitud de la descripción si es muy larga
+      if (desc.length > 1000) {
+        desc = desc.substring(0, 400) + '...';
+      }
+    }
+    
+    // Mapear a URLs directas de descarga
+    return files.map(f => ({
+      url: `https://archive.org/download/${identifier}/${encodeURIComponent(f.name)}`,
+      title: f.title || meta?.metadata?.title || identifier,
+      creator: meta?.metadata?.creator || '',
+      description: desc,
+      id: identifier,
+      filename: f.name,
+      format: f.format,
+      isSupported: isFormatSupported(f.name)
+    }));
+  } catch (error) {
+    if (error.name === 'AbortError') return [];
+    console.error('Error fetching metadata:', error);
+    addAudioError({message: `Error al obtener metadatos: ${error.message}`});
+    return [];
+  }
+}
+
+async function ensureCache(genre){
+  if(cache[genre]?.length) return;
+  const items = await queryItems(genre);
+  // barajamos ids y vamos llenando con archivos reproducibles
+  const shuffled = items.sort(()=>Math.random()-0.5).slice(0,80);
+  const bucket = [];
+  for (const it of shuffled){
+    try{
+      const files = await fetchPlayableFiles(it.identifier);
+      // añade unos pocos por ítem para diversidad
+      files.slice(0,3).forEach(f => bucket.push(f));
+      if(bucket.length > 50) break;
+    }catch(e){
+      if (e.name === 'AbortError') break;
+      console.error('Error ensuring cache:', e);
+      addAudioError({message: `Error asegurando caché: ${e.message}`});
+    }
+  }
+  cache[genre] = bucket;
+}
+
+function pickRandom(genre){
+  const list = cache[genre] || [];
+  if(!list.length) return null;
+  return list[Math.floor(Math.random()*list.length)];
+}
+
+/* ===== Reproducción ===== */
+async function playAudioTrack(track, attempt = 0) {
+  if (!track || attempt > 3) {
+    title.textContent = 'No se pudo cargar la pista';
+    addAudioError({message: 'No se pudo cargar ninguna pista después de múltiples intentos'});
+    isLoading = false;
+    updateLoadingState();
+    return false;
+  }
+  
+  // Ocultar advertencia inicialmente
+  formatWarning.style.display = 'none';
+  
+  // Cancelar carga anterior si existe
+  if (currentAudioLoad) {
+    currentAudioLoad = null;
+  }
+  
+  // Detener cualquier audio actual
+  audio.pause();
+  audio.currentTime = 0;
+  
+  // Crear una nueva promesa para esta carga
+  const loadPromise = new Promise(async (resolve) => {
+    // Configurar el audio
+    audio.src = track.url;
+    audio.type = getMimeType(track.filename);
+    
+    // Configurar manejadores de eventos para esta carga
+    const onCanPlay = () => {
+      cleanup();
+      resolve(true);
+    };
+    
+    const onError = () => {
+      cleanup();
+      resolve(false);
+    };
+    
+    const cleanup = () => {
+      audio.removeEventListener('canplay', onCanPlay);
+      audio.removeEventListener('error', onError);
+    };
+    
+    audio.addEventListener('canplay', onCanPlay, { once: true });
+    audio.addEventListener('error', onError, { once: true });
+    
+    audio.load();
+  });
+  
+  currentAudioLoad = loadPromise;
+  
+  // Actualizar UI
+  title.textContent = track.title || 'Pista desconocida';
+  if (track.format) {
+    title.innerHTML += `<span class="format-indicator">${track.format}${track.isSupported ? '' : ' (experimental)'}</span>`;
+  }
+  creator.textContent = track.creator ? `por ${track.creator}` : '';
+  
+  // Mostrar advertencia si el formato no es completamente compatible
+  if (!track.isSupported) {
+    formatWarning.style.display = 'flex';
+  }
+  
+  // Esperar a que el audio se cargue
+  const loaded = await loadPromise;
+  
+  // Si esta carga fue interrumpida por una nueva, salir
+  if (currentAudioLoad !== loadPromise) {
+    return false;
+  }
+  
+  if (!loaded) {
+    addAudioError({message: 'Error al cargar el audio'});
+    return false;
+  }
+  
+  // Intentar reproducir
+  try {
+    await audio.play();
+    playBtn.textContent = 'Pause';
+    isLoading = false;
+    updateLoadingState();
+    return true;
+  } catch (error) {
+    console.log('Audio play failed:', error);
+    addAudioError({message: `Error al reproducir: ${error.message}`});
+    
+    // Si falla, intentar con proxy si aún no se ha intentado
+    if (attempt === 0 && currentProxy) {
+      addAudioError({message: 'Intentando con proxy...'});
+      const proxyUrl = getProxyUrl(track.url);
+      return playAudioTrack({...track, url: proxyUrl}, attempt + 1);
+    }
+    
+    isLoading = false;
+    updateLoadingState();
+    return false;
+  }
+}
+
+function updateLoadingState() {
+  if (isLoading) {
+    playBtn.disabled = true;
+    nextBtn.disabled = false;
+    genreSel.disabled = true;
+    playBtn.innerHTML = 'Cargando <span class="loader"></span>';
+  } else {
+    playBtn.disabled = false;
+    nextBtn.disabled = false;
+    genreSel.disabled = false;
+    playBtn.textContent = audio.paused ? 'Play' : 'Pause';
+  }
+}
+
+async function playRandom(genre){
+  if (isLoading) return;
+  
+  isLoading = true;
+  updateLoadingState();
+  
+  currentGenre = genre;
+  title.textContent = 'Buscando pista…';
+  creator.textContent = '';
+  currentDescription = '';
+  formatAttempts = 0;
+  
+  // Ocultar descripción siempre al cargar nueva pista
+  descContainer.classList.remove('expanded');
+  viewDescBtn.style.display = 'none';
+  viewDescBtn.textContent = 'Info';
+  
+  await ensureCache(genre);
+  const track = pickRandom(genre);
+  if(!track){ 
+    title.textContent = 'No se encontraron pistas.'; 
+    isLoading = false;
+    updateLoadingState();
+    return; 
+  }
+  
+  currentTrack = track;
+  const success = await playAudioTrack(track);
+  
+  if (!success) {
+    // Si falla, intentar con otra pista
+    addAudioError({message: 'Reintentando con otra pista...'});
+    setTimeout(() => playRandom(genre), 1000);
+    return;
+  }
+  
+  // Configurar descripción
+  currentDescription = track.description || '';
+  if (currentDescription) {
+    description.innerHTML = currentDescription;
+    viewDescBtn.style.display = 'block';
+  } else {
+    viewDescBtn.style.display = 'none';
+  }
+  
+  setArt(track.id);
+}
+
+function togglePlay(){
+  if (isLoading) return;
+  
+  if(audio.paused){ 
+    audio.play().then(() => {
+      playBtn.textContent = 'Pause';
+    }).catch(error => {
+      console.error('Error playing audio:', error);
+      addAudioError({message: `Error al reproducir audio: ${error.message}`});
+    }); 
+  } else { 
+    audio.pause(); 
+    playBtn.textContent = 'Play'; 
+  }
+}
+
+// Alternar visibilidad de la descripción
+function toggleDescription() {
+  const isExpanded = descContainer.classList.toggle('expanded');
+  viewDescBtn.textContent = isExpanded ? '✕ Cerrar info' : 'Info';
+}
+
+// Alternar visibilidad de errores de audio
+function toggleErrors() {
+  const isExpanded = errorsContainer.classList.toggle('expanded');
+  viewErrorsBtn.textContent = isExpanded ? 'Ocultar errores' : 'Ver errores de audio';
+}
+
+/* ===== Eventos UI ===== */
+audio.addEventListener('timeupdate', ()=>{
+  cur.textContent = fmtTime(audio.currentTime);
+  dur.textContent = fmtTime(audio.duration);
+});
+audio.addEventListener('loadedmetadata', ()=>{
+  dur.textContent = fmtTime(audio.duration);
+});
+audio.addEventListener('play', ()=> { 
+  playBtn.textContent = 'Pause'; 
+});
+audio.addEventListener('pause', ()=> { 
+  playBtn.textContent = 'Play'; 
+});
+audio.addEventListener('ended', ()=> playRandom(currentGenre));
+audio.addEventListener('error', (e) => {
+  console.error('Audio error:', e);
+  const errorMessage = `Error MEDIA: ${audio.error ? audio.error.message : 'Error desconocido'}`;
+  addAudioError({message: errorMessage});
+  
+  // Si es un error de formato no compatible, intentar con otra pista
+  if (audio.error && audio.error.code === 4) {
+    addAudioError({message: 'Formato no compatible, intentando con otra pista...'});
+    setTimeout(() => playRandom(currentGenre), 1000);
+  }
+});
+
+playBtn.addEventListener('click', togglePlay);
+nextBtn.addEventListener('click', ()=> playRandom(currentGenre));
+genreSel.addEventListener('change', async (e)=>{
+  cache[e.target.value] ??= []; // prepara cache
+  await playRandom(e.target.value);
+});
+
+viewDescBtn.addEventListener('click', toggleDescription);
+viewErrorsBtn.addEventListener('click', toggleErrors);
+clearErrorsBtn.addEventListener('click', clearAudioErrors);
+
+startBtn.addEventListener('click', async ()=>{
+  gate.style.display = 'none';
+  await playRandom(currentGenre);
+});
+
+/* ===== Inicio en desktop (algunos permiten autoplay) ===== */
+document.addEventListener('DOMContentLoaded', async ()=>{
+  // Probar proxies primero
+  await testProxies();
+  
+  // Si el navegador permite autoplay sin gesto, arrancará; si no, el overlay seguirá arriba.
+  try {
+    await playRandom(currentGenre);
+  } catch (error) {
+    console.error('Initialization error:', error);
+    addAudioError({message: `Error de inicialización: ${error.message}`});
+    isLoading = false;
+    updateLoadingState();
+  }
+  
+  // Inicializar la visualización de errores
+  updateErrorsDisplay();
+});
+</script>
+</body>
+</html>
