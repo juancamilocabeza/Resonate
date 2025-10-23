@@ -1,4 +1,11 @@
-<style>:root {
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fitcover" />
+<title>resonate</title>
+<style>
+  :root {
     --bg: #0f1115;
     --fg: #e7e9ee;
     --muted: #9aa3af;
@@ -7,11 +14,13 @@
     --btn: #1f2330;
     --error: #ff6b6b;
   }
+
   * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
   }
+
   html, body {
     height: 100%;
     background: var(--bg);
@@ -19,31 +28,34 @@
     font: 16px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
     overflow: hidden;
   }
+
   /* Contenedor principal */
   .app {
-    height: 100vh;
     display: flex;
     flex-direction: column;
     padding: 12px;
     padding-bottom: 80px;
     position: relative;
   }
+
   /* Header normal (no sticky) */
   header {
     flex-shrink: 0;
     display: flex;
-    justify-content: center;
+    justify-content: left;
     align-items: center;
-    text-align: left;
+    text-align: center;
     padding: 8px 0;
     margin-bottom: 10px;
   }
+
   h1 {
     font-size: 18px;
     font-weight: 600;
     color: var(--accent);
     text-align: left;
   }
+
   /* Contenedor principal del contenido del reproductor */
   .player-container {
     flex: 1;
@@ -53,6 +65,7 @@
     min-height: 0;
     gap: 12px;
   }
+
   /* Contenido del reproductor con transparencia inicial */
   .player-content {
     flex: 1;
@@ -64,10 +77,12 @@
     transition: opacity 0.5s ease;
     gap: 12px;
   }
+
   /* Cuando la app está activa, quitar transparencia del contenido */
   .app.active .player-content {
     opacity: 1;
   }
+
   .art {
     width: 220px;
     height: 220px;
@@ -80,23 +95,27 @@
     flex-shrink: 0;
     position: relative;
   }
+
   .art img {
     width: 100%;
     height: 100%;
     object-fit: cover;
     transition: opacity 0.3s ease;
   }
+
   .art .hint {
     color: var(--muted);
     font-size: 14px;
     text-align: center;
     padding: 0 10px;
   }
+
   .track-info {
     text-align: center;
     width: 100%;
     flex-shrink: 0;
   }
+
   .title {
     font-size: 18px;
     font-weight: 600;
@@ -106,6 +125,7 @@
     text-overflow: ellipsis;
     padding: 0 16px;
   }
+
   .creator {
     color: var(--muted);
     font-size: 14px;
@@ -114,11 +134,13 @@
     text-overflow: ellipsis;
     padding: 0 16px;
   }
+
   .progress-section {
     width: 100%;
     margin: 8px 0;
     flex-shrink: 0;
   }
+
   .progress-bar {
     width: 100%;
     height: 6px;
@@ -127,6 +149,7 @@
     overflow: hidden;
     cursor: pointer;
   }
+
   .progress {
     height: 100%;
     background: var(--accent);
@@ -134,16 +157,19 @@
     width: 0%;
     transition: width 0.1s;
   }
+
   .time-controls {
     display: flex;
     justify-content: space-between;
     margin-top: 6px;
   }
+
   .current-time, .total-time {
     font-variant-numeric: tabular-nums;
     color: var(--muted);
     font-size: 12px;
   }
+
   .controls {
     display: flex;
     justify-content: center;
@@ -152,6 +178,7 @@
     margin: 12px 0;
     flex-shrink: 0;
   }
+
   button {
     height: 44px;
     border: none;
@@ -163,13 +190,16 @@
     padding: 0 16px;
     transition: all 0.2s ease;
   }
+
   button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }
+
   button:active:not(:disabled) {
     transform: scale(0.95);
   }
+
   .play-btn {
     width: 56px;
     height: 56px;
@@ -179,9 +209,11 @@
     font-weight: 700;
     font-size: 16px;
   }
+
   .prev-btn, .next-btn {
     min-width: 70px;
   }
+
   .favorite-btn {
     background: transparent;
     color: var(--muted);
@@ -193,19 +225,23 @@
     align-items: center;
     justify-content: center;
   }
+
   .favorite-btn.active {
     color: #ff6b6b;
   }
+
   .genre-section {
     margin: 8px 0;
     flex-shrink: 0;
     width: 100%;
   }
+
   .genre-label {
     color: var(--muted);
     font-size: 14px;
     margin-bottom: 6px;
   }
+
   select {
     width: 100%;
     height: 40px;
@@ -217,21 +253,25 @@
     padding: 0 16px;
     cursor: pointer;
   }
+
   .favorites-section {
     margin: 8px 0;
     flex-shrink: 0;
     width: 100%;
   }
+
   .favorites-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 6px;
   }
+
   .favorites-label {
     color: var(--muted);
     font-size: 14px;
   }
+
   .favorites-toggle {
     background: transparent;
     border: none;
@@ -241,6 +281,7 @@
     padding: 4px 8px;
     border-radius: 6px;
   }
+
   .favorites-list {
     background: var(--card);
     border-radius: 12px;
@@ -249,6 +290,7 @@
     display: none;
     margin-top: 6px;
   }
+
   .favorite-item {
     padding: 10px 12px;
     border-bottom: 1px solid rgba(255,255,255,0.1);
@@ -258,16 +300,20 @@
     justify-content: space-between;
     align-items: center;
   }
+
   .favorite-item:last-child {
     border-bottom: none;
   }
+
   .favorite-item:hover {
     background: rgba(255,255,255,0.05);
   }
+
   .favorite-info {
     flex: 1;
     min-width: 0;
   }
+
   .favorite-title {
     font-weight: 600;
     font-size: 13px;
@@ -276,6 +322,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+
   .favorite-creator {
     color: var(--muted);
     font-size: 11px;
@@ -283,10 +330,12 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+
   .favorite-actions {
     display: flex;
     gap: 6px;
   }
+
   .favorite-play {
     background: var(--accent);
     border: none;
@@ -297,6 +346,7 @@
     border-radius: 6px;
     font-weight: bold;
   }
+
   .favorite-remove {
     background: transparent;
     border: none;
@@ -307,9 +357,11 @@
     border-radius: 6px;
     transition: all 0.2s ease;
   }
+
   .favorite-remove:hover {
     background: rgba(255,107,107,0.1);
   }
+
   .search-section {
     position: fixed;
     bottom: 0;
@@ -320,9 +372,11 @@
     border-top: 1px solid var(--card);
     z-index: 100;
   }
+
   .search-container {
     position: relative;
   }
+
   .search-input {
     width: 100%;
     height: 46px;
@@ -334,13 +388,16 @@
     padding: 0 16px;
     transition: all 0.3s ease;
   }
+
   .search-input:focus {
     outline: none;
     box-shadow: 0 0 0 2px var(--accent);
   }
+
   .search-input::placeholder {
     color: var(--muted);
   }
+
   .search-results {
     position: absolute;
     bottom: 100%;
@@ -355,6 +412,7 @@
     box-shadow: 0 8px 24px rgba(0,0,0,0.3);
     border: 1px solid rgba(255,255,255,0.1);
   }
+
   .search-result {
     padding: 12px;
     border-bottom: 1px solid rgba(255,255,255,0.1);
@@ -364,16 +422,20 @@
     justify-content: space-between;
     align-items: center;
   }
+
   .search-result:last-child {
     border-bottom: none;
   }
+
   .search-result:hover {
     background: rgba(255,255,255,0.05);
   }
+
   .result-info {
     flex: 1;
     min-width: 0;
   }
+
   .result-title {
     font-weight: 600;
     font-size: 13px;
@@ -382,6 +444,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+
   .result-creator {
     color: var(--muted);
     font-size: 11px;
@@ -389,6 +452,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+
   .result-favorite {
     background: transparent;
     border: none;
@@ -400,27 +464,33 @@
     border-radius: 6px;
     transition: all 0.2s ease;
   }
+
   .result-favorite:hover {
     background: rgba(255,255,255,0.1);
   }
+
   .result-favorite.active {
     color: #ff6b6b;
   }
+
   .no-results {
     padding: 16px;
     text-align: center;
     color: var(--muted);
   }
+
   .search-loading {
     padding: 16px;
     text-align: center;
     color: var(--muted);
   }
+
   .status-messages {
     margin: 8px 0;
     min-height: 18px;
     text-align: center;
   }
+
   .status-message {
     background: var(--card);
     border-radius: 8px;
@@ -429,16 +499,20 @@
     margin: 4px 0;
     animation: fadeIn 0.3s ease-in;
   }
+
   .status-info {
     border-left: 3px solid var(--accent);
   }
+
   .status-error {
     border-left: 3px solid var(--error);
   }
+
   @keyframes fadeIn {
     from { opacity: 0; transform: translateY(-5px); }
     to { opacity: 1; transform: translateY(0); }
   }
+
   .loader {
     display: inline-block;
     width: 14px;
@@ -448,9 +522,11 @@
     border-top-color: var(--accent);
     animation: spin 1s linear infinite;
   }
+
   @keyframes spin {
     to { transform: rotate(360deg); }
   }
+
   /* Vista de inicio - Botón centrado y prominente */
   .start-view {
     position: fixed;
@@ -466,10 +542,12 @@
     z-index: 1000;
     transition: opacity 0.5s ease, visibility 0.5s ease;
   }
+
   .start-view.hidden {
     opacity: 0;
     visibility: hidden;
   }
+
   .start-title {
     font-size: 2rem;
     font-weight: 700;
@@ -477,6 +555,7 @@
     margin-bottom: 1rem;
     text-align: center;
   }
+
   .start-subtitle {
     font-size: 1rem;
     color: var(--muted);
@@ -484,6 +563,7 @@
     text-align: center;
     max-width: 80%;
   }
+
   .start-button {
     background: var(--accent);
     color: #0a0f0c;
@@ -496,152 +576,1261 @@
     transition: all 0.3s ease;
     box-shadow: 0 8px 25px rgba(110, 231, 183, 0.3);
   }
+
   .start-button:hover {
     transform: scale(1.05);
-    box-shadow: 0 0px 30px rgba(110, 231, 183, 0.4);
+    box-shadow: 0 12px 30px rgba(110, 231, 183, 0.4);
   }
+
   .start-button:active {
     transform: scale(0.98);
   }
+
   /* Responsive para pantallas pequeñas */
   @media (max-height: 700px) {
     .art {
       width: 180px;
       height: 180px;
     }
+    
     .player-content {
       gap: 10px;
     }
+    
     .title {
       font-size: 16px;
     }
+    
     .creator {
       font-size: 13px;
     }
+    
     .progress-section {
       margin: 6px 0;
     }
+    
     .controls {
       margin: 8px 0;
     }
   }
+
   @media (max-height: 600px) {
     .art {
       width: 140px;
       height: 140px;
     }
+    
     .player-content {
       gap: 8px;
     }
+    
     .progress-section {
       margin: 4px 0;
     }
+    
     .controls {
       margin: 6px 0;
     }
+    
     .genre-section, .favorites-section {
       margin: 6px 0;
     }
   }
+
   @media (max-width: 480px) {
     .app {
       padding: 10px;
       padding-bottom: 70px;
     }
+    
     .art {
       width: 180px;
       height: 180px;
     }
+    
     button {
       height: 40px;
       padding: 0 14px;
       font-size: 13px;
     }
+    
     .play-btn {
       width: 48px;
       height: 48px;
     }
+    
     .search-input {
       height: 42px;
       font-size: 13px;
     }
+    
     header {
       margin-bottom: 8px;
     }
+    
     h1 {
       font-size: 16px;
     }
-  }</style>
+  }
+</style>
+</head>
+
+<body>
 <!-- Vista de inicio con botón prominente -->
-<div id="start-view" class="start-view">
-  <button id="start-button" class="start-button">Iniciar Resonate</button>
+<div class="start-view" id="start-view">
+  <button class="start-button" id="start-button">Iniciar resonate</button>
 </div>
+
 <!-- Aplicación principal -->
-<div id="app" class="app">
+<div class="app" id="app">
   <header>
-    <h1>resonate</h1>
-  </header><!-- Contenedor para el contenido del reproductor -->
-  <div class="player-container"><!-- Contenido del reproductor con transparencia inicial -->
-    <div id="player-content" class="player-content">
-      <div id="art" class="art">&nbsp;</div>
-      <div class="track-info">
-        <div id="title" class="title">&nbsp;</div>
-        <div id="creator" class="creator">&nbsp;</div>
+      <h1>resonate</h1>
+  </header>
+
+  <!-- Contenedor para el contenido del reproductor -->
+  <div class="player-container">
+    <!-- Contenido del reproductor con transparencia inicial -->
+    <div class="player-content" id="player-content">
+      <div class="art" id="art">
+        <span class="hint"></span>
       </div>
-      <div id="status-messages" class="status-messages">&nbsp;</div>
+      
+      <div class="track-info">
+        <div class="title" id="title"></div>
+        <div class="creator" id="creator"></div>
+      </div>
+
+      <div class="status-messages" id="status-messages"></div>
+
+      <div class="controls">
+        <button id="prev-btn" class="prev-btn" disabled>Anterior</button>
+        <button id="play-btn" class="play-btn">▶</button>
+        <button id="next-btn" class="next-btn">Siguiente</button>
+        <button id="favorite-btn" class="prev-btn">♡</button>
+      </div>
+      
       <div class="progress-section">
-        <div id="progress-bar" class="progress-bar">
-          <div id="progress" class="progress">&nbsp;</div>
+        <div class="progress-bar" id="progress-bar">
+          <div class="progress" id="progress"></div>
         </div>
         <div class="time-controls">
-          <span id="current-time" class="current-time">0:00</span> 
-          <span id="total-time" class="total-time">0:00</span>
+          <span class="current-time" id="current-time">0:00</span>
+          <span class="total-time" id="total-time">0:00</span>
         </div>
       </div>
-      <div class="controls">
-        <button id="prev-btn" class="prev-btn" disabled="disabled">Anterior</button> 
-        <button id="play-btn" class="play-btn">▶</button> 
-        <button id="next-btn" class="next-btn">Siguiente</button> 
-        <button id="favorite-btn" class="favorite-btn">♡</button>
-      </div>
+      
       <div class="genre-section">
         <select id="genre-select">
-          <option selected="selected" value="classical">Clásica</option>
-          <option value="jazz">Jazz</option>
-          <option value="rock">Rock</option>
-          <option value="electronic">Electrónica</option>
-          <option value="reggae">Reggae</option>
-          <option value="blues">Blues</option>
-          <option value="hiphop">Hip Hop</option>
-          <option value="pop">Pop</option>
-          <option value="metal">Metal</option>
-          <option value="folk">Folk</option>
-          <option value="country">Country</option>
-          <option value="rnb">R&amp;B</option>
-          <option value="latin">Latina</option>
-          <option value="ambient">Ambient</option>
-          <option value="punk">Punk</option>
-          <option value="funk">Funk</option>
-          <option value="soul">Soul</option>
-          <option value="disco">Disco</option>
-          <option value="indie">Indie</option>
-          <option value="alternative">Alternativa</option>
+            <option value="classical" selected>Clásica</option>
+            <option value="jazz">Jazz</option>
+            <option value="rock">Rock</option>
+            <option value="electronic">Electrónica</option>
+            <option value="reggae">Reggae</option>
+            <option value="blues">Blues</option>
+            <option value="hiphop">Hip Hop</option>
+            <option value="pop">Pop</option>
+            <option value="metal">Metal</option>
+            <option value="folk">Folk</option>
+            <option value="country">Country</option>
+            <option value="rnb">R&B</option>
+            <option value="latin">Latina</option>
+            <option value="ambient">Ambient</option>
+            <option value="punk">Punk</option>
+            <option value="funk">Funk</option>
+            <option value="soul">Soul</option>
+            <option value="disco">Disco</option>
+            <option value="indie">Indie</option>
+            <option value="alternative">Alternativa</option>
         </select>
       </div>
-      <div class="favorites-section">
-        <div class="favorites-header">
-          <div class="favorites-label">Favoritos</div>
-          <button id="favorites-toggle" class="favorites-toggle">Mostrar</button>
-        </div>
-        <div id="favorites-list" class="favorites-list">&nbsp;</div>
-      </div>
+
     </div>
   </div>
-</div>
-<div class="search-section">
-  <div class="search-container">
-    <input id="search-input" class="search-input" type="text" placeholder="Buscar ...">
-    <div id="search-results" class="search-results">&nbsp;</div>
+
+  <div class="favorites-section">
+    <div class="favorites-header">
+        <button id="favorites-toggle" class="favorites-toggle">Mostrar favoritos</button>
+    </div>
+    <div id="favorites-list" class="favorites-list"></div>
   </div>
+
+  <div class="search-section">
+    <div class="search-container">
+      <input type="text" id="search-input" class="search-input" placeholder="Buscar ...">
+      <div id="search-results" class="search-results"></div>
+    </div>
+  </div>
+
 </div>
+
 <audio id="audio" crossorigin="anonymous" preload="none"></audio>
+
+<script>
+// Colecciones específicas de música en Internet Archive
+const MUSIC_COLLECTIONS = [
+  '78rpm',           // Grabaciones históricas
+  'etree',           // Música en vivo/conciertos
+  'opensource_music', // Música de código abierto
+  'folkmusic',       // Música folclórica
+  'netlabels',       // Sellos discográficos en línea
+  'GratefulDead',    // Bandas específicas
+  'LiveMusicArchive' // Archivo de música en vivo
+];
+
+// Configuración de géneros - usando colecciones específicas
+const GENRE_CONFIG = {
+  classical: {
+    query: 'classical',
+    collections: ['78rpm', 'etree'],
+    filters: ['symphony', 'concerto', 'sonata', 'opera']
+  },
+  jazz: {
+    query: 'jazz',
+    collections: ['78rpm', 'etree'],
+    filters: ['swing', 'bebop', 'cooljazz', 'fusion']
+  },
+  rock: {
+    query: 'rock',
+    collections: ['etree', 'netlabels'],
+    filters: ['rock', 'album', 'single']
+  },
+  electronic: {
+    query: 'electronic',
+    collections: ['netlabels', 'opensource_music'],
+    filters: ['electronic', 'techno', 'house', 'ambient']
+  },
+  reggae: {
+    query: 'reggae',
+    collections: ['etree', 'netlabels'],
+    filters: ['reggae', 'dub', 'ska']
+  },
+  blues: {
+    query: 'blues',
+    collections: ['78rpm', 'etree'],
+    filters: ['blues', 'delta', 'chicago']
+  },
+  hiphop: {
+    query: 'hiphop',
+    collections: ['netlabels', 'opensource_music'],
+    filters: ['hiphop', 'rap', 'beats']
+  },
+  pop: {
+    query: 'pop',
+    collections: ['netlabels', 'opensource_music'],
+    filters: ['pop', 'single', 'album']
+  },
+  metal: {
+    query: 'metal',
+    collections: ['netlabels'],
+    filters: ['metal', 'heavy', 'thrash']
+  },
+  folk: {
+    query: 'folk',
+    collections: ['folkmusic', 'etree'],
+    filters: ['folk', 'traditional', 'acoustic']
+  },
+  country: {
+    query: 'country',
+    collections: ['78rpm', 'etree'],
+    filters: ['country', 'western', 'bluegrass']
+  },
+  rnb: {
+    query: 'rnb',
+    collections: ['netlabels'],
+    filters: ['rnb', 'soul', 'funk']
+  },
+  latin: {
+    query: 'latin',
+    collections: ['etree', 'netlabels'],
+    filters: ['latin', 'salsa', 'merengue']
+  },
+  ambient: {
+    query: 'ambient',
+    collections: ['netlabels', 'opensource_music'],
+    filters: ['ambient', 'drone', 'atmospheric']
+  },
+  punk: {
+    query: 'punk',
+    collections: ['netlabels'],
+    filters: ['punk', 'hardcore', 'oi']
+  },
+  funk: {
+    query: 'funk',
+    collections: ['netlabels', 'etree'],
+    filters: ['funk', 'disco', 'soul']
+  },
+  soul: {
+    query: 'soul',
+    collections: ['78rpm', 'netlabels'],
+    filters: ['soul', 'motown', 'r&b']
+  },
+  disco: {
+    query: 'disco',
+    collections: ['netlabels'],
+    filters: ['disco', 'funk', 'dance']
+  },
+  indie: {
+    query: 'indie',
+    collections: ['netlabels', 'opensource_music'],
+    filters: ['indie', 'alternative', 'lo-fi']
+  },
+  alternative: {
+    query: 'alternative',
+    collections: ['netlabels', 'opensource_music'],
+    filters: ['alternative', 'indie', 'college']
+  }
+};
+
+// Elementos DOM
+const elements = {
+  audio: document.getElementById('audio'),
+  art: document.getElementById('art'),
+  title: document.getElementById('title'),
+  creator: document.getElementById('creator'),
+  proxyStatus: document.getElementById('proxy-status'),
+  statusMessages: document.getElementById('status-messages'),
+  progressBar: document.getElementById('progress-bar'),
+  progress: document.getElementById('progress'),
+  currentTime: document.getElementById('current-time'),
+  totalTime: document.getElementById('total-time'),
+  playBtn: document.getElementById('play-btn'),
+  prevBtn: document.getElementById('prev-btn'),
+  nextBtn: document.getElementById('next-btn'),
+  favoriteBtn: document.getElementById('favorite-btn'),
+  genreSelect: document.getElementById('genre-select'),
+  searchInput: document.getElementById('search-input'),
+  searchResults: document.getElementById('search-results'),
+  favoritesToggle: document.getElementById('favorites-toggle'),
+  favoritesList: document.getElementById('favorites-list'),
+  startView: document.getElementById('start-view'),
+  startButton: document.getElementById('start-button'),
+  app: document.getElementById('app'),
+  playerContent: document.getElementById('player-content')
+};
+
+// Estado de la aplicación
+const state = {
+  currentGenre: 'classical',
+  currentTrack: null,
+  isLoading: false,
+  favorites: [],
+  userInteracted: false,
+  retryCount: 0,
+  maxRetries: 5,
+  searchResults: [],
+  currentSearchIndex: -1,
+  isPlayingFavorites: false,
+  currentFavoriteIndex: -1,
+  favoritesVisible: false,
+  isInitialized: false,
+  onPlayCallback: null,
+  appStarted: false
+};
+
+// Sistema de almacenamiento local
+function loadFavorites() {
+  try {
+    const favorites = localStorage.getItem('resonate_favorites');
+    if (favorites) {
+      state.favorites = JSON.parse(favorites);
+    }
+  } catch (e) {
+    state.favorites = [];
+  }
+}
+
+function saveFavorites() {
+  try {
+    localStorage.setItem('resonate_favorites', JSON.stringify(state.favorites));
+  } catch (e) {
+    console.log('Error guardando favoritos');
+  }
+}
+
+function isTrackFavorite(track) {
+  return state.favorites.some(fav => fav.id === track.id);
+}
+
+function toggleFavorite(track) {
+  if (!track || !track.id) return;
+  
+  const isFavorite = isTrackFavorite(track);
+  
+  if (isFavorite) {
+    state.favorites = state.favorites.filter(fav => fav.id !== track.id);
+    showStatus('Eliminado de favoritos', 'info');
+  } else {
+    const favoriteTrack = {
+      id: track.id,
+      title: track.title || 'Sin título',
+      creator: track.creator || 'Desconocido',
+      url: track.url
+    };
+    state.favorites.push(favoriteTrack);
+    showStatus('Agregado a favoritos', 'info');
+  }
+  
+  saveFavorites();
+  updateFavoriteButton();
+  updateFavoritesList();
+}
+
+function updateFavoriteButton() {
+  if (state.currentTrack && state.currentTrack.id) {
+    const isFavorite = isTrackFavorite(state.currentTrack);
+    elements.favoriteBtn.classList.toggle('active', isFavorite);
+    elements.favoriteBtn.textContent = isFavorite ? '♥' : '♡';
+  } else {
+    elements.favoriteBtn.classList.remove('active');
+    elements.favoriteBtn.textContent = '♡';
+  }
+}
+
+// Utilidades
+function formatTime(seconds) {
+  if (!isFinite(seconds) || seconds < 0) return '0:00';
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.floor(seconds % 60);
+  return `${minutes}:${String(remainingSeconds).padStart(2, '0')}`;
+}
+
+// Función para obtener portadas
+async function setArtwork(track, identifier) {
+  elements.art.innerHTML = '';
+  
+  if (!track || !track.id) {
+    elements.art.innerHTML = '<span class="hint">Sin portada</span>';
+    return;
+  }
+
+  const img = new Image();
+  img.alt = 'Portada del álbum';
+  
+  // Intentar con portada de Internet Archive
+  const archiveCoverUrl = `https://archive.org/services/img/${identifier}`;
+  
+  img.onload = () => {
+    elements.art.appendChild(img);
+  };
+  
+  img.onerror = () => {
+    // Si falla, usar imagen genérica basada en el género
+    setGenericArtwork();
+  };
+  
+  // Intentar cargar portada de Internet Archive
+  img.src = archiveCoverUrl;
+}
+
+// Imagen genérica basada en género
+function setGenericArtwork() {
+  const genreColors = {
+    classical: '#8B4513',
+    jazz: '#FF6B35',
+    rock: '#DC143C',
+    electronic: '#00CED1',
+    reggae: '#FFD700',
+    blues: '#1E90FF',
+    hiphop: '#FF1493',
+    pop: '#32CD32',
+    metal: '#2F4F4F',
+    folk: '#DAA520',
+    country: '#FF8C00',
+    rnb: '#9932CC',
+    latin: '#FF4500',
+    ambient: '#4682B4',
+    punk: '#00FF00',
+    funk: '#FF69B4',
+    soul: '#FFD700',
+    disco: '#FF00FF',
+    indie: '#87CEEB',
+    alternative: '#DA70D6'
+  };
+  
+  const color = genreColors[state.currentGenre] || '#6ee7b7';
+  const genreName = elements.genreSelect.options[elements.genreSelect.selectedIndex].text;
+  
+  elements.art.innerHTML = `
+    <div style="width: 100%; height: 100%; background: ${color}; display: flex; align-items: center; justify-content: center; color: white; flex-direction: column; padding: 20px; text-align: center;">
+      <div style="font-size: 48px; margin-bottom: 10px;">♫</div>
+      <div style="font-size: 14px; font-weight: 600;">${genreName}</div>
+    </div>
+  `;
+}
+
+function showStatus(message, type = 'info', duration = 3000) {
+  elements.statusMessages.innerHTML = '';
+  
+  const messageEl = document.createElement('div');
+  messageEl.className = `status-message status-${type}`;
+  messageEl.textContent = message;
+  elements.statusMessages.appendChild(messageEl);
+
+  if (duration > 0) {
+    setTimeout(() => {
+      if (messageEl.parentNode) {
+        messageEl.remove();
+      }
+    }, duration);
+  }
+}
+
+// Nueva estrategia de búsqueda - usando colecciones específicas
+async function searchItems(query) {
+  // Buscar en colecciones de música específicas
+  const musicCollections = MUSIC_COLLECTIONS.join('+OR+collection:');
+  const encodedQuery = encodeURIComponent(query);
+  
+  // Consulta que busca en colecciones de música específicas
+  const url = `https://archive.org/advancedsearch.php?q=${encodedQuery}+AND+(collection:${musicCollections})&fl[]=identifier&fl[]=title&fl[]=creator&rows=50&output=json&sort[]=downloads+desc`;
+  
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('Error de red');
+    const data = await response.json();
+    
+    // Si no hay resultados, intentar una búsqueda más amplia pero con filtros
+    if (!data.response || data.response.docs.length === 0) {
+      return await fallbackSearch(query);
+    }
+    
+    return data.response.docs;
+  } catch (error) {
+    console.error('Error en búsqueda:', error);
+    // Intentar búsqueda de respaldo
+    return await fallbackSearch(query);
+  }
+}
+
+// Búsqueda de respaldo - más amplia pero con filtros
+async function fallbackSearch(query) {
+  const encodedQuery = encodeURIComponent(`${query} AND mediatype:audio`);
+  const url = `https://archive.org/advancedsearch.php?q=${encodedQuery}&fl[]=identifier&fl[]=title&fl[]=creator&rows=30&output=json&sort[]=downloads+desc`;
+  
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('Error de red');
+    const data = await response.json();
+    
+    // Filtrar resultados por nombre (excluir podcasts, audiolibros, etc.)
+    const filteredResults = (data.response?.docs || []).filter(item => {
+      const title = (item.title || '').toLowerCase();
+      const creator = (item.creator || '').toLowerCase();
+      
+      // Excluir tipos de contenido no musical
+      const excludeTerms = [
+        'podcast', 'audiobook', 'lecture', 'interview', 
+        'speech', 'sermon', 'documentary', 'radio', 'talk'
+      ];
+      
+      return !excludeTerms.some(term => 
+        title.includes(term) || creator.includes(term)
+      );
+    });
+    
+    return filteredResults;
+  } catch (error) {
+    console.error('Error en búsqueda de respaldo:', error);
+    return [];
+  }
+}
+
+// Función para obtener archivos reproducibles
+async function fetchPlayableFiles(identifier) {
+  const url = `https://archive.org/metadata/${identifier}`;
+  
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('Error al cargar metadatos');
+    const metadata = await response.json();
+    
+    if (!metadata || !metadata.files) {
+      throw new Error('Metadatos inválidos');
+    }
+    
+    // Buscar archivos de audio
+    const audioFiles = metadata.files.filter(file => {
+      if (!file.name || file.name.includes('_files.xml') || file.name.includes('_meta.xml')) {
+        return false;
+      }
+      
+      const lowerName = file.name.toLowerCase();
+      const isAudioFile = lowerName.endsWith('.mp3') || 
+             lowerName.endsWith('.ogg') || 
+             lowerName.endsWith('.wav');
+      
+      // Excluir archivos que parecen ser podcasts o audiolibros
+      const isLikelyMusic = !lowerName.includes('podcast') && 
+                           !lowerName.includes('audiobook') &&
+                           !lowerName.includes('lecture') &&
+                           !lowerName.includes('interview');
+      
+      return isAudioFile && isLikelyMusic;
+    });
+    
+    if (audioFiles.length === 0) {
+      throw new Error('No hay archivos de audio reproducibles');
+    }
+    
+    // Ordenar por tamaño (los archivos muy pequeños o muy grandes son menos probables de ser canciones)
+    audioFiles.sort((a, b) => {
+      const sizeA = a.size || 0;
+      const sizeB = b.size || 0;
+      
+      // Preferir archivos entre 1MB y 20MB (tamaño típico de canciones)
+      const idealMin = 1 * 1024 * 1024; // 1MB
+      const idealMax = 20 * 1024 * 1024; // 20MB
+      
+      const scoreA = getFileScore(sizeA, idealMin, idealMax);
+      const scoreB = getFileScore(sizeB, idealMin, idealMax);
+      
+      return scoreB - scoreA; // Orden descendente (mejor puntuación primero)
+    });
+    
+    // Tomar los mejores archivos
+    const playableFiles = audioFiles.slice(0, 3).map(file => ({
+      url: `https://archive.org/download/${identifier}/${encodeURIComponent(file.name)}`,
+      title: metadata.metadata?.title || file.name || identifier,
+      creator: metadata.metadata?.creator || 'Artista desconocido',
+      id: identifier,
+      format: file.name.split('.').pop()?.toUpperCase() || 'MP3'
+    }));
+    
+    return playableFiles;
+    
+  } catch (error) {
+    console.error('Error al cargar archivos:', error);
+    throw error;
+  }
+}
+
+// Función auxiliar para puntuar archivos por tamaño
+function getFileScore(size, idealMin, idealMax) {
+  if (size < idealMin) return 0; // Muy pequeño
+  if (size > idealMax) return size > (idealMax * 5) ? 0 : 0.5; // Muy grande
+  
+  // Dentro del rango ideal
+  const idealCenter = (idealMin + idealMax) / 2;
+  const distance = Math.abs(size - idealCenter);
+  const maxDistance = idealMax - idealCenter;
+  
+  return 1 - (distance / maxDistance);
+}
+
+// Funcionalidad de géneros usando colecciones específicas
+async function queryItems(genre) {
+  const config = GENRE_CONFIG[genre];
+  if (!config) {
+    showStatus(`Género no configurado: ${genre}`, 'error');
+    return [];
+  }
+  
+  // Construir consulta usando colecciones específicas
+  const collections = config.collections.join('+OR+collection:');
+  const filters = config.filters.join('+OR+');
+  
+  const url = `https://archive.org/advancedsearch.php?q=${config.query}+AND+(collection:${collections})+AND+(${filters})&fl[]=identifier&fl[]=title&fl[]=creator&rows=30&output=json&sort[]=downloads+desc`;
+  
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('Error de red');
+    const data = await response.json();
+    
+    // Si no hay resultados, intentar búsqueda más amplia
+    if (!data.response || data.response.docs.length === 0) {
+      return await fallbackGenreSearch(genre);
+    }
+    
+    return data.response.docs;
+  } catch (error) {
+    console.error('Error en queryItems:', error);
+    // Intentar búsqueda de respaldo
+    return await fallbackGenreSearch(genre);
+  }
+}
+
+// Búsqueda de respaldo para géneros
+async function fallbackGenreSearch(genre) {
+  const config = GENRE_CONFIG[genre];
+  if (!config) return [];
+  
+  const encodedQuery = encodeURIComponent(`${config.query} AND mediatype:audio`);
+  const url = `https://archive.org/advancedsearch.php?q=${encodedQuery}&fl[]=identifier&fl[]=title&fl[]=creator&rows=20&output=json&sort[]=downloads+desc`;
+  
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('Error de red');
+    const data = await response.json();
+    
+    // Filtrar resultados por nombre
+    const filteredResults = (data.response?.docs || []).filter(item => {
+      const title = (item.title || '').toLowerCase();
+      const creator = (item.creator || '').toLowerCase();
+      
+      // Excluir tipos de contenido no musical
+      const excludeTerms = [
+        'podcast', 'audiobook', 'lecture', 'interview', 
+        'speech', 'sermon', 'documentary', 'radio', 'talk'
+      ];
+      
+      return !excludeTerms.some(term => 
+        title.includes(term) || creator.includes(term)
+      );
+    });
+    
+    return filteredResults;
+  } catch (error) {
+    console.error('Error en búsqueda de respaldo para género:', error);
+    showStatus(`Error al buscar música ${genre}`, 'error');
+    return [];
+  }
+}
+
+// Función para iniciar la aplicación
+function startApp() {
+  state.appStarted = true;
+  elements.startView.classList.add('hidden');
+  elements.app.classList.add('active');
+  
+  // Iniciar reproducción automáticamente
+  forcePlay();
+}
+
+// Función para forzar la reproducción
+function forcePlay() {
+  if (!state.isInitialized) {
+    state.isInitialized = true;
+    showStatus('Iniciando Resonate...', 'info');
+    elements.title.textContent = '';
+    elements.creator.textContent = '';
+  }
+  
+  state.userInteracted = true;
+  playRandom(state.currentGenre);
+}
+
+// Función principal para reproducir
+async function playRandom(genre) {
+  if (state.isLoading) return;
+  
+  state.isLoading = true;
+  elements.playBtn.disabled = true;
+  elements.playBtn.innerHTML = '<span class="loader"></span>';
+  
+  state.currentGenre = genre;
+  state.isPlayingFavorites = false;
+  
+  try {
+    showStatus(`Buscando música ${genre}...`, 'info', 0);
+    const items = await queryItems(genre);
+    
+    if (items.length === 0) {
+      throw new Error('No se encontraron pistas para este género');
+    }
+    
+    // Intentar con varios ítems hasta encontrar uno que funcione
+    let success = false;
+    let attempts = 0;
+    const maxAttempts = 5;
+    
+    // Mezclar los ítems para mayor variedad
+    const shuffledItems = [...items].sort(() => Math.random() - 0.5);
+    
+    while (!success && attempts < maxAttempts && shuffledItems.length > 0) {
+      const item = shuffledItems[attempts];
+      
+      try {
+        showStatus(`Cargando: ${item.title}`, 'info', 0);
+        const files = await fetchPlayableFiles(item.identifier);
+        
+        if (files.length > 0) {
+          const track = files[0];
+          success = await playAudioTrack(track, item.identifier);
+          if (success) {
+            state.retryCount = 0; // Resetear contador en éxito
+            break;
+          }
+        }
+      } catch (error) {
+        console.error(`Error cargando ítem ${attempts + 1}:`, error);
+        // Continuar con el siguiente ítem
+      }
+      
+      attempts++;
+    }
+    
+    if (!success) {
+      throw new Error('No se pudo cargar ninguna pista después de varios intentos');
+    }
+    
+  } catch (error) {
+    console.error('Error en playRandom:', error);
+    
+    // Reintentar si no hemos excedido el máximo
+    if (state.retryCount < state.maxRetries) {
+      state.retryCount++;
+      showStatus(`Reintentando... (${state.retryCount}/${state.maxRetries})`, 'info', 2000);
+      setTimeout(() => playRandom(genre), 2000);
+    } else {
+      showStatus(`Error: ${error.message}`, 'error');
+      elements.title.textContent = 'Error al cargar género';
+      elements.creator.textContent = 'Intenta con otro género o busca manualmente';
+    }
+  } finally {
+    state.isLoading = false;
+    elements.playBtn.disabled = false;
+    elements.playBtn.textContent = '▶';
+  }
+}
+
+// Resto del código permanece igual...
+// [El resto del código JavaScript permanece igual que en la versión anterior]
+
+// Función para reproducir favoritos
+async function playFavorite(favoriteIndex = 0) {
+  if (state.isLoading || state.favorites.length === 0) return;
+  
+  state.isLoading = true;
+  elements.playBtn.disabled = true;
+  elements.playBtn.innerHTML = '<span class="loader"></span>';
+  
+  state.isPlayingFavorites = true;
+  state.currentFavoriteIndex = favoriteIndex;
+  
+  try {
+    const favorite = state.favorites[favoriteIndex];
+    showStatus(`Cargando favorito: ${favorite.title}`, 'info', 0);
+    
+    // Para favoritos, ya tenemos la URL directamente
+    const track = {
+      url: favorite.url,
+      title: favorite.title,
+      creator: favorite.creator,
+      id: favorite.id
+    };
+    
+    const success = await playAudioTrack(track, favorite.id);
+    if (success) {
+      state.retryCount = 0;
+    }
+    
+  } catch (error) {
+    console.error('Error en playFavorite:', error);
+    showStatus(`Error: ${error.message}`, 'error');
+  } finally {
+    state.isLoading = false;
+    elements.playBtn.disabled = false;
+    elements.playBtn.textContent = '▶';
+  }
+}
+
+// Función para reproducir siguiente favorito
+function playNextFavorite() {
+  if (!state.isPlayingFavorites || state.favorites.length === 0) return;
+  
+  const nextIndex = (state.currentFavoriteIndex + 1) % state.favorites.length;
+  playFavorite(nextIndex);
+}
+
+// Display de resultados de búsqueda
+function displaySearchResults(results) {
+  elements.searchResults.innerHTML = '';
+  state.searchResults = results;
+  
+  if (results.length === 0) {
+    elements.searchResults.innerHTML = '<div class="no-results">No se encontraron resultados de música</div>';
+    elements.searchResults.style.display = 'block';
+    return;
+  }
+  
+  // Mostrar todos los resultados
+  results.forEach((result, index) => {
+    const resultEl = document.createElement('div');
+    resultEl.className = 'search-result';
+    
+    const isFavorite = state.favorites.some(fav => fav.id === result.identifier);
+    
+    resultEl.innerHTML = `
+      <div class="result-info">
+        <div class="result-title">${result.title || 'Sin título'}</div>
+        <div class="result-creator">${result.creator || 'Desconocido'}</div>
+      </div>
+      <button class="result-favorite ${isFavorite ? 'active' : ''}">
+        ${isFavorite ? '♥' : '♡'}
+      </button>
+    `;
+    
+    resultEl.addEventListener('click', async (e) => {
+      if (!e.target.classList.contains('result-favorite')) {
+        showStatus(`Cargando: ${result.title}`, 'info', 0);
+        
+        try {
+          const files = await fetchPlayableFiles(result.identifier);
+          if (files.length > 0) {
+            const track = files[0];
+            // Guardar índice para reproducción secuencial
+            state.currentSearchIndex = index;
+            state.isPlayingFavorites = false;
+            await playAudioTrack(track, result.identifier);
+            hideSearchResults();
+          } else {
+            showStatus('No se encontraron archivos de audio reproducibles', 'error');
+          }
+        } catch (error) {
+          showStatus(`Error al cargar: ${error.message}`, 'error');
+        }
+      }
+    });
+    
+    const favoriteBtn = resultEl.querySelector('.result-favorite');
+    favoriteBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const track = {
+        id: result.identifier,
+        title: result.title,
+        creator: result.creator
+      };
+      toggleFavorite(track);
+      favoriteBtn.classList.toggle('active');
+      favoriteBtn.textContent = favoriteBtn.classList.contains('active') ? '♥' : '♡';
+    });
+    
+    elements.searchResults.appendChild(resultEl);
+  });
+  
+  elements.searchResults.style.display = 'block';
+}
+
+// Función para reproducir siguiente resultado de búsqueda
+function playNextSearchResult() {
+  if (state.searchResults.length === 0 || state.currentSearchIndex === -1) return;
+  
+  const nextIndex = (state.currentSearchIndex + 1) % state.searchResults.length;
+  state.currentSearchIndex = nextIndex;
+  
+  const nextResult = state.searchResults[nextIndex];
+  showStatus(`Cargando: ${nextResult.title}`, 'info', 0);
+  
+  fetchPlayableFiles(nextResult.identifier)
+    .then(files => {
+      if (files.length > 0) {
+        const track = files[0];
+        playAudioTrack(track, nextResult.identifier);
+      }
+    })
+    .catch(error => {
+      showStatus(`Error al cargar: ${error.message}`, 'error');
+    });
+}
+
+function hideSearchResults() {
+  elements.searchResults.style.display = 'none';
+  elements.searchInput.blur();
+}
+
+function performSearch() {
+  const query = elements.searchInput.value.trim();
+  
+  if (!query) {
+    hideSearchResults();
+    return;
+  }
+  
+  elements.searchResults.innerHTML = '<div class="search-loading"><span class="loader"></span> Buscando música...</div>';
+  elements.searchResults.style.display = 'block';
+  
+  setTimeout(async () => {
+    try {
+      const results = await searchItems(query);
+      displaySearchResults(results);
+    } catch (error) {
+      elements.searchResults.innerHTML = '<div class="no-results">Error en la búsqueda</div>';
+    }
+  }, 500);
+}
+
+// Control de reproducción
+async function playAudioTrack(track, identifier) {
+  if (!track || !track.url) {
+    showStatus('Error: Pista no disponible', 'error');
+    return false;
+  }
+  
+  // Limpiar estado anterior
+  elements.audio.pause();
+  elements.audio.currentTime = 0;
+  elements.audio.src = '';
+  
+  // Actualizar UI
+  elements.title.textContent = track.title;
+  elements.creator.textContent = track.creator;
+  
+  // Cargar portada
+  await setArtwork(track, identifier);
+  
+  state.currentTrack = track;
+  updateFavoriteButton();
+  
+  showStatus(`Cargando: ${track.title}`, 'info', 0);
+  
+  try {
+    // Configurar fuente de audio
+    elements.audio.src = track.url;
+    
+    // Esperar a que el audio esté listo
+    await new Promise((resolve, reject) => {
+      const onCanPlay = () => {
+        cleanup();
+        resolve();
+      };
+      
+      const onError = (e) => {
+        cleanup();
+        reject(new Error(`Error de audio: ${e.target.error?.message || 'Fuente no compatible'}`));
+      };
+      
+      const cleanup = () => {
+        elements.audio.removeEventListener('canplay', onCanPlay);
+        elements.audio.removeEventListener('error', onError);
+      };
+      
+      elements.audio.addEventListener('canplay', onCanPlay, { once: true });
+      elements.audio.addEventListener('error', onError, { once: true });
+      elements.audio.load();
+    });
+    
+    // Reproducir automáticamente
+    await elements.audio.play();
+    showStatus(`Reproduciendo: ${track.title}`, 'info');
+    
+    return true;
+    
+  } catch (error) {
+    console.error('Error en playAudioTrack:', error);
+    showStatus(`Error: ${error.message}`, 'error');
+    return false;
+  }
+}
+
+function togglePlay() {
+  if (state.isLoading) return;
+  
+  state.userInteracted = true;
+  
+  if (elements.audio.paused) {
+    if (!elements.audio.src) {
+      // Si no hay fuente, forzar reproducción
+      forcePlay();
+      return;
+    }
+    
+    elements.audio.play().then(() => {
+      elements.playBtn.textContent = '| |';
+      showStatus('Reproduciendo', 'info');
+    }).catch(error => {
+      showStatus(`Error: ${error.message}`, 'error');
+    });
+  } else {
+    elements.audio.pause();
+    elements.playBtn.textContent = '▶';
+    showStatus('Pausado', 'info');
+  }
+}
+
+function playNext() {
+  state.userInteracted = true;
+  showStatus('Siguiente pista', 'info');
+  
+  if (state.isPlayingFavorites) {
+    playNextFavorite();
+  } else if (state.currentSearchIndex !== -1) {
+    playNextSearchResult();
+  } else {
+    playRandom(state.currentGenre);
+  }
+}
+
+// Gestión de favoritos
+function updateFavoritesList() {
+  const favoritesList = elements.favoritesList;
+  favoritesList.innerHTML = '';
+  
+  if (state.favorites.length === 0) {
+    favoritesList.innerHTML = '<div class="no-results" style="padding: 12px; text-align: center;">No hay favoritos</div>';
+    return;
+  }
+  
+  state.favorites.forEach((favorite, index) => {
+    const favoriteItem = document.createElement('div');
+    favoriteItem.className = 'favorite-item';
+    
+    favoriteItem.innerHTML = `
+      <div class="favorite-info">
+        <div class="favorite-title">${favorite.title || 'Sin título'}</div>
+        <div class="favorite-creator">${favorite.creator || 'Desconocido'}</div>
+      </div>
+      <div class="favorite-actions">
+        <button class="favorite-play" data-index="${index}">▶</button>
+        <button class="favorite-remove" data-index="${index}">×</button>
+      </div>
+    `;
+    
+    const playBtn = favoriteItem.querySelector('.favorite-play');
+    const removeBtn = favoriteItem.querySelector('.favorite-remove');
+    
+    playBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const index = parseInt(playBtn.getAttribute('data-index'));
+      playFavorite(index);
+    });
+    
+    removeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const index = parseInt(removeBtn.getAttribute('data-index'));
+      state.favorites.splice(index, 1);
+      saveFavorites();
+      updateFavoritesList();
+      updateFavoriteButton();
+      showStatus('Eliminado de favoritos', 'info');
+    });
+    
+    favoritesList.appendChild(favoriteItem);
+  });
+}
+
+function toggleFavoritesList() {
+  state.favoritesVisible = !state.favoritesVisible;
+  
+  if (state.favoritesVisible) {
+    elements.favoritesList.style.display = 'block';
+    elements.favoritesToggle.textContent = 'Ocultar favoritos';
+    updateFavoritesList();
+  } else {
+    elements.favoritesList.style.display = 'none';
+    elements.favoritesToggle.textContent = 'Mostrar favoritos';
+  }
+}
+
+// Barra de progreso
+function updateProgressBar() {
+  if (elements.audio.duration && isFinite(elements.audio.duration)) {
+    const progressPercent = (elements.audio.currentTime / elements.audio.duration) * 100;
+    elements.progress.style.width = `${progressPercent}%`;
+    elements.currentTime.textContent = formatTime(elements.audio.currentTime);
+    elements.totalTime.textContent = formatTime(elements.audio.duration);
+  }
+}
+
+function seekAudio(event) {
+  if (!elements.audio.duration || !isFinite(elements.audio.duration)) return;
+  
+  const progressBarRect = elements.progressBar.getBoundingClientRect();
+  const clickPosition = (event.clientX - progressBarRect.left) / progressBarRect.width;
+  const seekTime = clickPosition * elements.audio.duration;
+  
+  elements.audio.currentTime = seekTime;
+}
+
+// IMPLEMENTACIÓN DE ONPLAY
+function onplay(callback) {
+  state.onPlayCallback = callback;
+  console.log('Callback onplay registrado:', callback);
+}
+
+// Función para ejecutar el callback onplay
+function executeOnPlayCallback(trackInfo) {
+  if (state.onPlayCallback && typeof state.onPlayCallback === 'function') {
+    try {
+      state.onPlayCallback(trackInfo);
+      console.log('Callback onplay ejecutado con:', trackInfo);
+    } catch (error) {
+      console.error('Error ejecutando callback onplay:', error);
+    }
+  }
+}
+
+// Inicialización
+function initializeApp() {
+  loadFavorites();
+  
+  // Eventos de audio
+  elements.audio.addEventListener('timeupdate', updateProgressBar);
+  elements.audio.addEventListener('loadedmetadata', updateProgressBar);
+  elements.audio.addEventListener('play', () => {
+    elements.playBtn.textContent = '| |';
+    
+    // Ejecutar callback onplay cuando la reproducción comienza
+    if (state.currentTrack) {
+      const trackInfo = {
+        title: state.currentTrack.title,
+        creator: state.currentTrack.creator,
+        genre: state.currentGenre,
+        duration: elements.audio.duration,
+        currentTime: elements.audio.currentTime,
+        id: state.currentTrack.id
+      };
+      executeOnPlayCallback(trackInfo);
+    }
+  });
+  
+  elements.audio.addEventListener('pause', () => elements.playBtn.textContent = '▶');
+  elements.audio.addEventListener('ended', playNext);
+  elements.audio.addEventListener('error', (e) => {
+    console.error('Error de audio:', e.target.error);
+    showStatus('Error de reproducción', 'error');
+  });
+  
+  // Eventos de controles
+  elements.progressBar.addEventListener('click', seekAudio);
+  elements.playBtn.addEventListener('click', togglePlay);
+  elements.nextBtn.addEventListener('click', playNext);
+  elements.favoriteBtn.addEventListener('click', () => toggleFavorite(state.currentTrack));
+  
+  // Evento del botón Iniciar Resonate
+  elements.startButton.addEventListener('click', startApp);
+  
+  // Eventos de búsqueda
+  elements.searchInput.addEventListener('input', performSearch);
+  
+  // Evento de género
+  elements.genreSelect.addEventListener('change', (e) => {
+    state.currentGenre = e.target.value;
+    state.userInteracted = true;
+    state.retryCount = 0;
+    state.isPlayingFavorites = false;
+    if (state.isInitialized) {
+      playRandom(state.currentGenre);
+    }
+  });
+  
+  // Evento de favoritos
+  elements.favoritesToggle.addEventListener('click', toggleFavoritesList);
+  
+  // Cerrar resultados al hacer clic fuera
+  document.addEventListener('click', (e) => {
+    if (!elements.searchInput.contains(e.target) && !elements.searchResults.contains(e.target)) {
+      hideSearchResults();
+    }
+  });
+  
+  // Marcar interacción del usuario
+  document.addEventListener('click', () => {
+    state.userInteracted = true;
+  });
+  
+  // Iniciar aplicación
+  elements.proxyStatus.textContent = 'Conectado';
+  
+  // Hacer la función onplay globalmente accesible
+  window.onplay = onplay;
+}
+
+// Inicializar
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeApp);
+} else {
+  initializeApp();
+}
+</script>
+</body>
+</html>
