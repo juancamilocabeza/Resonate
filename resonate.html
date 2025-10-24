@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fitcover" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>resonate</title>
 <style>
   :root {
@@ -29,14 +29,15 @@
     overflow: hidden;
   }
 
-  /* Contenedor principal */
-  .app {
+/* Contenedor principal - AHORA CON SCROLL */
+.app {
     display: flex;
     flex-direction: column;
+    height: 100vh;
     padding: 12px;
-    padding-bottom: 80px;
     position: relative;
-  }
+    overflow: hidden;
+}
 
   /* Header normal (no sticky) */
   header {
@@ -56,27 +57,21 @@
     text-align: left;
   }
 
-  /* Contenedor principal del contenido del reproductor */
-  .player-container {
+  /* Contenedor del reproductor CON SCROLL */
+.player-container {
     flex: 1;
-    display: flex;
-    flex-direction: column;
     overflow-y: auto;
-    min-height: 0;
-    gap: 12px;
-  }
+    display: flex;
+    flex-direction: column;
+}
 
-  /* Contenido del reproductor con transparencia inicial */
-  .player-content {
+/* Contenido del reproductor que se expande */
+.player-content {
     flex: 1;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    min-height: 0;
-    opacity: 0.3;
-    transition: opacity 0.5s ease;
-    gap: 12px;
-  }
+    min-height: 0; /* Importante para el scroll */
+}
 
   /* Cuando la app está activa, quitar transparencia del contenido */
   .app.active .player-content {
@@ -84,16 +79,15 @@
   }
 
   .art {
-    width: 220px;
-    height: 220px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 60%;
+    height: 60%;
     border-radius: 12px;
     background: var(--card);
-    display: flex;
-    align-items: center;
-    justify-content: center;
     overflow: hidden;
     flex-shrink: 0;
-    position: relative;
   }
 
   .art img {
@@ -201,13 +195,14 @@
   }
 
   .play-btn {
-    width: 56px;
-    height: 56px;
+    width: 60px;
+    height: 60px;
     border-radius: 50%;
     background: var(--accent);
     color: #0a0f0c;
     font-weight: 700;
     font-size: 16px;
+    font-style: bold;
   }
 
   .prev-btn, .next-btn {
@@ -234,6 +229,7 @@
     margin: 8px 0;
     flex-shrink: 0;
     width: 100%;
+    padding: 0 10px;
   }
 
   .genre-label {
@@ -250,15 +246,21 @@
     background: var(--btn);
     color: var(--fg);
     font-size: 14px;
-    padding: 0 16px;
     cursor: pointer;
+    padding: 0 10px;
   }
 
+  select:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--accent);
+  }
+  
   .favorites-section {
-    margin: 8px 0;
     flex-shrink: 0;
     width: 100%;
-  }
+    margin-top: auto; /* Empuja la sección hacia abajo */
+}
+
 
   .favorites-header {
     display: flex;
@@ -269,7 +271,7 @@
 
   .favorites-label {
     color: var(--muted);
-    font-size: 14px;
+    font-size: 12px;
   }
 
   .favorites-toggle {
@@ -283,14 +285,14 @@
   }
 
   .favorites-list {
-    background: var(--card);
-    border-radius: 12px;
-    max-height: 150px;
+    max-height: none; /* Elimina la altura máxima fija */
     overflow-y: auto;
-    display: none;
-    margin-top: 6px;
-  }
-
+    flex: 1; /* Ocupa el espacio disponible */
+    /* min-height: 200px; /* Altura mínima */
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    margin-top: 8px;
+}
   .favorite-item {
     padding: 10px 12px;
     border-bottom: 1px solid rgba(255,255,255,0.1);
@@ -363,14 +365,12 @@
   }
 
   .search-section {
-    position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
     background: var(--bg);
-    padding: 12px;
+    padding: 10px;
     border-top: 1px solid var(--card);
-    z-index: 100;
   }
 
   .search-container {
@@ -379,7 +379,7 @@
 
   .search-input {
     width: 100%;
-    height: 46px;
+    height: 40px;
     background: var(--card);
     border: none;
     border-radius: 12px;
@@ -400,13 +400,12 @@
 
   .search-results {
     position: absolute;
-    bottom: 100%;
     left: 0;
     right: 0;
-    background: var(--card);
+    background: black;
     border-radius: 12px;
     margin-bottom: 8px;
-    max-height: 300px;
+    max-height: 500px;
     overflow-y: auto;
     display: none;
     box-shadow: 0 8px 24px rgba(0,0,0,0.3);
@@ -417,7 +416,6 @@
     padding: 12px;
     border-bottom: 1px solid rgba(255,255,255,0.1);
     cursor: pointer;
-    transition: background 0.2s ease;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -428,7 +426,7 @@
   }
 
   .search-result:hover {
-    background: rgba(255,255,255,0.05);
+    background: black;
   }
 
   .result-info {
@@ -477,6 +475,7 @@
     padding: 16px;
     text-align: center;
     color: var(--muted);
+    font-size: 13px;
   }
 
   .search-loading {
@@ -486,12 +485,13 @@
   }
 
   .status-messages {
-    margin: 8px 0;
-    min-height: 18px;
-    text-align: center;
+    margin: 0px 0;
+    min-height: 10px;
+    text-align: left;;
   }
 
   .status-message {
+    display:none;
     background: var(--card);
     border-radius: 8px;
     font-size: 13px;
@@ -538,7 +538,7 @@
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    background: rgba(15, 17, 21, 0.95);
+    background: var(--bg);
     z-index: 1000;
     transition: opacity 0.5s ease, visibility 0.5s ease;
   }
@@ -569,7 +569,6 @@
     color: #0a0f0c;
     border: none;
     border-radius: 16px;
-    padding: 0px 32px;
     font-size: 1rem;
     font-weight: 700;
     cursor: pointer;
@@ -684,8 +683,17 @@
 <!-- Aplicación principal -->
 <div class="app" id="app">
   <header>
-      <h1>resonate</h1>
+      <h1 >resonate</h1>
   </header>
+
+  <div id="status-messages"></div>
+  
+  <div class="search-section">
+    <div class="search-container">
+      <input type="text" id="search-input" class="search-input" placeholder="Buscar ...">
+      <div id="search-results" class="search-results"></div>
+    </div>
+  </div>
 
   <!-- Contenedor para el contenido del reproductor -->
   <div class="player-container">
@@ -700,10 +708,8 @@
         <div class="creator" id="creator"></div>
       </div>
 
-      <div class="status-messages" id="status-messages"></div>
-
       <div class="controls">
-        <button id="prev-btn" class="prev-btn" disabled>Anterior</button>
+        <button id="prev-btn" class="prev-btn">Anterior</button>
         <button id="play-btn" class="play-btn">▶</button>
         <button id="next-btn" class="next-btn">Siguiente</button>
         <button id="favorite-btn" class="prev-btn">♡</button>
@@ -743,151 +749,199 @@
             <option value="alternative">Alternativa</option>
         </select>
       </div>
-
+      
+      <div class="favorites-section">
+        <div class="favorites-header">
+          <button id="favorites-toggle" class="favorites-toggle">Mostrar favoritos</button>
+        </div>
+        <div id="favorites-list" class="favorites-list"></div>
+      </div>
+    
     </div>
   </div>
 
-  <div class="favorites-section">
-    <div class="favorites-header">
-        <button id="favorites-toggle" class="favorites-toggle">Mostrar favoritos</button>
-    </div>
-    <div id="favorites-list" class="favorites-list"></div>
-  </div>
 
-  <div class="search-section">
-    <div class="search-container">
-      <input type="text" id="search-input" class="search-input" placeholder="Buscar ...">
-      <div id="search-results" class="search-results"></div>
-    </div>
-  </div>
 
 </div>
 
 <audio id="audio" crossorigin="anonymous" preload="none"></audio>
 
 <script>
-// Colecciones específicas de música en Internet Archive
-const MUSIC_COLLECTIONS = [
-  '78rpm',           // Grabaciones históricas
-  'etree',           // Música en vivo/conciertos
-  'opensource_music', // Música de código abierto
-  'folkmusic',       // Música folclórica
-  'netlabels',       // Sellos discográficos en línea
-  'GratefulDead',    // Bandas específicas
-  'LiveMusicArchive' // Archivo de música en vivo
-];
-
-// Configuración de géneros - usando colecciones específicas
-const GENRE_CONFIG = {
+// ==================== CONFIGURACIÓN OPTIMIZADA DE GÉNEROS ====================
+const GENRE_CONFIG_OPTIMIZED = {
   classical: {
-    query: 'classical',
-    collections: ['78rpm', 'etree'],
-    filters: ['symphony', 'concerto', 'sonata', 'opera']
+    query: '(classical OR symphony OR concerto OR sonata) AND mediatype:audio',
+    collections: ['78rpm', 'etree', 'georgeblood'],
+    fileFilters: ['\\.mp3$', '\\.ogg$', '\\.flac$'],
+    minDuration: 120,
+    maxDuration: 1800
   },
   jazz: {
-    query: 'jazz',
-    collections: ['78rpm', 'etree'],
-    filters: ['swing', 'bebop', 'cooljazz', 'fusion']
+    query: '(jazz OR swing OR bebop OR fusion) AND mediatype:audio',
+    collections: ['78rpm', 'etree', 'Jazz'],
+    fileFilters: ['\\.mp3$', '\\.ogg$'],
+    minDuration: 120,
+    maxDuration: 1200
   },
   rock: {
-    query: 'rock',
-    collections: ['etree', 'netlabels'],
-    filters: ['rock', 'album', 'single']
+    query: '(rock OR "rock and roll" OR album) AND mediatype:audio',
+    collections: ['etree', 'netlabels', 'rockmusic'],
+    fileFilters: ['\\.mp3$', '\\.ogg$'],
+    minDuration: 120,
+    maxDuration: 600
   },
   electronic: {
-    query: 'electronic',
-    collections: ['netlabels', 'opensource_music'],
-    filters: ['electronic', 'techno', 'house', 'ambient']
+    query: '(electronic OR techno OR house OR ambient) AND mediatype:audio',
+    collections: ['netlabels', 'opensource_music', 'electronic'],
+    fileFilters: ['\\.mp3$', '\\.ogg$'],
+    minDuration: 120,
+    maxDuration: 600
   },
   reggae: {
-    query: 'reggae',
+    query: '(reggae OR dub OR ska) AND mediatype:audio',
     collections: ['etree', 'netlabels'],
-    filters: ['reggae', 'dub', 'ska']
+    fileFilters: ['\\.mp3$', '\\.ogg$'],
+    minDuration: 120,
+    maxDuration: 600
   },
   blues: {
-    query: 'blues',
+    query: '(blues OR delta OR chicago) AND mediatype:audio',
     collections: ['78rpm', 'etree'],
-    filters: ['blues', 'delta', 'chicago']
+    fileFilters: ['\\.mp3$', '\\.ogg$'],
+    minDuration: 120,
+    maxDuration: 600
   },
   hiphop: {
-    query: 'hiphop',
+    query: '(hiphop OR rap OR beats) AND mediatype:audio',
     collections: ['netlabels', 'opensource_music'],
-    filters: ['hiphop', 'rap', 'beats']
+    fileFilters: ['\\.mp3$', '\\.ogg$'],
+    minDuration: 120,
+    maxDuration: 600
   },
   pop: {
-    query: 'pop',
+    query: '(pop OR single OR album) AND mediatype:audio',
     collections: ['netlabels', 'opensource_music'],
-    filters: ['pop', 'single', 'album']
+    fileFilters: ['\\.mp3$', '\\.ogg$'],
+    minDuration: 120,
+    maxDuration: 600
   },
   metal: {
-    query: 'metal',
+    query: '(metal OR heavy OR thrash) AND mediatype:audio',
     collections: ['netlabels'],
-    filters: ['metal', 'heavy', 'thrash']
+    fileFilters: ['\\.mp3$', '\\.ogg$'],
+    minDuration: 120,
+    maxDuration: 600
   },
   folk: {
-    query: 'folk',
+    query: '(folk OR traditional OR acoustic) AND mediatype:audio',
     collections: ['folkmusic', 'etree'],
-    filters: ['folk', 'traditional', 'acoustic']
+    fileFilters: ['\\.mp3$', '\\.ogg$'],
+    minDuration: 120,
+    maxDuration: 600
   },
   country: {
-    query: 'country',
+    query: '(country OR western OR bluegrass) AND mediatype:audio',
     collections: ['78rpm', 'etree'],
-    filters: ['country', 'western', 'bluegrass']
+    fileFilters: ['\\.mp3$', '\\.ogg$'],
+    minDuration: 120,
+    maxDuration: 600
   },
   rnb: {
-    query: 'rnb',
+    query: '(rnb OR soul OR funk) AND mediatype:audio',
     collections: ['netlabels'],
-    filters: ['rnb', 'soul', 'funk']
+    fileFilters: ['\\.mp3$', '\\.ogg$'],
+    minDuration: 120,
+    maxDuration: 600
   },
   latin: {
-    query: 'latin',
+    query: '(latin OR salsa OR merengue) AND mediatype:audio',
     collections: ['etree', 'netlabels'],
-    filters: ['latin', 'salsa', 'merengue']
+    fileFilters: ['\\.mp3$', '\\.ogg$'],
+    minDuration: 120,
+    maxDuration: 600
   },
   ambient: {
-    query: 'ambient',
+    query: '(ambient OR drone OR atmospheric) AND mediatype:audio',
     collections: ['netlabels', 'opensource_music'],
-    filters: ['ambient', 'drone', 'atmospheric']
+    fileFilters: ['\\.mp3$', '\\.ogg$'],
+    minDuration: 120,
+    maxDuration: 600
   },
   punk: {
-    query: 'punk',
+    query: '(punk OR hardcore OR oi) AND mediatype:audio',
     collections: ['netlabels'],
-    filters: ['punk', 'hardcore', 'oi']
+    fileFilters: ['\\.mp3$', '\\.ogg$'],
+    minDuration: 120,
+    maxDuration: 600
   },
   funk: {
-    query: 'funk',
+    query: '(funk OR disco OR soul) AND mediatype:audio',
     collections: ['netlabels', 'etree'],
-    filters: ['funk', 'disco', 'soul']
+    fileFilters: ['\\.mp3$', '\\.ogg$'],
+    minDuration: 120,
+    maxDuration: 600
   },
   soul: {
-    query: 'soul',
+    query: '(soul OR motown OR r&b) AND mediatype:audio',
     collections: ['78rpm', 'netlabels'],
-    filters: ['soul', 'motown', 'r&b']
+    fileFilters: ['\\.mp3$', '\\.ogg$'],
+    minDuration: 120,
+    maxDuration: 600
   },
   disco: {
-    query: 'disco',
+    query: '(disco OR funk OR dance) AND mediatype:audio',
     collections: ['netlabels'],
-    filters: ['disco', 'funk', 'dance']
+    fileFilters: ['\\.mp3$', '\\.ogg$'],
+    minDuration: 120,
+    maxDuration: 600
   },
   indie: {
-    query: 'indie',
+    query: '(indie OR alternative OR lo-fi) AND mediatype:audio',
     collections: ['netlabels', 'opensource_music'],
-    filters: ['indie', 'alternative', 'lo-fi']
+    fileFilters: ['\\.mp3$', '\\.ogg$'],
+    minDuration: 120,
+    maxDuration: 600
   },
   alternative: {
-    query: 'alternative',
+    query: '(alternative OR indie OR college) AND mediatype:audio',
     collections: ['netlabels', 'opensource_music'],
-    filters: ['alternative', 'indie', 'college']
+    fileFilters: ['\\.mp3$', '\\.ogg$'],
+    minDuration: 120,
+    maxDuration: 600
   }
 };
 
-// Elementos DOM
+// ==================== SISTEMA DE CACHÉ MEJORADO ====================
+const searchCache = new Map();
+const metadataCache = new Map();
+
+function getCacheKey(type, query) {
+  return `${type}:${query.toLowerCase().trim()}`;
+}
+
+async function cachedSearch(query, searchFunction) {
+  const cacheKey = getCacheKey('search', query);
+  const cached = searchCache.get(cacheKey);
+  
+  if (cached && Date.now() - cached.timestamp < 300000) {
+    return cached.data;
+  }
+  
+  const results = await searchFunction(query);
+  searchCache.set(cacheKey, {
+    data: results,
+    timestamp: Date.now()
+  });
+  
+  return results;
+}
+
+// ==================== ELEMENTOS DOM ====================
 const elements = {
   audio: document.getElementById('audio'),
   art: document.getElementById('art'),
   title: document.getElementById('title'),
   creator: document.getElementById('creator'),
-  proxyStatus: document.getElementById('proxy-status'),
   statusMessages: document.getElementById('status-messages'),
   progressBar: document.getElementById('progress-bar'),
   progress: document.getElementById('progress'),
@@ -908,7 +962,7 @@ const elements = {
   playerContent: document.getElementById('player-content')
 };
 
-// Estado de la aplicación
+// ==================== ESTADO DE LA APLICACIÓN ====================
 const state = {
   currentGenre: 'classical',
   currentTrack: null,
@@ -918,16 +972,55 @@ const state = {
   retryCount: 0,
   maxRetries: 5,
   searchResults: [],
-  currentSearchIndex: -1,
   isPlayingFavorites: false,
-  currentFavoriteIndex: -1,
   favoritesVisible: false,
   isInitialized: false,
   onPlayCallback: null,
   appStarted: false
 };
 
-// Sistema de almacenamiento local
+// ==================== SISTEMA DE REPRODUCCIÓN CONTINUA ====================
+class ContinuousPlaybackManager {
+  constructor() {
+    this.currentContext = null;
+    this.contextData = {
+      genre: { currentIndex: -1, items: [] },
+      search: { currentIndex: -1, items: [] },
+      favorites: { currentIndex: -1, items: [] }
+    };
+  }
+  
+  setContext(context, items, startIndex = 0) {
+    this.currentContext = context;
+    this.contextData[context] = {
+      currentIndex: startIndex,
+      items: items || []
+    };
+  }
+  
+  getNextTrack() {
+    if (!this.currentContext || !this.contextData[this.currentContext].items.length) {
+      return null;
+    }
+    
+    const context = this.contextData[this.currentContext];
+    context.currentIndex = (context.currentIndex + 1) % context.items.length;
+    return context.items[context.currentIndex];
+  }
+  
+  getCurrentContext() {
+    return this.currentContext;
+  }
+  
+  hasNextTrack() {
+    const context = this.contextData[this.currentContext];
+    return context && context.items.length > 0;
+  }
+}
+
+const playbackManager = new ContinuousPlaybackManager();
+
+// ==================== ALMACENAMIENTO LOCAL ====================
 function loadFavorites() {
   try {
     const favorites = localStorage.getItem('resonate_favorites');
@@ -986,7 +1079,7 @@ function updateFavoriteButton() {
   }
 }
 
-// Utilidades
+// ==================== UTILIDADES ====================
 function formatTime(seconds) {
   if (!isFinite(seconds) || seconds < 0) return '0:00';
   const minutes = Math.floor(seconds / 60);
@@ -994,7 +1087,6 @@ function formatTime(seconds) {
   return `${minutes}:${String(remainingSeconds).padStart(2, '0')}`;
 }
 
-// Función para obtener portadas
 async function setArtwork(track, identifier) {
   elements.art.innerHTML = '';
   
@@ -1006,7 +1098,6 @@ async function setArtwork(track, identifier) {
   const img = new Image();
   img.alt = 'Portada del álbum';
   
-  // Intentar con portada de Internet Archive
   const archiveCoverUrl = `https://archive.org/services/img/${identifier}`;
   
   img.onload = () => {
@@ -1014,15 +1105,12 @@ async function setArtwork(track, identifier) {
   };
   
   img.onerror = () => {
-    // Si falla, usar imagen genérica basada en el género
     setGenericArtwork();
   };
   
-  // Intentar cargar portada de Internet Archive
   img.src = archiveCoverUrl;
 }
 
-// Imagen genérica basada en género
 function setGenericArtwork() {
   const genreColors = {
     classical: '#8B4513',
@@ -1075,68 +1163,79 @@ function showStatus(message, type = 'info', duration = 3000) {
   }
 }
 
-// Nueva estrategia de búsqueda - usando colecciones específicas
-async function searchItems(query) {
-  // Buscar en colecciones de música específicas
-  const musicCollections = MUSIC_COLLECTIONS.join('+OR+collection:');
-  const encodedQuery = encodeURIComponent(query);
-  
-  // Consulta que busca en colecciones de música específicas
-  const url = `https://archive.org/advancedsearch.php?q=${encodedQuery}+AND+(collection:${musicCollections})&fl[]=identifier&fl[]=title&fl[]=creator&rows=50&output=json&sort[]=downloads+desc`;
-  
-  try {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error('Error de red');
-    const data = await response.json();
-    
-    // Si no hay resultados, intentar una búsqueda más amplia pero con filtros
-    if (!data.response || data.response.docs.length === 0) {
-      return await fallbackSearch(query);
-    }
-    
-    return data.response.docs;
-  } catch (error) {
-    console.error('Error en búsqueda:', error);
-    // Intentar búsqueda de respaldo
-    return await fallbackSearch(query);
+// ==================== BÚSQUEDA OPTIMIZADA ====================
+async function optimizedSearchItems(query, genre = null) {
+  // Consulta más simple y efectiva
+  let searchQuery;
+  if (genre && GENRE_CONFIG_OPTIMIZED[genre]) {
+    // Usar términos específicos del género
+    const genreTerms = query || genre;
+    searchQuery = `(${genreTerms}) AND mediatype:audio AND format:("MP3" OR "Ogg Vorbis" OR "VBR MP3")`;
+  } else {
+    searchQuery = `(${query}) AND mediatype:audio AND format:("MP3" OR "Ogg Vorbis" OR "VBR MP3")`;
   }
-}
-
-// Búsqueda de respaldo - más amplia pero con filtros
-async function fallbackSearch(query) {
-  const encodedQuery = encodeURIComponent(`${query} AND mediatype:audio`);
-  const url = `https://archive.org/advancedsearch.php?q=${encodedQuery}&fl[]=identifier&fl[]=title&fl[]=creator&rows=30&output=json&sort[]=downloads+desc`;
+  
+  const encodedQuery = encodeURIComponent(searchQuery);
+  const url = `https://archive.org/advancedsearch.php?q=${encodedQuery}&fl[]=identifier&fl[]=title&fl[]=creator&rows=100&output=json&sort[]=downloads+desc`;
   
   try {
     const response = await fetch(url);
     if (!response.ok) throw new Error('Error de red');
     const data = await response.json();
     
-    // Filtrar resultados por nombre (excluir podcasts, audiolibros, etc.)
-    const filteredResults = (data.response?.docs || []).filter(item => {
-      const title = (item.title || '').toLowerCase();
-      const creator = (item.creator || '').toLowerCase();
-      
-      // Excluir tipos de contenido no musical
-      const excludeTerms = [
-        'podcast', 'audiobook', 'lecture', 'interview', 
-        'speech', 'sermon', 'documentary', 'radio', 'talk'
-      ];
-      
-      return !excludeTerms.some(term => 
-        title.includes(term) || creator.includes(term)
-      );
-    });
+    const validItems = (data.response?.docs || []).filter(item => 
+      item.identifier && item.title
+    );
     
-    return filteredResults;
+    console.log(`Encontrados ${validItems.length} items para: ${query}`);
+    return validItems;
+    
   } catch (error) {
-    console.error('Error en búsqueda de respaldo:', error);
+    console.error('Error en búsqueda optimizada:', error);
     return [];
   }
 }
 
-// Función para obtener archivos reproducibles
-async function fetchPlayableFiles(identifier) {
+function isValidMusicItem(item, genre = null) {
+  if (!item.identifier) return false;
+  
+  const title = (item.title || '').toLowerCase();
+  const description = (item.description || '').toLowerCase();
+  const creator = (item.creator || '').toLowerCase();
+  
+  const excludeTerms = [
+    'podcast', 'audiobook', 'lecture', 'interview', 'speech',
+    'sermon', 'documentary', 'radio show', 'talk', 'conference'
+  ];
+  
+  const hasExcludedTerm = excludeTerms.some(term => 
+    title.includes(term) || description.includes(term) || creator.includes(term)
+  );
+  
+  if (hasExcludedTerm) return false;
+  
+  if (genre && GENRE_CONFIG_OPTIMIZED[genre]) {
+    const config = GENRE_CONFIG_OPTIMIZED[genre];
+    const genreTerms = config.query.toLowerCase().split(' OR ');
+    const hasGenreTerm = genreTerms.some(term => 
+      title.includes(term) || description.includes(term) || creator.includes(term)
+    );
+    
+    if (!hasGenreTerm) return false;
+  }
+  
+  return true;
+}
+
+// ==================== GESTIÓN DE ARCHIVOS DE AUDIO ====================
+async function fetchOptimizedPlayableFiles(identifier, genre = null) {
+  const cacheKey = getCacheKey('metadata', identifier);
+  const cached = metadataCache.get(cacheKey);
+  
+  if (cached && Date.now() - cached.timestamp < 600000) {
+    return cached.data;
+  }
+  
   const url = `https://archive.org/metadata/${identifier}`;
   
   try {
@@ -1144,173 +1243,113 @@ async function fetchPlayableFiles(identifier) {
     if (!response.ok) throw new Error('Error al cargar metadatos');
     const metadata = await response.json();
     
-    if (!metadata || !metadata.files) {
+    if (!metadata?.files) {
       throw new Error('Metadatos inválidos');
     }
     
-    // Buscar archivos de audio
-    const audioFiles = metadata.files.filter(file => {
-      if (!file.name || file.name.includes('_files.xml') || file.name.includes('_meta.xml')) {
-        return false;
-      }
-      
-      const lowerName = file.name.toLowerCase();
-      const isAudioFile = lowerName.endsWith('.mp3') || 
-             lowerName.endsWith('.ogg') || 
-             lowerName.endsWith('.wav');
-      
-      // Excluir archivos que parecen ser podcasts o audiolibros
-      const isLikelyMusic = !lowerName.includes('podcast') && 
-                           !lowerName.includes('audiobook') &&
-                           !lowerName.includes('lecture') &&
-                           !lowerName.includes('interview');
-      
-      return isAudioFile && isLikelyMusic;
-    });
+    // Encontrar el primer archivo de audio válido
+    const audioFile = metadata.files.find(file => 
+      isPlayableAudioFile(file, genre)
+    );
     
-    if (audioFiles.length === 0) {
+    if (!audioFile) {
       throw new Error('No hay archivos de audio reproducibles');
     }
     
-    // Ordenar por tamaño (los archivos muy pequeños o muy grandes son menos probables de ser canciones)
-    audioFiles.sort((a, b) => {
-      const sizeA = a.size || 0;
-      const sizeB = b.size || 0;
-      
-      // Preferir archivos entre 1MB y 20MB (tamaño típico de canciones)
-      const idealMin = 1 * 1024 * 1024; // 1MB
-      const idealMax = 20 * 1024 * 1024; // 20MB
-      
-      const scoreA = getFileScore(sizeA, idealMin, idealMax);
-      const scoreB = getFileScore(sizeB, idealMin, idealMax);
-      
-      return scoreB - scoreA; // Orden descendente (mejor puntuación primero)
-    });
-    
-    // Tomar los mejores archivos
-    const playableFiles = audioFiles.slice(0, 3).map(file => ({
-      url: `https://archive.org/download/${identifier}/${encodeURIComponent(file.name)}`,
-      title: metadata.metadata?.title || file.name || identifier,
+    const playableFile = {
+      url: `https://archive.org/download/${identifier}/${encodeURIComponent(audioFile.name)}`,
+      title: metadata.metadata?.title || audioFile.name || identifier,
       creator: metadata.metadata?.creator || 'Artista desconocido',
       id: identifier,
-      format: file.name.split('.').pop()?.toUpperCase() || 'MP3'
-    }));
+      format: audioFile.name.split('.').pop()?.toUpperCase() || 'MP3'
+    };
     
-    return playableFiles;
+    metadataCache.set(cacheKey, {
+      data: [playableFile], // Devolver como array con un elemento
+      timestamp: Date.now()
+    });
+    
+    return [playableFile];
     
   } catch (error) {
-    console.error('Error al cargar archivos:', error);
+    console.error('Error al cargar archivos optimizados:', error);
     throw error;
   }
 }
 
-// Función auxiliar para puntuar archivos por tamaño
-function getFileScore(size, idealMin, idealMax) {
-  if (size < idealMin) return 0; // Muy pequeño
-  if (size > idealMax) return size > (idealMax * 5) ? 0 : 0.5; // Muy grande
-  
-  // Dentro del rango ideal
-  const idealCenter = (idealMin + idealMax) / 2;
-  const distance = Math.abs(size - idealCenter);
-  const maxDistance = idealMax - idealCenter;
-  
-  return 1 - (distance / maxDistance);
-}
-
-// Funcionalidad de géneros usando colecciones específicas
-async function queryItems(genre) {
-  const config = GENRE_CONFIG[genre];
-  if (!config) {
-    showStatus(`Género no configurado: ${genre}`, 'error');
-    return [];
+function isPlayableAudioFile(file, genre = null) {
+  if (!file.name || file.name.includes('_files.xml') || file.name.includes('_meta.xml')) {
+    return false;
   }
   
-  // Construir consulta usando colecciones específicas
-  const collections = config.collections.join('+OR+collection:');
-  const filters = config.filters.join('+OR+');
+  const audioFormats = ['.mp3', '.ogg', '.wav', '.flac', '.m4a'];
+  const isAudioFile = audioFormats.some(format => 
+    file.name.toLowerCase().endsWith(format)
+  );
   
-  const url = `https://archive.org/advancedsearch.php?q=${config.query}+AND+(collection:${collections})+AND+(${filters})&fl[]=identifier&fl[]=title&fl[]=creator&rows=30&output=json&sort[]=downloads+desc`;
+  if (!isAudioFile) return false;
   
-  try {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error('Error de red');
-    const data = await response.json();
+  const fileSize = file.size || 0;
+  if (fileSize < 100000) return false;
+  if (fileSize > 500000000) return false;
+  
+  if (genre && GENRE_CONFIG_OPTIMIZED[genre]) {
+    const config = GENRE_CONFIG_OPTIMIZED[genre];
+    const duration = file.length || 0;
     
-    // Si no hay resultados, intentar búsqueda más amplia
-    if (!data.response || data.response.docs.length === 0) {
-      return await fallbackGenreSearch(genre);
+    if (duration < config.minDuration || duration > config.maxDuration) {
+      return false;
     }
-    
-    return data.response.docs;
-  } catch (error) {
-    console.error('Error en queryItems:', error);
-    // Intentar búsqueda de respaldo
-    return await fallbackGenreSearch(genre);
-  }
-}
-
-// Búsqueda de respaldo para géneros
-async function fallbackGenreSearch(genre) {
-  const config = GENRE_CONFIG[genre];
-  if (!config) return [];
-  
-  const encodedQuery = encodeURIComponent(`${config.query} AND mediatype:audio`);
-  const url = `https://archive.org/advancedsearch.php?q=${encodedQuery}&fl[]=identifier&fl[]=title&fl[]=creator&rows=20&output=json&sort[]=downloads+desc`;
-  
-  try {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error('Error de red');
-    const data = await response.json();
-    
-    // Filtrar resultados por nombre
-    const filteredResults = (data.response?.docs || []).filter(item => {
-      const title = (item.title || '').toLowerCase();
-      const creator = (item.creator || '').toLowerCase();
-      
-      // Excluir tipos de contenido no musical
-      const excludeTerms = [
-        'podcast', 'audiobook', 'lecture', 'interview', 
-        'speech', 'sermon', 'documentary', 'radio', 'talk'
-      ];
-      
-      return !excludeTerms.some(term => 
-        title.includes(term) || creator.includes(term)
-      );
-    });
-    
-    return filteredResults;
-  } catch (error) {
-    console.error('Error en búsqueda de respaldo para género:', error);
-    showStatus(`Error al buscar música ${genre}`, 'error');
-    return [];
-  }
-}
-
-// Función para iniciar la aplicación
-function startApp() {
-  state.appStarted = true;
-  elements.startView.classList.add('hidden');
-  elements.app.classList.add('active');
-  
-  // Iniciar reproducción automáticamente
-  forcePlay();
-}
-
-// Función para forzar la reproducción
-function forcePlay() {
-  if (!state.isInitialized) {
-    state.isInitialized = true;
-    showStatus('Iniciando Resonate...', 'info');
-    elements.title.textContent = '';
-    elements.creator.textContent = '';
   }
   
-  state.userInteracted = true;
-  playRandom(state.currentGenre);
+  const excludePatterns = [
+    /podcast/i, /audiobook/i, /lecture/i, /interview/i,
+    /speech/i, /sermon/i, /documentary/i, /radio.*show/i
+  ];
+  
+  const hasExcludedPattern = excludePatterns.some(pattern => 
+    pattern.test(file.name)
+  );
+  
+  return !hasExcludedPattern;
 }
 
-// Función principal para reproducir
-async function playRandom(genre) {
+function getFileScore(file, genre = null) {
+  let score = 0;
+  
+  const formatScores = {
+    '.flac': 100,
+    '.wav': 90,
+    '.m4a': 80,
+    '.mp3': 70,
+    '.ogg': 60
+  };
+  
+  const extension = '.' + file.name.split('.').pop()?.toLowerCase();
+  score += formatScores[extension] || 50;
+  
+  const fileSize = file.size || 0;
+  if (fileSize > 2000000 && fileSize < 50000000) {
+    score += 30;
+  }
+  
+  const fileName = file.name.toLowerCase();
+  if (!/^\d+[-_]/.test(fileName)) {
+    score += 20;
+  }
+  
+  if (file.length) {
+    const duration = file.length;
+    if (duration > 120 && duration < 600) {
+      score += 40;
+    }
+  }
+  
+  return score;
+}
+
+// ==================== FUNCIONES DE REPRODUCCIÓN OPTIMIZADAS - CORREGIDAS ====================
+async function playOptimizedRandom(genre) {
   if (state.isLoading) return;
   
   state.isLoading = true;
@@ -1322,60 +1361,40 @@ async function playRandom(genre) {
   
   try {
     showStatus(`Buscando música ${genre}...`, 'info', 0);
-    const items = await queryItems(genre);
+    
+    const config = GENRE_CONFIG_OPTIMIZED[genre];
+    if (!config) {
+      throw new Error(`Configuración no encontrada para el género: ${genre}`);
+    }
+    
+    // Búsqueda más simple y directa
+    const simpleQuery = `${genre} music audio`;
+    const items = await cachedSearch(
+      `${genre} music`, 
+      () => optimizedSearchItems(simpleQuery, genre)
+    );
     
     if (items.length === 0) {
-      throw new Error('No se encontraron pistas para este género');
-    }
-    
-    // Intentar con varios ítems hasta encontrar uno que funcione
-    let success = false;
-    let attempts = 0;
-    const maxAttempts = 5;
-    
-    // Mezclar los ítems para mayor variedad
-    const shuffledItems = [...items].sort(() => Math.random() - 0.5);
-    
-    while (!success && attempts < maxAttempts && shuffledItems.length > 0) {
-      const item = shuffledItems[attempts];
+      // Segunda intento con búsqueda más amplia
+      const fallbackItems = await cachedSearch(
+        `${genre} audio`,
+        () => optimizedSearchItems(`${genre}`, null) // Sin filtro de género
+      );
       
-      try {
-        showStatus(`Cargando: ${item.title}`, 'info', 0);
-        const files = await fetchPlayableFiles(item.identifier);
-        
-        if (files.length > 0) {
-          const track = files[0];
-          success = await playAudioTrack(track, item.identifier);
-          if (success) {
-            state.retryCount = 0; // Resetear contador en éxito
-            break;
-          }
-        }
-      } catch (error) {
-        console.error(`Error cargando ítem ${attempts + 1}:`, error);
-        // Continuar con el siguiente ítem
+      if (fallbackItems.length === 0) {
+        throw new Error(`No se encontraron pistas de ${genre}. Intenta con otro género.`);
       }
       
-      attempts++;
+      playbackManager.setContext('genre', fallbackItems);
+    } else {
+      playbackManager.setContext('genre', items);
     }
     
-    if (!success) {
-      throw new Error('No se pudo cargar ninguna pista después de varios intentos');
-    }
+    await playNextInContext();
     
   } catch (error) {
-    console.error('Error en playRandom:', error);
-    
-    // Reintentar si no hemos excedido el máximo
-    if (state.retryCount < state.maxRetries) {
-      state.retryCount++;
-      showStatus(`Reintentando... (${state.retryCount}/${state.maxRetries})`, 'info', 2000);
-      setTimeout(() => playRandom(genre), 2000);
-    } else {
-      showStatus(`Error: ${error.message}`, 'error');
-      elements.title.textContent = 'Error al cargar género';
-      elements.creator.textContent = 'Intenta con otro género o busca manualmente';
-    }
+    console.error('Error en playOptimizedRandom:', error);
+    handlePlaybackError(error, genre);
   } finally {
     state.isLoading = false;
     elements.playBtn.disabled = false;
@@ -1383,11 +1402,37 @@ async function playRandom(genre) {
   }
 }
 
-// Resto del código permanece igual...
-// [El resto del código JavaScript permanece igual que en la versión anterior]
+async function playOptimizedSearchResult(result, index, allResults) {
+  if (state.isLoading) return;
+  
+  state.isLoading = true;
+  elements.playBtn.disabled = true;
+  
+  try {
+    showStatus(`Cargando: ${result.title}`, 'info', 0);
+    
+    playbackManager.setContext('search', allResults, index);
+    
+    const files = await fetchOptimizedPlayableFiles(result.identifier);
+    
+    if (files.length > 0) {
+      const track = files[0];
+      await playAudioTrackOptimized(track, result.identifier);
+      hideSearchResults();
+    } else {
+      throw new Error('No se encontraron archivos de audio reproducibles');
+    }
+    
+  } catch (error) {
+    console.error('Error en playOptimizedSearchResult:', error);
+    showStatus(`Error: ${error.message}`, 'error');
+  } finally {
+    state.isLoading = false;
+    elements.playBtn.disabled = false;
+  }
+}
 
-// Función para reproducir favoritos
-async function playFavorite(favoriteIndex = 0) {
+async function playOptimizedFavorite(favoriteIndex = 0) {
   if (state.isLoading || state.favorites.length === 0) return;
   
   state.isLoading = true;
@@ -1395,13 +1440,13 @@ async function playFavorite(favoriteIndex = 0) {
   elements.playBtn.innerHTML = '<span class="loader"></span>';
   
   state.isPlayingFavorites = true;
-  state.currentFavoriteIndex = favoriteIndex;
   
   try {
+    playbackManager.setContext('favorites', state.favorites, favoriteIndex);
+    
     const favorite = state.favorites[favoriteIndex];
     showStatus(`Cargando favorito: ${favorite.title}`, 'info', 0);
     
-    // Para favoritos, ya tenemos la URL directamente
     const track = {
       url: favorite.url,
       title: favorite.title,
@@ -1409,13 +1454,10 @@ async function playFavorite(favoriteIndex = 0) {
       id: favorite.id
     };
     
-    const success = await playAudioTrack(track, favorite.id);
-    if (success) {
-      state.retryCount = 0;
-    }
+    await playAudioTrackOptimized(track, favorite.id);
     
   } catch (error) {
-    console.error('Error en playFavorite:', error);
+    console.error('Error en playOptimizedFavorite:', error);
     showStatus(`Error: ${error.message}`, 'error');
   } finally {
     state.isLoading = false;
@@ -1424,15 +1466,195 @@ async function playFavorite(favoriteIndex = 0) {
   }
 }
 
-// Función para reproducir siguiente favorito
-function playNextFavorite() {
-  if (!state.isPlayingFavorites || state.favorites.length === 0) return;
+// ==================== REPRODUCCIÓN CONTINUA MEJORADA ====================
+async function playNextInContext() {
+  const context = playbackManager.getCurrentContext();
   
-  const nextIndex = (state.currentFavoriteIndex + 1) % state.favorites.length;
-  playFavorite(nextIndex);
+  if (!playbackManager.hasNextTrack()) {
+    // Si no hay siguiente pista, buscar más del mismo género
+    if (context === 'genre') {
+      await playOptimizedRandom(state.currentGenre);
+    }
+    return;
+  }
+  
+  const nextItem = playbackManager.getNextTrack();
+  
+  try {
+    let files;
+    
+    if (context === 'genre' || context === 'search') {
+      files = await fetchOptimizedPlayableFiles(nextItem.identifier, state.currentGenre);
+    } else if (context === 'favorites') {
+      // Para favoritos, usar la URL directamente
+      const track = {
+        url: nextItem.url,
+        title: nextItem.title,
+        creator: nextItem.creator,
+        id: nextItem.id
+      };
+      await playAudioTrackOptimized(track, nextItem.id);
+      return;
+    }
+    
+    if (files && files.length > 0) {
+      await playAudioTrackOptimized(files[0], nextItem.identifier);
+    } else {
+      // Si no se pueden cargar archivos, intentar con la siguiente pista
+      await playNextInContext();
+    }
+    
+  } catch (error) {
+    console.error('Error al reproducir siguiente pista:', error);
+    // Reintentar con la siguiente pista después de un breve delay
+    setTimeout(() => playNextInContext(), 1000);
+  }
 }
 
-// Display de resultados de búsqueda
+async function playAudioTrackOptimized(track, identifier) {
+  if (!track || !track.url) {
+    throw new Error('Pista no disponible');
+  }
+  
+  elements.audio.pause();
+  elements.audio.currentTime = 0;
+  elements.audio.src = '';
+  
+  elements.title.textContent = track.title;
+  elements.creator.textContent = track.creator;
+  
+  await setArtwork(track, identifier);
+  
+  state.currentTrack = track;
+  updateFavoriteButton();
+  
+  showStatus(`Cargando: ${track.title}`, 'info', 0);
+  
+  return new Promise((resolve, reject) => {
+    const audio = elements.audio;
+    
+    const onCanPlay = () => {
+      cleanup();
+      audio.play().then(() => {
+        showStatus(`Reproduciendo: ${track.title}`, 'info');
+        resolve(true);
+      }).catch(reject);
+    };
+    
+    const onError = (e) => {
+      cleanup();
+      reject(new Error(`Error de audio: ${e.target.error?.message || 'Fuente no compatible'}`));
+    };
+    
+    const cleanup = () => {
+      audio.removeEventListener('canplay', onCanPlay);
+      audio.removeEventListener('error', onError);
+      clearTimeout(timeoutId);
+    };
+    
+    const timeoutId = setTimeout(() => {
+      cleanup();
+      reject(new Error('Tiempo de espera agotado al cargar audio'));
+    }, 15000);
+    
+    audio.addEventListener('canplay', onCanPlay, { once: true });
+    audio.addEventListener('error', onError, { once: true });
+    
+    audio.src = track.url;
+    audio.load();
+  });
+}
+
+// ==================== MANEJO DE ERRORES MEJORADO ====================
+function handlePlaybackError(error, context) {
+  console.error(`Error de reproducción en ${context}:`, error);
+  
+  if (state.retryCount < state.maxRetries) {
+    state.retryCount++;
+    showStatus(`Reintentando... (${state.retryCount}/${state.maxRetries})`, 'info', 2000);
+    
+    setTimeout(() => {
+      if (playbackManager.getCurrentContext() === 'genre') {
+        playOptimizedRandom(state.currentGenre);
+      } else {
+        playNextInContext();
+      }
+    }, 2000);
+  } else {
+    showStatus(`Error: ${error.message}`, 'error');
+    elements.title.textContent = 'Error al cargar';
+    elements.creator.textContent = 'Intenta con otro género o busca manualmente';
+    state.retryCount = 0;
+    
+    // Restablecer botón de reproducción
+    elements.playBtn.disabled = false;
+    elements.playBtn.textContent = '▶';
+  }
+}
+
+// ==================== CONTROL DE REPRODUCCIÓN ====================
+function togglePlay() {
+  if (state.isLoading) return;
+  
+  state.userInteracted = true;
+  
+  if (elements.audio.paused) {
+    if (!elements.audio.src) {
+      forcePlay();
+      return;
+    }
+    
+    elements.audio.play().then(() => {
+      elements.playBtn.textContent = '| |';
+      showStatus('Reproduciendo', 'info');
+    }).catch(error => {
+      showStatus(`Error: ${error.message}`, 'error');
+    });
+  } else {
+    elements.audio.pause();
+    elements.playBtn.textContent = '▶';
+    showStatus('Pausado', 'info');
+  }
+}
+
+function playNext() {
+  state.userInteracted = true;
+  showStatus('Siguiente pista', 'info');
+  playNextInContext();
+}
+
+function forcePlay() {
+  if (!state.isInitialized) {
+    state.isInitialized = true;
+    showStatus('Iniciando Resonate...', 'info');
+    elements.title.textContent = '';
+    elements.creator.textContent = '';
+  }
+  
+  state.userInteracted = true;
+  playOptimizedRandom(state.currentGenre);
+}
+
+// ==================== BÚSQUEDA Y RESULTADOS ====================
+async function performOptimizedSearch() {
+  const query = elements.searchInput.value.trim();
+  
+  if (!query) {
+    hideSearchResults();
+    return;
+  }
+  
+  elements.searchResults.innerHTML = '<div class="search-loading"><span class="loader"></span> Buscando música...</div>';
+  elements.searchResults.style.display = 'block';
+  
+  try {
+    const results = await cachedSearch(query, () => optimizedSearchItems(query));
+    displaySearchResults(results);
+  } catch (error) {
+    elements.searchResults.innerHTML = '<div class="no-results">Error en la búsqueda</div>';
+  }
+}
+
 function displaySearchResults(results) {
   elements.searchResults.innerHTML = '';
   state.searchResults = results;
@@ -1443,7 +1665,6 @@ function displaySearchResults(results) {
     return;
   }
   
-  // Mostrar todos los resultados
   results.forEach((result, index) => {
     const resultEl = document.createElement('div');
     resultEl.className = 'search-result';
@@ -1463,22 +1684,7 @@ function displaySearchResults(results) {
     resultEl.addEventListener('click', async (e) => {
       if (!e.target.classList.contains('result-favorite')) {
         showStatus(`Cargando: ${result.title}`, 'info', 0);
-        
-        try {
-          const files = await fetchPlayableFiles(result.identifier);
-          if (files.length > 0) {
-            const track = files[0];
-            // Guardar índice para reproducción secuencial
-            state.currentSearchIndex = index;
-            state.isPlayingFavorites = false;
-            await playAudioTrack(track, result.identifier);
-            hideSearchResults();
-          } else {
-            showStatus('No se encontraron archivos de audio reproducibles', 'error');
-          }
-        } catch (error) {
-          showStatus(`Error al cargar: ${error.message}`, 'error');
-        }
+        await playOptimizedSearchResult(result, index, results);
       }
     });
     
@@ -1501,156 +1707,12 @@ function displaySearchResults(results) {
   elements.searchResults.style.display = 'block';
 }
 
-// Función para reproducir siguiente resultado de búsqueda
-function playNextSearchResult() {
-  if (state.searchResults.length === 0 || state.currentSearchIndex === -1) return;
-  
-  const nextIndex = (state.currentSearchIndex + 1) % state.searchResults.length;
-  state.currentSearchIndex = nextIndex;
-  
-  const nextResult = state.searchResults[nextIndex];
-  showStatus(`Cargando: ${nextResult.title}`, 'info', 0);
-  
-  fetchPlayableFiles(nextResult.identifier)
-    .then(files => {
-      if (files.length > 0) {
-        const track = files[0];
-        playAudioTrack(track, nextResult.identifier);
-      }
-    })
-    .catch(error => {
-      showStatus(`Error al cargar: ${error.message}`, 'error');
-    });
-}
-
 function hideSearchResults() {
   elements.searchResults.style.display = 'none';
   elements.searchInput.blur();
 }
 
-function performSearch() {
-  const query = elements.searchInput.value.trim();
-  
-  if (!query) {
-    hideSearchResults();
-    return;
-  }
-  
-  elements.searchResults.innerHTML = '<div class="search-loading"><span class="loader"></span> Buscando música...</div>';
-  elements.searchResults.style.display = 'block';
-  
-  setTimeout(async () => {
-    try {
-      const results = await searchItems(query);
-      displaySearchResults(results);
-    } catch (error) {
-      elements.searchResults.innerHTML = '<div class="no-results">Error en la búsqueda</div>';
-    }
-  }, 500);
-}
-
-// Control de reproducción
-async function playAudioTrack(track, identifier) {
-  if (!track || !track.url) {
-    showStatus('Error: Pista no disponible', 'error');
-    return false;
-  }
-  
-  // Limpiar estado anterior
-  elements.audio.pause();
-  elements.audio.currentTime = 0;
-  elements.audio.src = '';
-  
-  // Actualizar UI
-  elements.title.textContent = track.title;
-  elements.creator.textContent = track.creator;
-  
-  // Cargar portada
-  await setArtwork(track, identifier);
-  
-  state.currentTrack = track;
-  updateFavoriteButton();
-  
-  showStatus(`Cargando: ${track.title}`, 'info', 0);
-  
-  try {
-    // Configurar fuente de audio
-    elements.audio.src = track.url;
-    
-    // Esperar a que el audio esté listo
-    await new Promise((resolve, reject) => {
-      const onCanPlay = () => {
-        cleanup();
-        resolve();
-      };
-      
-      const onError = (e) => {
-        cleanup();
-        reject(new Error(`Error de audio: ${e.target.error?.message || 'Fuente no compatible'}`));
-      };
-      
-      const cleanup = () => {
-        elements.audio.removeEventListener('canplay', onCanPlay);
-        elements.audio.removeEventListener('error', onError);
-      };
-      
-      elements.audio.addEventListener('canplay', onCanPlay, { once: true });
-      elements.audio.addEventListener('error', onError, { once: true });
-      elements.audio.load();
-    });
-    
-    // Reproducir automáticamente
-    await elements.audio.play();
-    showStatus(`Reproduciendo: ${track.title}`, 'info');
-    
-    return true;
-    
-  } catch (error) {
-    console.error('Error en playAudioTrack:', error);
-    showStatus(`Error: ${error.message}`, 'error');
-    return false;
-  }
-}
-
-function togglePlay() {
-  if (state.isLoading) return;
-  
-  state.userInteracted = true;
-  
-  if (elements.audio.paused) {
-    if (!elements.audio.src) {
-      // Si no hay fuente, forzar reproducción
-      forcePlay();
-      return;
-    }
-    
-    elements.audio.play().then(() => {
-      elements.playBtn.textContent = '| |';
-      showStatus('Reproduciendo', 'info');
-    }).catch(error => {
-      showStatus(`Error: ${error.message}`, 'error');
-    });
-  } else {
-    elements.audio.pause();
-    elements.playBtn.textContent = '▶';
-    showStatus('Pausado', 'info');
-  }
-}
-
-function playNext() {
-  state.userInteracted = true;
-  showStatus('Siguiente pista', 'info');
-  
-  if (state.isPlayingFavorites) {
-    playNextFavorite();
-  } else if (state.currentSearchIndex !== -1) {
-    playNextSearchResult();
-  } else {
-    playRandom(state.currentGenre);
-  }
-}
-
-// Gestión de favoritos
+// ==================== GESTIÓN DE FAVORITOS ====================
 function updateFavoritesList() {
   const favoritesList = elements.favoritesList;
   favoritesList.innerHTML = '';
@@ -1681,7 +1743,7 @@ function updateFavoritesList() {
     playBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       const index = parseInt(playBtn.getAttribute('data-index'));
-      playFavorite(index);
+      playOptimizedFavorite(index);
     });
     
     removeBtn.addEventListener('click', (e) => {
@@ -1699,19 +1761,25 @@ function updateFavoritesList() {
 }
 
 function toggleFavoritesList() {
-  state.favoritesVisible = !state.favoritesVisible;
-  
-  if (state.favoritesVisible) {
-    elements.favoritesList.style.display = 'block';
-    elements.favoritesToggle.textContent = 'Ocultar favoritos';
-    updateFavoritesList();
-  } else {
-    elements.favoritesList.style.display = 'none';
-    elements.favoritesToggle.textContent = 'Mostrar favoritos';
-  }
+    state.favoritesVisible = !state.favoritesVisible;
+    
+    if (state.favoritesVisible) {
+        elements.favoritesList.style.display = 'block';
+        elements.favoritesToggle.textContent = 'Ocultar favoritos';
+        
+        // Ajustar altura máxima basada en el espacio disponible
+        const availableHeight = window.innerHeight - elements.favoritesList.getBoundingClientRect().top - 100;
+        elements.favoritesList.style.maxHeight = availableHeight + 'px';
+        
+        updateFavoritesList();
+    } else {
+        elements.favoritesList.style.display = 'none';
+        elements.favoritesToggle.textContent = 'Mostrar favoritos';
+        elements.favoritesList.style.maxHeight = 'none';
+    }
 }
 
-// Barra de progreso
+// ==================== BARRA DE PROGRESO ====================
 function updateProgressBar() {
   if (elements.audio.duration && isFinite(elements.audio.duration)) {
     const progressPercent = (elements.audio.currentTime / elements.audio.duration) * 100;
@@ -1731,35 +1799,36 @@ function seekAudio(event) {
   elements.audio.currentTime = seekTime;
 }
 
-// IMPLEMENTACIÓN DE ONPLAY
-function onplay(callback) {
-  state.onPlayCallback = callback;
-  console.log('Callback onplay registrado:', callback);
+// ==================== INICIALIZACIÓN ====================
+function startApp() {
+  state.appStarted = true;
+  elements.startView.classList.add('hidden');
+  elements.app.classList.add('active');
+  forcePlay();
 }
 
-// Función para ejecutar el callback onplay
+function onplay(callback) {
+  state.onPlayCallback = callback;
+}
+
 function executeOnPlayCallback(trackInfo) {
   if (state.onPlayCallback && typeof state.onPlayCallback === 'function') {
     try {
       state.onPlayCallback(trackInfo);
-      console.log('Callback onplay ejecutado con:', trackInfo);
     } catch (error) {
       console.error('Error ejecutando callback onplay:', error);
     }
   }
 }
 
-// Inicialización
 function initializeApp() {
   loadFavorites();
   
-  // Eventos de audio
   elements.audio.addEventListener('timeupdate', updateProgressBar);
   elements.audio.addEventListener('loadedmetadata', updateProgressBar);
   elements.audio.addEventListener('play', () => {
     elements.playBtn.textContent = '| |';
     
-    // Ejecutar callback onplay cuando la reproducción comienza
     if (state.currentTrack) {
       const trackInfo = {
         title: state.currentTrack.title,
@@ -1780,52 +1849,40 @@ function initializeApp() {
     showStatus('Error de reproducción', 'error');
   });
   
-  // Eventos de controles
   elements.progressBar.addEventListener('click', seekAudio);
   elements.playBtn.addEventListener('click', togglePlay);
   elements.nextBtn.addEventListener('click', playNext);
   elements.favoriteBtn.addEventListener('click', () => toggleFavorite(state.currentTrack));
   
-  // Evento del botón Iniciar Resonate
   elements.startButton.addEventListener('click', startApp);
   
-  // Eventos de búsqueda
-  elements.searchInput.addEventListener('input', performSearch);
+  elements.searchInput.addEventListener('input', performOptimizedSearch);
   
-  // Evento de género
   elements.genreSelect.addEventListener('change', (e) => {
     state.currentGenre = e.target.value;
     state.userInteracted = true;
     state.retryCount = 0;
     state.isPlayingFavorites = false;
     if (state.isInitialized) {
-      playRandom(state.currentGenre);
+      playOptimizedRandom(state.currentGenre);
     }
   });
   
-  // Evento de favoritos
   elements.favoritesToggle.addEventListener('click', toggleFavoritesList);
   
-  // Cerrar resultados al hacer clic fuera
   document.addEventListener('click', (e) => {
     if (!elements.searchInput.contains(e.target) && !elements.searchResults.contains(e.target)) {
       hideSearchResults();
     }
   });
   
-  // Marcar interacción del usuario
   document.addEventListener('click', () => {
     state.userInteracted = true;
   });
   
-  // Iniciar aplicación
-  elements.proxyStatus.textContent = 'Conectado';
-  
-  // Hacer la función onplay globalmente accesible
   window.onplay = onplay;
 }
 
-// Inicializar
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initializeApp);
 } else {
