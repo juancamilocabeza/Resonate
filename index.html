@@ -40,7 +40,7 @@
   .app {
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    height: 100%;
     padding: 10px;
     position: relative;
     overflow: hidden;
@@ -155,7 +155,7 @@
 
   .progress-section {
     width: 100%;
-    margin: 6px 0;
+    margin: 10px 0;
     flex-shrink: 0;
   }
 
@@ -226,7 +226,7 @@
     justify-content: center;
     align-items: center;
     gap: 10px;
-    margin: 10px 0;
+    margin: 10px 2px;
     flex-shrink: 0;
   }
 
@@ -675,17 +675,18 @@
 
   .search-section {
     background: var(--bg);
-    padding: 1px;
+    /*padding: 0 4px;*/
     position: relative;
     display: block;
-    width: 100%;
+    /*width: 100%;*/
   }
 
   .search-container {
     position: relative;
     display: flex;
     gap: 8px;
-    width: 100%;
+    /*width: 100%;*/
+    margin: 0 2px;
   }
 
   .search-input {
@@ -704,6 +705,7 @@
   .search-input:focus {
     outline: 2px solid var(--accent);
     background: rgba(255,255,255,0.05);
+    position:relative;
   }
 
   .search-input::placeholder {
@@ -718,18 +720,22 @@
     position: absolute;
     left: 0;
     right: 0;
-    top: 100%;
-    background: #000;
+
+    /* Antes: top: 100%;  margin-top: 8px;  transform: translateY(-10px); */
+    top: auto;              /* o quítalo */
+    bottom: 100%;           /* ancla el borde inferior al borde superior del contenedor */
+    margin-bottom: 8px;     /* separa del campo */
+    transform: translateY(10px); /* para que “suba” al mostrarse */
+
+    background: var(--card);
     border-radius: 10px;
-    margin-top: 8px;
     display: none;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.6); /* sombra hacia arriba (opcional) */
     border: 1px solid rgba(255,255,255,0.1);
     z-index: 10;
-    max-height: 60vh;
+    max-height: 70vh;
     overflow-y: auto;
     opacity: 0;
-    transform: translateY(-10px);
     transition: opacity 0.3s, transform 0.3s;
   }
 
@@ -864,6 +870,7 @@
     margin: 0;
     min-height: 5px;
     text-align: left;
+    display: none;
   }
 
   .status-message {
@@ -872,6 +879,7 @@
     font-size: 12px;
     padding: 8px 10px;
     margin: 3px 0;
+    display: none;
   }
 
   .status-info {
@@ -1321,7 +1329,7 @@
 
       <div class="controls">
         <button id="prev-btn" class="shuffle-favorites-btn button inactive" aria-label="Anterior"><span aria-hidden="true">⏮</span></button>
-        <button id="play-btn" class="shuffle-favorites-btn button active" aria-label="Reproducir/Pausar"><span aria-hidden="true"></span></button>
+        <button id="play-btn" class="shuffle-favorites-btn button active" aria-label="Reproducir/Pausar"><span aria-hidden="true">⏸</span></button>
         <button id="next-btn" class="shuffle-favorites-btn button inactive" aria-label="Siguiente"><span aria-hidden="true">⏭</span></button>
         <button id="favorite-btn" class="favorite-btn button" aria-label="Favorito"><span aria-hidden="true">♡</span></button>
         <button id="shuffle-favorites-btn" class="shuffle-favorites-btn button active" aria-label="Desactivar reproducción aleatoria de favoritos">
@@ -1487,7 +1495,7 @@ const elements = {
 
 // ==================== ESTADO DE LA APLICACIÓN ====================
 const state = {
-  currentGenre: 'rock',
+  currentGenre: 'tangos',
   currentTrack: null,
   isLoading: false,
   favorites: [],
@@ -2565,7 +2573,7 @@ function forcePlay() {
     playOptimizedFavorite(-1);
   } else {
     showStatus('No hay favoritos, reproduciendo Rock', 'info');
-    playOptimizedRandom('rock');
+    playOptimizedRandom('tangos');
   }
 }
 
@@ -2605,7 +2613,7 @@ async function playNextInContext() {
       return;
     } else if (context === 'favorites') {
       showStatus('Fin de los favoritos, reproduciendo Rock', 'info', 2000);
-      await playOptimizedRandom('rock');
+      await playOptimizedRandom('tangos');
       return;
     }
     return;

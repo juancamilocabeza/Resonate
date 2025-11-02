@@ -40,7 +40,7 @@
   .app {
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    height: 100%;
     padding: 10px;
     position: relative;
     overflow: hidden;
@@ -51,8 +51,6 @@
     display: flex;
     justify-content: left;
     align-items: center;
-    padding: 6px 0;
-    margin-bottom: 8px;
   }
 
   h1 {
@@ -94,8 +92,8 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    min-height: 0;
     gap: 12px;
+    margin-top: 10px;
   }
 
   .app.active .player-content {
@@ -155,7 +153,7 @@
 
   .progress-section {
     width: 100%;
-    margin: 6px 0;
+    margin: 10px 0;
     flex-shrink: 0;
   }
 
@@ -226,7 +224,7 @@
     justify-content: center;
     align-items: center;
     gap: 10px;
-    margin: 10px 0;
+    margin: 10px 2px;
     flex-shrink: 0;
   }
 
@@ -598,6 +596,7 @@
   }
 
   .track-title {
+    width: 100%;
     font-weight: 500;
     font-size: 12px;
     margin-bottom: 2px;
@@ -673,19 +672,21 @@
     background: rgba(110, 231, 183, 0.1);
   }
 
+  .tracks-container {
+    overflow-x: clip;
+    overflow-x: hidden;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  
   .search-section {
-    background: var(--bg);
-    padding: 1px;
-    position: relative;
-    display: block;
-    width: 100%;
+    padding: 2px 4px;
   }
 
   .search-container {
     position: relative;
     display: flex;
-    gap: 8px;
-    width: 100%;
+    margin: 0 2px;
   }
 
   .search-input {
@@ -695,15 +696,14 @@
     border: none;
     border-radius: 10px;
     color: var(--fg);
-    font-size: 14px;
-    padding: 0 14px;
-    transition: background-color 0.2s;
-    width: 100%;
+    font-size: 15px;
+    padding: 0 8px;
   }
 
   .search-input:focus {
     outline: 2px solid var(--accent);
-    background: rgba(255,255,255,0.05);
+    background: var(--card);
+    position: relative;
   }
 
   .search-input::placeholder {
@@ -715,28 +715,17 @@
   }
 
   .search-results {
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 100%;
-    background: #000;
     border-radius: 10px;
-    margin-top: 8px;
-    display: none;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.6);
-    border: 1px solid rgba(255,255,255,0.1);
-    z-index: 10;
-    max-height: 60vh;
     overflow-y: auto;
-    opacity: 0;
-    transform: translateY(-10px);
-    transition: opacity 0.3s, transform 0.3s;
+    display: none;
   }
 
   .search-results.active {
     display: block;
     opacity: 1;
-    transform: translateY(0);
+    margin-top: 5px;
+    background: var(--card);
+    margin-left: 10px;
   }
 
   .search-result {
@@ -744,10 +733,12 @@
     border-bottom: 1px solid rgba(255,255,255,0.06);
     cursor: pointer;
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    justify-content: flex-start;
+    align-items: baseline;
     transition: background-color 0.2s;
     text-align: left;
+    flex-direction: row;
+    flex-wrap: wrap;
   }
 
   .search-result:last-child {
@@ -822,14 +813,15 @@
   }
 
   .no-results {
-    padding: 20px;
+    padding: 5px;
     text-align: center;
-    color: var(--muted);
-    font-size: 13px;
+    color: var(--error);
+    font-size: 15px;
+    font-weight: bold;
   }
 
   .search-loading {
-    padding: 20px;
+    padding: 5px;
     text-align: center;
     color: var(--muted);
     display: flex;
@@ -864,6 +856,7 @@
     margin: 0;
     min-height: 5px;
     text-align: left;
+    display: none;
   }
 
   .status-message {
@@ -872,6 +865,7 @@
     font-size: 12px;
     padding: 8px 10px;
     margin: 3px 0;
+    display: none;
   }
 
   .status-info {
@@ -947,134 +941,9 @@
     transform: scale(0.97);
   }
 
-    /*@media (max-width: 768px) {
-    .search-results {
-      max-height: 50vh;
-    }
-    
-    .search-result {
-      padding: 14px 12px;
-    }
-    
-    .result-title {
-      font-size: 14px;
-    }
-    
-    .result-creator {
-      font-size: 12px;
-    }
-  }
-
-  @media (max-height: 700px) {
-    .art {
-      max-width: 200px;
-    }
-    
-    .player-content {
-      gap: 10px;
-    }
-    
-    .title {
-      font-size: 18px;
-    }
-    
-    .creator {
-      font-size: 15px;
-    }
-    
-    .progress-section {
-      margin: 5px 0;
-    }
-    
-    .controls {
-      margin: 8px 0;
-    }
-  }
-
-  @media (max-height: 600px) {
-    .art {
-      max-width: 160px;
-    }
-    
-    .player-content {
-      gap: 8px;
-    }
-    
-    .progress-section {
-      margin: 4px 0;
-    }
-    
-    .controls {
-      margin: 6px 0;
-    }
-    
-    .genre-section, .favorites-section {
-      margin: 5px 0;
-    }
-  }
-
-  @media (max-width: 480px) {
-    .app {
-      padding: 8px;
-    }
-    
-    .art {
-      max-width: 240px;
-    }
-    
-    button {
-      height: 40px;
-      padding: 0 12px;
-      font-size: 18px;
-    }
-    
-    .play-btn {
-      width: 50px;
-      height: 50px;
-    }
-    
-    .search-input {
-      height: 40px;
-      font-size: 14px;
-    }
-    
-    header {
-      margin-bottom: 6px;
-    }
-    
-    h1 {
-      font-size: 20px;
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    * {
-      animation: none !important;
-      transition: none !important;
-    }
-  }
-
-  @media (max-width: 360px) {
-    .app {
-      padding: 6px;
-    }
-    
-    h1 {
-      font-size: 20px;
-    }
-    
-    .art {
-      max-width: 220px;
-    }
-    
-    button {
-      font-size: 11px;
-      padding: 0 10px;
-    }
-  }*/
 </style>
 
-<!-- Media Session API Script - CORREGIDO -->
+<!-- Media Session API Script -->
 <script>
 (function(){
   function supportsMediaSession() {
@@ -1295,6 +1164,8 @@
   <button id="start-button">Iniciar resonate</button>
 </div>
 
+<div id="status-messages"></div>
+
 <div class="app" id="app">
   <header>
       <h1>resonate</h1>
@@ -1307,6 +1178,14 @@
     </div>
     <div id="favorites-list" class="favorites-list"></div>
   </div>
+
+  <div class="search-section">
+    <div class="search-container">
+      <input type="text" id="search-input" class="search-input" placeholder="Buscar">
+    </div>
+  </div>
+  <div id="search-results" class="search-results"></div>
+
 
   <div class="player-container">
     <div class="player-content" id="player-content">
@@ -1321,7 +1200,7 @@
 
       <div class="controls">
         <button id="prev-btn" class="shuffle-favorites-btn button inactive" aria-label="Anterior"><span aria-hidden="true">⏮</span></button>
-        <button id="play-btn" class="shuffle-favorites-btn button active" aria-label="Reproducir/Pausar"><span aria-hidden="true"></span></button>
+        <button id="play-btn" class="shuffle-favorites-btn button active" aria-label="Reproducir/Pausar"><span aria-hidden="true">⏸</span></button>
         <button id="next-btn" class="shuffle-favorites-btn button inactive" aria-label="Siguiente"><span aria-hidden="true">⏭</span></button>
         <button id="favorite-btn" class="favorite-btn button" aria-label="Favorito"><span aria-hidden="true">♡</span></button>
         <button id="shuffle-favorites-btn" class="shuffle-favorites-btn button active" aria-label="Desactivar reproducción aleatoria de favoritos">
@@ -1391,27 +1270,17 @@
             <option value="alternative">Alternativa</option>
         </select>
       </div>
-      
-      <div id="status-messages"></div>
-  
-      <div class="search-section">
-        <div class="search-container">
-          <input type="text" id="search-input" class="search-input" placeholder="Buscar">
-        </div>
-        <div id="search-results" class="search-results"></div>
-      </div>
-
     </div>
   </div>
 </div>
 
 <audio id="audio" crossorigin="anonymous" preload="metadata"></audio>
-
 <script>
+
 // ==================== CONFIGURACIÓN PRINCIPAL ====================
 const SEARCH_CONFIG = {
   maxResults: 20,
-  resultsPerPage: 10,
+  resultsPerPage: 20,
   timeout: 8000,
   enableLazyLoading: true,
   cacheDuration: 10 * 60 * 1000,
@@ -1487,7 +1356,7 @@ const elements = {
 
 // ==================== ESTADO DE LA APLICACIÓN ====================
 const state = {
-  currentGenre: 'rock',
+  currentGenre: 'tangos',
   currentTrack: null,
   isLoading: false,
   favorites: [],
@@ -2117,7 +1986,7 @@ function createSearchResultElement(result, globalIndex) {
       </div>
     </div>
     <button class="result-favorite ${hasFavoriteTrack ? 'active' : ''}">
-      ${hasFavoriteTrack ? '♥' : '♡'}
+      ${hasFavoriteTrack ? '❤️' : '♡'}
     </button>
   `;
 
@@ -2135,7 +2004,7 @@ function createSearchResultElement(result, globalIndex) {
         toggleFavorite(track);
         const isNowFavorite = isTrackFavorite(track);
         favoriteBtn.classList.toggle('active', isNowFavorite);
-        favoriteBtn.textContent = isNowFavorite ? '♥' : '♡';
+        favoriteBtn.textContent = isNowFavorite ? '❤️' : '♡';
       }
     } catch (error) {
       console.error('Error al obtener URL para favorito:', error);
@@ -2227,15 +2096,15 @@ function displayAlbumTracks(albumId, tracksContainer) {
         const trackNumber = track.trackNumber || index + 1;
         
         trackItem.innerHTML = `
+          <div class="track-actions">
+            <span class="track-number">${trackNumber}</span>
+            <button class="track-play" data-url="${track.url}" data-title="${track.title}"> ▶ </button>
+            <button class="track-favorite ${isFavorite ? 'active' : ''}">${isFavorite ? '❤️' : ' ♡ '}</button>
+          </div>
           <div class="track-item-info">
             <div class="track-title">${track.title || 'Sin título'}</div>
             <div class="track-creator">${track.creator || 'Desconocido'}</div>
-          </div>
-          <div class="track-actions">
-            <span class="track-number">${trackNumber}</span>
-            <button class="track-play" data-url="${track.url}" data-title="${track.title}"></button>
-            <button class="track-favorite ${isFavorite ? 'active' : ''}">${isFavorite ? '♥' : '♡'}</button>
-          </div>
+          </div>          
         `;
         
         const playBtn = trackItem.querySelector('.track-play');
@@ -2250,7 +2119,7 @@ function displayAlbumTracks(albumId, tracksContainer) {
           toggleFavorite(track);
           const isNowFavorite = isTrackFavorite(track);
           favoriteBtn.classList.toggle('active', isNowFavorite);
-          favoriteBtn.textContent = isNowFavorite ? '♥' : '♡';
+          favoriteBtn.textContent = isNowFavorite ? '❤️' : '♡';
         });
         
         tracksList.appendChild(trackItem);
@@ -2565,7 +2434,7 @@ function forcePlay() {
     playOptimizedFavorite(-1);
   } else {
     showStatus('No hay favoritos, reproduciendo Rock', 'info');
-    playOptimizedRandom('rock');
+    playOptimizedRandom('tangos');
   }
 }
 
@@ -2605,7 +2474,7 @@ async function playNextInContext() {
       return;
     } else if (context === 'favorites') {
       showStatus('Fin de los favoritos, reproduciendo Rock', 'info', 2000);
-      await playOptimizedRandom('rock');
+      await playOptimizedRandom('tangos');
       return;
     }
     return;
@@ -2729,7 +2598,7 @@ function updateFavoritesList() {
       </div>
       <div class="favorite-actions">
         <button class="favorite-play" data-id="${albumId}" data-is-album="${isAlbum}">▶</button>
-        <button class="favorite-remove" data-id="${albumId}">×</button>
+        <button class="favorite-remove" data-id="${albumId}"> X </button>
       </div>
     `;
     
@@ -2966,6 +2835,71 @@ function setupProgressBarInteraction() {
     isDragging = true;
     state.isSeeking = true;
     elements.progressBar.classList.add('dragging');
+    
+    // Actualizar inmediatamente al comenzar el arrastre
+    updateProgressOnDrag(e);
+    
+    if (e.cancelable) {
+      e.preventDefault();
+    }
+  };
+  
+  const drag = (e) => {
+    if (!isDragging) return;
+    updateProgressOnDrag(e);
+  };
+  
+  const endDrag = () => {
+    if (!isDragging) return;
+    
+    isDragging = false;
+    state.isSeeking = false;
+    elements.progressBar.classList.remove('dragging');
+  };
+  
+  const updateProgressOnDrag = (e) => {
+    const progressBarRect = elements.progressBar.getBoundingClientRect();
+    let clientX;
+    
+    if (e.type.includes('touch')) {
+      clientX = e.touches[0].clientX;
+    } else {
+      clientX = e.clientX;
+    }
+    
+    const clickPosition = Math.max(0, Math.min(1, (clientX - progressBarRect.left) / progressBarRect.width));
+    const seekTime = clickPosition * elements.audio.duration;
+    
+    // Actualizar la visualización
+    elements.progress.style.width = `${clickPosition * 100}%`;
+    elements.currentTime.textContent = formatTime(seekTime);
+    
+    // CORRECCIÓN: Actualizar el audio SIEMPRE, tanto en arrastre como en click
+    elements.audio.currentTime = seekTime;
+  };
+  
+  // Configurar eventos - ELIMINAR DUPLICADOS
+  elements.progressBar.addEventListener('mousedown', startDrag);
+  document.addEventListener('mousemove', drag);
+  document.addEventListener('mouseup', endDrag);
+  
+  elements.progressBar.addEventListener('touchstart', startDrag, { passive: false });
+  document.addEventListener('touchmove', drag, { passive: false });
+  document.addEventListener('touchend', endDrag, { passive: false });
+  
+  // SOLO UN event listener para click
+  elements.progressBar.addEventListener('click', (e) => {
+    if (!isDragging) { // Solo procesar clicks que no sean parte de un arrastre
+      updateProgressOnDrag(e);
+    }
+  });
+}  
+  const startDrag = (e) => {
+    if (!elements.audio.duration || !isFinite(elements.audio.duration)) return;
+    
+    isDragging = true;
+    state.isSeeking = true;
+    elements.progressBar.classList.add('dragging');
     updateProgressOnDrag(e);
     
     if (e.cancelable) {
@@ -3024,7 +2958,6 @@ function setupProgressBarInteraction() {
       seekAudio(e);
     }
   });
-}
 
 function updateProgressBar() {
   if (!state.isSeeking && elements.audio.duration && isFinite(elements.audio.duration)) {
@@ -3033,17 +2966,6 @@ function updateProgressBar() {
     elements.currentTime.textContent = formatTime(elements.audio.currentTime);
     elements.totalTime.textContent = formatTime(elements.audio.duration);
   }
-}
-
-function seekAudio(event) {
-  if (!elements.audio.duration || !isFinite(elements.audio.duration)) return;
-  
-  const progressBarRect = elements.progressBar.getBoundingClientRect();
-  const clickPosition = (event.clientX - progressBarRect.left) / progressBarRect.width;
-  const seekTime = clickPosition * elements.audio.duration;
-  
-  elements.audio.currentTime = seekTime;
-  updateProgressBar();
 }
 
 // ==================== INICIALIZACIÓN ====================
@@ -3084,7 +3006,7 @@ function initializeApp() {
   
   elements.shuffleFavoritesBtn.addEventListener('click', toggleShuffleFavorites);
   
-  elements.progressBar.addEventListener('click', seekAudio);  
+  /*elements.progressBar.addEventListener('click', seekAudio);*/
   elements.prevBtn.addEventListener('click', playPrevious);
   elements.playBtn.addEventListener('click', togglePlay);
   elements.nextBtn.addEventListener('click', playNext);
