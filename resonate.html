@@ -1471,6 +1471,49 @@ function isTrackFavorite(track) {
   return state.favorites.some(fav => fav.url === track.url);
 }
 
+// NUEVA FUNCIÓN: Verificar si un álbum completo está en favoritos
+function isAlbumFavorite(albumId) {
+  if (!albumId) return false;
+  return state.favorites.some(fav => fav.albumId === albumId);
+}
+
+// NUEVA FUNCIÓN: Agregar álbum completo a favoritos
+function addAlbumToFavorites(albumId, files) {
+  if (!albumId || !files || files.length === 0) return;
+  
+  // Verificar si el álbum ya está en favoritos
+  if (isAlbumFavorite(albumId)) {
+    // Si ya está, quitarlo (toggle)
+    state.favorites = state.favorites.filter(fav => fav.albumId !== albumId);
+    showStatus('Álbum eliminado de favoritos', 'info');
+  } else {
+    // Agregar todas las pistas del álbum
+    files.forEach((track, index) => {
+      const favoriteTrack = {
+        id: track.id,
+        title: track.title || 'Sin título',
+        creator: track.creator || 'Desconocido',
+        url: track.url,
+        isAlbumTrack: true,
+        albumId: albumId,
+        trackIndex: index,
+        totalTracks: files.length,
+        albumTitle: track.album || files[0]?.title || 'Álbum'
+      };
+      
+      // Solo agregar si no existe ya
+      if (!state.favorites.some(fav => fav.url === track.url)) {
+        state.favorites.push(favoriteTrack);
+      }
+    });
+    showStatus(`Álbum agregado a favoritos (${files.length} pistas)`, 'info');
+  }
+  
+  saveFavorites();
+  updateFavoriteButton();
+  updateFavoritesList();
+}
+
 function toggleFavorite(track) {
   if (!track || !track.url) return;
   
@@ -1855,31 +1898,24 @@ function extractTrackInfo(file, itemMetadata) {
 }
 
 // ==================== FUNCIONES DE INTERFAZ ====================
-function setupFastRealTimeSearch() {
-  let searchTimeout = null;
+function setupSearchOnEnter() {
   let currentPage = 0;
   let currentQuery = '';
   let isLoadingMore = false;
 
-  elements.searchInput.addEventListener('input', () => {
-    clearTimeout(searchTimeout);
-    currentPage = 0;
-    
-    const query = elements.searchInput.value.trim();
-    currentQuery = query;
-    
-    /*if (query.length < 2) {
+  elements.searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      currentPage = 0;
+      currentQuery = elements.searchInput.value.trim();
+      if (currentQuery) {
+        performOptimizedSearch(currentQuery, 0)
+          .then(result => displaySearchResults(result, true));
+      } else {
+        hideSearchResults();
+      }
+    } else if (e.key === 'Escape') {
       hideSearchResults();
-      return;
-    }*/
-
-    elements.searchResults.innerHTML = '<div class="search-loading"><span class="loader"></span>Buscando ...</div>';
-    elements.searchResults.classList.add('active');
-    state.searchActive = true;
-
-    searchTimeout = setTimeout(async () => {
-      await loadSearchResults(query, 0, true);
-    }, 300);
+    }
   });
 
   window.loadMoreResults = async function() {
@@ -1898,17 +1934,6 @@ function setupFastRealTimeSearch() {
     
     isLoadingMore = false;
   };
-
-  elements.searchInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      clearTimeout(searchTimeout);
-      currentPage = 0;
-      performOptimizedSearch(elements.searchInput.value.trim(), 0)
-        .then(result => displaySearchResults(result, true));
-    } else if (e.key === 'Escape') {
-      hideSearchResults();
-    }
-  });
 }
 
 async function loadSearchResults(query, page = 0, clearExisting = true) {
@@ -2000,9 +2025,17 @@ function createSearchResultElement(result, globalIndex) {
     try {
       const files = await fetchOptimizedPlayableFiles(result.identifier);
       if (files.length > 0) {
-        const track = files[0];
-        toggleFavorite(track);
-        const isNowFavorite = isTrackFavorite(track);
+        // MODIFICACIÓN: Si es un álbum (más de una pista), agregar todo el álbum
+        if (files.length > 1) {
+          addAlbumToFavorites(result.identifier, files);
+        } else {
+          // Si es una sola pista, comportamiento original
+          const track = files[0];
+          toggleFavorite(track);
+        }
+        
+        // Actualizar el estado del botón
+        const isNowFavorite = isAlbumFavorite(result.identifier);
         favoriteBtn.classList.toggle('active', isNowFavorite);
         favoriteBtn.textContent = isNowFavorite ? '❤️' : '♡';
       }
@@ -2034,6 +2067,12 @@ async function loadAlbumInfoBackground(identifier, resultEl) {
         `<span class="result-album-indicator">🎵 Álbum: ${trackCount} pistas</span>` :
         `<span class="result-album-indicator">🎵 Pista individual</span>`;
     }
+    
+    // Actualizar el estado del botón de favorito basado en si el álbum completo está en favoritos
+    const favoriteBtn = resultEl.querySelector('.result-favorite');
+    const isAlbumFav = isAlbumFavorite(identifier);
+    favoriteBtn.classList.toggle('active', isAlbumFav);
+    favoriteBtn.textContent = isAlbumFav ? '❤️' : '♡';
     
     if (isAlbum && !resultEl.querySelector('.expand-tracks')) {
       const expandButton = document.createElement('button');
@@ -2628,7 +2667,7 @@ function updateFavoritesList() {
       saveFavorites();
       updateFavoritesList();
       updateFavoriteButton();
-      showStatus('Eliminado de favoritos', 'info');
+      showStatus('Álbum eliminado de favoritos', 'info');
     });
     
     favoritesList.appendChild(albumItem);
@@ -2894,70 +2933,6 @@ function setupProgressBarInteraction() {
     }
   });
 }  
-  const startDrag = (e) => {
-    if (!elements.audio.duration || !isFinite(elements.audio.duration)) return;
-    
-    isDragging = true;
-    state.isSeeking = true;
-    elements.progressBar.classList.add('dragging');
-    updateProgressOnDrag(e);
-    
-    if (e.cancelable) {
-      e.preventDefault();
-    }
-  };
-  
-  const drag = (e) => {
-    if (!isDragging) return;
-    updateProgressOnDrag(e);
-  };
-  
-  const endDrag = () => {
-    if (!isDragging) return;
-    
-    isDragging = false;
-    state.isSeeking = false;
-    elements.progressBar.classList.remove('dragging');
-    
-    if (!elements.audio.paused) {
-      elements.audio.play().catch(() => {});
-    }
-  };
-  
-  const updateProgressOnDrag = (e) => {
-    const progressBarRect = elements.progressBar.getBoundingClientRect();
-    let clientX;
-    
-    if (e.type.includes('touch')) {
-      clientX = e.touches[0].clientX;
-    } else {
-      clientX = e.clientX;
-    }
-    
-    const clickPosition = Math.max(0, Math.min(1, (clientX - progressBarRect.left) / progressBarRect.width));
-    const seekTime = clickPosition * elements.audio.duration;
-    
-    elements.progress.style.width = `${clickPosition * 100}%`;
-    elements.currentTime.textContent = formatTime(seekTime);
-    
-    if (!isDragging) {
-      elements.audio.currentTime = seekTime;
-    }
-  };
-  
-  elements.progressBar.addEventListener('mousedown', startDrag);
-  document.addEventListener('mousemove', drag);
-  document.addEventListener('mouseup', endDrag);
-  
-  elements.progressBar.addEventListener('touchstart', startDrag, { passive: false });
-  document.addEventListener('touchmove', drag, { passive: false });
-  document.addEventListener('touchend', endDrag, { passive: false });
-  
-  elements.progressBar.addEventListener('click', (e) => {
-    if (!isDragging) {
-      seekAudio(e);
-    }
-  });
 
 function updateProgressBar() {
   if (!state.isSeeking && elements.audio.duration && isFinite(elements.audio.duration)) {
@@ -2984,7 +2959,7 @@ function onplay(callback) {
 function initializeApp() {
   loadFavorites();
   
-  setupFastRealTimeSearch();
+  setupSearchOnEnter();
   setupCastFunctionality();
   setupProgressBarInteraction();
   
@@ -3067,6 +3042,7 @@ function initializeApp() {
   window.playAlbumFromFavorites = playAlbumFromFavorites;
   window.playSpecificTrack = playSpecificTrack;
   window.toggleShuffleFavorites = toggleShuffleFavorites;
+  window.addAlbumToFavorites = addAlbumToFavorites;
   
   console.log('Aplicación optimizada inicializada con Media Session');
 }
