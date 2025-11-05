@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<title>resonate</title>
+<title>Resonate</title>
 <!-- PWA Manifest -->
 <link rel="icon" type="image/png" href="icons/favicon.png">
 <link rel="manifest" href="manifest.json">
@@ -57,13 +57,13 @@
   h1 {
     font-size: 20px;
     font-weight: 600;
-    margin-bottom: 3px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    /*margin-bottom: 3px;*/
+    /*white-space: nowrap;*/
+    /*overflow: hidden;*/
+    /*text-overflow: ellipsis;*/
     text-align: left;
-    letter-spacing: 0.5px;
-    padding: 15px;
+    /*letter-spacing: 0.5px;*/
+    padding: 8px;
     color: var(--accent);
   }
 
@@ -109,6 +109,7 @@
     max-width: 280px;
     aspect-ratio: 1;
     margin: 0 auto;
+    margin-top: 30px;
     border-radius: 8px;
     background: var(--card);
     overflow: hidden;
@@ -136,7 +137,7 @@
   }
 
   .title {
-    font-size: 20px;
+    font-size: 18px;
     font-weight: 600;
     margin-bottom: 3px;
     white-space: nowrap;
@@ -154,7 +155,7 @@
 
   .progress-section {
     width: 100%;
-    margin: 10px 0;
+    margin: 5% 0;
     flex-shrink: 0;
   }
 
@@ -225,7 +226,7 @@
     justify-content: center;
     align-items: center;
     gap: 10px;
-    margin: 10px 2px;
+    margin: 7% 2px;
     flex-shrink: 0;
   }
 
@@ -703,8 +704,8 @@
 
   .search-input:focus {
     outline: 2px solid var(--accent);
-    background: var(--card);
     position: relative;
+    color: var(--fg);
   }
 
   .search-input::placeholder {
@@ -731,7 +732,7 @@
 
   .search-result {
     padding: 12px;
-    border-bottom: 1px solid rgba(255,255,255,0.06);
+    border-bottom: 1px solid rgba(226, 29, 29, 0.06);
     cursor: pointer;
     display: flex;
     justify-content: flex-start;
@@ -846,7 +847,9 @@
     font-size: 12px;
     font-weight: 600;
     cursor: pointer;
-    transition: transform 0.1s;
+    transition: transform 0.1s;    
+    text-align: center;
+    display: inline-block;
   }
 
   .load-more-btn:active {
@@ -944,7 +947,7 @@
 
   .footer {
     color: var(--muted);
-    font-size: 13px;
+    font-size: 9px;
     text-align: center;
   }
 
@@ -1168,18 +1171,14 @@
 
 <body>
 <div class="start-view" id="start-view">
-  <button id="start-button">Iniciar resonate</button>
-  <footer class="footer"style="margin-top: 15px;">
-  <div>&copy; 2025 resonate. Todos los derechos reservados</div>
-  <div>Prohibida la reproducción total o parcial sin autorización</div>
-</footer>
+  <button id="start-button">Iniciar &copy;Resonate</button>
 </div>
 
 <div id="status-messages"></div>
 
 <div class="app" id="app">
   <header>
-      <h1>resonate</h1>
+      <h1>Resonate</h1>
   </header>
 
   <div class="favorites-section">
@@ -1211,9 +1210,9 @@
 
       <div class="controls">
         <button id="prev-btn" class="shuffle-favorites-btn button inactive" aria-label="Anterior"><span aria-hidden="true">⏮</span></button>
-        <button id="play-btn" class="shuffle-favorites-btn button active" aria-label="Reproducir/Pausar"><span aria-hidden="true">⏸</span></button>
+        <button id="play-btn" class="shuffle-favorites-btn button active" aria-label="Reproducir/Pausar"><span aria-hidden="true">| |</span></button>
         <button id="next-btn" class="shuffle-favorites-btn button inactive" aria-label="Siguiente"><span aria-hidden="true">⏭</span></button>
-        <button id="favorite-btn" class="favorite-btn button" aria-label="Favorito"><span aria-hidden="true">♡</span></button>
+        <button id="favorite-btn" class="shuffle-favorites-btn button inactive" aria-label="Favorito"><span aria-hidden="true">🩶</span></button>
         <button id="shuffle-favorites-btn" class="shuffle-favorites-btn button active" aria-label="Desactivar reproducción aleatoria de favoritos">
           <svg viewBox="0 0 24 24">
             <path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/>
@@ -1294,8 +1293,8 @@
 
 // ==================== CONFIGURACIÓN PRINCIPAL ====================
 const SEARCH_CONFIG = {
-  maxResults: 20,
-  resultsPerPage: 20,
+  maxResults: 50,
+  resultsPerPage: 10,
   timeout: 8000,
   enableLazyLoading: true,
   cacheDuration: 10 * 60 * 1000,
@@ -1769,10 +1768,10 @@ function updateFavoriteButton() {
   if (state.currentTrack && state.currentTrack.url) {
     const isFavorite = isTrackFavorite(state.currentTrack);
     elements.favoriteBtn.classList.toggle('active', isFavorite);
-    elements.favoriteBtn.textContent = isFavorite ? '❤️' : '♡';
+    elements.favoriteBtn.textContent = isFavorite ? '❤️' : '🩶';
   } else {
     elements.favoriteBtn.classList.remove('active');
-    elements.favoriteBtn.textContent = '♡';
+    elements.favoriteBtn.textContent = '🩶';
   }
 }
 
@@ -1872,7 +1871,6 @@ async function performOptimizedSearch(query, page = 0) {
     return cached;
   }
 
-  elements.searchResults.innerHTML = '<div class="search-loading"><span class="loader"></span>Buscando ...</div>';
   elements.searchResults.classList.add('active');
   state.searchActive = true;
 
@@ -2286,7 +2284,7 @@ function displaySearchResults(searchData, clearExisting = true) {
     loadMoreEl.className = 'load-more';
     loadMoreEl.innerHTML = `
       <button class="load-more-btn" onclick="loadMoreResults()">
-        Cargar más resultados
+        Cargar 10 resultados más
       </button>
     `;
     elements.searchResults.appendChild(loadMoreEl);
@@ -2302,8 +2300,9 @@ function createSearchResultElement(result, globalIndex) {
   const hasFavoriteTrack = isAlbumInFavorites(result.identifier);
   
   resultEl.innerHTML = `
+    <button class="result-favorite ${hasFavoriteTrack ? 'active' : ''}">${hasFavoriteTrack ? '❤️' : '🩶'}</button>
     <div class="result-info">
-      <div class="result-title">
+    <div class="result-title">
         ${result.title}
       </div>
       <div class="result-creator">${result.creator}</div>
@@ -2311,9 +2310,6 @@ function createSearchResultElement(result, globalIndex) {
         <span class="result-album-indicator">🎵 Cargando información...</span>
       </div>
     </div>
-    <button class="result-favorite ${hasFavoriteTrack ? 'active' : ''}">
-      ${hasFavoriteTrack ? '❤️' : '♡'}
-    </button>
   `;
 
   // Cargar información de álbum en segundo plano
@@ -2331,14 +2327,14 @@ function createSearchResultElement(result, globalIndex) {
           addAlbumToFavorites(result.identifier, files);
           const isNowFavorite = isAlbumInFavorites(result.identifier);
           favoriteBtn.classList.toggle('active', isNowFavorite);
-          favoriteBtn.textContent = isNowFavorite ? '❤️' : '♡';
+          favoriteBtn.textContent = isNowFavorite ? '❤️' : '🩶';
         } else {
           // Es una pista individual
           const track = files[0];
           toggleFavorite(track);
           const isNowFavorite = isTrackFavorite(track);
           favoriteBtn.classList.toggle('active', isNowFavorite);
-          favoriteBtn.textContent = isNowFavorite ? '❤️' : '♡';
+          favoriteBtn.textContent = isNowFavorite ? '❤️' : '🩶';
         }
       }
     } catch (error) {
@@ -2375,7 +2371,7 @@ async function loadAlbumInfoBackground(identifier, resultEl) {
     if (favoriteBtn) {
       const isFavorite = isAlbumInFavorites(identifier);
       favoriteBtn.classList.toggle('active', isFavorite);
-      favoriteBtn.textContent = isFavorite ? '❤️' : '♡';
+      favoriteBtn.textContent = isFavorite ? '❤️' : '🩶';
     }
     
     if (isAlbum && !resultEl.querySelector('.expand-tracks')) {
@@ -2441,8 +2437,8 @@ function displayAlbumTracks(albumId, tracksContainer) {
         trackItem.innerHTML = `
           <div class="track-actions">
             <span class="track-number">${trackNumber}</span>
-            <button class="track-play" data-url="${track.url}" data-title="${track.title}"> ▶ </button>
-            <button class="track-favorite ${isFavorite ? 'active' : ''}">${isFavorite ? '❤️' : ' ♡ '}</button>
+            <button class="track-play" data-url="${track.url}" data-title="${track.title}">▶</button>
+            <button class="track-favorite ${isFavorite ? 'active' : ''}">${isFavorite ? '❤️' : ' 🩶 '}</button>
           </div>
           <div class="track-item-info">
             <div class="track-title">${track.title || 'Sin título'}</div>
@@ -2462,7 +2458,7 @@ function displayAlbumTracks(albumId, tracksContainer) {
           toggleFavorite(track);
           const isNowFavorite = isTrackFavorite(track);
           favoriteBtn.classList.toggle('active', isNowFavorite);
-          favoriteBtn.textContent = isNowFavorite ? '❤️' : '♡';
+          favoriteBtn.textContent = isNowFavorite ? '❤️' : '🩶';
         });
         
         tracksList.appendChild(trackItem);
@@ -2762,14 +2758,14 @@ function togglePlay() {
     }
     
     elements.audio.play().then(() => {
-      elements.playBtn.textContent = '▶';
+      elements.playBtn.textContent = '| |';
       showStatus('Reproduciendo', 'info');
     }).catch(error => {
       showStatus(`Error: ${error.message}`, 'error');
     });
   } else {
     elements.audio.pause();
-    elements.playBtn.textContent = '⏸';
+    elements.playBtn.textContent = '▶';
     showStatus('Pausado', 'info');
   }
 }
@@ -2998,7 +2994,7 @@ function updateFavoritesList() {
         <div class="favorite-creator">${albumData.albumCreator || 'Desconocido'}</div>
       </div>
       <div class="favorite-actions">
-        <button class="favorite-play" data-id="${albumId}" data-is-album="${isAlbum}">▶</button>
+        <button class="favorite-play" data-id="${albumId}" data-is-album="${isAlbum}"> ▶ </button>
         <button class="favorite-remove" data-id="${albumId}"> X </button>
       </div>
     `;
@@ -3084,7 +3080,7 @@ async function playAlbumFromFavorites(albumId) {
   } finally {
     state.isLoading = false;
     elements.playBtn.disabled = false;
-    elements.playBtn.textContent = '⏸';
+    elements.playBtn.textContent = '| |';
   }
 }
 
@@ -3147,7 +3143,7 @@ async function playOptimizedFavorite(favoriteIndex = 0) {
   } finally {
     state.isLoading = false;
     elements.playBtn.disabled = false;
-    elements.playBtn.textContent = '▶';
+    elements.playBtn.textContent = '| |';
   }
 }
 
@@ -3180,7 +3176,7 @@ async function playOptimizedRandom(genre) {
   } finally {
     state.isLoading = false;
     elements.playBtn.disabled = false;
-    elements.playBtn.textContent = '⏸';
+    elements.playBtn.textContent = '||';
   }
 }
 
@@ -3356,9 +3352,9 @@ async function initializeApp() {
   elements.audio.addEventListener('timeupdate', updateProgressBar);
   elements.audio.addEventListener('loadedmetadata', updateProgressBar);
   elements.audio.addEventListener('play', () => {
-    elements.playBtn.textContent = '⏸';
+  elements.playBtn.textContent = '| |';
   });
-  elements.audio.addEventListener('pause', () => elements.playBtn.textContent = '⏸');
+  elements.audio.addEventListener('pause', () => elements.playBtn.textContent = '▶');
   elements.audio.addEventListener('ended', playNextInContext); // AÑADIDO: Reproducir siguiente al terminar
   elements.audio.addEventListener('error', (e) => {
     console.error('Error de audio:', e.target.error);
