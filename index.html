@@ -4,6 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>Resonate</title>
+
 <!-- PWA Manifest -->
 <link rel="icon" type="image/png" href="icons/favicon.png">
 <link rel="manifest" href="manifest.json">
@@ -12,6 +13,16 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Resonate">
 <link rel="apple-touch-icon" href="icons/favicon.png">
+
+<!-- Android Auto Support -->
+<meta name="theme-color" content="#6ee7b7">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="icon" sizes="192x192" href="icons/icon-192x192.png">
+<link rel="apple-touch-icon" href="icons/icon-192x192.png">
+<meta name="media-title" content="Resonate">
+<meta name="media-artist" content="Reproductor de Música">
+
 <style>
   :root {
     --bg: #000;
@@ -57,12 +68,7 @@
   h1 {
     font-size: 20px;
     font-weight: 600;
-    /*margin-bottom: 3px;*/
-    /*white-space: nowrap;*/
-    /*overflow: hidden;*/
-    /*text-overflow: ellipsis;*/
     text-align: left;
-    /*letter-spacing: 0.5px;*/
     padding: 8px;
     color: var(--accent);
   }
@@ -231,14 +237,12 @@
   }
 
   button {
-    /*width: 34px;*/
     height: 40px;
     border: none;
     border-radius: 10px;
     background: var(--btn);
     color: var(--accent);
     font-size: 19px;
-    /*font-weight: bold;*/
     cursor: pointer;
     padding: 0 14px;
     transition: transform 0.1s, background-color 0.2s;
@@ -255,8 +259,7 @@
 
   button:active:not(:disabled) {
     transform: scale(0.96);
-        border: none;
-
+    border: none;
   }
 
   .play-btn {
@@ -953,7 +956,7 @@
 
 </style>
 
-<!-- Media Session API Script -->
+<!-- Media Session API Script Corregido -->
 <script>
 (function(){
   function supportsMediaSession() {
@@ -961,217 +964,207 @@
   }
 
   function safe(fn) {
-    try { fn(); } catch (e) { console.error('MediaSession error', e); }
+    try { fn(); } catch (e) { console.warn('MediaSession warning:', e); }
   }
 
-  // Initialize after all scripts have executed
-  window.addEventListener('load', function initMediaSession() {
+  let currentTrackInfo = null;
+  let positionUpdater = null;
+
+  function getAudio() {
+    return document.getElementById('audio');
+  }
+
+  function getCurrentTrackInfo() {
+    if (window.state && window.state.currentTrack) {
+      return window.state.currentTrack;
+    }
+    return {
+      title: document.getElementById('title')?.textContent || 'Sin título',
+      creator: document.getElementById('creator')?.textContent || 'Desconocido',
+      id: null,
+      album: window.state?.currentGenre || 'Resonate'
+    };
+  }
+
+  function updateMetadata() {
+    safe(() => {
+      if (!supportsMediaSession()) return;
+      
+      const info = getCurrentTrackInfo();
+      currentTrackInfo = info;
+      
+      const artwork = info.id ? [
+        { src: `https://archive.org/services/img/${info.id}`, sizes: '512x512', type: 'image/jpeg' },
+        { src: `https://archive.org/services/img/${info.id}/thumb`, sizes: '96x96', type: 'image/jpeg' }
+      ] : [];
+
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: info.title || 'Sin título',
+        artist: info.creator || 'Desconocido',
+        album: info.album || 'Resonate',
+        artwork: artwork
+      });
+    });
+  }
+
+  function updatePositionState() {
+    safe(() => {
+      const audio = getAudio();
+      if (!audio || !navigator.mediaSession.setPositionState) return;
+      if (!isFinite(audio.duration) || audio.duration <= 0) return;
+      
+      navigator.mediaSession.setPositionState({
+        duration: audio.duration,
+        playbackRate: audio.playbackRate || 1,
+        position: audio.currentTime || 0
+      });
+    });
+  }
+
+  function startPositionUpdater() {
+    stopPositionUpdater();
+    positionUpdater = setInterval(updatePositionState, 1000);
+  }
+
+  function stopPositionUpdater() {
+    if (positionUpdater) {
+      clearInterval(positionUpdater);
+      positionUpdater = null;
+    }
+  }
+
+  function setupMediaSessionHandlers() {
     if (!supportsMediaSession()) return;
 
     const ms = navigator.mediaSession;
-    let positionUpdater = null;
+    
+    // Limpiar handlers existentes
+    ms.setActionHandler('play', null);
+    ms.setActionHandler('pause', null);
+    ms.setActionHandler('previoustrack', null);
+    ms.setActionHandler('nexttrack', null);
+    ms.setActionHandler('seekbackward', null);
+    ms.setActionHandler('seekforward', null);
+    ms.setActionHandler('seekto', null);
 
-    function getAudio() {
-      return window.document ? document.getElementById('audio') : null;
-    }
-
-    function getCurrentTrackInfo() {
-      const s = window.state || {};
-      const el = window.elements || {};
-      const track = s.currentTrack || {};
-      return {
-        title: track.title || el.title?.textContent || 'Sin título',
-        artist: track.creator || el.creator?.textContent || 'Desconocido',
-        album: s.currentGenre ? (el.genreSelect?.options[el.genreSelect.selectedIndex]?.text || s.currentGenre) : undefined,
-        id: track.id || null,
-        url: track.url || null,
-        artwork: track.id ? `https://archive.org/services/img/${track.id}` : null
-      };
-    }
-
-    function updateMetadata() {
-      safe(() => {
-        const info = getCurrentTrackInfo();
-        const artwork = info.artwork ? [
-          { src: info.artwork, sizes: '512x512', type: 'image/jpeg' },
-          { src: info.artwork + '/thumb', sizes: '96x96', type: 'image/jpeg' }
-        ] : [];
-
-        ms.metadata = new MediaMetadata({
-          title: info.title,
-          artist: info.artist,
-          album: info.album || '',
-          artwork: artwork
-        });
-      });
-    }
-
-    function updatePositionState() {
-      safe(() => {
-        const audio = getAudio();
-        if (!audio || !ms.setPositionState) return;
-        if (!isFinite(audio.duration) || audio.duration === 0) return;
-        ms.setPositionState({
-          duration: audio.duration,
-          playbackRate: audio.playbackRate || 1,
-          position: Math.max(0, audio.currentTime || 0)
-        });
-      });
-    }
-
-    function startPositionUpdater() {
-      stopPositionUpdater();
-      positionUpdater = setInterval(updatePositionState, 1000);
-      updatePositionState();
-    }
-
-    function stopPositionUpdater() {
-      if (positionUpdater) {
-        clearInterval(positionUpdater);
-        positionUpdater = null;
-      }
-    }
-
-    // CORREGIDO: Función async añadida donde se necesitaba
-    ms.setActionHandler('play', function() {
-      safe(async () => {
+    // Configurar nuevos handlers
+    safe(() => {
+      ms.setActionHandler('play', function() {
         const audio = getAudio();
         if (audio && audio.paused) {
-          if (!audio.src || audio.src === '') {
-            if (typeof window.forcePlay === 'function') {
-              await window.forcePlay();
-            }
+          if (!audio.src) {
+            if (window.forcePlay) window.forcePlay();
           } else {
-            await audio.play().catch(()=>{});
+            audio.play().catch(console.warn);
           }
         }
-        updateMetadata();
       });
-    });
 
-    ms.setActionHandler('pause', function() {
-      safe(() => {
+      ms.setActionHandler('pause', function() {
         const audio = getAudio();
         if (audio && !audio.paused) audio.pause();
       });
-    });
 
-    ms.setActionHandler('previoustrack', function() {
-      safe(() => {
-        if (typeof window.playPrevious === 'function') {
-          window.playPrevious();
-        } else if (typeof window.playPreviousInContext === 'function') {
-          window.playPreviousInContext();
-        }
+      ms.setActionHandler('previoustrack', function() {
+        if (window.playPrevious) window.playPrevious();
       });
-    });
 
-    ms.setActionHandler('nexttrack', function() {
-      safe(() => {
-        if (typeof window.playNext === 'function') {
-          window.playNext();
-        } else if (typeof window.playNextInContext === 'function') {
-          window.playNextInContext();
-        }
+      ms.setActionHandler('nexttrack', function() {
+        if (window.playNext) window.playNext();
       });
-    });
 
-    ms.setActionHandler('seekbackward', function(details) {
-      safe(() => {
+      ms.setActionHandler('seekbackward', function(details) {
         const audio = getAudio();
         if (!audio) return;
-        const seekOffset = (details && details.seekOffset) || 10;
+        const seekOffset = details.seekOffset || 10;
         audio.currentTime = Math.max(0, audio.currentTime - seekOffset);
         updatePositionState();
       });
-    });
 
-    ms.setActionHandler('seekforward', function(details) {
-      safe(() => {
+      ms.setActionHandler('seekforward', function(details) {
         const audio = getAudio();
         if (!audio) return;
-        const seekOffset = (details && details.seekOffset) || 10;
-        audio.currentTime = Math.min(audio.duration || Infinity, audio.currentTime + seekOffset);
+        const seekOffset = details.seekOffset || 10;
+        audio.currentTime = Math.min(audio.duration, audio.currentTime + seekOffset);
         updatePositionState();
       });
-    });
 
-    ms.setActionHandler('seekto', function(details) {
-      safe(() => {
+      ms.setActionHandler('seekto', function(details) {
         const audio = getAudio();
         if (!audio || typeof details.seekTime !== 'number') return;
-        if (typeof audio.fastSeek === 'function') {
-          audio.fastSeek(details.seekTime);
-        } else {
-          audio.currentTime = details.seekTime;
-        }
+        audio.currentTime = details.seekTime;
         updatePositionState();
       });
     });
+  }
 
-    try {
-      ms.setActionHandler('stop', function() {
-        safe(() => {
-          const audio = getAudio();
-          if (audio) {
-            audio.pause();
-            audio.currentTime = 0;
-          }
-          stopPositionUpdater();
-        });
-      });
-    } catch (e) {
-      // some browsers don't support stop handler
-    }
+  function initializeMediaSession() {
+    if (!supportsMediaSession()) return;
+
+    setupMediaSessionHandlers();
+    updateMetadata();
 
     const audio = getAudio();
     if (audio) {
       audio.addEventListener('play', function() {
-        updateMetadata();
+        navigator.mediaSession.playbackState = 'playing';
         startPositionUpdater();
       });
+
       audio.addEventListener('pause', function() {
-        updateMetadata();
+        navigator.mediaSession.playbackState = 'paused';
         stopPositionUpdater();
-        updatePositionState();
       });
-      audio.addEventListener('seeked', updatePositionState);
-      audio.addEventListener('ratechange', updatePositionState);
-      audio.addEventListener('loadedmetadata', function(){
-        updateMetadata();
-        updatePositionState();
+
+      audio.addEventListener('ended', function() {
+        navigator.mediaSession.playbackState = 'none';
+        stopPositionUpdater();
       });
-      
-      const observer = new MutationObserver(function() {
-        updateMetadata();
-        updatePositionState();
-      });
-      const titleEl = document.getElementById('title');
-      const creatorEl = document.getElementById('creator');
-      if (titleEl) observer.observe(titleEl, { childList: true, characterData: true, subtree: true });
-      if (creatorEl) observer.observe(creatorEl, { childList: true, characterData: true, subtree: true });
+
+      audio.addEventListener('loadedmetadata', updatePositionState);
+      audio.addEventListener('timeupdate', updatePositionState);
     }
 
-    safe(() => {
-      window.updateMediaSessionMetadata = function(trackId) {
-        if (trackId && (!getCurrentTrackInfo().id)) {
-          const cur = getCurrentTrackInfo();
-          cur.id = trackId;
+    // Observar cambios en la UI para actualizar metadata
+    const observer = new MutationObserver(function(mutations) {
+      mutations.forEach(function(mutation) {
+        if (mutation.type === 'childList' || mutation.type === 'characterData') {
+          updateMetadata();
         }
-        updateMetadata();
-        updatePositionState();
-      };
+      });
     });
 
+    const titleEl = document.getElementById('title');
+    const creatorEl = document.getElementById('creator');
+    if (titleEl) observer.observe(titleEl, { childList: true, characterData: true, subtree: true });
+    if (creatorEl) observer.observe(creatorEl, { childList: true, characterData: true, subtree: true });
+  }
+
+  // Inicializar cuando el DOM esté listo
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeMediaSession);
+  } else {
+    initializeMediaSession();
+  }
+
+  // Exponer funciones globalmente
+  window.updateMediaSessionMetadata = function(trackInfo) {
+    if (trackInfo) {
+      currentTrackInfo = { ...currentTrackInfo, ...trackInfo };
+    }
     updateMetadata();
-  }, { once: true });
+    updatePositionState();
+  };
+
+  window.setupMediaSessionHandlers = setupMediaSessionHandlers;
+
 })();
 </script>
 </head>
 
 <body>
 <div class="start-view" id="start-view">
-  <button id="start-button">Iniciar &copy;Resonate</button>
+  <button id="start-button">Iniciar Resonate</button>
 </div>
 
 <div id="status-messages"></div>
@@ -1195,7 +1188,6 @@
     </div>
   </div>
   <div id="search-results" class="search-results"></div>
-
 
   <div class="player-container">
     <div class="player-content" id="player-content">
@@ -3329,6 +3321,109 @@ function onplay(callback) {
   state.onPlayCallback = callback;
 }
 
+// ==================== REGISTRO PWA ====================
+function registerServiceWorker() {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js')
+      .then((registration) => {
+        console.log('Service Worker registrado con éxito:', registration);
+        
+        // Verificar actualizaciones
+        registration.addEventListener('updatefound', () => {
+          const newWorker = registration.installing;
+          console.log('Nueva versión del Service Worker encontrada:', newWorker);
+          
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              showStatus('Nueva versión disponible. Recarga la aplicación.', 'info', 5000);
+            }
+          });
+        });
+      })
+      .catch((error) => {
+        console.log('Error al registrar el Service Worker:', error);
+      });
+
+    // Escuchar cambios de estado del service worker
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      console.log('Service Worker controller cambiado');
+    });
+  }
+}
+
+// ==================== INSTALACIÓN PWA ====================
+function setupPWAInstall() {
+  let deferredPrompt;
+  
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    
+    // Mostrar botón de instalación si es apropiado
+    showInstallButton();
+  });
+  
+  function showInstallButton() {
+    // Puedes agregar un botón de instalación en tu UI aquí
+    console.log('La aplicación puede ser instalada');
+    
+    // Ejemplo: mostrar notificación después de 30 segundos de uso
+    setTimeout(() => {
+      if (deferredPrompt) {
+        showStatus('¿Quieres instalar Resonate para una mejor experiencia?', 'info', 5000);
+      }
+    }, 30000);
+  }
+  
+  window.installPWA = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      
+      if (outcome === 'accepted') {
+        console.log('Usuario aceptó la instalación');
+        showStatus('Resonate se está instalando...', 'info', 3000);
+      } else {
+        console.log('Usuario rechazó la instalación');
+      }
+      
+      deferredPrompt = null;
+    }
+  };
+}
+
+// ==================== NOTIFICACIONES PUSH ====================
+function setupPushNotifications() {
+  // Solicitar permiso para notificaciones
+  if ('Notification' in window && 'serviceWorker' in navigator) {
+    Notification.requestPermission().then((permission) => {
+      if (permission === 'granted') {
+        console.log('Permiso para notificaciones concedido');
+        // Aquí podrías suscribirte a push notifications
+      }
+    });
+  }
+}
+
+// ==================== FUNCIONALIDAD OFFLINE ====================
+function setupOfflineFunctionality() {
+  // Detectar cambios de conectividad
+  window.addEventListener('online', () => {
+    showStatus('Conexión restaurada', 'info', 2000);
+    state.networkOnline = true;
+  });
+
+  window.addEventListener('offline', () => {
+    showStatus('Modo offline activado', 'error', 3000);
+    state.networkOnline = false;
+    
+    // Intentar reproducir desde caché si hay una pista actual
+    if (state.currentTrack && elements.audio.src) {
+      showStatus('Reproduciendo desde caché', 'info', 2000);
+    }
+  });
+}
+
 async function initializeApp() {
   // Inicializar caché de audio primero
   try {
@@ -3411,6 +3506,17 @@ async function initializeApp() {
   
   updateShuffleButton();
   
+  // Inicializar PWA
+  registerServiceWorker();
+  setupPWAInstall();
+  setupPushNotifications();
+  setupOfflineFunctionality();
+  
+  // Reinicializar Media Session
+  if (window.setupMediaSessionHandlers) {
+    window.setupMediaSessionHandlers();
+  }
+  
   // EXPONER FUNCIONES GLOBALES CRÍTICAS
   window.onplay = onplay;
   window.state = state;
@@ -3427,8 +3533,9 @@ async function initializeApp() {
   window.addAlbumToFavorites = addAlbumToFavorites;
   window.isAlbumInFavorites = isAlbumInFavorites;
   window.audioCache = audioCache; // Para debugging
+  window.installPWA = installPWA;
   
-  console.log('Aplicación optimizada inicializada con Media Session y Caché Avanzada');
+  console.log('Aplicación optimizada inicializada con Media Session, PWA y Android Auto');
 }
 
 // INICIALIZACIÓN SEGURA
