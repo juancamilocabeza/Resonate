@@ -1,21 +1,21 @@
 // Service Worker para Resonate - Reproductor de Música
-const CACHE_NAME = 'resonate-v2.1.0';
-const STATIC_CACHE = 'resonate-static-v2.1.0';
-const AUDIO_CACHE = 'resonate-audio-v2.1.0';
+const CACHE_NAME = 'resonate-v2.1.1';
+const STATIC_CACHE = 'resonate-static-v2.1.1';
+const AUDIO_CACHE = 'resonate-audio-v2.1.1';
 
 // Archivos críticos para el funcionamiento de la app
 const STATIC_FILES = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/icons/icon-72x72.png',
-  '/icons/icon-96x96.png',
-  '/icons/icon-128x128.png',
-  '/icons/icon-144x144.png',
-  '/icons/icon-152x152.png',
-  '/icons/icon-192x192.png',
-  '/icons/icon-384x384.png',
-  '/icons/icon-512x512.png'
+  './',
+  './index.html',
+  './manifest.json',
+  './icons/icon-72x72.png',
+  './icons/icon-96x96.png',
+  './icons/icon-128x128.png',
+  './icons/icon-144x144.png',
+  './icons/icon-152x152.png',
+  './icons/icon-192x192.png',
+  './icons/icon-384x384.png',
+  './icons/icon-512x512.png'
 ];
 
 // Instalación del Service Worker
@@ -62,6 +62,11 @@ self.addEventListener('activate', (event) => {
 
 // Estrategia de cache para archivos de audio
 self.addEventListener('fetch', (event) => {
+  // Solo manejar peticiones HTTP/HTTPS
+  if (!event.request.url.startsWith('http')) {
+    return;
+  }
+
   const url = new URL(event.request.url);
   
   // Estrategia para archivos de audio
@@ -190,8 +195,8 @@ self.addEventListener('push', (event) => {
   const data = event.data.json();
   const options = {
     body: data.body || 'Nueva notificación de Resonate',
-    icon: '/icons/icon-192x192.png',
-    badge: '/icons/icon-72x72.png',
+    icon: './icons/icon-192x192.png',
+    badge: './icons/icon-72x72.png',
     tag: 'resonate-notification',
     renotify: true,
     actions: [
@@ -227,7 +232,7 @@ self.addEventListener('notificationclick', (event) => {
           }
         }
         if (clients.openWindow) {
-          return clients.openWindow('/');
+          return clients.openWindow('./');
         }
       })
     );
@@ -241,7 +246,7 @@ self.addEventListener('notificationclick', (event) => {
           }
         }
         if (clients.openWindow) {
-          return clients.openWindow('/');
+          return clients.openWindow('./');
         }
       })
     );

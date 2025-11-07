@@ -2,33 +2,33 @@
   "name": "Resonate",
   "short_name": "Resonate",
   "description": "Reproductor avanzado con acceso a Archive.org",
-  "start_url": "/",
+  "start_url": "./",
   "display": "standalone",
   "background_color": "#000000",
   "theme_color": "#6ee7b7",
   "orientation": "portrait",
-  "scope": "/",
+  "scope": "./",
   "lang": "es",
   "categories": ["music", "entertainment"],
   "icons": [
     {
-      "src": "icons/icon-192x192.png",
+      "src": "./icons/icon-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "icons/icon-256x256.png",
+      "src": "./icons/icon-256x256.png",
       "sizes": "256x256",
       "type": "image/png"
     },
     {
-      "src": "icons/icon-512x512.png",
+      "src": "./icons/icon-512x512.png",
       "sizes": "512x512",
       "type": "image/png"
     },
     {
-      "src": "icons/icon-1024x1024.png",
+      "src": "./icons/icon-1024x1024.png",
       "sizes": "1024x1024",
       "type": "image/png"
     }

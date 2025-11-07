@@ -1679,6 +1679,7 @@ class ContinuousPlaybackManager {
     
     const context = this.contextData[this.currentContext];
     
+    // MODIFICACIÓN: Para searchPlaylist, siempre usar orden lineal
     if (this.currentContext === 'favorites' && state.shuffleFavorites) {
       context.currentIndex = Math.floor(Math.random() * context.items.length);
     } else {
@@ -1694,7 +1695,8 @@ class ContinuousPlaybackManager {
   
   hasNextTrack() {
     const context = this.contextData[this.currentContext];
-    return context && context.items.length > 0;
+    return context && context.items.length > 0 && 
+           context.currentIndex < context.items.length - 1;
   }
   
   setAlbumPlaylist(albumId, tracks, startIndex = 0) {
@@ -1714,6 +1716,18 @@ class ContinuousPlaybackManager {
 
   setSearchPlaylist(tracks, startIndex = 0) {
     this.setContext('searchPlaylist', tracks, startIndex);
+  }
+  
+  // NUEVO: Obtener pista anterior en la lista precargada
+  getPreviousTrack() {
+    if (!this.currentContext || !this.contextData[this.currentContext].items.length) {
+      return null;
+    }
+    
+    const context = this.contextData[this.currentContext];
+    context.currentIndex = (context.currentIndex - 1 + context.items.length) % context.items.length;
+    
+    return context.items[context.currentIndex];
   }
 }
 
@@ -2553,12 +2567,32 @@ async function playOptimizedSearchResult(result, index, allResults) {
         const firstTrack = files[0];
         await playAudioTrackOptimized(firstTrack, result.identifier, 0, files.length);
       } else {
-        state.albumOrigin = 'search';
-        playbackManager.setContext('search', allResults, index);
+        // MODIFICACIÓN: Crear lista precargada con todos los resultados
+        const searchPlaylist = [];
+        
+        // Precargar todas las pistas de todos los resultados
+        for (let i = 0; i < allResults.length; i++) {
+          try {
+            const resultFiles = await fetchOptimizedPlayableFiles(allResults[i].identifier);
+            if (resultFiles && resultFiles.length > 0) {
+              if (resultFiles.length > 1) {
+                // Para álbumes, tomar solo la primera pista para simplificar
+                searchPlaylist.push(resultFiles[0]);
+              } else {
+                searchPlaylist.push(resultFiles[0]);
+              }
+            }
+          } catch (error) {
+            console.error(`Error precargando resultado ${i}:`, error);
+          }
+        }
+        
+        // Configurar la lista precargada
+        setupPreloadedPlayback(searchPlaylist, index);
+        
         const track = files[0];
         await playAudioTrackOptimized(track, result.identifier);
       }
-      // MODIFICADO: No ocultar resultados automáticamente
     } else {
       throw new Error('No se encontraron archivos de audio reproducibles');
     }
@@ -2856,10 +2890,40 @@ function forcePlay() {
   }
 }
 
+// ==================== NUEVA FUNCIÓN PARA GESTIONAR LISTAS PRECARGADAS ====================
+function setupPreloadedPlayback(tracks, startIndex = 0) {
+  if (!tracks || tracks.length === 0) return;
+  
+  // Crear una lista de reproducción precargada
+  const preloadedPlaylist = tracks.map(track => ({
+    ...track,
+    id: track.id || `preloaded-${Math.random().toString(36).substr(2, 9)}`
+  }));
+  
+  // Configurar el contexto de reproducción precargado
+  playbackManager.setContext('searchPlaylist', preloadedPlaylist, startIndex);
+  state.autoPlaySearchResults = true;
+  
+  console.log(`Lista precargada configurada con ${preloadedPlaylist.length} pistas`);
+}
+
 // ==================== REPRODUCCIÓN CONTINUA MEJORADA ====================
 async function playNextInContext() {
   const context = playbackManager.getCurrentContext();
   
+  // Si estamos en un contexto de búsqueda con playlist precargada
+  if (context === 'searchPlaylist' && state.autoPlaySearchResults) {
+    if (!playbackManager.hasNextTrack()) {
+      showStatus('Fin de la lista de reproducción', 'info', 2000);
+      return;
+    }
+    
+    const nextItem = playbackManager.getNextTrack();
+    await playAudioTrackOptimized(nextItem, nextItem.id, 0, 1);
+    return;
+  }
+  
+  // Si estamos en un álbum de búsqueda
   if (context === 'album' && state.albumOrigin === 'search') {
     const albumContext = playbackManager.contextData.album;
     
@@ -2884,6 +2948,7 @@ async function playNextInContext() {
     }
   }
   
+  // Para otros contextos, usar el comportamiento de precarga existente
   if (!playbackManager.hasNextTrack()) {
     if (context === 'genre') {
       await playOptimizedRandom(state.currentGenre);
@@ -2894,8 +2959,8 @@ async function playNextInContext() {
       showStatus('Fin de los favoritos, reproduciendo Rock', 'info', 2000);
       await playOptimizedRandom('rock');
       return;
-    } else if (context === 'searchPlaylist') {
-      showStatus('Fin de la lista de búsqueda', 'info', 2000);
+    } else if (context === 'search') {
+      showStatus('Fin de la búsqueda actual', 'info', 2000);
       return;
     }
     return;
@@ -2913,10 +2978,9 @@ async function playNextInContext() {
         await playNextInContext();
       }
     } else if (context === 'favorites') {
-      // CORRECCIÓN CRÍTICA: Asegurar que el track tenga URL válida
+      // Comportamiento existente para favoritos
       if (!nextItem.url) {
         console.error('Favorito sin URL válida:', nextItem);
-        // Saltar a la siguiente pista si esta no es válida
         setTimeout(() => playNextInContext(), 1000);
         return;
       }
@@ -2932,7 +2996,6 @@ async function playNextInContext() {
         totalTracks: nextItem.totalTracks || 1
       };
       
-      // Verificación adicional de URL
       if (!track.url || track.url === '') {
         console.error('URL de audio vacía en favorito:', track);
         showStatus('Error: URL de audio no disponible', 'error', 2000);
@@ -2944,15 +3007,11 @@ async function playNextInContext() {
     } else if (context === 'album') {
       const ctx = playbackManager.contextData.album;
       await playAudioTrackOptimized(nextItem, playbackManager.getCurrentAlbumId(), ctx.currentIndex, ctx.items.length);
-    } else if (context === 'searchPlaylist') {
-      // NUEVO: Reproducir desde la lista de búsqueda precargada
-      await playAudioTrackOptimized(nextItem, nextItem.id, 0, 1);
     }
     
   } catch (error) {
     console.error('Error al reproducir siguiente pista:', error);
     
-    // Si hay error por falta de conexión, intentar con la siguiente pista
     if (error.message.includes('conexión') || error.message.includes('offline')) {
       showStatus('Sin conexión, intentando siguiente pista...', 'error', 2000);
       setTimeout(() => playNextInContext(), 1000);
@@ -3258,7 +3317,7 @@ async function playRandomSearchResults() {
   elements.playBtn.innerHTML = '<span class="loader"></span>';
   
   try {
-    showStatus('Preparando lista de reproducción aleatoria...', 'info', 0);
+    showStatus('Preparando lista de reproducción precargada...', 'info', 0);
     
     // Crear una lista de reproducción con todas las pistas de los resultados
     const searchPlaylist = [];
@@ -3285,18 +3344,14 @@ async function playRandomSearchResults() {
       throw new Error('No se pudieron cargar pistas de los resultados');
     }
     
-    // Mezclar aleatoriamente la lista de reproducción
-    const shuffledPlaylist = [...searchPlaylist].sort(() => Math.random() - 0.5);
-    
-    // Configurar el contexto de reproducción
-    playbackManager.setSearchPlaylist(shuffledPlaylist, 0);
-    state.autoPlaySearchResults = true;
+    // Configurar la lista precargada
+    setupPreloadedPlayback(searchPlaylist, 0);
     
     // Reproducir la primera pista
-    const firstTrack = shuffledPlaylist[0];
+    const firstTrack = searchPlaylist[0];
     await playAudioTrackOptimized(firstTrack, firstTrack.id, 0, 1);
     
-    showStatus(`Reproduciendo ${shuffledPlaylist.length} pistas aleatoriamente`, 'info', 3000);
+    showStatus(`Reproduciendo ${searchPlaylist.length} pistas en orden precargado`, 'info', 3000);
     
   } catch (error) {
     console.error('Error en playRandomSearchResults:', error);
