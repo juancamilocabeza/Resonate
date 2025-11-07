@@ -6,22 +6,27 @@
 <title>Resonate</title>
 
 <!-- PWA Manifest -->
-<link rel="icon" type="image/png" href="icons/favicon.png">
+<link rel="icon" type="image/svg+xml" href="icons/favicon.svg">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#000000" />
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Resonate">
-<link rel="apple-touch-icon" href="icons/favicon.png">
+<link rel="apple-touch-icon" type="image/svg+xml" href="icons/favicon.svg">
 
 <!-- Android Auto Support -->
 <meta name="theme-color" content="#6ee7b7">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="icon" sizes="192x192" href="icons/icon-192x192.png">
-<link rel="apple-touch-icon" href="icons/icon-192x192.png">
+<link rel="icon" href="icons/favicon.svg">
+<link rel="apple-touch-icon" href="icons/favicon.svg">
 <meta name="media-title" content="Resonate">
 <meta name="media-artist" content="Reproductor de Música">
+
+<!-- Android Auto Metadata -->
+<meta name="media-application-id" content="resonate.music.player">
+<meta name="media-role" content="music">
+<meta name="media-service" content="resonate">
 
 <style>
   :root {
@@ -733,6 +738,40 @@
     margin-left: 10px;
   }
 
+  .search-results-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+  }
+
+  .search-results-controls {
+    display: flex;
+    gap: 8px;
+  }
+
+  .search-control-btn {
+    background: var(--btn);
+    border: none;
+    color: var(--accent);
+    font-size: 11px;
+    cursor: pointer;
+    padding: 6px 10px;
+    border-radius: 6px;
+    height: auto;
+    font-weight: 500;
+  }
+
+  .search-control-btn:active {
+    background: var(--card);
+  }
+
+  .search-results-list {
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
   .search-result {
     padding: 12px;
     border-bottom: 1px solid rgba(226, 29, 29, 0.06);
@@ -941,6 +980,7 @@
     font-size: 0.95rem;
     font-weight: 700;
     cursor: pointer;
+    padding: 12px 24px;
     box-shadow: 0 6px 20px rgba(110, 231, 183, 0.25);
   }
 
@@ -1164,7 +1204,7 @@
 
 <body>
 <div class="start-view" id="start-view">
-  <button id="start-button" onclick="startApp()">Iniciar Resonate</button>
+  <button id="start-button" class="start-button" onclick="startApp()">Iniciar Resonate</button>
 </div>
 
 <div id="status-messages"></div>
@@ -1187,7 +1227,15 @@
       <input type="text" id="search-input" class="search-input" placeholder="Buscar">
     </div>
   </div>
-  <div id="search-results" class="search-results"></div>
+  <div id="search-results" class="search-results">
+    <div class="search-results-header">
+      <div class="search-results-controls">
+        <button id="play-random-search" class="search-control-btn">Reproducir Aleatorio</button>
+        <button id="hide-results-btn" class="search-control-btn">Ocultar Resultados</button>
+      </div>
+    </div>
+    <div id="search-results-list" class="search-results-list"></div>
+  </div>
 
   <div class="player-container">
     <div class="player-content" id="player-content">
@@ -1201,17 +1249,17 @@
       </div>
 
       <div class="controls">
-        <button id="prev-btn" class="shuffle-favorites-btn button inactive" aria-label="Anterior"><span aria-hidden="true">⏮</span></button>
-        <button id="play-btn" class="shuffle-favorites-btn button active" aria-label="Reproducir/Pausar"><span aria-hidden="true">| |</span></button>
-        <button id="next-btn" class="shuffle-favorites-btn button inactive" aria-label="Siguiente"><span aria-hidden="true">⏭</span></button>
-        <button id="favorite-btn" class="shuffle-favorites-btn button inactive" aria-label="Favorito"><span aria-hidden="true">🩶</span></button>
-        <button id="shuffle-favorites-btn" class="shuffle-favorites-btn button active" aria-label="Desactivar reproducción aleatoria de favoritos">
+        <button id="prev-btn" class="prev-btn" aria-label="Anterior">⏮</button>
+        <button id="play-btn" class="play-btn" aria-label="Reproducir/Pausar">▶</button>
+        <button id="next-btn" class="next-btn" aria-label="Siguiente">⏭</button>
+        <button id="favorite-btn" class="favorite-btn" aria-label="Favorito">🩶</button>
+        <button id="shuffle-favorites-btn" class="shuffle-favorites-btn" aria-label="Desactivar reproducción aleatoria de favoritos">
           <svg viewBox="0 0 24 24">
             <path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/>
           </svg>
         </button>
-        <div class="cast-container" style="display: none;">
-          <button id="cast-btn" class="cast-btn button" aria-label="Transmitir a dispositivo">
+        <div class="cast-container">
+          <button id="cast-btn" class="cast-btn" aria-label="Transmitir a dispositivo">
             <svg viewBox="0 0 24 24" width="18" height="18">
               <path d="M2 16.1A5 5 0 0 1 5.9 20M2 12.05A9 9 0 0 1 9.95 20M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6" 
                     fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -1286,7 +1334,7 @@
 // ==================== CONFIGURACIÓN PRINCIPAL ====================
 const SEARCH_CONFIG = {
   maxResults: 50,
-  resultsPerPage: 10,
+  resultsPerPage: 5,
   timeout: 8000,
   enableLazyLoading: true,
   cacheDuration: 10 * 60 * 1000,
@@ -1540,17 +1588,20 @@ const elements = {
   genreSelect: document.getElementById('genre-select'),
   searchInput: document.getElementById('search-input'),
   searchResults: document.getElementById('search-results'),
+  searchResultsList: document.getElementById('search-results-list'),
   favoritesToggle: document.getElementById('favorites-toggle'),
   favoritesList: document.getElementById('favorites-list'),
   startView: document.getElementById('start-view'),
   startButton: document.getElementById('start-button'),
   app: document.getElementById('app'),
-  playerContent: document.getElementById('player-content')
+  playerContent: document.getElementById('player-content'),
+  playRandomSearch: document.getElementById('play-random-search'),
+  hideResultsBtn: document.getElementById('hide-results-btn')
 };
 
 // ==================== ESTADO DE LA APLICACIÓN ====================
 const state = {
-  currentGenre: 'tangos',
+  currentGenre: 'rock',
   currentTrack: null,
   isLoading: false,
   favorites: [],
@@ -1575,7 +1626,9 @@ const state = {
   castAvailable: false,
   castSession: null,
   networkOnline: true,
-  currentBlobUrl: null
+  currentBlobUrl: null,
+  autoPlaySearchResults: false,
+  searchPlaylist: []
 };
 
 // ==================== DETECCIÓN DE CONECTIVIDAD ====================
@@ -1605,7 +1658,8 @@ class ContinuousPlaybackManager {
       genre: { currentIndex: -1, items: [] },
       search: { currentIndex: -1, items: [] },
       favorites: { currentIndex: -1, items: [] },
-      album: { currentIndex: -1, items: [], currentAlbumId: null }
+      album: { currentIndex: -1, items: [], currentAlbumId: null },
+      searchPlaylist: { currentIndex: -1, items: [] }
     };
   }
   
@@ -1656,6 +1710,10 @@ class ContinuousPlaybackManager {
       return this.currentContext === 'album' && this.contextData.album.currentAlbumId === albumId;
     }
     return this.currentContext === 'album';
+  }
+
+  setSearchPlaylist(tracks, startIndex = 0) {
+    this.setContext('searchPlaylist', tracks, startIndex);
   }
 }
 
@@ -1908,7 +1966,7 @@ async function performOptimizedSearch(query, page = 0) {
     
   } catch (error) {
     console.error('Error en búsqueda:', error);
-    elements.searchResults.innerHTML = '<div class="no-results">Error en la búsqueda</div>';
+    elements.searchResultsList.innerHTML = '<div class="no-results">Error en la búsqueda</div>';
     return { results: [], hasMore: false };
   }
 }
@@ -2233,7 +2291,7 @@ async function loadSearchResults(query, page = 0, clearExisting = true) {
     displaySearchResults(result, clearExisting);
   } catch (error) {
     console.error('Error cargando resultados:', error);
-    elements.searchResults.innerHTML = '<div class="no-results">Error cargando resultados</div>';
+    elements.searchResultsList.innerHTML = '<div class="no-results">Error cargando resultados</div>';
   }
 }
 
@@ -2241,14 +2299,14 @@ function displaySearchResults(searchData, clearExisting = true) {
   const { results, hasMore, total } = searchData;
   
   if (clearExisting) {
-    elements.searchResults.innerHTML = '';
+    elements.searchResultsList.innerHTML = '';
     state.searchResults = results;
   } else {
     state.searchResults = [...state.searchResults, ...results];
   }
 
   if (results.length === 0 && clearExisting) {
-    elements.searchResults.innerHTML = '<div class="no-results">No se encontraron resultados</div>';
+    elements.searchResultsList.innerHTML = '<div class="no-results">No se encontraron resultados</div>';
     elements.searchResults.classList.add('active');
     return;
   }
@@ -2261,14 +2319,14 @@ function displaySearchResults(searchData, clearExisting = true) {
   });
 
   if (clearExisting) {
-    elements.searchResults.appendChild(fragment);
+    elements.searchResultsList.appendChild(fragment);
   } else {
-    const existingLoadMore = elements.searchResults.querySelector('.load-more');
+    const existingLoadMore = elements.searchResultsList.querySelector('.load-more');
     if (existingLoadMore) {
       existingLoadMore.remove();
     }
     
-    elements.searchResults.appendChild(fragment);
+    elements.searchResultsList.appendChild(fragment);
   }
 
   if (hasMore) {
@@ -2276,10 +2334,10 @@ function displaySearchResults(searchData, clearExisting = true) {
     loadMoreEl.className = 'load-more';
     loadMoreEl.innerHTML = `
       <button class="load-more-btn" onclick="loadMoreResults()">
-        Cargar 10 resultados más
+        Cargar más resultados
       </button>
     `;
-    elements.searchResults.appendChild(loadMoreEl);
+    elements.searchResultsList.appendChild(loadMoreEl);
   }
 
   elements.searchResults.classList.add('active');
@@ -2335,12 +2393,14 @@ function createSearchResultElement(result, globalIndex) {
     }
   });
 
-  resultEl.addEventListener('click', async (e) => {
-    if (!e.target.classList.contains('result-favorite')) {
+  // MODIFICADO: Solo reproducir si el usuario hace clic en la información de la pista
+  const trackInfo = resultEl.querySelector('.track-item-info');
+  if (trackInfo) {
+    trackInfo.addEventListener('click', async (e) => {
       showStatus(`Cargando: ${result.title}`, 'info', 0);
       await playOptimizedSearchResult(result, globalIndex, state.searchResults);
-    }
-  });
+    });
+  }
 
   return resultEl;
 }
@@ -2452,6 +2512,13 @@ function displayAlbumTracks(albumId, tracksContainer) {
           favoriteBtn.classList.toggle('active', isNowFavorite);
           favoriteBtn.textContent = isNowFavorite ? '❤️' : '🩶';
         });
+
+        // MODIFICADO: Solo reproducir si el usuario hace clic en la información de la pista
+        const trackInfo = trackItem.querySelector('.track-item-info');
+        trackInfo.addEventListener('click', (e) => {
+          e.stopPropagation();
+          playSpecificTrack(track, albumId, index, files.length);
+        });
         
         tracksList.appendChild(trackItem);
       });
@@ -2470,6 +2537,7 @@ async function playOptimizedSearchResult(result, index, allResults) {
   
   state.isLoading = true;
   elements.playBtn.disabled = true;
+  elements.playBtn.innerHTML = '<span class="loader"></span>';
   
   try {
     showStatus(`Cargando: ${result.title}`, 'info', 0);
@@ -2490,7 +2558,7 @@ async function playOptimizedSearchResult(result, index, allResults) {
         const track = files[0];
         await playAudioTrackOptimized(track, result.identifier);
       }
-      hideSearchResults();
+      // MODIFICADO: No ocultar resultados automáticamente
     } else {
       throw new Error('No se encontraron archivos de audio reproducibles');
     }
@@ -2509,6 +2577,7 @@ async function playOptimizedSearchResult(result, index, allResults) {
   } finally {
     state.isLoading = false;
     elements.playBtn.disabled = false;
+    elements.playBtn.textContent = '||';
   }
 }
 
@@ -2517,6 +2586,7 @@ async function playSpecificTrack(track, albumId, trackIndex, totalTracks) {
   
   state.isLoading = true;
   elements.playBtn.disabled = true;
+  elements.playBtn.innerHTML = '<span class="loader"></span>';
   
   try {
     showStatus(`Cargando: ${track.title}`, 'info', 0);
@@ -2529,13 +2599,14 @@ async function playSpecificTrack(track, albumId, trackIndex, totalTracks) {
     
     await playAudioTrackOptimized(track, albumId, trackIndex, totalTracks);
     
-    hideSearchResults();
+    // MODIFICADO: No ocultar resultados automáticamente
   } catch (error) {
     console.error('Error en playSpecificTrack:', error);
     showStatus(`Error: ${error.message}`, 'error');
   } finally {
     state.isLoading = false;
     elements.playBtn.disabled = false;
+    elements.playBtn.textContent = '||';
   }
 }
 
@@ -2549,9 +2620,6 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
   
   // CORRECCIÓN CRÍTICA: NO limpiar la fuente anterior hasta que tengamos la nueva
   // Solo pausar y resetear el tiempo, pero mantener el src actual hasta tener el nuevo
-  
-  hideSearchResults();
-  hideFavoritesList();
   
   if (totalTracks > 1) {
     elements.title.textContent = `${track.title || 'Sin título'}`;
@@ -2573,10 +2641,10 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
     albumId: identifier
   };
   
-  // ACTUALIZAR MEDIA SESSION
+  // ACTUALIZAR MEDIA SESSION - CORRECCIÓN: pasar el objeto completo
   if (typeof window.updateMediaSessionMetadata === 'function') {
     try { 
-      window.updateMediaSessionMetadata(state.currentTrack.id); 
+      window.updateMediaSessionMetadata(state.currentTrack); 
     } catch(e){ 
       console.error('Error actualizando MediaSession:', e);
     }
@@ -2784,7 +2852,7 @@ function forcePlay() {
     playOptimizedFavorite(-1);
   } else {
     showStatus('No hay favoritos, reproduciendo Rock', 'info');
-    playOptimizedRandom('tangos');
+    playOptimizedRandom('rock');
   }
 }
 
@@ -2824,7 +2892,10 @@ async function playNextInContext() {
       return;
     } else if (context === 'favorites') {
       showStatus('Fin de los favoritos, reproduciendo Rock', 'info', 2000);
-      await playOptimizedRandom('tangos');
+      await playOptimizedRandom('rock');
+      return;
+    } else if (context === 'searchPlaylist') {
+      showStatus('Fin de la lista de búsqueda', 'info', 2000);
       return;
     }
     return;
@@ -2873,6 +2944,9 @@ async function playNextInContext() {
     } else if (context === 'album') {
       const ctx = playbackManager.contextData.album;
       await playAudioTrackOptimized(nextItem, playbackManager.getCurrentAlbumId(), ctx.currentIndex, ctx.items.length);
+    } else if (context === 'searchPlaylist') {
+      // NUEVO: Reproducir desde la lista de búsqueda precargada
+      await playAudioTrackOptimized(nextItem, nextItem.id, 0, 1);
     }
     
   } catch (error) {
@@ -2936,6 +3010,9 @@ async function playPreviousInContext() {
       await playAudioTrackOptimized(track, prevItem.id, prevItem.trackIndex, prevItem.totalTracks);
     } else if (context === 'album') {
       await playAudioTrackOptimized(prevItem, playbackManager.getCurrentAlbumId(), ctx.currentIndex, ctx.items.length);
+    } else if (context === 'searchPlaylist') {
+      // NUEVO: Reproducir desde la lista de búsqueda precargada
+      await playAudioTrackOptimized(prevItem, prevItem.id, 0, 1);
     }
   } catch (error) {
     console.error('Error al reproducir pista anterior:', error);
@@ -3164,6 +3241,65 @@ async function playOptimizedRandom(genre) {
     
   } catch (error) {
     console.error('Error en playOptimizedRandom:', error);
+    showStatus(`Error: ${error.message}`, 'error');
+  } finally {
+    state.isLoading = false;
+    elements.playBtn.disabled = false;
+    elements.playBtn.textContent = '||';
+  }
+}
+
+// ==================== NUEVA FUNCIONALIDAD: REPRODUCCIÓN ALEATORIA DE RESULTADOS ====================
+async function playRandomSearchResults() {
+  if (state.isLoading || state.searchResults.length === 0) return;
+  
+  state.isLoading = true;
+  elements.playBtn.disabled = true;
+  elements.playBtn.innerHTML = '<span class="loader"></span>';
+  
+  try {
+    showStatus('Preparando lista de reproducción aleatoria...', 'info', 0);
+    
+    // Crear una lista de reproducción con todas las pistas de los resultados
+    const searchPlaylist = [];
+    
+    // Precargar todas las pistas de los resultados
+    for (const result of state.searchResults) {
+      try {
+        const files = await fetchOptimizedPlayableFiles(result.identifier);
+        if (files && files.length > 0) {
+          // Para álbumes, agregar todas las pistas
+          if (files.length > 1) {
+            searchPlaylist.push(...files);
+          } else {
+            // Para pistas individuales, agregar la única pista
+            searchPlaylist.push(files[0]);
+          }
+        }
+      } catch (error) {
+        console.error(`Error cargando pistas para ${result.identifier}:`, error);
+      }
+    }
+    
+    if (searchPlaylist.length === 0) {
+      throw new Error('No se pudieron cargar pistas de los resultados');
+    }
+    
+    // Mezclar aleatoriamente la lista de reproducción
+    const shuffledPlaylist = [...searchPlaylist].sort(() => Math.random() - 0.5);
+    
+    // Configurar el contexto de reproducción
+    playbackManager.setSearchPlaylist(shuffledPlaylist, 0);
+    state.autoPlaySearchResults = true;
+    
+    // Reproducir la primera pista
+    const firstTrack = shuffledPlaylist[0];
+    await playAudioTrackOptimized(firstTrack, firstTrack.id, 0, 1);
+    
+    showStatus(`Reproduciendo ${shuffledPlaylist.length} pistas aleatoriamente`, 'info', 3000);
+    
+  } catch (error) {
+    console.error('Error en playRandomSearchResults:', error);
     showStatus(`Error: ${error.message}`, 'error');
   } finally {
     state.isLoading = false;
@@ -3440,6 +3576,10 @@ async function initializeApp() {
   setupCastFunctionality();
   setupProgressBarInteraction();
   
+  // NUEVO: Configurar botones de control de búsqueda
+  elements.playRandomSearch.addEventListener('click', playRandomSearchResults);
+  elements.hideResultsBtn.addEventListener('click', hideSearchResults);
+  
   elements.favoritesSection = document.querySelector('.favorites-section');
   elements.favoritesSection.style.display = 'block';
   
@@ -3533,6 +3673,7 @@ async function initializeApp() {
   window.toggleShuffleFavorites = toggleShuffleFavorites;
   window.addAlbumToFavorites = addAlbumToFavorites;
   window.isAlbumInFavorites = isAlbumInFavorites;
+  window.playRandomSearchResults = playRandomSearchResults;
   window.audioCache = audioCache; // Para debugging
   window.installPWA = installPWA;
   
