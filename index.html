@@ -14,19 +14,26 @@
 <meta name="apple-mobile-web-app-title" content="Resonate">
 <link rel="apple-touch-icon" type="image/svg+xml" href="icons/favicon.svg">
 
-<!-- Android Auto Support -->
+<!-- Android Auto Support - CORREGIDO -->
 <meta name="theme-color" content="#6ee7b7">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="icon" href="icons/favicon.svg">
 <link rel="apple-touch-icon" href="icons/favicon.svg">
+
+<!-- Android Auto Metadata - CORREGIDO Y MEJORADO -->
 <meta name="media-title" content="Resonate">
 <meta name="media-artist" content="Reproductor de Música">
-
-<!-- Android Auto Metadata -->
 <meta name="media-application-id" content="resonate.music.player">
 <meta name="media-role" content="music">
 <meta name="media-service" content="resonate">
+<meta name="media-browsable" content="true">
+<meta name="media-content-type" content="music">
+
+<!-- Metadata adicional para Android Auto -->
+<meta name="media-playback-type" content="audio">
+<meta name="media-supported-media" content="audio">
+<meta name="media-description" content="Reproductor de música con acceso a Archive.org">
 
 <style>
   :root {
@@ -911,7 +918,7 @@
     font-size: 12px;
     padding: 8px 10px;
     margin: 3px 0;
-    display: none;
+    /*display: none;*/
   }
 
   .status-info {
@@ -996,9 +1003,16 @@
 
 </style>
 
-<!-- Media Session API Script Corregido -->
+<!-- Media Session API Script MEJORADO para Android Auto -->
 <script>
 (function(){
+  // Detectar si estamos en un entorno compatible con Android Auto
+  const isAndroidAutoCompatible = () => {
+    return 'mediaSession' in navigator && 
+           (navigator.userAgent.includes('Android') || 
+            navigator.userAgent.includes('Auto'));
+  };
+
   function supportsMediaSession() {
     return 'mediaSession' in navigator;
   }
@@ -1033,17 +1047,31 @@
       const info = getCurrentTrackInfo();
       currentTrackInfo = info;
       
+      // MEJORADO: Mejor manejo de artwork para Android Auto
       const artwork = info.id ? [
         { src: `https://archive.org/services/img/${info.id}`, sizes: '512x512', type: 'image/jpeg' },
-        { src: `https://archive.org/services/img/${info.id}/thumb`, sizes: '96x96', type: 'image/jpeg' }
+        { src: `https://archive.org/services/img/${info.id}/thumb`, sizes: '96x96', type: 'image/jpeg' },
+        { src: `https://archive.org/services/img/${info.id}`, sizes: '256x256', type: 'image/jpeg' },
+        { src: `https://archive.org/services/img/${info.id}`, sizes: '128x128', type: 'image/jpeg' }
       ] : [];
 
-      navigator.mediaSession.metadata = new MediaMetadata({
+      const metadata = {
         title: info.title || 'Sin título',
         artist: info.creator || 'Desconocido',
         album: info.album || 'Resonate',
         artwork: artwork
-      });
+      };
+
+      // MEJORADO: Metadata adicional para Android Auto
+      if (isAndroidAutoCompatible()) {
+        // Agregar metadatos extendidos para mejor compatibilidad
+        metadata.album = info.album || 'Resonate Music Player';
+        metadata.artist = info.creator || 'Artista Desconocido';
+      }
+
+      navigator.mediaSession.metadata = new MediaMetadata(metadata);
+      
+      console.log('MediaSession metadata actualizado:', metadata);
     });
   }
 
@@ -1086,10 +1114,12 @@
     ms.setActionHandler('seekbackward', null);
     ms.setActionHandler('seekforward', null);
     ms.setActionHandler('seekto', null);
+    ms.setActionHandler('stop', null);
 
     // Configurar nuevos handlers
     safe(() => {
       ms.setActionHandler('play', function() {
+        console.log('MediaSession: Play action');
         const audio = getAudio();
         if (audio && audio.paused) {
           if (!audio.src) {
@@ -1101,19 +1131,23 @@
       });
 
       ms.setActionHandler('pause', function() {
+        console.log('MediaSession: Pause action');
         const audio = getAudio();
         if (audio && !audio.paused) audio.pause();
       });
 
       ms.setActionHandler('previoustrack', function() {
+        console.log('MediaSession: Previous track action');
         if (window.playPrevious) window.playPrevious();
       });
 
       ms.setActionHandler('nexttrack', function() {
+        console.log('MediaSession: Next track action');
         if (window.playNext) window.playNext();
       });
 
       ms.setActionHandler('seekbackward', function(details) {
+        console.log('MediaSession: Seek backward', details);
         const audio = getAudio();
         if (!audio) return;
         const seekOffset = details.seekOffset || 10;
@@ -1122,6 +1156,7 @@
       });
 
       ms.setActionHandler('seekforward', function(details) {
+        console.log('MediaSession: Seek forward', details);
         const audio = getAudio();
         if (!audio) return;
         const seekOffset = details.seekOffset || 10;
@@ -1130,17 +1165,35 @@
       });
 
       ms.setActionHandler('seekto', function(details) {
+        console.log('MediaSession: Seek to', details);
         const audio = getAudio();
         if (!audio || typeof details.seekTime !== 'number') return;
         audio.currentTime = details.seekTime;
         updatePositionState();
       });
+
+      ms.setActionHandler('stop', function() {
+        console.log('MediaSession: Stop action');
+        const audio = getAudio();
+        if (audio) {
+          audio.pause();
+          audio.currentTime = 0;
+        }
+      });
+
+      // MEJORADO: Configurar estado inicial de playback
+      ms.playbackState = 'none';
     });
   }
 
   function initializeMediaSession() {
-    if (!supportsMediaSession()) return;
+    if (!supportsMediaSession()) {
+      console.log('MediaSession API no soportada');
+      return;
+    }
 
+    console.log('Inicializando MediaSession para Android Auto...');
+    
     setupMediaSessionHandlers();
     updateMetadata();
 
@@ -1149,16 +1202,19 @@
       audio.addEventListener('play', function() {
         navigator.mediaSession.playbackState = 'playing';
         startPositionUpdater();
+        console.log('MediaSession: Estado cambiado a playing');
       });
 
       audio.addEventListener('pause', function() {
         navigator.mediaSession.playbackState = 'paused';
         stopPositionUpdater();
+        console.log('MediaSession: Estado cambiado a paused');
       });
 
       audio.addEventListener('ended', function() {
         navigator.mediaSession.playbackState = 'none';
         stopPositionUpdater();
+        console.log('MediaSession: Estado cambiado a none (ended)');
       });
 
       audio.addEventListener('loadedmetadata', updatePositionState);
@@ -1178,6 +1234,8 @@
     const creatorEl = document.getElementById('creator');
     if (titleEl) observer.observe(titleEl, { childList: true, characterData: true, subtree: true });
     if (creatorEl) observer.observe(creatorEl, { childList: true, characterData: true, subtree: true });
+
+    console.log('MediaSession inicializado correctamente');
   }
 
   // Inicializar cuando el DOM esté listo
@@ -1197,6 +1255,7 @@
   };
 
   window.setupMediaSessionHandlers = setupMediaSessionHandlers;
+  window.isAndroidAutoCompatible = isAndroidAutoCompatible;
 
 })();
 </script>
@@ -1273,15 +1332,7 @@
               </svg>
               <span>AirPlay</span>
             </button>
-            <button class="cast-option" id="web-audio-btn">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-                <line x1="12" y1="19" x2="12" y2="23"/>
-                <line x1="8" y1="23" x2="16" y2="23"/>
-              </svg>
-              <span>Web Audio</span>
-            </button>
+            <!-- REMOVIDO: Botón de Web Audio que no funcionaba -->
           </div>
         </div>
       </div>
@@ -1596,7 +1647,9 @@ const elements = {
   app: document.getElementById('app'),
   playerContent: document.getElementById('player-content'),
   playRandomSearch: document.getElementById('play-random-search'),
-  hideResultsBtn: document.getElementById('hide-results-btn')
+  hideResultsBtn: document.getElementById('hide-results-btn'),
+  airplayBtn: document.getElementById('airplay-btn'),
+  castMenu: document.getElementById('cast-menu')
 };
 
 // ==================== ESTADO DE LA APLICACIÓN ====================
@@ -1623,12 +1676,13 @@ const state = {
   isAndroid: /Android/.test(navigator.userAgent),
   expandedAlbums: new Set(),
   shuffleFavorites: true,
-  castAvailable: false,
+  castAvailable: true,
   castSession: null,
   networkOnline: true,
   currentBlobUrl: null,
-  autoPlaySearchResults: false,
-  searchPlaylist: []
+  autoPlaySearchResults: true,
+  searchPlaylist: [],
+  airplayAvailable: false
 };
 
 // ==================== DETECCIÓN DE CONECTIVIDAD ====================
@@ -3363,61 +3417,81 @@ async function playRandomSearchResults() {
   }
 }
 
-// ==================== FUNCIONALIDAD CAST ====================
+// ==================== FUNCIONALIDAD CAST MEJORADA ====================
 function setupCastFunctionality() {
   const castMenu = document.getElementById('cast-menu');
   const airplayBtn = document.getElementById('airplay-btn');
-  const webAudioBtn = document.getElementById('web-audio-btn');
   
+  // MEJORADO: Detección mejorada de AirPlay
+  function checkAirPlayAvailability() {
+    state.airplayAvailable = (
+      window.WebKitPlaybackTargetAvailabilityEvent && 
+      'webkitShowPlaybackTargetPicker' in elements.audio
+    );
+    
+    console.log('AirPlay disponible:', state.airplayAvailable);
+    
+    if (!state.airplayAvailable) {
+      elements.castBtn.style.display = 'none';
+      return false;
+    }
+    return true;
+  }
+  
+  // Configurar eventos del botón de transmisión
   elements.castBtn.addEventListener('click', (e) => {
     e.stopPropagation();
+    
+    if (!checkAirPlayAvailability()) {
+      showStatus('AirPlay no está disponible en este navegador', 'error', 3000);
+      return;
+    }
+    
     castMenu.classList.toggle('active');
   });
   
-  document.addEventListener('click', () => {
-    castMenu.classList.remove('active');
+  // Cerrar menú al hacer clic fuera
+  document.addEventListener('click', (e) => {
+    if (!elements.castBtn.contains(e.target) && !castMenu.contains(e.target)) {
+      castMenu.classList.remove('active');
+    }
   });
   
+  // Configurar AirPlay
   airplayBtn.addEventListener('click', () => {
     castMenu.classList.remove('active');
     
-    if (window.WebKitPlaybackTargetAvailabilityEvent) {
-      elements.audio.webkitShowPlaybackTargetPicker();
-      showStatus('Seleccionando dispositivo AirPlay...', 'info', 2000);
-    } else {
-      showStatus('AirPlay no está disponible en este navegador', 'error', 3000);
-    }
-  });
-  
-  webAudioBtn.addEventListener('click', () => {
-    castMenu.classList.remove('active');
-    
-    if (state.currentTrack) {
-      showStatus('Conectando a dispositivo Web Audio...', 'info', 2000);
-      
-      setTimeout(() => {
-        showStatus('Reproduciendo en dispositivo Web Audio', 'info', 3000);
-        elements.castBtn.classList.add('active');
-      }, 2000);
-    } else {
-      showStatus('No hay pista actual para transmitir', 'error', 3000);
-    }
-  });
-  
-  if (window.WebKitPlaybackTargetAvailabilityEvent) {
-    elements.audio.addEventListener('webkitplaybacktargetavailabilitychanged', (event) => {
-      switch (event.availability) {
-        case "available":
-          airplayBtn.disabled = false;
-          break;
-        case "not-available":
-          airplayBtn.disabled = true;
-          break;
+    if (checkAirPlayAvailability()) {
+      try {
+        elements.audio.webkitShowPlaybackTargetPicker();
+        showStatus('Seleccionando dispositivo AirPlay...', 'info', 2000);
+        
+        // MEJORADO: Monitorear cambios de estado de AirPlay
+        elements.audio.addEventListener('webkitcurrentplaybacktargetiswirelesschanged', function() {
+          const isWireless = elements.audio.webkitCurrentPlaybackTargetIsWireless;
+          if (isWireless) {
+            elements.castBtn.classList.add('active');
+            showStatus('Conectado a dispositivo AirPlay', 'info', 3000);
+          } else {
+            elements.castBtn.classList.remove('active');
+            showStatus('Desconectado de AirPlay', 'info', 2000);
+          }
+        });
+      } catch (error) {
+        console.error('Error al usar AirPlay:', error);
+        showStatus('Error al conectar con AirPlay', 'error', 3000);
       }
-    });
-  } else {
-    airplayBtn.disabled = true;
-  }
+    } else {
+      showStatus('AirPlay no está disponible', 'error', 3000);
+    }
+  });
+  
+  // MEJORADO: Verificar disponibilidad al inicializar
+  setTimeout(() => {
+    if (!checkAirPlayAvailability()) {
+      console.log('AirPlay no disponible, ocultando botón de transmisión');
+    }
+  }, 1000);
 }
 
 // ==================== BARRA DE PROGRESO MEJORADA ====================
@@ -3628,10 +3702,10 @@ async function initializeApp() {
   setupConnectivityMonitoring();
   
   setupSearchOnEnter();
-  setupCastFunctionality();
+  setupCastFunctionality(); // MEJORADO: Función de transmisión corregida
   setupProgressBarInteraction();
   
-  // NUEVO: Configurar botones de control de búsqueda
+  // Configurar botones de control de búsqueda
   elements.playRandomSearch.addEventListener('click', playRandomSearchResults);
   elements.hideResultsBtn.addEventListener('click', hideSearchResults);
   
@@ -3653,7 +3727,6 @@ async function initializeApp() {
   
   elements.shuffleFavoritesBtn.addEventListener('click', toggleShuffleFavorites);
   
-  /*elements.progressBar.addEventListener('click', seekAudio);*/
   elements.prevBtn.addEventListener('click', playPrevious);
   elements.playBtn.addEventListener('click', togglePlay);
   elements.nextBtn.addEventListener('click', playNext);
@@ -3675,7 +3748,6 @@ async function initializeApp() {
   });
   
   // El botón startButton ya tiene onclick="startApp()" en el HTML
-  // elements.startButton.addEventListener('click', startApp);
   
   elements.genreSelect.addEventListener('change', (e) => {
     state.currentGenre = e.target.value;
@@ -3708,9 +3780,20 @@ async function initializeApp() {
   setupPushNotifications();
   setupOfflineFunctionality();
   
-  // Reinicializar Media Session
+  // Reinicializar Media Session para Android Auto
   if (window.setupMediaSessionHandlers) {
     window.setupMediaSessionHandlers();
+  }
+  
+  // MEJORADO: Configuración específica para Android Auto
+  if (window.isAndroidAutoCompatible && window.isAndroidAutoCompatible()) {
+    console.log('Configurando para Android Auto...');
+    // Asegurar que los metadatos estén actualizados
+    setTimeout(() => {
+      if (window.updateMediaSessionMetadata) {
+        window.updateMediaSessionMetadata();
+      }
+    }, 1000);
   }
   
   // EXPONER FUNCIONES GLOBALES CRÍTICAS
@@ -3732,7 +3815,7 @@ async function initializeApp() {
   window.audioCache = audioCache; // Para debugging
   window.installPWA = installPWA;
   
-  console.log('Aplicación optimizada inicializada con Media Session, PWA y Android Auto');
+  console.log('Aplicación optimizada inicializada con Media Session, PWA y Android Auto corregido');
 }
 
 // INICIALIZACIÓN SEGURA
