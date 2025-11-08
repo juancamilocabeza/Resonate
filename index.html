@@ -14,14 +14,14 @@
 <meta name="apple-mobile-web-app-title" content="Resonate">
 <link rel="apple-touch-icon" type="image/svg+xml" href="icons/favicon.svg">
 
-<!-- Android Auto Support - CORREGIDO -->
+<!-- Android Auto Support - MEJORADO -->
 <meta name="theme-color" content="#6ee7b7">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="icon" href="icons/favicon.svg">
-<link rel="apple-touch-icon" href="icons/favicon.svg">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="icon" href="icons/favicon-192.png" sizes="192x192">
+<link rel="apple-touch-icon" href="icons/favicon-192.png">
 
-<!-- Android Auto Metadata - CORREGIDO Y MEJORADO -->
+<!-- Android Auto Metadata - MEJORADO -->
 <meta name="media-title" content="Resonate">
 <meta name="media-artist" content="Reproductor de Música">
 <meta name="media-application-id" content="resonate.music.player">
@@ -30,10 +30,14 @@
 <meta name="media-browsable" content="true">
 <meta name="media-content-type" content="music">
 
-<!-- Metadata adicional para Android Auto -->
+<!-- Metadata extendida para Android Auto -->
 <meta name="media-playback-type" content="audio">
-<meta name="media-supported-media" content="audio">
+<meta name="media-supported-media" content="audio/mpeg,audio/ogg,audio/wav,audio/flac,audio/aac">
 <meta name="media-description" content="Reproductor de música con acceso a Archive.org">
+<meta name="media-genre" content="Various">
+<meta name="media-compatibility" content="android.media.browse">
+<meta name="media-notification" content="true">
+<meta name="media-background" content="true">
 
 <style>
   :root {
@@ -1000,61 +1004,163 @@
     font-size: 9px;
     text-align: center;
   }
-
 </style>
 
 <!-- Media Session API Script MEJORADO para Android Auto -->
 <script>
-(function(){
-  // Detectar si estamos en un entorno compatible con Android Auto
-  const isAndroidAutoCompatible = () => {
-    return 'mediaSession' in navigator && 
-           (navigator.userAgent.includes('Android') || 
-            navigator.userAgent.includes('Auto'));
-  };
+// Media Session API MEJORADA para Android Auto
+class AndroidAutoMediaSession {
+  constructor() {
+    this.isInitialized = false;
+    this.currentTrack = null;
+    this.positionState = null;
+    this.supportedActions = [
+      'play', 'pause', 'previoustrack', 'nexttrack', 
+      'seekbackward', 'seekforward', 'seekto', 'stop'
+    ];
+  }
 
-  function supportsMediaSession() {
+  init() {
+    if (!this.supportsMediaSession()) {
+      console.warn('MediaSession API no soportada');
+      return false;
+    }
+
+    try {
+      this.setupActionHandlers();
+      this.setupPlaybackState();
+      this.isInitialized = true;
+      console.log('Android Auto MediaSession inicializado');
+      return true;
+    } catch (error) {
+      console.error('Error inicializando MediaSession:', error);
+      return false;
+    }
+  }
+
+  supportsMediaSession() {
     return 'mediaSession' in navigator;
   }
 
-  function safe(fn) {
-    try { fn(); } catch (e) { console.warn('MediaSession warning:', e); }
+  setupActionHandlers() {
+    const actions = this.supportedActions;
+    
+    actions.forEach(action => {
+      try {
+        navigator.mediaSession.setActionHandler(action, (details) => {
+          this.handleAction(action, details);
+        });
+      } catch (error) {
+        console.warn(`Action ${action} no soportada:`, error);
+      }
+    });
   }
 
-  let currentTrackInfo = null;
-  let positionUpdater = null;
-
-  function getAudio() {
-    return document.getElementById('audio');
-  }
-
-  function getCurrentTrackInfo() {
-    if (window.state && window.state.currentTrack) {
-      return window.state.currentTrack;
+  handleAction(action, details) {
+    console.log(`Android Auto Action: ${action}`, details);
+    
+    switch (action) {
+      case 'play':
+        this.play();
+        break;
+      case 'pause':
+        this.pause();
+        break;
+      case 'previoustrack':
+        this.previousTrack();
+        break;
+      case 'nexttrack':
+        this.nextTrack();
+        break;
+      case 'seekbackward':
+        this.seekBackward(details);
+        break;
+      case 'seekforward':
+        this.seekForward(details);
+        break;
+      case 'seekto':
+        this.seekTo(details);
+        break;
+      case 'stop':
+        this.stop();
+        break;
     }
-    return {
-      title: document.getElementById('title')?.textContent || 'Sin título',
-      creator: document.getElementById('creator')?.textContent || 'Desconocido',
-      id: null,
-      album: window.state?.currentGenre || 'Resonate'
-    };
   }
 
-  function updateMetadata() {
-    safe(() => {
-      if (!supportsMediaSession()) return;
-      
-      const info = getCurrentTrackInfo();
-      currentTrackInfo = info;
-      
-      // MEJORADO: Mejor manejo de artwork para Android Auto
-      const artwork = info.id ? [
-        { src: `https://archive.org/services/img/${info.id}`, sizes: '512x512', type: 'image/jpeg' },
-        { src: `https://archive.org/services/img/${info.id}/thumb`, sizes: '96x96', type: 'image/jpeg' },
-        { src: `https://archive.org/services/img/${info.id}`, sizes: '256x256', type: 'image/jpeg' },
-        { src: `https://archive.org/services/img/${info.id}`, sizes: '128x128', type: 'image/jpeg' }
-      ] : [];
+  play() {
+    const audio = document.getElementById('audio');
+    if (audio && audio.paused) {
+      if (!audio.src && window.forcePlay) {
+        window.forcePlay();
+      } else if (audio.src) {
+        audio.play().catch(console.error);
+      }
+    }
+  }
 
+  pause() {
+    const audio = document.getElementById('audio');
+    if (audio && !audio.paused) {
+      audio.pause();
+    }
+  }
+
+  previousTrack() {
+    if (window.playPrevious) {
+      window.playPrevious();
+    }
+  }
+
+  nextTrack() {
+    if (window.playNext) {
+      window.playNext();
+    }
+  }
+
+  seekBackward(details) {
+    const audio = document.getElementById('audio');
+    if (!audio) return;
+    
+    const seekOffset = details.seekOffset || 10;
+    audio.currentTime = Math.max(0, audio.currentTime - seekOffset);
+    this.updatePositionState();
+  }
+
+  seekForward(details) {
+    const audio = document.getElementById('audio');
+    if (!audio) return;
+    
+    const seekOffset = details.seekOffset || 10;
+    audio.currentTime = Math.min(audio.duration, audio.currentTime + seekOffset);
+    this.updatePositionState();
+  }
+
+  seekTo(details) {
+    const audio = document.getElementById('audio');
+    if (!audio || typeof details.seekTime !== 'number') return;
+    
+    audio.currentTime = details.seekTime;
+    this.updatePositionState();
+  }
+
+  stop() {
+    const audio = document.getElementById('audio');
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+      this.setPlaybackState('none');
+    }
+  }
+
+  updateMetadata(trackInfo = null) {
+    if (!this.supportsMediaSession()) return;
+
+    try {
+      const info = trackInfo || this.getCurrentTrackInfo();
+      this.currentTrack = info;
+
+      const artwork = this.generateArtwork(info);
+      
       const metadata = {
         title: info.title || 'Sin título',
         artist: info.creator || 'Desconocido',
@@ -1062,202 +1168,175 @@
         artwork: artwork
       };
 
-      // MEJORADO: Metadata adicional para Android Auto
-      if (isAndroidAutoCompatible()) {
-        // Agregar metadatos extendidos para mejor compatibilidad
+      // Metadata extendida para Android Auto
+      if (this.isAndroidAuto()) {
         metadata.album = info.album || 'Resonate Music Player';
         metadata.artist = info.creator || 'Artista Desconocido';
+        
+        // Agregar más metadatos específicos para Auto
+        if (info.duration) {
+          metadata.duration = info.duration;
+        }
+        
+        if (info.genre) {
+          metadata.genre = info.genre;
+        }
       }
 
       navigator.mediaSession.metadata = new MediaMetadata(metadata);
-      
       console.log('MediaSession metadata actualizado:', metadata);
-    });
-  }
-
-  function updatePositionState() {
-    safe(() => {
-      const audio = getAudio();
-      if (!audio || !navigator.mediaSession.setPositionState) return;
-      if (!isFinite(audio.duration) || audio.duration <= 0) return;
       
-      navigator.mediaSession.setPositionState({
-        duration: audio.duration,
-        playbackRate: audio.playbackRate || 1,
-        position: audio.currentTime || 0
-      });
-    });
-  }
-
-  function startPositionUpdater() {
-    stopPositionUpdater();
-    positionUpdater = setInterval(updatePositionState, 1000);
-  }
-
-  function stopPositionUpdater() {
-    if (positionUpdater) {
-      clearInterval(positionUpdater);
-      positionUpdater = null;
+    } catch (error) {
+      console.error('Error actualizando metadata:', error);
     }
   }
 
-  function setupMediaSessionHandlers() {
-    if (!supportsMediaSession()) return;
-
-    const ms = navigator.mediaSession;
+  generateArtwork(trackInfo) {
+    const artwork = [];
     
-    // Limpiar handlers existentes
-    ms.setActionHandler('play', null);
-    ms.setActionHandler('pause', null);
-    ms.setActionHandler('previoustrack', null);
-    ms.setActionHandler('nexttrack', null);
-    ms.setActionHandler('seekbackward', null);
-    ms.setActionHandler('seekforward', null);
-    ms.setActionHandler('seekto', null);
-    ms.setActionHandler('stop', null);
-
-    // Configurar nuevos handlers
-    safe(() => {
-      ms.setActionHandler('play', function() {
-        console.log('MediaSession: Play action');
-        const audio = getAudio();
-        if (audio && audio.paused) {
-          if (!audio.src) {
-            if (window.forcePlay) window.forcePlay();
-          } else {
-            audio.play().catch(console.warn);
-          }
-        }
+    if (trackInfo.id) {
+      const sizes = [96, 128, 192, 256, 384, 512];
+      sizes.forEach(size => {
+        artwork.push({
+          src: `https://archive.org/services/img/${trackInfo.id}`,
+          sizes: `${size}x${size}`,
+          type: 'image/jpeg'
+        });
       });
-
-      ms.setActionHandler('pause', function() {
-        console.log('MediaSession: Pause action');
-        const audio = getAudio();
-        if (audio && !audio.paused) audio.pause();
+    }
+    
+    // Fallback artwork
+    if (artwork.length === 0) {
+      artwork.push({
+        src: 'icons/favicon-192.png',
+        sizes: '192x192',
+        type: 'image/png'
       });
-
-      ms.setActionHandler('previoustrack', function() {
-        console.log('MediaSession: Previous track action');
-        if (window.playPrevious) window.playPrevious();
-      });
-
-      ms.setActionHandler('nexttrack', function() {
-        console.log('MediaSession: Next track action');
-        if (window.playNext) window.playNext();
-      });
-
-      ms.setActionHandler('seekbackward', function(details) {
-        console.log('MediaSession: Seek backward', details);
-        const audio = getAudio();
-        if (!audio) return;
-        const seekOffset = details.seekOffset || 10;
-        audio.currentTime = Math.max(0, audio.currentTime - seekOffset);
-        updatePositionState();
-      });
-
-      ms.setActionHandler('seekforward', function(details) {
-        console.log('MediaSession: Seek forward', details);
-        const audio = getAudio();
-        if (!audio) return;
-        const seekOffset = details.seekOffset || 10;
-        audio.currentTime = Math.min(audio.duration, audio.currentTime + seekOffset);
-        updatePositionState();
-      });
-
-      ms.setActionHandler('seekto', function(details) {
-        console.log('MediaSession: Seek to', details);
-        const audio = getAudio();
-        if (!audio || typeof details.seekTime !== 'number') return;
-        audio.currentTime = details.seekTime;
-        updatePositionState();
-      });
-
-      ms.setActionHandler('stop', function() {
-        console.log('MediaSession: Stop action');
-        const audio = getAudio();
-        if (audio) {
-          audio.pause();
-          audio.currentTime = 0;
-        }
-      });
-
-      // MEJORADO: Configurar estado inicial de playback
-      ms.playbackState = 'none';
-    });
+    }
+    
+    return artwork;
   }
 
-  function initializeMediaSession() {
-    if (!supportsMediaSession()) {
-      console.log('MediaSession API no soportada');
+  updatePositionState() {
+    if (!this.supportsMediaSession() || !navigator.mediaSession.setPositionState) {
       return;
     }
 
-    console.log('Inicializando MediaSession para Android Auto...');
+    const audio = document.getElementById('audio');
+    if (!audio || !isFinite(audio.duration) || audio.duration <= 0) return;
+
+    try {
+      this.positionState = {
+        duration: audio.duration,
+        playbackRate: audio.playbackRate || 1,
+        position: audio.currentTime || 0
+      };
+
+      navigator.mediaSession.setPositionState(this.positionState);
+    } catch (error) {
+      console.warn('Error actualizando position state:', error);
+    }
+  }
+
+  setPlaybackState(state) {
+    if (!this.supportsMediaSession()) return;
     
-    setupMediaSessionHandlers();
-    updateMetadata();
-
-    const audio = getAudio();
-    if (audio) {
-      audio.addEventListener('play', function() {
-        navigator.mediaSession.playbackState = 'playing';
-        startPositionUpdater();
-        console.log('MediaSession: Estado cambiado a playing');
-      });
-
-      audio.addEventListener('pause', function() {
-        navigator.mediaSession.playbackState = 'paused';
-        stopPositionUpdater();
-        console.log('MediaSession: Estado cambiado a paused');
-      });
-
-      audio.addEventListener('ended', function() {
-        navigator.mediaSession.playbackState = 'none';
-        stopPositionUpdater();
-        console.log('MediaSession: Estado cambiado a none (ended)');
-      });
-
-      audio.addEventListener('loadedmetadata', updatePositionState);
-      audio.addEventListener('timeupdate', updatePositionState);
+    const validStates = ['none', 'paused', 'playing'];
+    if (validStates.includes(state)) {
+      navigator.mediaSession.playbackState = state;
+      console.log('MediaSession playback state:', state);
     }
-
-    // Observar cambios en la UI para actualizar metadata
-    const observer = new MutationObserver(function(mutations) {
-      mutations.forEach(function(mutation) {
-        if (mutation.type === 'childList' || mutation.type === 'characterData') {
-          updateMetadata();
-        }
-      });
-    });
-
-    const titleEl = document.getElementById('title');
-    const creatorEl = document.getElementById('creator');
-    if (titleEl) observer.observe(titleEl, { childList: true, characterData: true, subtree: true });
-    if (creatorEl) observer.observe(creatorEl, { childList: true, characterData: true, subtree: true });
-
-    console.log('MediaSession inicializado correctamente');
   }
 
-  // Inicializar cuando el DOM esté listo
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeMediaSession);
-  } else {
-    initializeMediaSession();
+  getCurrentTrackInfo() {
+    if (window.state && window.state.currentTrack) {
+      return window.state.currentTrack;
+    }
+    
+    return {
+      title: document.getElementById('title')?.textContent || 'Sin título',
+      creator: document.getElementById('creator')?.textContent || 'Desconocido',
+      id: null,
+      album: window.state?.currentGenre || 'Resonate',
+      duration: document.getElementById('audio')?.duration || 0
+    };
   }
 
-  // Exponer funciones globalmente
-  window.updateMediaSessionMetadata = function(trackInfo) {
-    if (trackInfo) {
-      currentTrackInfo = { ...currentTrackInfo, ...trackInfo };
-    }
-    updateMetadata();
-    updatePositionState();
-  };
+  isAndroidAuto() {
+    return navigator.userAgent.includes('Android') || 
+           navigator.userAgent.includes('Auto') ||
+           (navigator.mediaSession && 
+            navigator.mediaSession.metadata &&
+            navigator.userAgent.includes('Mobile'));
+  }
 
-  window.setupMediaSessionHandlers = setupMediaSessionHandlers;
-  window.isAndroidAutoCompatible = isAndroidAutoCompatible;
+  // Método para notificar errores a Android Auto
+  notifyError(error) {
+    console.error('Android Auto Error:', error);
+    // Aquí podrías enviar notificaciones de error al sistema
+  }
+}
 
-})();
+// Inicialización global
+let androidAutoSession = null;
+
+function initializeAndroidAuto() {
+  androidAutoSession = new AndroidAutoMediaSession();
+  const success = androidAutoSession.init();
+  
+  if (success) {
+    setupAudioEventListeners();
+    console.log('Android Auto configurado correctamente');
+  }
+  
+  return success;
+}
+
+function setupAudioEventListeners() {
+  const audio = document.getElementById('audio');
+  if (!audio) return;
+
+  audio.addEventListener('play', () => {
+    androidAutoSession.setPlaybackState('playing');
+    androidAutoSession.updatePositionState();
+  });
+
+  audio.addEventListener('pause', () => {
+    androidAutoSession.setPlaybackState('paused');
+  });
+
+  audio.addEventListener('ended', () => {
+    androidAutoSession.setPlaybackState('none');
+  });
+
+  audio.addEventListener('timeupdate', () => {
+    androidAutoSession.updatePositionState();
+  });
+
+  audio.addEventListener('loadedmetadata', () => {
+    androidAutoSession.updatePositionState();
+  });
+
+  audio.addEventListener('error', (e) => {
+    androidAutoSession.notifyError(e.target.error);
+  });
+}
+
+// Inicializar cuando el DOM esté listo
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeAndroidAuto);
+} else {
+  initializeAndroidAuto();
+}
+
+// API global para actualizar desde otras partes de la aplicación
+window.updateAndroidAutoMetadata = (trackInfo) => {
+  if (androidAutoSession) {
+    androidAutoSession.updateMetadata(trackInfo);
+  }
+};
+
+window.getAndroidAutoSession = () => androidAutoSession;
 </script>
 </head>
 
@@ -1332,7 +1411,6 @@
               </svg>
               <span>AirPlay</span>
             </button>
-            <!-- REMOVIDO: Botón de Web Audio que no funcionaba -->
           </div>
         </div>
       </div>
@@ -2729,12 +2807,17 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
     albumId: identifier
   };
   
-  // ACTUALIZAR MEDIA SESSION - CORRECCIÓN: pasar el objeto completo
-  if (typeof window.updateMediaSessionMetadata === 'function') {
-    try { 
-      window.updateMediaSessionMetadata(state.currentTrack); 
-    } catch(e){ 
-      console.error('Error actualizando MediaSession:', e);
+  // ACTUALIZAR ANDROID AUTO - AGREGAR ESTAS LÍNEAS
+  if (typeof window.updateAndroidAutoMetadata === 'function') {
+    try {
+      const trackInfo = {
+        ...state.currentTrack,
+        album: track.album || window.state?.currentGenre || 'Resonate',
+        duration: elements.audio.duration || 0
+      };
+      window.updateAndroidAutoMetadata(trackInfo);
+    } catch(e) {
+      console.error('Error actualizando Android Auto:', e);
     }
   }
   
@@ -3689,6 +3772,26 @@ function setupOfflineFunctionality() {
   });
 }
 
+// ==================== VERIFICACIÓN DE COMPATIBILIDAD ANDROID AUTO ====================
+function checkAndroidAutoCompatibility() {
+  const compatibility = {
+    mediaSession: 'mediaSession' in navigator,
+    serviceWorker: 'serviceWorker' in navigator,
+    backgroundSync: 'sync' in registration,
+    mediaMetadata: 'MediaMetadata' in window,
+    audioWorklet: 'audioWorklet' in AudioContext
+  };
+  
+  console.log('Compatibilidad Android Auto:', compatibility);
+  
+  // Notificar al usuario si hay limitaciones
+  if (!compatibility.mediaSession) {
+    console.warn('MediaSession no soportado - Android Auto limitado');
+  }
+  
+  return compatibility;
+}
+
 async function initializeApp() {
   // Inicializar caché de audio primero
   try {
@@ -3780,18 +3883,16 @@ async function initializeApp() {
   setupPushNotifications();
   setupOfflineFunctionality();
   
-  // Reinicializar Media Session para Android Auto
-  if (window.setupMediaSessionHandlers) {
-    window.setupMediaSessionHandlers();
-  }
+  // Verificar compatibilidad con Android Auto
+  checkAndroidAutoCompatibility();
   
   // MEJORADO: Configuración específica para Android Auto
-  if (window.isAndroidAutoCompatible && window.isAndroidAutoCompatible()) {
+  if (window.getAndroidAutoSession && window.getAndroidAutoSession()) {
     console.log('Configurando para Android Auto...');
     // Asegurar que los metadatos estén actualizados
     setTimeout(() => {
-      if (window.updateMediaSessionMetadata) {
-        window.updateMediaSessionMetadata();
+      if (window.updateAndroidAutoMetadata) {
+        window.updateAndroidAutoMetadata();
       }
     }, 1000);
   }
@@ -3814,6 +3915,7 @@ async function initializeApp() {
   window.playRandomSearchResults = playRandomSearchResults;
   window.audioCache = audioCache; // Para debugging
   window.installPWA = installPWA;
+  window.checkAndroidAutoCompatibility = checkAndroidAutoCompatibility;
   
   console.log('Aplicación optimizada inicializada con Media Session, PWA y Android Auto corregido');
 }
