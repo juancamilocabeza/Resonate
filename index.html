@@ -9,10 +9,6 @@
 <link rel="icon" type="image/svg+xml" href="icons/favicon.svg">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#000000" />
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Resonate">
-<link rel="apple-touch-icon" type="image/svg+xml" href="icons/favicon.svg">
 
 <style>
   :root {
@@ -320,6 +316,29 @@
 
   .shuffle-favorites-btn.active svg {
     stroke:var(--accent);
+  }
+
+  .cast-btn {
+    background: var(--btn);
+    color: var(--muted);
+    font-size: 19px;
+    width: 68px;
+    height: 40px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .cast-btn.active {
+    color: var(--accent);
+    background: var(--btn);
+    outline: 2px solid var(--accent);
+  }
+
+  .cast-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
   }
 
   .genre-section {
@@ -817,7 +836,6 @@
     margin: 0;
     min-height: 5px;
     text-align: left;
-    display: none;
   }
 
   .status-message {
@@ -826,6 +844,7 @@
     font-size: 12px;
     padding: 8px 10px;
     margin: 3px 0;
+    display: none;
   }
 
   .status-info {
@@ -915,8 +934,6 @@
   <button id="start-button" class="start-button" onclick="startApp()">Iniciar Resonate</button>
 </div>
 
-<div id="status-messages"></div>
-
 <div class="app" id="app">
   <header>
       <h1>Resonate</h1>
@@ -966,6 +983,7 @@
             <path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/>
           </svg>
         </button>
+        <button id="cast-btn" class="cast-btn" aria-label="Transmitir">📡</button>
       </div>
       
       <div class="progress-section">
@@ -1008,6 +1026,9 @@
   <div>&copy; 2025 resonate. Todos los derechos reservados</div>
   <div>Prohibida la reproducción total o parcial sin autorización</div>
 </footer>
+
+<div id="status-messages"></div>
+
 </div>
   
 <audio id="audio" crossorigin="anonymous" preload="metadata"></audio>
@@ -1035,7 +1056,7 @@ class AdvancedAudioCache {
     this.initialized = false;
     this.listenStats = new Map();
     this.favoritesQueue = []; // Cola FIFO para favoritos precargados
-    this.maxFavorites = 10; // Máximo de favoritos precargados
+    this.maxFavorites = 5; // Máximo de favoritos precargados
     this.favoritesQueueLock = false; // Bloqueo para evitar conflictos
   }
 
@@ -1280,7 +1301,7 @@ class AdvancedAudioCache {
     return [...this.favoritesQueue];
   }
 
-  // NUEVO MÉTODO: Reemplazar favorito en cola FIFO basado en contexto
+  // MÉTODO MEJORADO: Reemplazar favorito en cola FIFO basado en contexto
   async replaceFavoritesQueueItem(oldUrl, newUrl, favorites) {
     if (this.favoritesQueueLock) {
       console.log('Cola FIFO bloqueada, esperando...');
@@ -1293,7 +1314,7 @@ class AdvancedAudioCache {
       // Remover el favorito antiguo
       this.removeFromFavoritesQueue(oldUrl);
       
-      // Si newUrl no está especificado, elegir uno aleatorio de los favoritos
+      // Seleccionar un favorito aleatorio para reemplazo
       if (!newUrl && favorites && favorites.length > 0) {
         const availableFavorites = favorites.filter(fav => 
           fav && fav.url && !this.favoritesQueue.includes(fav.url)
@@ -1303,14 +1324,21 @@ class AdvancedAudioCache {
           const randomIndex = Math.floor(Math.random() * availableFavorites.length);
           newUrl = availableFavorites[randomIndex].url;
           console.log(`Seleccionado favorito aleatorio para reemplazo: ${newUrl}`);
+          
+          // Agregar Favorito a cola FIFO
+          this.addToFavoritesQueue(newUrl);
+          
+          // Almacenar pista en caché
+          await this.prefetchAudio(newUrl, true);
+          
+          console.log(`Reemplazo completado: ${oldUrl} -> ${newUrl}`);
+          return true;
         }
-      }
-      
-      // Agregar el nuevo favorito si está disponible
-      if (newUrl) {
+      } else if (newUrl) {
+        // Agregar Favorito a cola FIFO
         this.addToFavoritesQueue(newUrl);
         
-        // Precargar el nuevo favorito
+        // Almacenar pista en caché
         await this.prefetchAudio(newUrl, true);
         
         console.log(`Reemplazo completado: ${oldUrl} -> ${newUrl}`);
@@ -1327,38 +1355,53 @@ class AdvancedAudioCache {
     }
   }
 
+  // MÉTODO: Cargar cola FIFO completa desde favoritos
+  async loadFavoritesQueue(favorites, shuffle = true) {
+    console.log(`Cargando cola FIFO desde favoritos (shuffle: ${shuffle})`);
+    
+    // Limpiar cola actual
+    this.favoritesQueue = [];
+    
+    if (!favorites || favorites.length === 0) {
+      console.log('No hay favoritos para cargar en cola FIFO');
+      return;
+    }
+    
+    let favoritesToLoad;
+    
+    if (shuffle) {
+      // Modo aleatorio: seleccionar 10 favoritos aleatorios
+      favoritesToLoad = this.shuffleArray([...favorites]).slice(0, this.maxFavorites);
+    } else {
+      // Modo secuencial: tomar los siguientes 10 favoritos
+      const currentIndex = state.playbackHistory.length;
+      favoritesToLoad = favorites.slice(currentIndex, currentIndex + this.maxFavorites);
+    }
+    
+    console.log(`Cargando ${favoritesToLoad.length} favoritos en cola FIFO`);
+    
+    const preloadPromises = [];
+    
+    for (const favorite of favoritesToLoad) {
+      if (favorite && favorite.url) {
+        this.addToFavoritesQueue(favorite.url);
+        preloadPromises.push(this.prefetchAudio(favorite.url, true));
+      }
+    }
+    
+    await Promise.allSettled(preloadPromises);
+    console.log(`Cola FIFO cargada: ${this.favoritesQueue.length}/${this.maxFavorites} favoritos`);
+  }
+
   // ==================== PRECARGA ALEATORIA DE FAVORITOS ====================
   
   async preloadFavorites(favorites) {
     if (!this.initialized) await this.init();
     
-    console.log('Precargando favoritos aleatoriamente en cola FIFO...');
+    console.log('Precargando favoritos en cola FIFO...');
     
-    // Limpiar cola actual
-    this.favoritesQueue = [];
-    
-    if (favorites.length === 0) {
-      console.log('No hay favoritos para precargar');
-      return;
-    }
-    
-    // SELECCIÓN COMPLETAMENTE ALEATORIA - Sin criterios
-    const shuffledFavorites = this.shuffleArray([...favorites]);
-    const favoritesToPreload = shuffledFavorites.slice(0, this.maxFavorites);
-    
-    console.log(`Seleccionados ${favoritesToPreload.length} favoritos aleatorios para precargar`);
-    
-    const preloadPromises = [];
-    
-    for (const favorite of favoritesToPreload) {
-      if (favorite && favorite.url) {
-        preloadPromises.push(this.prefetchFavorite(favorite));
-      }
-    }
-    
-    // Esperar a que todas las precargas se completen
-    await Promise.allSettled(preloadPromises);
-    console.log(`Precarga de favoritos aleatorios completada: ${this.favoritesQueue.length}/${this.maxFavorites}`);
+    // Usar el nuevo método para cargar la cola
+    await this.loadFavoritesQueue(favorites, state.shuffleFavorites);
   }
   
   async prefetchFavorite(favorite) {
@@ -1369,16 +1412,16 @@ class AdvancedAudioCache {
         // Precargar en segundo plano
         const success = await this.prefetchAudio(favorite.url, true);
         if (success) {
-          console.log('Favorito aleatorio precargado:', favorite.title);
+          console.log('Favorito precargado:', favorite.title);
         }
       } else {
         // Ya está en caché, agregar a la cola
         this.addToFavoritesQueue(favorite.url);
         await this.markAsFavorite(favorite.url);
-        console.log('Favorito aleatorio ya estaba en caché:', favorite.title);
+        console.log('Favorito ya estaba en caché:', favorite.title);
       }
     } catch (error) {
-      console.log('Error precargando favorito aleatorio:', error);
+      console.log('Error precargando favorito:', error);
     }
   }
   
@@ -1584,6 +1627,7 @@ const elements = {
   nextBtn: document.getElementById('next-btn'),
   favoriteBtn: document.getElementById('favorite-btn'),
   shuffleFavoritesBtn: document.getElementById('shuffle-favorites-btn'),
+  castBtn: document.getElementById('cast-btn'),
   genreSelect: document.getElementById('genre-select'),
   searchInput: document.getElementById('search-input'),
   searchResults: document.getElementById('search-results'),
@@ -1629,8 +1673,309 @@ const state = {
   currentTrackListenStart: 0,
   tracksSkippedEarly: new Map(),
   preloadedFavorites: [],
-  initialPreloadDone: false
+  initialPreloadDone: false,
+  playbackHistory: [],
+  playbackQueue: [],
+  isCasting: false,
+  castSession: null,
+  castAvailable: false
 };
+
+// ==================== MEDIA SESSION API ====================
+function setupMediaSession() {
+  if (!('mediaSession' in navigator)) {
+    console.log('Media Session API no está disponible');
+    return;
+  }
+
+  // Configurar acciones de Media Session
+  try {
+    navigator.mediaSession.setActionHandler('play', () => {
+      togglePlay();
+    });
+
+    navigator.mediaSession.setActionHandler('pause', () => {
+      togglePlay();
+    });
+
+    navigator.mediaSession.setActionHandler('previoustrack', () => {
+      playPrevious();
+    });
+
+    navigator.mediaSession.setActionHandler('nexttrack', () => {
+      playNext();
+    });
+
+    navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+      const skipTime = details.seekOffset || 10;
+      elements.audio.currentTime = Math.max(0, elements.audio.currentTime - skipTime);
+    });
+
+    navigator.mediaSession.setActionHandler('seekforward', (details) => {
+      const skipTime = details.seekOffset || 10;
+      elements.audio.currentTime = Math.min(elements.audio.duration, elements.audio.currentTime + skipTime);
+    });
+
+    navigator.mediaSession.setActionHandler('seekto', (details) => {
+      if (details.fastSeek && 'fastSeek' in elements.audio) {
+        elements.audio.fastSeek(details.seekTime);
+      } else {
+        elements.audio.currentTime = details.seekTime;
+      }
+    });
+
+    console.log('Media Session API configurada correctamente');
+  } catch (error) {
+    console.log('Algunas acciones de Media Session no están disponibles:', error);
+  }
+}
+
+function updateMediaSessionMetadata(track, identifier) {
+  if (!('mediaSession' in navigator)) return;
+
+  try {
+    const artwork = [];
+    const archiveCoverUrl = `https://archive.org/services/img/${identifier}`;
+    
+    // Agregar diferentes tamaños de artwork para compatibilidad
+    artwork.push({ src: archiveCoverUrl, sizes: '300x300', type: 'image/jpeg' });
+    artwork.push({ src: archiveCoverUrl, sizes: '512x512', type: 'image/jpeg' });
+
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: track.title || 'Sin título',
+      artist: track.creator || 'Desconocido',
+      album: track.album || identifier,
+      artwork: artwork
+    });
+
+    // Actualizar posición y duración
+    updateMediaPositionState();
+
+    console.log('Metadatos de Media Session actualizados:', track.title);
+  } catch (error) {
+    console.log('Error actualizando Media Session:', error);
+  }
+}
+
+function updateMediaPositionState() {
+  if (!('mediaSession' in navigator) || !elements.audio.duration) return;
+
+  try {
+    navigator.mediaSession.setPositionState({
+      duration: elements.audio.duration,
+      playbackRate: elements.audio.playbackRate,
+      position: elements.audio.currentTime
+    });
+  } catch (error) {
+    console.log('Error actualizando posición de Media Session:', error);
+  }
+}
+
+// ==================== GOOGLE CAST API (REEMPLAZO DE CHROMECAST) ====================
+function setupCastAPI() {
+  // Verificar si la API de Cast está disponible
+  if (!window.cast || !window.cast.framework) {
+    console.log('Google Cast API no disponible');
+    state.castAvailable = false;
+    elements.castBtn.disabled = true;
+    elements.castBtn.title = 'Google Cast no disponible';
+    return;
+  }
+
+  state.castAvailable = true;
+  
+  try {
+    // Inicializar el framework de Cast
+    const castContext = cast.framework.CastContext.getInstance();
+    
+    // Configurar opciones de Cast
+    castContext.setOptions({
+      receiverApplicationId: chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
+      autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED,
+      resumeSavedSession: true
+    });
+
+    // Escuchar cambios en el estado de Cast
+    castContext.addEventListener(
+      cast.framework.CastContextEventType.SESSION_STATE_CHANGED,
+      (event) => {
+        console.log('Estado de sesión Cast cambiado:', event.sessionState);
+        
+        switch (event.sessionState) {
+          case cast.framework.SessionState.SESSION_STARTED:
+          case cast.framework.SessionState.SESSION_RESUMED:
+            state.isCasting = true;
+            elements.castBtn.classList.add('active');
+            showStatus('Conectado a Google Cast', 'info', 3000);
+            startCasting();
+            break;
+            
+          case cast.framework.SessionState.SESSION_ENDED:
+          case cast.framework.SessionState.SESSION_START_FAILED:
+            state.isCasting = false;
+            elements.castBtn.classList.remove('active');
+            showStatus('Conexión Cast finalizada', 'info', 3000);
+            stopCasting();
+            break;
+        }
+      }
+    );
+
+    // Escuchar cambios en el estado del receptor
+    castContext.addEventListener(
+      cast.framework.CastContextEventType.RECEIVER_AVAILABILITY_CHANGED,
+      (event) => {
+        console.log('Disponibilidad del receptor:', event.receiverAvailability);
+        state.castAvailable = (event.receiverAvailability === 
+          cast.framework.ReceiverAvailability.AVAILABLE);
+        
+        elements.castBtn.disabled = !state.castAvailable;
+        if (!state.castAvailable) {
+          elements.castBtn.title = 'No hay dispositivos Cast disponibles';
+        } else {
+          elements.castBtn.title = 'Transmitir a dispositivo Cast';
+        }
+      }
+    );
+
+    console.log('Google Cast API inicializada correctamente');
+  } catch (error) {
+    console.error('Error inicializando Google Cast API:', error);
+    state.castAvailable = false;
+    elements.castBtn.disabled = true;
+  }
+}
+
+// Inicializar Cast API cuando el framework esté disponible
+function initializeCastFramework() {
+  // Cargar el framework de Cast
+  const script = document.createElement('script');
+  script.src = 'https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1';
+  script.onload = () => {
+    console.log('Google Cast Framework cargado');
+    // Esperar a que la API esté disponible
+    window.__onGCastApiAvailable = (isAvailable) => {
+      if (isAvailable) {
+        setupCastAPI();
+      } else {
+        console.log('Google Cast Framework no disponible');
+        state.castAvailable = false;
+        elements.castBtn.disabled = true;
+      }
+    };
+  };
+  script.onerror = () => {
+    console.log('Error cargando Google Cast Framework');
+    state.castAvailable = false;
+    elements.castBtn.disabled = true;
+  };
+  document.head.appendChild(script);
+}
+
+async function startCasting() {
+  if (!state.currentTrack || !state.isCasting || !state.castAvailable) return;
+
+  try {
+    const castSession = cast.framework.CastContext.getInstance().getCurrentSession();
+    if (!castSession) {
+      console.log('No hay sesión Cast activa');
+      return;
+    }
+
+    const mediaInfo = new chrome.cast.media.MediaInfo(state.currentTrack.url, 'audio/mpeg');
+    mediaInfo.metadata = new chrome.cast.media.MusicTrackMediaMetadata();
+    mediaInfo.metadata.title = state.currentTrack.title;
+    mediaInfo.metadata.artist = state.currentTrack.creator;
+    mediaInfo.metadata.albumName = state.currentTrack.album || state.currentTrack.id;
+
+    // Agregar artwork si está disponible
+    if (state.currentTrack.id) {
+      const artworkUrl = `https://archive.org/services/img/${state.currentTrack.id}`;
+      mediaInfo.metadata.images = [new chrome.cast.Image(artworkUrl)];
+    }
+
+    const request = new chrome.cast.media.LoadRequest(mediaInfo);
+    request.autoplay = true;
+    request.currentTime = elements.audio.currentTime || 0;
+    
+    await castSession.loadMedia(request);
+    state.castSession = castSession;
+    
+    console.log('Transmisión Cast iniciada:', state.currentTrack.title);
+    
+    // Configurar listeners para el estado de reproducción
+    const media = castSession.getMediaSession();
+    if (media) {
+      media.addUpdateListener((isAlive) => {
+        if (!isAlive) return;
+        
+        // Sincronizar controles con el estado de Cast
+        switch (media.playerState) {
+          case chrome.cast.media.PlayerState.PLAYING:
+            elements.playBtn.textContent = '| |';
+            break;
+          case chrome.cast.media.PlayerState.PAUSED:
+            elements.playBtn.textContent = '▶';
+            break;
+          case chrome.cast.media.PlayerState.BUFFERING:
+            elements.playBtn.innerHTML = '<span class="loader"></span>';
+            break;
+        }
+        
+        // Actualizar progreso si es necesario
+        if (media.currentTime !== undefined) {
+          elements.audio.currentTime = media.currentTime;
+          updateProgressBar();
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Error iniciando transmisión Cast:', error);
+    showStatus('Error al transmitir', 'error', 3000);
+  }
+}
+
+function stopCasting() {
+  if (state.castSession) {
+    try {
+      const castContext = cast.framework.CastContext.getInstance();
+      castContext.endCurrentSession(true);
+      console.log('Sesión Cast finalizada');
+    } catch (error) {
+      console.log('Error finalizando sesión Cast:', error);
+    }
+    state.castSession = null;
+  }
+  state.isCasting = false;
+}
+
+function toggleCast() {
+  if (!state.castAvailable) {
+    showStatus('Google Cast no disponible', 'error', 3000);
+    return;
+  }
+
+  try {
+    const castContext = cast.framework.CastContext.getInstance();
+    
+    if (state.isCasting) {
+      // Finalizar transmisión
+      castContext.endCurrentSession(true);
+      showStatus('Transmisión finalizada', 'info', 3000);
+    } else {
+      // Iniciar transmisión
+      castContext.requestSession().then(() => {
+        console.log('Sesión Cast solicitada');
+      }).catch((error) => {
+        console.log('Error solicitando sesión Cast:', error);
+        showStatus('Error al conectar con Cast', 'error', 3000);
+      });
+    }
+  } catch (error) {
+    console.error('Error en toggleCast:', error);
+    showStatus('Error al usar Google Cast', 'error', 3000);
+  }
+}
 
 // ==================== DETECCIÓN DE CONECTIVIDAD ====================
 function setupConnectivityMonitoring() {
@@ -1737,7 +2082,7 @@ function loadFavorites() {
     if (favorites) {
       state.favorites = JSON.parse(favorites);
       
-      // Precargar favoritos aleatoriamente
+      // Precargar favoritos en cola FIFO
       audioCache.preloadFavorites(state.favorites);
     }
   } catch (e) {
@@ -1749,7 +2094,7 @@ function saveFavorites() {
   try {
     localStorage.setItem('resonate_favorites', JSON.stringify(state.favorites));
     
-    // Actualizar precarga de favoritos aleatoriamente
+    // Actualizar precarga de favoritos en cola FIFO
     audioCache.preloadFavorites(state.favorites);
   } catch (e) {
     console.log('Error guardando favoritos');
@@ -1768,6 +2113,29 @@ function toggleFavorite(track) {
   
   if (isFavorite) {
     state.favorites = state.favorites.filter(fav => fav.url !== track.url);
+    
+    // Reemplazar en cola FIFO si se elimina un favorito
+    if (state.playbackQueue.some(item => item.url === track.url)) {
+      const availableFavorites = state.favorites.filter(fav => 
+        !state.playbackQueue.some(item => item.url === fav.url)
+      );
+      
+      if (availableFavorites.length > 0) {
+        const randomIndex = Math.floor(Math.random() * availableFavorites.length);
+        const newFavorite = availableFavorites[randomIndex];
+        
+        // Reemplazar en la cola
+        const queueIndex = state.playbackQueue.findIndex(item => item.url === track.url);
+        if (queueIndex !== -1) {
+          state.playbackQueue[queueIndex] = newFavorite;
+          console.log(`Favorito reemplazado en cola FIFO: ${track.url} -> ${newFavorite.url}`);
+        }
+        
+        // Precargar el nuevo favorito
+        audioCache.prefetchAudio(newFavorite.url, true);
+      }
+    }
+    
     audioCache.remove(track.url).then(removed => {
       if (removed) {
         console.log('Pista eliminada de caché al quitar de favoritos:', track.url);
@@ -1799,7 +2167,7 @@ function toggleFavorite(track) {
   updateFavoritesList();
 }
 
-// NUEVA FUNCIÓN: Agregar todas las pistas de un álbum a favoritos
+// FUNCIÓN: Agregar todas las pistas de un álbum a favoritos
 function addAlbumToFavorites(albumId, files) {
   if (!files || files.length === 0) return;
   
@@ -1837,7 +2205,7 @@ function addAlbumToFavorites(albumId, files) {
   }
 }
 
-// NUEVA FUNCIÓN: Verificar si todas las pistas de un álbum están en favoritos
+// FUNCIÓN: Verificar si todas las pistas de un álbum están en favoritos
 function isAlbumInFavorites(albumId) {
   // Buscar cualquier pista del álbum en favoritos
   return state.favorites.some(fav => fav.albumId === albumId);
@@ -1894,21 +2262,63 @@ function updateShuffleButton() {
   }
 }
 
+// FUNCIÓN: Cargar cola FIFO según el contexto actual
+async function loadPlaybackQueue(context, items, startIndex = 0) {
+  state.playbackQueue = [];
+  
+  if (!items || items.length === 0) {
+    console.log('No hay items para cargar en cola FIFO');
+    return;
+  }
+  
+  const queueSize = 10;
+  
+  if (context === 'favorites' && state.shuffleFavorites) {
+    // Modo aleatorio: seleccionar 10 items aleatorios
+    const shuffled = [...items].sort(() => Math.random() - 0.5);
+    state.playbackQueue = shuffled.slice(0, queueSize);
+  } else {
+    // Modo secuencial: tomar los siguientes 10 items
+    for (let i = 0; i < queueSize; i++) {
+      const index = (startIndex + i) % items.length;
+      if (items[index]) {
+        state.playbackQueue.push(items[index]);
+      }
+    }
+  }
+  
+  console.log(`Cola FIFO cargada: ${state.playbackQueue.length} pistas del contexto ${context}`);
+  
+  // Precargar las pistas de la cola
+  if (state.networkOnline) {
+    audioCache.preloadTracks(state.playbackQueue, true);
+  }
+}
+
 function toggleShuffleFavorites() {
   state.shuffleFavorites = !state.shuffleFavorites;
   
   if (state.shuffleFavorites) {
     showStatus('Reproducción aleatoria de favoritos activada', 'info', 2000);
+    
+    // Recargar cola FIFO con 10 favoritos aleatorios
+    if (state.favorites.length > 0) {
+      loadPlaybackQueue('favorites', state.favorites, 0);
+      audioCache.loadFavoritesQueue(state.favorites, true);
+    }
   } else {
     showStatus('Reproducción aleatoria de favoritos desactivada', 'info', 2000);
+    
+    // Recargar cola FIFO con las siguientes 10 pistas
+    const context = playbackManager.getCurrentContext();
+    if (context && playbackManager.contextData[context].items.length > 0) {
+      const ctx = playbackManager.contextData[context];
+      const currentIndex = ctx.currentIndex;
+      loadPlaybackQueue(context, ctx.items, currentIndex + 1);
+    }
   }
   
   updateShuffleButton();
-  
-  if (state.isPlayingFavorites && playbackManager.getCurrentContext() === 'favorites') {
-    const currentIndex = playbackManager.contextData.favorites.currentIndex;
-    playbackManager.setContext('favorites', state.favorites, currentIndex);
-  }
 }
 
 // ==================== FUNCIONES ASÍNCRONAS CORREGIDAS ====================
@@ -2202,7 +2612,6 @@ async function loadAudioWithCache(track) {
     throw new Error('URL de audio no disponible');
   }
 
-  // NO limpiar la URL anterior aquí - eso se hará en playAudioTrackOptimized
   try {
     // Intentar obtener de la caché primero
     const cachedBlob = await audioCache.get(track.url);
@@ -2219,6 +2628,7 @@ async function loadAudioWithCache(track) {
     }
 
     // Cargar desde la red
+    elements.playBtn.innerHTML = '<span class="loader"></span>';
     console.log('Descargando audio:', track.title);
     showStatus('Descargando audio...', 'info', 0);
     
@@ -2255,44 +2665,11 @@ async function loadAudioWithCache(track) {
 }
 
 function preloadNextTrack() {
-  const context = playbackManager.getCurrentContext();
-  if (!context) return;
-
-  const ctx = playbackManager.contextData[context];
-  const currentIndex = ctx.currentIndex;
-  const nextTracks = [];
-
-  // Solo precargar la siguiente pista
-  const nextIndex = (currentIndex + 1) % ctx.items.length;
-  if (ctx.items[nextIndex]) {
-    nextTracks.push(ctx.items[nextIndex]);
-  }
-
-  // Precargar en segundo plano si hay conexión
-  if (state.networkOnline && nextTracks.length > 0) {
-    audioCache.preloadTracks(nextTracks, false);
-  }
-}
-
-function preloadInitialTracks() {
-  const context = playbackManager.getCurrentContext();
-  if (!context) return;
-
-  const ctx = playbackManager.contextData[context];
-  const currentIndex = ctx.currentIndex;
-  const nextTracks = [];
-
-  // Precargar las siguientes 10 pistas al inicio
-  for (let i = 1; i <= 10; i++) {
-    const nextIndex = (currentIndex + i) % ctx.items.length;
-    if (ctx.items[nextIndex]) {
-      nextTracks.push(ctx.items[nextIndex]);
+  if (state.playbackQueue.length > 0) {
+    const nextTrack = state.playbackQueue[0];
+    if (nextTrack && nextTrack.url) {
+      audioCache.prefetchAudio(nextTrack.url).catch(console.error);
     }
-  }
-
-  // Precargar en segundo plano si hay conexión
-  if (state.networkOnline && nextTracks.length > 0) {
-    audioCache.preloadTracks(nextTracks, true);
   }
 }
 
@@ -2315,7 +2692,7 @@ function setupListenTracking() {
         await audioCache.markAsFullyListened(state.currentTrack.url);
         console.log('Pista marcada como escuchada completamente:', state.currentTrack.title);
         
-        // NUEVO: Reemplazar en cola FIFO cuando se completa la reproducción
+        // Reemplazar en cola FIFO cuando se completa la reproducción
         if (isTrackFavorite(state.currentTrack)) {
           console.log('Reemplazando favorito en cola FIFO por reproducción completada');
           await audioCache.replaceFavoritesQueueItem(state.currentTrack.url, null, state.favorites);
@@ -2492,7 +2869,7 @@ function createSearchResultElement(result, globalIndex) {
     }
   });
 
-  // MODIFICADO: Solo reproducir si el usuario hace clic en la información de la pista
+  // Solo reproducir si el usuario hace clic en la información de la pista
   const trackInfo = resultEl.querySelector('.track-item-info');
   if (trackInfo) {
     trackInfo.addEventListener('click', async (e) => {
@@ -2612,7 +2989,7 @@ function displayAlbumTracks(albumId, tracksContainer) {
           favoriteBtn.textContent = isNowFavorite ? '❤️' : '🩶';
         });
 
-        // MODIFICADO: Solo reproducir si el usuario hace clic en la información de la pista
+        // Solo reproducir si el usuario hace clic en la información de la pista
         const trackInfo = trackItem.querySelector('.track-item-info');
         trackInfo.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -2649,10 +3026,13 @@ async function playOptimizedSearchResult(result, index, allResults) {
         state.albumOrigin = 'search';
         playbackManager.setAlbumPlaylist(result.identifier, files, 0);
         
+        // Cargar cola FIFO con las pistas del álbum
+        loadPlaybackQueue('album', files, 0);
+        
         const firstTrack = files[0];
         await playAudioTrackOptimized(firstTrack, result.identifier, 0, files.length);
       } else {
-        // MODIFICACIÓN: Crear lista precargada con todos los resultados
+        // Crear lista precargada con todos los resultados
         const searchPlaylist = [];
         
         // Precargar todas las pistas de todos los resultados
@@ -2674,6 +3054,9 @@ async function playOptimizedSearchResult(result, index, allResults) {
         
         // Configurar la lista precargada
         setupPreloadedPlayback(searchPlaylist, index);
+        
+        // Cargar cola FIFO con los resultados de búsqueda
+        loadPlaybackQueue('search', searchPlaylist, index);
         
         const track = files[0];
         await playAudioTrackOptimized(track, result.identifier);
@@ -2714,11 +3097,14 @@ async function playSpecificTrack(track, albumId, trackIndex, totalTracks) {
       const files = await fetchOptimizedPlayableFiles(albumId);
       playbackManager.setAlbumPlaylist(albumId, files, trackIndex);
       state.albumOrigin = 'search';
+      
+      // Cargar cola FIFO con las pistas del álbum
+      loadPlaybackQueue('album', files, trackIndex);
     }
     
     await playAudioTrackOptimized(track, albumId, trackIndex, totalTracks);
     
-    // MODIFICADO: No ocultar resultados automáticamente
+    // No ocultar resultados automáticamente
   } catch (error) {
     console.error('Error en playSpecificTrack:', error);
     showStatus(`Error: ${error.message}`, 'error');
@@ -2736,9 +3122,6 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
   
   elements.audio.pause();
   elements.audio.currentTime = 0;
-  
-  // CORRECCIÓN CRÍTICA: NO limpiar la fuente anterior hasta que tengamos la nueva
-  // Solo pausar y resetear el tiempo, pero mantener el src actual hasta tener el nuevo
   
   if (totalTracks > 1) {
     elements.title.textContent = `${track.title || 'Sin título'}`;
@@ -2761,6 +3144,9 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
   };
   
   updateFavoriteButton();
+  
+  // Actualizar Media Session
+  updateMediaSessionMetadata(track, identifier);
   
   showStatus(`Cargando: ${track.title}`, 'info', 0);
   elements.playBtn.innerHTML = '<span class="loader"></span>';
@@ -2796,12 +3182,6 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
         
         // Precargar siguiente pista
         preloadNextTrack();
-        
-        // Precargar 10 pistas iniciales si es la primera vez
-        if (!state.initialPreloadDone) {
-          state.initialPreloadDone = true;
-          preloadInitialTracks();
-        }
         
         resolve(true);
       }).catch(reject);
@@ -2936,6 +3316,11 @@ function togglePlay() {
     elements.audio.play().then(() => {
       elements.playBtn.textContent = '| |';
       showStatus('Reproduciendo', 'info');
+      
+      // Actualizar Media Session
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.playbackState = 'playing';
+      }
     }).catch(error => {
       showStatus(`Error: ${error.message}`, 'error');
     });
@@ -2943,6 +3328,11 @@ function togglePlay() {
     elements.audio.pause();
     elements.playBtn.textContent = '▶';
     showStatus('Pausado', 'info');
+    
+    // Actualizar Media Session
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.playbackState = 'paused';
+    }
   }
 }
 
@@ -2964,15 +3354,55 @@ function forcePlay() {
   state.userInteracted = true;
   
   if (state.favorites.length > 0) {
-    showStatus('Reproduciendo favoritos aleatoriamente', 'info');
-    playOptimizedFavorite(-1);
+    showStatus('Reproduciendo favoritos desde cola FIFO', 'info');
+    playFromFavoritesQueue();
   } else {
     showStatus('No hay favoritos, reproduciendo Rock', 'info');
     playOptimizedRandom('rock');
   }
 }
 
-// ==================== NUEVA FUNCIÓN PARA GESTIONAR LISTAS PRECARGADAS ====================
+// FUNCIÓN: Reproducir desde cola FIFO de favoritos
+async function playFromFavoritesQueue() {
+  if (state.isLoading || state.favorites.length === 0) return;
+  
+  state.isLoading = true;
+  elements.playBtn.disabled = true;
+  elements.playBtn.innerHTML = '<span class="loader"></span>';
+  
+  state.isPlayingFavorites = true;
+  
+  try {
+    // Cargar cola FIFO con favoritos
+    await loadPlaybackQueue('favorites', state.favorites, 0);
+    
+    if (state.playbackQueue.length === 0) {
+      throw new Error('No se pudo cargar la cola de reproducción');
+    }
+    
+    const track = state.playbackQueue[0];
+    
+    if (!track.url) {
+      throw new Error('URL de audio no disponible en el favorito');
+    }
+    
+    showStatus(`Cargando desde cola FIFO: ${track.title}`, 'info', 0);
+    
+    await playAudioTrackOptimized(track, track.id, track.trackIndex, track.totalTracks);
+    
+    updateShuffleButton();
+    
+  } catch (error) {
+    console.error('Error en playFromFavoritesQueue:', error);
+    showStatus(`Error: ${error.message}`, 'error');
+  } finally {
+    state.isLoading = false;
+    elements.playBtn.disabled = false;
+    elements.playBtn.textContent = '| |';
+  }
+}
+
+// ==================== FUNCIÓN PARA GESTIONAR LISTAS PRECARGADAS ====================
 function setupPreloadedPlayback(tracks, startIndex = 0) {
   if (!tracks || tracks.length === 0) return;
   
@@ -2991,13 +3421,30 @@ function setupPreloadedPlayback(tracks, startIndex = 0) {
 
 // ==================== REPRODUCCIÓN CONTINUA MEJORADA ====================
 async function playNextInContext() {
-  const context = playbackManager.getCurrentContext();
-  
-  // NUEVO: Reemplazar en cola FIFO cuando se usa el botón siguiente
+  // Reemplazar en cola FIFO cuando se usa el botón siguiente
   if (state.currentTrack && isTrackFavorite(state.currentTrack)) {
     console.log('Reemplazando favorito en cola FIFO por botón siguiente');
     await audioCache.replaceFavoritesQueueItem(state.currentTrack.url, null, state.favorites);
   }
+  
+  // Siempre reproducir desde la cola FIFO
+  if (state.playbackQueue.length > 0) {
+    const nextTrack = state.playbackQueue.shift();
+    
+    // Agregar la pista actual al historial
+    if (state.currentTrack) {
+      state.playbackHistory.push(state.currentTrack);
+    }
+    
+    try {
+      await playAudioTrackOptimized(nextTrack, nextTrack.id, nextTrack.trackIndex, nextTrack.totalTracks);
+      return;
+    } catch (error) {
+      console.error('Error reproduciendo desde cola FIFO:', error);
+    }
+  }
+  
+  const context = playbackManager.getCurrentContext();
   
   // Si estamos en un contexto de búsqueda con playlist precargada
   if (context === 'searchPlaylist' && state.autoPlaySearchResults) {
@@ -3118,6 +3565,23 @@ async function playNextInContext() {
 }
 
 async function playPreviousInContext() {
+  // Usar historial para botón anterior
+  if (state.playbackHistory.length > 0) {
+    const previousTrack = state.playbackHistory.pop();
+    
+    // Poner la pista actual de vuelta en la cola FIFO
+    if (state.currentTrack) {
+      state.playbackQueue.unshift(state.currentTrack);
+    }
+    
+    try {
+      await playAudioTrackOptimized(previousTrack, previousTrack.id, previousTrack.trackIndex, previousTrack.totalTracks);
+      return;
+    } catch (error) {
+      console.error('Error reproduciendo desde historial:', error);
+    }
+  }
+  
   const context = playbackManager.getCurrentContext();
   if (!context || !playbackManager.contextData[context].items.length) return;
 
@@ -3165,7 +3629,7 @@ async function playPreviousInContext() {
     } else if (context === 'album') {
       await playAudioTrackOptimized(prevItem, playbackManager.getCurrentAlbumId(), ctx.currentIndex, ctx.items.length);
     } else if (context === 'searchPlaylist') {
-      // NUEVO: Reproducir desde la lista de búsqueda precargada
+      // Reproducir desde la lista de búsqueda precargada
       await playAudioTrackOptimized(prevItem, prevItem.id, 0, 1);
     }
   } catch (error) {
@@ -3235,7 +3699,7 @@ function updateFavoritesList() {
       } else {
         const favoriteTrack = state.favorites.find(fav => fav.albumId === id);
         if (favoriteTrack) {
-          playOptimizedFavorite(state.favorites.indexOf(favoriteTrack));
+          playFromFavoritesQueue();
         }
       }
     });
@@ -3289,6 +3753,9 @@ async function playAlbumFromFavorites(albumId) {
     
     if (files.length > 0) {
       playbackManager.setAlbumPlaylist(albumId, files, 0);
+      
+      // Cargar cola FIFO con las pistas del álbum
+      loadPlaybackQueue('album', files, 0);
       
       await playAudioTrackOptimized(files[0], albumId, 0, files.length);
       
@@ -3411,6 +3878,10 @@ async function playOptimizedRandom(genre) {
     }
     
     playbackManager.setContext('genre', items.results);
+    
+    // Cargar cola FIFO con los resultados
+    loadPlaybackQueue('genre', items.results, 0);
+    
     await playNextInContext();
     
   } catch (error) {
@@ -3423,7 +3894,7 @@ async function playOptimizedRandom(genre) {
   }
 }
 
-// ==================== NUEVA FUNCIONALIDAD: REPRODUCCIÓN ALEATORIA DE RESULTADOS ====================
+// ==================== FUNCIONALIDAD: REPRODUCCIÓN ALEATORIA DE RESULTADOS ====================
 async function playRandomSearchResults() {
   if (state.isLoading || state.searchResults.length === 0) return;
   
@@ -3461,6 +3932,9 @@ async function playRandomSearchResults() {
     
     // Configurar la lista precargada
     setupPreloadedPlayback(searchPlaylist, 0);
+    
+    // Cargar cola FIFO con los resultados de búsqueda
+    loadPlaybackQueue('search', searchPlaylist, 0);
     
     // Reproducir la primera pista
     const firstTrack = searchPlaylist[0];
@@ -3554,6 +4028,9 @@ function updateProgressBar() {
     elements.progress.style.width = `${progressPercent}%`;
     elements.currentTime.textContent = formatTime(elements.audio.currentTime);
     elements.totalTime.textContent = formatTime(elements.audio.duration);
+    
+    // Actualizar Media Session
+    updateMediaPositionState();
   }
 }
 
@@ -3687,7 +4164,7 @@ async function initializeApp() {
     // Mostrar estadísticas iniciales
     const stats = await audioCache.getUsageStats();
     if (stats) {
-      console.log(`Estadísticas de caché: ${stats.totalTracks} pistas, ${(stats.totalSize / 1024 / 1024).toFixed(2)}MB, ${stats.favoritesPreloaded}/${stats.favorites} favoritos precargados aleatoriamente, ${stats.usagePercentage.toFixed(1)}% utilizado`);
+      console.log(`Estadísticas de caché: ${stats.totalTracks} pistas, ${(stats.totalSize / 1024 / 1024).toFixed(2)}MB, ${stats.favoritesPreloaded}/${stats.favorites} favoritos precargados, ${stats.usagePercentage.toFixed(1)}% utilizado`);
     }
   } catch (error) {
     console.error('Error inicializando caché:', error);
@@ -3697,12 +4174,21 @@ async function initializeApp() {
   setupConnectivityMonitoring();
   setupListenTracking();
   
+  // Configurar Media Session API
+  setupMediaSession();
+  
+  // Configurar Google Cast API
+  initializeCastFramework();
+  
   setupSearchOnEnter();
   setupProgressBarInteraction();
   
   // Configurar botones de control de búsqueda
   elements.playRandomSearch.addEventListener('click', playRandomSearchResults);
   elements.hideResultsBtn.addEventListener('click', hideSearchResults);
+  
+  // Configurar botón de transmisión
+  elements.castBtn.addEventListener('click', toggleCast);
   
   elements.favoritesSection = document.querySelector('.favorites-section');
   elements.favoritesSection.style.display = 'block';
@@ -3711,9 +4197,19 @@ async function initializeApp() {
   elements.audio.addEventListener('timeupdate', updateProgressBar);
   elements.audio.addEventListener('loadedmetadata', updateProgressBar);
   elements.audio.addEventListener('play', () => {
-  elements.playBtn.textContent = '| |';
+    elements.playBtn.textContent = '| |';
+    // Actualizar Media Session
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.playbackState = 'playing';
+    }
   });
-  elements.audio.addEventListener('pause', () => elements.playBtn.textContent = '▶');
+  elements.audio.addEventListener('pause', () => {
+    elements.playBtn.textContent = '▶';
+    // Actualizar Media Session
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.playbackState = 'paused';
+    }
+  });
   elements.audio.addEventListener('ended', playNextInContext);
   elements.audio.addEventListener('error', (e) => {
     console.error('Error de audio:', e.target.error);
@@ -3770,7 +4266,7 @@ async function initializeApp() {
   // Inicializar PWA
   registerServiceWorker();
   setupPWAInstall();
-  setupPushNotifications();
+  /*setupPushNotifications();*/
   setupOfflineFunctionality();
   
   // EXPONER FUNCIONES GLOBALES CRÍTICAS
@@ -3792,9 +4288,11 @@ async function initializeApp() {
   window.audioCache = audioCache;
   window.installPWA = installPWA;
   window.preloadNextTrack = preloadNextTrack;
-  window.preloadInitialTracks = preloadInitialTracks;
+  window.loadPlaybackQueue = loadPlaybackQueue;
+  window.playFromFavoritesQueue = playFromFavoritesQueue;
+  window.toggleCast = toggleCast;
   
-  console.log('Aplicación optimizada inicializada con precarga inteligente de pistas');
+  console.log('Aplicación optimizada inicializada con sistema de colas FIFO, Media Session y Google Cast API');
 }
 
 // INICIALIZACIÓN SEGURA
