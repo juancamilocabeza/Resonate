@@ -1,15 +1,12 @@
-// sw.js - Service Worker mejorado para Android Auto
-const CACHE_NAME = 'resonate-v2.1.0';
-const STATIC_CACHE = 'static-v2.1.0';
-const AUDIO_CACHE = 'audio-cache-v1';
+// sw.js - Service Worker simplificado
+const CACHE_NAME = 'resonate-simple-v1';
+const STATIC_CACHE = 'static-simple-v1';
 
 // Archivos críticos para caché
 const STATIC_FILES = [
   '/',
   '/index.html',
-  '/manifest.json',
-  '/icons/favicon-192.png',
-  '/icons/favicon-512.png'
+  '/manifest.json'
 ];
 
 self.addEventListener('install', (event) => {
@@ -30,7 +27,7 @@ self.addEventListener('activate', (event) => {
     caches.keys().then(cacheNames => {
       return Promise.all(
         cacheNames.map(cacheName => {
-          if (cacheName !== STATIC_CACHE && cacheName !== AUDIO_CACHE) {
+          if (cacheName !== STATIC_CACHE) {
             console.log('Eliminando cache antiguo:', cacheName);
             return caches.delete(cacheName);
           }
@@ -52,44 +49,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   
-  // Estrategia Network First para audio (para Android Auto)
-  if (event.request.url.includes('archive.org/download') || 
-      event.request.headers.get('accept')?.includes('audio')) {
-    event.respondWith(
-      fetch(event.request)
-        .then(response => {
-          // Cachear respuesta de audio para uso offline
-          const responseClone = response.clone();
-          caches.open(AUDIO_CACHE)
-            .then(cache => cache.put(event.request, responseClone));
-          return response;
-        })
-        .catch(() => {
-          return caches.match(event.request);
-        })
-    );
-    return;
-  }
-  
-  // Para otras peticiones
-  event.respondWith(fetch(event.request));
+  // Para otras peticiones, usar Network First
+  event.respondWith(
+    fetch(event.request)
+      .catch(() => {
+        return caches.match(event.request);
+      })
+  );
 });
-
-// Background Sync para Android Auto
-self.addEventListener('sync', (event) => {
-  if (event.tag === 'background-audio-sync') {
-    console.log('Background sync para audio');
-    event.waitUntil(doBackgroundSync());
-  }
-});
-
-async function doBackgroundSync() {
-  // Sincronización en segundo plano para precargar contenido
-  const clients = await self.clients.matchAll();
-  clients.forEach(client => {
-    client.postMessage({
-      type: 'BACKGROUND_SYNC',
-      message: 'Precargando contenido para Android Auto'
-    });
-  });
-}
