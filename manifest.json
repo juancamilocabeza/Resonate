@@ -1,18 +1,25 @@
 {
-  "name": "Resonate",
+  "name": "Resonate Player",
   "short_name": "Resonate",
-  "description": "Reproductor de música con acceso a Archive.org",
+  "description": "Reproductor multimedia optimizado",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#000000",
   "theme_color": "#6ee7b7",
-  "orientation": "portrait",
-  "categories": ["music", "entertainment"],
+  "orientation": "portrait-primary",
+  "categories": ["education", "entertainment"],
   "icons": [
     {
-      "src": "icons/favicon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml"
+      "src": "icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
     }
   ],
   "related_applications": [],
