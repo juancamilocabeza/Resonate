@@ -2,16 +2,16 @@
 <html lang="es">
   <head>
     <meta charset="utf-8" />
-    <meta name="description" content="Reproductor multimedia">
-    <meta name="keywords" content="HTML, CSS, JavaScript">
-    <meta name="author" content="Juan Cabeza">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="keywords" content="Resonate, reproductor multimedia, música online, streaming de audio, PWA música, reproductor web, música gratis, playlists, canciones, artistas, álbumes, audio de alta calidad, música sin interrupciones, reproductor responsive, aplicación de música, música en cualquier dispositivo, música offline, experiencia musical, música digital, música interactiva, música moderna, música global, música personalizada">
-    <title>Resonate</title>
-    <!-- PWA Manifest -->
-    <link rel="icon" type="image/svg+xml" href="icons/favicon.svg">
-    <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#000000" />
+    <title>Resonate Player - Reproductor multimedia gratis</title>
+    <meta name="description" content="Resonate Player - Es un reproductor de multimedia online, que te permite descubrir y sorprenderte con contenidos que te imaginas, disfruta de una experiencia sin interrupciones en cualquier dispositivo.">
+    <meta name="keywords" content="Resonate, reproductor multimedia, música online, PWA música, música gratis, playlists, música offline">
+    <meta name="robots" content="index, follow">
+    <meta name="author" content="Juan Cabeza">
+    <meta name="theme-color" content="#000000">
+    <link rel="icon" type="image/png" href="icons/icon-192x192.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <style>
       :root {
         --bg: #000;
@@ -947,6 +947,7 @@
         background: var(--bg);
         z-index: 1000;
         transition: opacity 0.4s, visibility 0.4s;
+        display: none;
       }
 
       .start-view.hidden {
@@ -1026,9 +1027,6 @@
     <header>
       <h1><img src="icons/favicon.svg" height="20px">&nbsp;Resonate</h1>
     </header>
-    <div class="start-view" id="start-view">
-      <button id="start-button" class="start-button">Iniciar Resonate</button>
-    </div>
     <div class="app" id="app">
      
       <div class="favorites-section">
