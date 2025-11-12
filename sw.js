@@ -160,7 +160,15 @@ async function fetchAndCache(request, cache) {
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'CLEAR_CACHE') {
     caches.delete(CACHE_NAME).then(() => {
-      event.ports[0].postMessage({ success: true });
+      if (event.ports && event.ports[0]) {
+        event.ports[0].postMessage({ success: true });
+      }
     });
+  }
+
+  // Soporta activación inmediata desde la página (skipWaiting)
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    console.log('SW: recibir SKIP_WAITING desde cliente, ejecutando skipWaiting()');
+    self.skipWaiting();
   }
 });

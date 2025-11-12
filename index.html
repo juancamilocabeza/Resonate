@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Resonate Player - Reproductor multimedia gratis</title>
+    <title>Resonate Player</title>
     <meta name="description" content="Resonate Player - Es un reproductor de multimedia online, que te permite descubrir y sorprenderte con contenidos que te imaginas, disfruta de una experiencia sin interrupciones en cualquier dispositivo.">
     <meta name="keywords" content="Resonate, reproductor multimedia, música online, PWA música, música gratis, playlists, música offline">
     <meta name="robots" content="index, follow">
@@ -11,7 +11,10 @@
     <meta name="theme-color" content="#000000">
     <link rel="icon" type="image/png" href="icons/icon-192x192.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="msapplication-TileColor" content="#000000">
+  <!-- Apple touch icon (use a transparent PNG so the black background stands out) -->
+  <link rel="apple-touch-icon" href="icons/icon-512x512.png">
     <style>
       :root {
         --bg: #000;
@@ -56,96 +59,6 @@
 
       h1 {
         font-size: 20px;
-        font-weight: 600;
-        text-align: left;
-        padding: 8px;
-        color: var(--accent);
-        display: flex;
-        justify-content: center;
-        align-items: center;
-      }
-
-      .player-container {
-        flex: 1;
-        overflow-y: auto;
-        overflow-x: hidden;
-        display: flex;
-        flex-direction: column;
-        -webkit-overflow-scrolling: touch;
-      }
-
-      .player-container::-webkit-scrollbar {
-        width: 4px;
-      }
-
-      .player-container::-webkit-scrollbar-track {
-        background: transparent;
-      }
-
-      .player-container::-webkit-scrollbar-thumb {
-        background: var(--muted);
-        border-radius: 2px;
-      }
-
-      .player-content {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-        margin-top: 10px;
-      }
-
-      .app.active .player-content {
-        opacity: 1;
-      }
-
-      .art {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        width: 100%;
-        max-width: 280px;
-        aspect-ratio: 1;
-        margin: 0 auto;
-        margin-top: 30px;
-        border-radius: 8px;
-        background: var(--card);
-        overflow: hidden;
-        flex-shrink: 0;
-      }
-
-      .art img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-      }
-
-      .art .hint {
-        color: var(--muted);
-        font-size: 13px;
-        text-align: center;
-        padding: 0 10px;
-      }
-
-      .current-track-info {
-        text-align: center;
-        width: 100%;
-        flex-shrink: 0;
-        padding: 0 10px;
-      }
-
-      .title {
-        font-size: 18px;
-        font-weight: 600;
-        margin-bottom: 3px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-
-      .creator {
-        color: var(--muted);
-        font-size: 15px;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -197,20 +110,6 @@
         border-radius: 50%;
         opacity: 0;
         transition: opacity 0.2s;
-      }
-
-      .progress-bar:hover .progress::after {
-        opacity: 1;
-      }
-
-      .progress-bar.dragging .progress::after {
-        opacity: 1;
-      }
-
-      .time-controls {
-        display: flex;
-        justify-content: space-between;
-        margin-top: 4px;
       }
 
       .current-time, .total-time {
@@ -1114,14 +1013,15 @@
   <script>
 // ==================== CONFIGURACIÓN PRINCIPAL ====================
 const SEARCH_CONFIG = {
-  maxResults: 50, // Reducido para mejor rendimiento
-  resultsPerPage: 8, // Reducido para menos carga
-  timeout: 10000, // Aumentado a 10 segundos
+  maxResults: 50,
+  resultsPerPage: 8,
+  timeout: 10000,
   enableLazyLoading: true,
-  cacheDuration: 10 * 60 * 1000, // 10 minutos
+  cacheDuration: 10 * 60 * 1000,
   preloadMetadata: true
 };
-// ==================== SISTEMA DE CACHÉ AVANZADO ====================
+
+// Advanced audio caching system
 class AdvancedAudioCache {
   constructor() {
     this.dbName = 'ResonateAudioCache';
@@ -1139,15 +1039,15 @@ class AdvancedAudioCache {
 
   async init() {
     if (this.initialized) return;
-    
+
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(this.dbName, this.dbVersion);
-      
+
       request.onerror = () => {
         console.error('Error abriendo IndexedDB:', request.error);
         reject(request.error);
       };
-      
+
       request.onsuccess = () => {
         this.db = request.result;
         this.initialized = true;
@@ -1180,25 +1080,23 @@ class AdvancedAudioCache {
           }
         }
       };
-    });
-  }
-
-  async calculateSize() {
-    if (!this.db) return 0;
-    
-    return new Promise((resolve) => {
-      const transaction = this.db.transaction([this.storeName], 'readonly');
+      }
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        // Controller changed; reload once to apply the new service worker
+        if (swRefreshing) return;
+        swRefreshing = true;
+        window.location.reload();
+      });
       const store = transaction.objectStore(this.storeName);
       const request = store.getAll();
-      
+
       request.onsuccess = () => {
         this.currentSize = request.result.reduce((total, item) => total + (item.size || 0), 0);
-        console.log(`Tamaño actual de caché: ${(this.currentSize / 1024 / 1024).toFixed(2)}MB`);
-        
+
         if (this.currentSize > this.maxSize * 0.9) {
           this.showStorageWarning();
         }
-        
+
         resolve(this.currentSize);
       };
     });
@@ -1206,12 +1104,12 @@ class AdvancedAudioCache {
 
   async get(url) {
     if (!this.initialized) await this.init();
-    
+
     return new Promise((resolve) => {
       const transaction = this.db.transaction([this.storeName], 'readwrite');
       const store = transaction.objectStore(this.storeName);
       const request = store.get(url);
-      
+
       request.onsuccess = () => {
         if (request.result) {
           request.result.lastAccessed = Date.now();
@@ -1222,7 +1120,7 @@ class AdvancedAudioCache {
           resolve(null);
         }
       };
-      
+
       request.onerror = () => resolve(null);
     });
   }
@@ -1230,16 +1128,15 @@ class AdvancedAudioCache {
   async put(url, blob, updateSize = true, isFavorite = false) {
     if (!this.initialized) await this.init();
     if (!blob) return;
-    
+
     const existing = await this.get(url);
     if (existing) {
-      console.log('Pista ya existe en caché, actualizando:', url);
       if (isFavorite) {
         await this.markAsFavorite(url);
       }
       return true;
     }
-    
+
     const item = {
       url: url,
       blob: blob,
@@ -1251,24 +1148,21 @@ class AdvancedAudioCache {
       lastPlayed: null,
       isFavorite: isFavorite
     };
-    
+
     return new Promise(async (resolve) => {
       if (updateSize) {
         this.currentSize += blob.size;
         await this.ensureSpace();
       }
-      
+
       const transaction = this.db.transaction([this.storeName], 'readwrite');
       const store = transaction.objectStore(this.storeName);
       const request = store.put(item);
-      
+
       request.onsuccess = () => {
-        console.log('Pista almacenada en caché:', url, `(${(blob.size / 1024 / 1024).toFixed(2)}MB)`);
-        
         if (isFavorite) {
           this.addToFavoritesQueue(url);
         }
-        
         resolve(true);
       };
       request.onerror = () => resolve(false);
@@ -1277,247 +1171,193 @@ class AdvancedAudioCache {
 
   async markAsFullyListened(url) {
     if (!this.initialized) await this.init();
-    
+
     return new Promise((resolve) => {
       const transaction = this.db.transaction([this.storeName], 'readwrite');
       const store = transaction.objectStore(this.storeName);
       const request = store.get(url);
-      
+
       request.onsuccess = () => {
         if (request.result) {
           const item = request.result;
           item.fullyListened = true;
           item.lastPlayed = Date.now();
           store.put(item);
-          console.log('Pista marcada como escuchada completamente:', url);
           resolve(true);
         } else {
           resolve(false);
         }
       };
-      
+
       request.onerror = () => resolve(false);
     });
   }
 
   async markAsFavorite(url) {
     if (!this.initialized) await this.init();
-    
+
     return new Promise((resolve) => {
       const transaction = this.db.transaction([this.storeName], 'readwrite');
       const store = transaction.objectStore(this.storeName);
       const request = store.get(url);
-      
+
       request.onsuccess = () => {
         if (request.result) {
           const item = request.result;
           item.isFavorite = true;
           item.lastAccessed = Date.now();
           store.put(item);
-          
+
           this.addToFavoritesQueue(url);
-          
-          console.log('Pista marcada como favorita:', url);
           resolve(true);
         } else {
           resolve(false);
         }
       };
-      
+
       request.onerror = () => resolve(false);
     });
   }
 
   async remove(url) {
     if (!this.initialized) await this.init();
-    
+
     return new Promise((resolve) => {
       const transaction = this.db.transaction([this.storeName], 'readwrite');
       const store = transaction.objectStore(this.storeName);
       const request = store.get(url);
-      
+
       request.onsuccess = () => {
         if (request.result) {
           this.currentSize -= request.result.size;
           store.delete(url);
-          
+
           this.removeFromFavoritesQueue(url);
-          
-          console.log('Pista eliminada de caché:', url);
           resolve(true);
         } else {
           resolve(false);
         }
       };
-      
+
       request.onerror = () => resolve(false);
     });
   }
 
-  // ==================== GESTIÓN DE COLA FIFO PARA FAVORITOS ====================
-  
+  // Favorites queue management
   addToFavoritesQueue(url) {
-    // Evitar duplicados
     this.removeFromFavoritesQueue(url);
-    
-    // Agregar al final de la cola
     this.favoritesQueue.push(url);
-    
-    console.log(`Favorito agregado a cola FIFO: ${url} (${this.favoritesQueue.length}/${this.maxFavorites})`);
   }
-  
+
   removeFromFavoritesQueue(url) {
     const index = this.favoritesQueue.indexOf(url);
     if (index !== -1) {
       this.favoritesQueue.splice(index, 1);
-      console.log(`Favorito removido de cola FIFO: ${url}`);
     }
   }
-  
+
   getFavoritesQueue() {
     return [...this.favoritesQueue];
   }
 
-  // MÉTODO MEJORADO: Reemplazar favorito en cola FIFO basado en contexto
   async replaceFavoritesQueueItem(oldUrl, newUrl, favorites) {
     if (this.favoritesQueueLock) {
-      console.log('Cola FIFO bloqueada, esperando...');
       return false;
     }
-    
+
     this.favoritesQueueLock = true;
-    
+
     try {
-      // Remover el favorito antiguo
       this.removeFromFavoritesQueue(oldUrl);
-      
-      // Seleccionar un favorito aleatorio para reemplazo
+
       if (!newUrl && favorites && favorites.length > 0) {
-        const availableFavorites = favorites.filter(fav => 
+        const availableFavorites = favorites.filter(fav =>
           fav && fav.url && !this.favoritesQueue.includes(fav.url)
         );
-        
+
         if (availableFavorites.length > 0) {
           const randomIndex = Math.floor(Math.random() * availableFavorites.length);
           newUrl = availableFavorites[randomIndex].url;
-          console.log(`Seleccionado favorito aleatorio para reemplazo: ${newUrl}`);
-          
-          // Agregar Favorito a cola FIFO
+
           this.addToFavoritesQueue(newUrl);
-          
-          // Almacenar pista en caché
           await this.prefetchAudio(newUrl, true);
-          
-          console.log(`Reemplazo completado: ${oldUrl} -> ${newUrl}`);
           return true;
         }
       } else if (newUrl) {
-        // Agregar Favorito a cola FIFO
         this.addToFavoritesQueue(newUrl);
-        
-        // Almacenar pista en caché
         await this.prefetchAudio(newUrl, true);
-        
-        console.log(`Reemplazo completado: ${oldUrl} -> ${newUrl}`);
         return true;
       } else {
-        console.log('No hay favoritos disponibles para reemplazo');
         return false;
       }
     } catch (error) {
-      console.error('Error en replaceFavoritesQueueItem:', error);
+      console.error('Error in replaceFavoritesQueueItem:', error);
       return false;
     } finally {
       this.favoritesQueueLock = false;
     }
   }
 
-  // ==================== SISTEMA DE SEGURIDAD PARA STATE.LOADING ====================
-
-// Método para resetear state.isLoading si se queda bloqueado
-setupLoadingSafety() {
-  // Resetear state.isLoading cada 30 segundos por seguridad
-  setInterval(() => {
-    if (state.isLoading) {
-      console.warn('state.isLoading estaba bloqueado, reseteando...');
-      state.isLoading = false;
-      elements.playBtn.disabled = false;
-      elements.playBtn.textContent = '▶';
-    }
-  }, 30000);
-}
+  setupLoadingSafety() {
+    setInterval(() => {
+      if (state.isLoading) {
+        console.warn('state.isLoading stuck, resetting...');
+        state.isLoading = false;
+        elements.playBtn.disabled = false;
+        elements.playBtn.textContent = '▶';
+      }
+    }, 30000);
+  }
   
-  // MÉTODO: Cargar cola FIFO completa desde favoritos
   async loadFavoritesQueue(favorites, shuffle = true) {
-    console.log(`Cargando cola FIFO desde favoritos (shuffle: ${shuffle})`);
-    
-    // Limpiar cola actual
-    this.favoritesQueue = [];
-    
     if (!favorites || favorites.length === 0) {
-      console.log('No hay favoritos para cargar en cola FIFO');
       return;
     }
-    
+
+    this.favoritesQueue = [];
+
     let favoritesToLoad;
-    
+
     if (shuffle) {
-      // Modo aleatorio: seleccionar 10 favoritos aleatorios
       favoritesToLoad = this.shuffleArray([...favorites]).slice(0, this.maxFavorites);
     } else {
-      // Modo secuencial: tomar los siguientes 10 favoritos
       const currentIndex = state.playbackHistory.length;
       favoritesToLoad = favorites.slice(currentIndex, currentIndex + this.maxFavorites);
     }
-    
-    console.log(`Cargando ${favoritesToLoad.length} favoritos en cola FIFO`);
-    
+
     const preloadPromises = [];
-    
+
     for (const favorite of favoritesToLoad) {
       if (favorite && favorite.url) {
         this.addToFavoritesQueue(favorite.url);
         preloadPromises.push(this.prefetchAudio(favorite.url, true));
       }
     }
-    
+
     await Promise.allSettled(preloadPromises);
-    console.log(`Cola FIFO cargada: ${this.favoritesQueue.length}/${this.maxFavorites} favoritos`);
   }
 
-  // ==================== PRECARGA ALEATORIA DE FAVORITOS ====================
-  
   async preloadFavorites(favorites) {
     if (!this.initialized) await this.init();
-    
-    console.log('Precargando favoritos en cola FIFO...');
-    
-    // Usar el nuevo método para cargar la cola
+
     await this.loadFavoritesQueue(favorites, state.shuffleFavorites);
   }
-  
+
   async prefetchFavorite(favorite) {
     try {
-      // Verificar si ya está en caché
       const existing = await this.get(favorite.url);
       if (!existing) {
-        // Precargar en segundo plano
-        const success = await this.prefetchAudio(favorite.url, true);
-        if (success) {
-          console.log('Favorito precargado:', favorite.title);
-        }
+        await this.prefetchAudio(favorite.url, true);
       } else {
-        // Ya está en caché, agregar a la cola
         this.addToFavoritesQueue(favorite.url);
         await this.markAsFavorite(favorite.url);
-        console.log('Favorito ya estaba en caché:', favorite.title);
       }
     } catch (error) {
-      console.log('Error precargando favorito:', error);
+  console.error('Error preloading favorite:', error);
     }
   }
   
-  // Función para mezclar array aleatoriamente (Fisher-Yates)
+  // Randomize array using Fisher-Yates shuffle
   shuffleArray(array) {
     const newArray = [...array];
     for (let i = newArray.length - 1; i > 0; i--) {
@@ -1529,15 +1369,13 @@ setupLoadingSafety() {
   
   async ensureSpace() {
     if (this.currentSize <= this.maxSize) return;
-    
-    console.log('Liberando espacio en caché...');
-    
+
     const transaction = this.db.transaction([this.storeName], 'readwrite');
     const store = transaction.objectStore(this.storeName);
     const index = store.index('lastAccessed');
-    
+
     const request = index.getAll();
-    
+
     request.onsuccess = async () => {
       const items = request.result.sort((a, b) => {
         if (a.isFavorite !== b.isFavorite) {
@@ -1548,27 +1386,25 @@ setupLoadingSafety() {
         }
         return a.lastAccessed - b.lastAccessed;
       });
-      
+
       let freedSpace = 0;
       const targetSize = this.maxSize * 0.85;
-      
+
       for (const item of items) {
         if (this.currentSize - freedSpace <= targetSize) break;
-        
+
         if (this.favoritesQueue.includes(item.url)) {
           continue;
         }
-        
+
         const deleteRequest = store.delete(item.url);
         freedSpace += item.size;
-        
+
         deleteRequest.onsuccess = () => {
           this.currentSize -= item.size;
         };
       }
-      
-      console.log(`Espacio liberado: ${(freedSpace / 1024 / 1024).toFixed(2)}MB`);
-      
+
       if (this.currentSize > this.maxSize * 0.9) {
         this.showStorageWarning();
       }
@@ -1590,19 +1426,14 @@ setupLoadingSafety() {
 
   increaseStorageLimit(additionalBytes) {
     this.maxSize += additionalBytes;
-    console.log(`Nuevo límite de almacenamiento: ${(this.maxSize / 1024 / 1024 / 1024).toFixed(2)}GB`);
   }
 
   async preloadTracks(tracks, isInitial = false) {
     if (!this.initialized) await this.init();
-    
-    if (isInitial) {
-      console.log('Precargando 10 pistas iniciales en caché...');
-    }
-    
+
     const count = isInitial ? 10 : 1;
     const preloadPromises = [];
-    
+
     for (const track of tracks.slice(0, count)) {
       if (track && track.url) {
         try {
@@ -1611,15 +1442,12 @@ setupLoadingSafety() {
             preloadPromises.push(this.prefetchAudio(track.url));
           }
         } catch (error) {
-          console.log('Error precargando pista:', error);
+          console.error('Error preloading track:', error);
         }
       }
     }
-    
+
     await Promise.allSettled(preloadPromises);
-    if (isInitial) {
-      console.log(`Precarga inicial completada: ${preloadPromises.length} pistas`);
-    }
   }
 
   async prefetchAudio(url, isFavorite = false) {
@@ -1631,7 +1459,7 @@ setupLoadingSafety() {
         return true;
       }
     } catch (error) {
-      console.log('Error en prefetch:', error);
+  console.error('Error in prefetch:', error);
     }
     return false;
   }
@@ -1719,7 +1547,7 @@ class EnhancedSearchCache {
 const enhancedCache = new EnhancedSearchCache();
 const audioCache = new AdvancedAudioCache();
 
-// ==================== ELEMENTOS DOM ====================
+// DOM Elements
 const elements = {
   audio: document.getElementById('audio'),
   art: document.getElementById('art'),
@@ -1748,7 +1576,7 @@ const elements = {
   playerContent: document.getElementById('player-content')
 };
 
-// ==================== ESTADO DE LA APLICACIÓN ====================
+// Application state
 const state = {
   currentGenre: 'rock',
   currentTrack: null,
@@ -1791,14 +1619,12 @@ const state = {
   isLoadingMore: false
 };
 
-// ==================== MEDIA SESSION API ====================
 function setupMediaSession() {
   if (!('mediaSession' in navigator)) {
-    console.log('Media Session API no está disponible');
+  // Media Session API not available in this environment
     return;
   }
 
-  // Configurar acciones de Media Session
   try {
     navigator.mediaSession.setActionHandler('play', () => {
       togglePlay();
@@ -1833,10 +1659,8 @@ function setupMediaSession() {
         elements.audio.currentTime = details.seekTime;
       }
     });
-
-    console.log('Media Session API configurada correctamente');
   } catch (error) {
-    console.log('Algunas acciones de Media Session no están disponibles:', error);
+  console.warn('Some Media Session actions unavailable:', error);
   }
 }
 
@@ -1846,24 +1670,20 @@ function updateMediaSessionMetadata(track, identifier) {
   try {
     const artwork = [];
     const archiveCoverUrl = `https://archive.org/services/img/${identifier}`;
-    
-    // Agregar diferentes tamaños de artwork para compatibilidad
+
     artwork.push({ src: archiveCoverUrl, sizes: '300x300', type: 'image/jpeg' });
     artwork.push({ src: archiveCoverUrl, sizes: '512x512', type: 'image/jpeg' });
 
     navigator.mediaSession.metadata = new MediaMetadata({
-      title: track.title || 'Sin título',
-      artist: track.creator || 'Desconocido',
+      title: track.title || 'Untitled',
+      artist: track.creator || 'Unknown',
       album: track.album || identifier,
       artwork: artwork
     });
 
-    // Actualizar posición y duración
     updateMediaPositionState();
-
-    console.log('Metadatos de Media Session actualizados:', track.title);
   } catch (error) {
-    console.log('Error actualizando Media Session:', error);
+  console.error('Error updating Media Session:', error);
   }
 }
 
@@ -1877,28 +1697,26 @@ function updateMediaPositionState() {
       position: elements.audio.currentTime
     });
   } catch (error) {
-    console.log('Error actualizando posición de Media Session:', error);
+  console.error('Error updating Media Session position:', error);
   }
 }
 
-// ==================== DETECCIÓN DE CONECTIVIDAD ====================
+// Connectivity monitoring
 function setupConnectivityMonitoring() {
   state.networkOnline = navigator.onLine;
-  
+
   window.addEventListener('online', () => {
     state.networkOnline = true;
-    showStatus('Conexión restaurada', 'info', 2000);
-    console.log('Conectado a internet');
+    showStatus('Connection restored', 'info', 2000);
   });
-  
+
   window.addEventListener('offline', () => {
     state.networkOnline = false;
-    showStatus('Sin conexión - Reproduciendo desde caché', 'error', 3000);
-    console.log('Sin conexión a internet');
+    showStatus('Offline - Playing from cache', 'error', 3000);
   });
 }
 
-// ==================== SISTEMA DE REPRODUCCIÓN CONTINUA ====================
+// Continuous playback management
 class ContinuousPlaybackManager {
   constructor() {
     this.currentContext = null;
@@ -1927,7 +1745,8 @@ class ContinuousPlaybackManager {
     
     const context = this.contextData[this.currentContext];
     
-    if (this.currentContext === 'favorites' && state.shuffleFavorites) {
+    // Soporta shuffle tanto para 'favorites' como para 'search'
+    if ((this.currentContext === 'favorites' || this.currentContext === 'search') && state.shuffleFavorites) {
       context.currentIndex = Math.floor(Math.random() * context.items.length);
     } else {
       context.currentIndex = (context.currentIndex + 1) % context.items.length;
@@ -1989,19 +1808,24 @@ function loadFavorites() {
       // Precargar favoritos en cola FIFO
       audioCache.preloadFavorites(state.favorites);
     }
+    
+    // Actualizar estado del botón de reproducción
+    updatePlayButtonState();
   } catch (e) {
     state.favorites = [];
+    updatePlayButtonState();
   }
 }
-
 function saveFavorites() {
   try {
-    localStorage.setItem('resonate_favorites', JSON.stringify(state.favorites));
-    
-    // Actualizar precarga de favoritos en cola FIFO
-    audioCache.preloadFavorites(state.favorites);
-  } catch (e) {
-    console.log('Error guardando favoritos');
+    const payload = JSON.stringify(state.favorites || []);
+    localStorage.setItem('resonate_favorites', payload);
+    // Request preload/update of favorites in cache if available
+    if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.preloadFavorites === 'function') {
+      audioCache.preloadFavorites(state.favorites || []);
+    }
+  } catch (err) {
+    console.error('Error saving favorites:', err);
   }
 }
 
@@ -2023,34 +1847,29 @@ function toggleFavorite(track) {
       const availableFavorites = state.favorites.filter(fav => 
         !state.playbackQueue.some(item => item.url === fav.url)
       );
-      
+
       if (availableFavorites.length > 0) {
         const randomIndex = Math.floor(Math.random() * availableFavorites.length);
         const newFavorite = availableFavorites[randomIndex];
-        
-        // Reemplazar en la cola
+
+        // Replace in queue
         const queueIndex = state.playbackQueue.findIndex(item => item.url === track.url);
         if (queueIndex !== -1) {
           state.playbackQueue[queueIndex] = newFavorite;
-          console.log(`Favorito reemplazado en cola FIFO: ${track.url} -> ${newFavorite.url}`);
         }
-        
-        // Precargar el nuevo favorito
+
+        // Preload new favorite
         audioCache.prefetchAudio(newFavorite.url, true);
       }
     }
-    
-    audioCache.remove(track.url).then(removed => {
-      if (removed) {
-        console.log('Pista eliminada de caché al quitar de favoritos:', track.url);
-      }
-    });
-    showStatus('Eliminado de favoritos', 'info');
+
+    audioCache.remove(track.url);
+    showStatus('Removed from favorites', 'info');
   } else {
     const favoriteTrack = {
       id: track.id,
-      title: track.title || 'Sin título',
-      creator: track.creator || 'Desconocido',
+      title: track.title || 'Untitled',
+      creator: track.creator || 'Unknown',
       url: track.url,
       isAlbumTrack: track.isAlbumTrack || false,
       albumId: track.albumId || track.id,
@@ -2069,6 +1888,7 @@ function toggleFavorite(track) {
   saveFavorites();
   updateFavoriteButton();
   updateFavoritesList();
+  updatePlayButtonState();
 }
 
 // FUNCIÓN: Agregar todas las pistas de un álbum a favoritos
@@ -2103,6 +1923,7 @@ function addAlbumToFavorites(albumId, files) {
     saveFavorites();
     updateFavoriteButton();
     updateFavoritesList();
+    updatePlayButtonState();
     showStatus(`Álbum agregado a favoritos (${addedCount} pistas)`, 'info');
   } else {
     showStatus('Todas las pistas del álbum ya están en favoritos', 'info');
@@ -2127,6 +1948,7 @@ function removeAlbumFromFavorites(albumId) {
   saveFavorites();
   updateFavoriteButton();
   updateFavoritesList();
+  updatePlayButtonState();
   
   if (removedCount > 0) {
     showStatus(`Álbum removido de favoritos (${removedCount} pistas)`, 'info');
@@ -2207,12 +2029,14 @@ function hideSearchResults() {
 }
 
 function updateShuffleButton() {
+  const ctx = playbackManager.getCurrentContext();
+  const noun = ctx === 'search' ? 'resultados de búsqueda' : 'favoritos';
   if (state.shuffleFavorites) {
     elements.shuffleFavoritesBtn.classList.add('active');
-    elements.shuffleFavoritesBtn.setAttribute('aria-label', 'Desactivar reproducción aleatoria de favoritos');
+    elements.shuffleFavoritesBtn.setAttribute('aria-label', `Desactivar reproducción aleatoria de ${noun}`);
   } else {
     elements.shuffleFavoritesBtn.classList.remove('active');
-    elements.shuffleFavoritesBtn.setAttribute('aria-label', 'Activar reproducción aleatoria de favoritos');
+    elements.shuffleFavoritesBtn.setAttribute('aria-label', `Activar reproducción aleatoria de ${noun}`);
   }
 }
 
@@ -2221,29 +2045,45 @@ async function loadPlaybackQueue(context, items, startIndex = 0) {
   state.playbackQueue = [];
   
   if (!items || items.length === 0) {
-    console.log('No hay items para cargar en cola FIFO');
+  // No items to load into FIFO
     return;
   }
-  
+
   const queueSize = 10;
-  
-  if (context === 'favorites' && state.shuffleFavorites) {
-    // Modo aleatorio: seleccionar 10 items aleatorios
-    const shuffled = [...items].sort(() => Math.random() - 0.5);
-    state.playbackQueue = shuffled.slice(0, queueSize);
-  } else {
-    // Modo secuencial: tomar los siguientes 10 items
-    for (let i = 0; i < queueSize; i++) {
-      const index = (startIndex + i) % items.length;
-      if (items[index]) {
-        state.playbackQueue.push(items[index]);
+  // Queue behavior by context and shuffle mode
+  if (context === 'favorites') {
+    if (state.shuffleFavorites) {
+      // Favorites random mode: load random selection for FIFO queue
+      const shuffled = [...items].sort(() => Math.random() - 0.5);
+      state.playbackQueue = shuffled.slice(0, queueSize);
+    } else {
+      // Sequential mode: take next `queueSize` items from startIndex
+      for (let i = 0; i < queueSize; i++) {
+        const index = (startIndex + i) % items.length;
+        if (items[index]) state.playbackQueue.push(items[index]);
       }
     }
+  } else if (context === 'search') {
+    if (state.shuffleFavorites) {
+      // Search random mode: shuffle and play all results
+      const shuffledAll = [...items].sort(() => Math.random() - 0.5);
+      state.playbackQueue = shuffledAll.slice();
+    } else {
+      // Sequential mode: play linearly all results from startIndex
+      for (let i = 0; i < items.length; i++) {
+        const index = (startIndex + i) % items.length;
+        if (items[index]) state.playbackQueue.push(items[index]);
+      }
+    }
+  } else {
+    // Default behavior (other contexts): load next `queueSize` items
+    for (let i = 0; i < queueSize; i++) {
+      const index = (startIndex + i) % items.length;
+      if (items[index]) state.playbackQueue.push(items[index]);
+    }
   }
-  
-  console.log(`Cola FIFO cargada: ${state.playbackQueue.length} pistas del contexto ${context}`);
-  
-  // Precargar las pistas de la cola
+
+  // Preload tracks from queue
   if (state.networkOnline) {
     audioCache.preloadTracks(state.playbackQueue, true);
   }
@@ -2251,27 +2091,41 @@ async function loadPlaybackQueue(context, items, startIndex = 0) {
 
 function toggleShuffleFavorites() {
   state.shuffleFavorites = !state.shuffleFavorites;
-  
+
+  const context = playbackManager.getCurrentContext() || (state.favorites && state.favorites.length > 0 ? 'favorites' : 'search');
+
   if (state.shuffleFavorites) {
-    showStatus('Reproducción aleatoria de favoritos activada', 'info', 2000);
-    
-    // Recargar cola FIFO con 10 favoritos aleatorios
-    if (state.favorites.length > 0) {
+    // Activar modo aleatorio
+    if (context === 'favorites' && state.favorites.length > 0) {
+      showStatus('Reproducción aleatoria de favoritos activada', 'info', 2000);
       loadPlaybackQueue('favorites', state.favorites, 0);
-      audioCache.loadFavoritesQueue(state.favorites, true);
+      if (audioCache && typeof audioCache.loadFavoritesQueue === 'function') {
+        audioCache.loadFavoritesQueue(state.favorites, true);
+      }
+    } else if (context === 'search' && state.searchResults && state.searchResults.length > 0) {
+      showStatus('Reproducción aleatoria de resultados activada', 'info', 2000);
+      loadPlaybackQueue('search', state.searchResults, 0);
+      if (state.networkOnline) audioCache.preloadTracks(state.playbackQueue, true);
+    } else {
+      showStatus('Reproducción aleatoria activada', 'info', 2000);
     }
   } else {
-    showStatus('Reproducción aleatoria de favoritos desactivada', 'info', 2000);
-    
-    // Recargar cola FIFO con las siguientes 10 pistas
-    const context = playbackManager.getCurrentContext();
-    if (context && playbackManager.contextData[context].items.length > 0) {
-      const ctx = playbackManager.contextData[context];
-      const currentIndex = ctx.currentIndex;
-      loadPlaybackQueue(context, ctx.items, currentIndex + 1);
+    // Desactivar modo aleatorio: volver a modo secuencial
+    if (context === 'favorites' && state.favorites.length > 0) {
+      showStatus('Reproducción aleatoria de favoritos desactivada', 'info', 2000);
+      const ctx = playbackManager.contextData['favorites'] || { currentIndex: 0, items: state.favorites };
+      const currentIndex = typeof ctx.currentIndex === 'number' ? ctx.currentIndex : 0;
+      loadPlaybackQueue('favorites', ctx.items.length ? ctx.items : state.favorites, currentIndex + 1);
+    } else if (context === 'search' && state.searchResults && state.searchResults.length > 0) {
+      showStatus('Reproducción secuencial de resultados activada', 'info', 2000);
+      const ctx = playbackManager.contextData['search'] || { currentIndex: 0, items: state.searchResults };
+      const currentIndex = typeof ctx.currentIndex === 'number' ? ctx.currentIndex : 0;
+      loadPlaybackQueue('search', ctx.items.length ? ctx.items : state.searchResults, currentIndex + 1);
+    } else {
+      showStatus('Reproducción aleatoria desactivada', 'info', 2000);
     }
   }
-  
+
   updateShuffleButton();
 }
 
@@ -2310,7 +2164,7 @@ async function performOptimizedSearch(query, page = 0) {
   const cached = enhancedCache.get('search', cacheKey);
   
   if (cached) {
-    console.log('Resultados desde caché:', cached.results.length);
+  console.debug('Cached results count:', cached.results.length);
     return cached;
   }
 
@@ -2319,88 +2173,82 @@ async function performOptimizedSearch(query, page = 0) {
 
   try {
     const startTime = Date.now();
-    
-    // QUERY OPTIMIZADA Y COMPATIBLE - Sin sintaxis de boosting que causa errores
-    // Usamos una estrategia de búsqueda por fases para mejor relevancia
+
+    // Optimized query compatible with Archive.org API
+    // Multi-phase search strategy for better relevance
     const baseQuery = `(${query}) AND mediatype:audio`;
-    
-    // Estrategia: buscar en title Y creator primero, luego en general
-    // Esto mejora relevancia sin usar sintaxis incompatible
+
+    // Phase strategy: search title AND creator first, then general
+    // Improves relevance without using incompatible syntax
     const searchPhases = [
-      `title:(${query}) AND creator:(${query})`, // Coincidencia exacta en ambos
-      `title:(${query})`, // Luego solo en título
-      `creator:(${query})`, // Luego solo en creador
-      baseQuery // Finalmente búsqueda general
+      `title:(${query}) AND creator:(${query})`, // Exact match in both
+      `title:(${query})`, // Then only in title
+      `creator:(${query})`, // Then only in creator
+      baseQuery // Finally general search
     ];
-    
-    // Construir query OR para cubrir todas las fases
+
+    // Build OR query to cover all phases
     const optimizedQuery = searchPhases.join(' OR ');
     const encodedQuery = encodeURIComponent(optimizedQuery);
-    
+
     const url = `https://archive.org/advancedsearch.php?q=${encodedQuery}&fl[]=identifier,title,creator,description&rows=${SEARCH_CONFIG.resultsPerPage}&page=${page + 1}&output=json&sort[]=downloads+desc`;
-    
-    console.log('Realizando búsqueda optimizada:', url);
-    
-    const response = await fetchWithTimeout(url, { 
+
+    const response = await fetchWithTimeout(url, {
       timeout: SEARCH_CONFIG.timeout,
       headers: {
         'Accept': 'application/json'
       }
     });
-    
-    if (!response.ok) throw new Error('Error de red');
-    
+
+    if (!response.ok) throw new Error('Network error');
+
     const data = await response.json();
     const results = data.response?.docs || [];
-    
-    // Post-procesamiento para mejorar relevancia en el cliente
+
+    // Post-process results for improved relevance in client
     const processedResults = results.map(item => ({
       identifier: item.identifier,
-      title: item.title || 'Sin título',
-      creator: item.creator || 'Desconocido',
+      title: item.title || 'Untitled',
+      creator: item.creator || 'Unknown',
       description: item.description || '',
       isAlbum: null,
       trackCount: null,
-      // Calculamos score de relevancia local
       relevanceScore: calculateRelevanceScore(item, query)
     }));
 
-    // Ordenar por relevancia calculada (si hay muchos resultados)
+    // Sort by calculated relevance score (if many results)
     if (processedResults.length > 1) {
       processedResults.sort((a, b) => b.relevanceScore - a.relevanceScore);
     }
 
     const hasMore = results.length === SEARCH_CONFIG.resultsPerPage;
-    
+
     const searchResult = {
       results: processedResults,
       hasMore,
       total: data.response?.numFound || 0
     };
-    
+
     enhancedCache.set('search', cacheKey, searchResult);
-    
-    console.log(`Búsqueda optimizada completada en ${Date.now() - startTime}ms. Resultados: ${results.length}`);
-    
+
     return searchResult;
-    
+
   } catch (error) {
-    console.error('Error en búsqueda optimizada:', error);
-    
-    // Fallback: intentar con query simple si la optimizada falla
+    console.error('Error in optimized search:', error);
+
+    // Fallback: try simple query if optimized fails
     try {
-      console.log('Intentando búsqueda simple como fallback...');
       const simpleQuery = encodeURIComponent(`(${query}) AND mediatype:audio`);
       const fallbackUrl = `https://archive.org/advancedsearch.php?q=${simpleQuery}&fl[]=identifier,title,creator&rows=${SEARCH_CONFIG.resultsPerPage}&page=${page + 1}&output=json&sort[]=downloads+desc`;
-      
-      const fallbackResponse = await fetchWithTimeout(fallbackUrl, { 
-        timeout: SEARCH_CONFIG.timeout 
+
+      const fallbackResponse = await fetchWithTimeout(fallbackUrl, {
+        timeout: SEARCH_CONFIG.timeout
       });
-      
+
       if (fallbackResponse.ok) {
         const fallbackData = await fallbackResponse.json();
         const fallbackResults = fallbackData.response?.docs || [];
-        
+
         const processedFallbackResults = fallbackResults.map(item => ({
           identifier: item.identifier,
           title: item.title || 'Sin título',
@@ -2692,38 +2540,37 @@ async function loadAudioWithCache(track) {
     const cachedBlob = await audioCache.get(track.url);
     
     if (cachedBlob) {
-      console.log('Reproduciendo desde caché:', track.title);
+  console.debug('Playing from cache:', track.title);
       const blobUrl = URL.createObjectURL(cachedBlob);
       return blobUrl;
     }
 
     // Si no está en caché y no hay conexión, no podemos cargarlo
     if (!state.networkOnline) {
-      throw new Error('Sin conexión y audio no disponible en caché');
+      throw new Error('Offline and audio not available in cache');
     }
 
-    // Cargar desde la red
-    console.log('Descargando audio:', track.title);
-    showStatus('Descargando audio...', 'info', 0);
+    // Load from network
+    showStatus('Downloading audio...', 'info', 0);
     elements.playBtn.innerHTML = '<span class="loader"></span>';
-    
+
     const response = await fetchWithTimeout(track.url, { timeout: 15000 });
-    
+
     if (!response.ok) {
-      throw new Error(`Error HTTP: ${response.status}`);
+      throw new Error(`HTTP Error: ${response.status}`);
     }
 
     const blob = await response.blob();
-    
-    // Guardar en caché para uso futuro (en segundo plano)
+
+    // Save to cache for future use (background)
     const isFavorite = isTrackFavorite(track);
     audioCache.put(track.url, blob, true, isFavorite).catch(error => {
-      console.log('Error guardando en caché:', error);
+  console.error('Error saving to cache:', error);
     });
 
     const blobUrl = URL.createObjectURL(blob);
-    
-    showStatus('Audio cargado', 'info', 1000);
+
+    showStatus('Audio loaded', 'info', 1000);
     return blobUrl;
 
   } catch (error) {
@@ -2756,14 +2603,12 @@ function setupListenTracking() {
     endedHandlerExecuted = false;
     if (state.currentTrack) {
       state.currentTrackListenStart = Date.now();
-      console.log('Iniciando seguimiento de escucha para:', state.currentTrack.title);
     }
   });
 
   elements.audio.addEventListener('ended', async () => {
     // PREVENIR EJECUCIÓN MÚLTIPLE
     if (endedHandlerExecuted) {
-      console.log('Evento ended ya ejecutado, ignorando...');
       return;
     }
     endedHandlerExecuted = true;
@@ -2775,31 +2620,27 @@ function setupListenTracking() {
       // Si se escuchó al menos el 90% de la pista, marcarla como escuchada completamente
       if (listenDuration >= trackDuration * 0.9) {
         await audioCache.markAsFullyListened(state.currentTrack.url);
-        console.log('Pista marcada como escuchada completamente:', state.currentTrack.title);
-        
-        // Reemplazar en cola FIFO cuando se completa la reproducción
+        // Replace in FIFO when playback completes
         if (isTrackFavorite(state.currentTrack)) {
-          console.log('Reemplazando favorito en cola FIFO por reproducción completada');
           await audioCache.replaceFavoritesQueueItem(state.currentTrack.url, null, state.favorites);
         }
-        
-        // Actualizar estadísticas de uso
+
+        // Update usage stats and warn if very high
         const stats = await audioCache.getUsageStats();
         if (stats && stats.usagePercentage > 90) {
-          showStatus(`Almacenamiento: ${stats.usagePercentage.toFixed(1)}% utilizado`, 'info', 3000);
+          showStatus(`Storage: ${stats.usagePercentage.toFixed(1)}% used`, 'info', 3000);
         }
       } else {
         // Registrar que se saltó temprano
         const skipCount = state.tracksSkippedEarly.get(state.currentTrack.url) || 0;
         state.tracksSkippedEarly.set(state.currentTrack.url, skipCount + 1);
-        console.log(`Pista saltada temprano: ${state.currentTrack.title} (${skipCount + 1} veces)`);
+    // Track skipped early: increment skip counter silently
       }
-      
+
       state.currentTrackListenStart = 0;
     }
 
-    // CORRECCIÓN: Pequeño delay antes de reproducir siguiente canción
-    // para evitar conflictos con el sistema de caché
+    // Small delay before playing next track to prevent cache conflicts
     setTimeout(() => {
       playNextInContext();
     }, 100);
@@ -2913,7 +2754,7 @@ function performCompleteCleanup() {
     lazyObserver.remove();
   }
   
-  console.log('✅ Limpieza completa realizada: resultados ocultos y estado resetado');
+  console.debug('Cleanup complete: search results hidden and state reset');
 }
 
 function hideSearchResults() {
@@ -2942,7 +2783,7 @@ function hideSearchResults() {
     lazyObserver.remove();
   }
   
-  console.log('Resultados de búsqueda ocultos y limpiados');
+  console.debug('Search results hidden and cleared');
 }
 
 function createSearchResultElement(result, globalIndex) {
@@ -3065,6 +2906,10 @@ function displaySearchResults(searchData, clearExisting = true) {
   if (results.length === 0 && clearExisting) {
     elements.searchResultsList.innerHTML = '<div class="no-results">No se encontraron resultados</div>';
     elements.searchResults.classList.add('active');
+    // Volver a deshabilitar los controles si no hay resultados
+    if (state.favorites.length === 0) {
+      updatePlayButtonState();
+    }
     return;
   }
 
@@ -3094,6 +2939,9 @@ function displaySearchResults(searchData, clearExisting = true) {
   }
 
   elements.searchResults.classList.add('active');
+  
+  // Habilitar controles si hay resultados de búsqueda
+  enableControlsForSearchResults();
 }
 
 function setupLazyLoadingObserver() {
@@ -3162,14 +3010,14 @@ async function loadAlbumInfoBackground(identifier, resultEl) {
       tracksContainer.className = 'tracks-container';
       tracksContainer.style.display = 'none';
       resultEl.appendChild(tracksContainer);
-      
+
       expandButton.addEventListener('click', (e) => {
-        e.stopPropagation(); // Importante: evitar que active el listener del resultado
+        e.stopPropagation(); // Prevent triggering result listener
         toggleAlbumTracks(identifier, tracksContainer, expandButton);
       });
     }
   } catch (error) {
-    console.log('Error cargando información de álbum:', error);
+  console.error('Error loading album info:', error);
     const metaElement = resultEl.querySelector('.result-meta');
     if (metaElement) {
       metaElement.innerHTML = '<span style="color: var(--muted); font-size: 10px;">Error cargando información</span>';
@@ -3299,7 +3147,7 @@ async function playSpecificTrack(track, albumId, trackIndex, totalTracks) {
 // ==================== FUNCIÓN PLAY OPTIMIZED SEARCH RESULT CORREGIDA ====================
 async function playOptimizedSearchResult(result, index, allResults) {
   if (state.isLoading) {
-    console.log('Reproducción en progreso, ignorando clic...');
+  console.debug('Playback in progress, ignoring click');
     return;
   }
   
@@ -3357,17 +3205,17 @@ async function playOptimizedSearchResult(result, index, allResults) {
     } else {
       throw new Error('No se encontraron archivos de audio reproducibles');
     }
-    
+
   } catch (error) {
-    console.error('Error en playOptimizedSearchResult:', error);
-    
-    // IMPORTANTE: Restaurar el estado incluso en caso de error
+    console.error('Error in playOptimizedSearchResult:', error);
+
+    // Restore state even on error
     state.isLoading = false;
     elements.playBtn.disabled = false;
     elements.playBtn.textContent = '▶';
-    
+
     if (allResults && index < allResults.length - 1) {
-      showStatus(`Error con "${result.title}", intentando siguiente...`, 'error', 2000);
+      showStatus(`Error with "${result.title}", trying next...`, 'error', 2000);
       setTimeout(() => {
         playOptimizedSearchResult(allResults[index + 1], index + 1, allResults);
       }, 1500);
@@ -3418,21 +3266,21 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
   return new Promise((resolve, reject) => {
     const audio = elements.audio;
     let timeoutId;
-    
+
     const onCanPlay = () => {
       cleanup();
       audio.play().then(() => {
-        // CORRECCIÓN: Restaurar estado del botón cuando la reproducción comienza
+        // Restore button state when playback starts
         state.isLoading = false;
         elements.playBtn.disabled = false;
         elements.playBtn.textContent = '| |';
-        
+
         if (totalTracks > 1) {
-          showStatus(`Reproduciendo: ${track.title} (${trackIndex + 1}/${totalTracks})`, 'info');
+          showStatus(`Playing: ${track.title} (${trackIndex + 1}/${totalTracks})`, 'info');
         } else {
-          showStatus(`Reproduciendo: ${track.title}`, 'info');
+          showStatus(`Playing: ${track.title}`, 'info');
         }
-        
+
         // EJECUTAR CALLBACK ONPLAY
         if (state.onPlayCallback && typeof state.onPlayCallback === 'function') {
           try {
@@ -3448,13 +3296,13 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
             console.error('Error ejecutando callback onplay:', error);
           }
         }
-        
-        // Precargar siguiente pista
+
+        // Preload next track
         preloadNextTrack();
-        
+
         resolve(true);
       }).catch(error => {
-        // CORRECCIÓN: Manejar error de reproducción
+        // Handle playback error
         cleanup();
         state.isLoading = false;
         elements.playBtn.disabled = false;
@@ -3462,7 +3310,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
         reject(error);
       });
     };
-    
+
     const onError = (e) => {
       cleanup();
       state.isLoading = false;
@@ -3582,6 +3430,12 @@ function playPrevious() {
 function togglePlay() {
   if (state.isLoading) return;
   
+  // Prevenir reproducción si no hay favoritos y no hay audio cargado
+  if (elements.audio.paused && !elements.audio.src && state.favorites.length === 0) {
+    showStatus('Agrega favoritos para comenzar a reproducir', 'info');
+    return;
+  }
+  
   state.userInteracted = true;
   
   if (elements.audio.paused) {
@@ -3627,21 +3481,21 @@ function forcePlay() {
     elements.title.textContent = '';
     elements.creator.textContent = '';
   }
-  
+
   state.userInteracted = true;
-  
-  // CORRECCIÓN: Limpiar estado de reproducción anterior
+
+  // Clear previous playback state
   state.isLoading = false;
   state.playbackQueue = [];
   state.playbackHistory = [];
-  
+
   if (state.favorites.length > 0) {
-    showStatus('Reproduciendo favoritos desde cola FIFO', 'info');
-    playFromFavoritesQueue();
-  } else {
-    showStatus('No hay favoritos, reproduciendo Rock', 'info');
-    playOptimizedRandom('rock');
-  }
+  showStatus('Playing favorites from FIFO queue', 'info');
+  playFromFavoritesQueue();
+} else {
+  showStatus('No hay favoritos. Selecciona un género para comenzar', 'info');
+}
+
 }
 
 // FUNCIÓN: Reproducir desde cola FIFO de favoritos
@@ -3667,18 +3521,18 @@ async function playFromFavoritesQueue() {
     if (!track.url) {
       throw new Error('URL de audio no disponible en el favorito');
     }
-    
-    showStatus(`Cargando desde cola FIFO: ${track.title}`, 'info', 0);
-    
-    // CORRECCIÓN: Remover la pista de la cola antes de reproducir
+
+    showStatus(`Loading from FIFO queue: ${track.title}`, 'info', 0);
+
+    // Remove track from queue before playing
     state.playbackQueue.shift();
-    
+
     await playAudioTrackOptimized(track, track.id, track.trackIndex, track.totalTracks);
-    
+
     updateShuffleButton();
-    
+
   } catch (error) {
-    console.error('Error en playFromFavoritesQueue:', error);
+    console.error('Error in playFromFavoritesQueue:', error);
     showStatus(`Error: ${error.message}`, 'error');
   } finally {
     state.isLoading = false;
@@ -3701,27 +3555,26 @@ function setupPreloadedPlayback(tracks, startIndex = 0) {
   playbackManager.setContext('searchPlaylist', preloadedPlaylist, startIndex);
   state.autoPlaySearchResults = true;
   
-  console.log(`Lista precargada configurada con ${preloadedPlaylist.length} pistas`);
+  console.debug(`Preloaded list configured with ${preloadedPlaylist.length} tracks`);
 }
 
 // ==================== REPRODUCCIÓN CONTINUA MEJORADA ====================
 async function playNextInContext() {
-  // PREVENIR EJECUCIÓN MÚLTIPLE
+  // PREVENT MULTIPLE EXECUTION
   if (state.isLoading) return;
   state.isLoading = true;
 
-  // CORRECCIÓN: Solo reemplazar en cola FIFO si la canción se reprodujo completamente
-  // y no cuando se usa el botón siguiente manualmente
+  // Only replace in FIFO queue if song played completely, not on manual next button
   const currentTrackUrl = state.currentTrack?.url;
-  
+
   try {
-    // Siempre reproducir desde la cola FIFO si hay pistas disponibles
+    // Always play from FIFO queue if tracks available
     if (state.playbackQueue.length > 0) {
       const nextTrack = state.playbackQueue[0];
-      
-      // Verificar que no sea la misma canción que la actual
+
+      // Check it's not the same as current track
       if (currentTrackUrl && nextTrack.url === currentTrackUrl) {
-        console.log('Evitando reproducir la misma canción, saltando a la siguiente...');
+  // Skipping same track, moving to next
         state.playbackQueue.shift(); // Remover la duplicada
         if (state.playbackQueue.length > 0) {
           await playNextInContext(); // Intentar con la siguiente
@@ -3764,7 +3617,7 @@ async function playNextInContext() {
       const albumContext = playbackManager.contextData.album;
       
       if (albumContext.currentIndex >= albumContext.items.length - 1) {
-        console.log('Fin del álbum de búsqueda, continuando con siguiente resultado...');
+  console.debug('End of album for search result, continuing to next result...');
         
         const currentAlbumId = playbackManager.getCurrentAlbumId();
         const currentIndex = state.searchResults.findIndex(item => item.identifier === currentAlbumId);
@@ -3792,10 +3645,10 @@ async function playNextInContext() {
         showStatus('Fin del álbum', 'info', 2000);
         return;
       } else if (context === 'favorites') {
-        showStatus('Fin de los favoritos, reproduciendo Rock', 'info', 2000);
-        await playOptimizedRandom('rock');
+        showStatus('Fin de los favoritos. Selecciona un género para continuar', 'info', 2000);
         return;
-      } else if (context === 'search') {
+      }
+ if (context === 'search') {
         showStatus('Fin de la búsqueda actual', 'info', 2000);
         return;
       }
@@ -3814,17 +3667,17 @@ async function playNextInContext() {
           await playNextInContext();
         }
       } else if (context === 'favorites') {
-        // CORRECCIÓN: Usar la caché para favoritos
+        // Use cache for favorites
         if (!nextItem.url) {
-          console.error('Favorito sin URL válida:', nextItem);
+          console.error('Favorite without valid URL:', nextItem);
           setTimeout(() => playNextInContext(), 1000);
           return;
         }
-        
+
         const track = {
           url: nextItem.url,
-          title: nextItem.title || 'Sin título',
-          creator: nextItem.creator || 'Desconocido',
+          title: nextItem.title || 'Untitled',
+          creator: nextItem.creator || 'Unknown',
           id: nextItem.id,
           isAlbumTrack: nextItem.isAlbumTrack || false,
           albumId: nextItem.albumId || nextItem.id,
@@ -3905,24 +3758,24 @@ async function playPreviousInContext() {
         await playPreviousInContext();
       }
     } else if (context === 'favorites') {
-      // CORRECCIÓN: Usar la caché para favoritos
+      // Use cache for favorites
       if (!prevItem.url) {
-        console.error('Favorito sin URL válida:', prevItem);
+        console.error('Favorite without valid URL:', prevItem);
         setTimeout(() => playPreviousInContext(), 1000);
         return;
       }
-      
+
       const track = {
         url: prevItem.url,
-        title: prevItem.title || 'Sin título',
-        creator: prevItem.creator || 'Desconocido',
+        title: prevItem.title || 'Untitled',
+        creator: prevItem.creator || 'Unknown',
         id: prevItem.id,
         isAlbumTrack: prevItem.isAlbumTrack || false,
         albumId: prevItem.albumId || prevItem.id,
         trackIndex: prevItem.trackIndex || 0,
         totalTracks: prevItem.totalTracks || 1
       };
-      
+
       // Verificar si está en caché antes de reproducir
       const cached = await audioCache.get(track.url);
       if (!cached && !state.networkOnline) {
@@ -3945,9 +3798,133 @@ async function playPreviousInContext() {
 }
 
 // ==================== FUNCIONES DE FAVORITOS ====================
+function updatePlayButtonState() {
+  if (state.favorites.length === 0) {
+    elements.prevBtn.disabled = true;
+    elements.playBtn.disabled = true;
+    elements.nextBtn.disabled = true;
+    elements.favoriteBtn.disabled = true;
+    elements.shuffleFavoritesBtn.disabled = true;
+    elements.playBtn.title = 'Realiza una búsqueda para comenzar';
+    elements.prevBtn.title = 'Realiza una búsqueda para comenzar';
+    elements.nextBtn.title = 'Realiza una búsqueda para comenzar';
+    elements.favoriteBtn.title = 'Realiza una búsqueda para comenzar';
+    elements.shuffleFavoritesBtn.title = 'Realiza una búsqueda para comenzar';
+  } else {
+    // Habilitar los controles relevantes cuando haya favoritos
+    if (elements.prevBtn) elements.prevBtn.disabled = false;
+    if (elements.playBtn) elements.playBtn.disabled = false;
+    if (elements.nextBtn) elements.nextBtn.disabled = false;
+    if (elements.favoriteBtn) elements.favoriteBtn.disabled = false;
+    if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.disabled = false;
+
+    if (elements.playBtn) elements.playBtn.title = 'Reproducir';
+    if (elements.prevBtn) elements.prevBtn.title = 'Pista anterior';
+    if (elements.nextBtn) elements.nextBtn.title = 'Siguiente pista';
+    if (elements.favoriteBtn) elements.favoriteBtn.title = 'Quitar favorito';
+    if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.title = 'Mezclar favoritos';
+  }
+}
+
+function enableControlsForSearchResults() {
+  // Si no hay favoritos pero hay resultados de búsqueda, habilitar los controles
+  if (state.favorites.length === 0 && state.searchResults && state.searchResults.length > 0) {
+    if (elements.playBtn) elements.playBtn.disabled = false;
+    if (elements.playBtn) elements.playBtn.title = 'Reproducir resultado de búsqueda';
+    
+    if (elements.favoriteBtn) elements.favoriteBtn.disabled = false;
+    if (elements.favoriteBtn) elements.favoriteBtn.title = 'Agregar a favoritos';
+    
+    // Los botones prev/next funcionan dentro del contexto de búsqueda
+    if (elements.prevBtn) elements.prevBtn.disabled = false;
+    if (elements.nextBtn) elements.nextBtn.disabled = false;
+    if (elements.prevBtn) elements.prevBtn.title = 'Pista anterior (búsqueda)';
+    if (elements.nextBtn) elements.nextBtn.title = 'Siguiente pista (búsqueda)';
+    
+    // El botón shuffle funciona con los resultados actuales
+    if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.disabled = false;
+    if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.title = 'Mezclar resultados';
+  }
+}
+
+// ==================== BANNER PARA INICIAR FAVORITOS (CAPTURA INTERACCIÓN) ====================
+function createStartFavoritesCTA() {
+  if (document.getElementById('start-favorites-cta')) return;
+  const container = document.createElement('div');
+  container.id = 'start-favorites-cta';
+  // Banner pequeño fijo en la parte inferior
+  container.style.position = 'fixed';
+  container.style.bottom = '16px';
+  container.style.left = '50%';
+  container.style.transform = 'translateX(-50%)';
+  container.style.display = 'none';
+  container.style.alignItems = 'center';
+  container.style.justifyContent = 'center';
+  container.style.pointerEvents = 'auto';
+  container.style.zIndex = '9999';
+
+  container.innerHTML = `
+    <div style="display:flex; align-items:center; gap:12px; background: rgba(255,255,255,0.98); padding:10px 14px; border-radius:24px; box-shadow:0 6px 18px rgba(0,0,0,0.18); max-width:calc(100% - 32px);">
+      <div style="display:flex; flex-direction:column; min-width:0;">
+        <div style="font-weight:600; font-size:14px; color:#111; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Tienes favoritos</div>
+        <div style="font-size:12px; color:#444; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Reproducir tus favoritos precargados</div>
+      </div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <button id="start-favorites-btn" style="background:#1e88e5; color:#fff; border:none; padding:8px 12px; font-size:14px; border-radius:12px; cursor:pointer;">Reproducir</button>
+        <button id="start-favorites-close" aria-label="Cerrar" style="background:transparent; border:none; color:#666; font-size:16px; cursor:pointer;">✕</button>
+      </div>
+    </div>
+  `;
+
+  // Solo el botón inicia la reproducción (evita clicks accidentales fuera)
+  container.querySelector('#start-favorites-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    handleStartFavoritesCTA();
+  });
+
+  container.querySelector('#start-favorites-close').addEventListener('click', (e) => {
+    e.stopPropagation();
+    hideStartFavoritesCTA();
+  });
+
+  document.body.appendChild(container);
+}
+
+function showStartFavoritesCTA() {
+  const c = document.getElementById('start-favorites-cta');
+  if (!c) createStartFavoritesCTA();
+  const el = document.getElementById('start-favorites-cta');
+  if (el) el.style.display = 'flex';
+}
+
+function hideStartFavoritesCTA() {
+  const c = document.getElementById('start-favorites-cta');
+  if (c && c.parentNode) c.parentNode.removeChild(c);
+}
+
+async function handleStartFavoritesCTA() {
+  try {
+    hideStartFavoritesCTA();
+    state.userInteracted = true;
+    // Si hay favoritos, reproducir la cola de favoritos (el click permite autoplay)
+    if (state.favorites && state.favorites.length > 0) {
+      await playFromFavoritesQueue();
+    } else {
+      // Fallback: intentar reproducir cualquier pista cargada
+      forcePlay();
+    }
+  } catch (err) {
+    console.error('Error al iniciar reproducción desde CTA:', err);
+    showStatus(typeof err === 'string' ? err : `Error: ${err && err.message ? err.message : err}`, 'error');
+  }
+}
+
 function updateFavoritesList() {
   const favoritesList = elements.favoritesList;
   favoritesList.innerHTML = '';
+  
+  // Actualizar estado del botón de reproducción
+  updatePlayButtonState();
   
   if (state.favorites.length === 0) {
     favoritesList.innerHTML = '<div class="no-results" style="padding: 12px; text-align: center;">No hay favoritos</div>';
@@ -4132,9 +4109,9 @@ async function playOptimizedFavorite(favoriteIndex = 0) {
     const isPreloaded = favoritesQueue.includes(track.url);
     
     if (isPreloaded) {
-      console.log('Reproduciendo desde favoritos precargados:', track.title);
+  console.debug('Playing from preloaded favorites:', track.title);
     } else {
-      console.log('Favorito no está precargado, cargando desde red:', track.title);
+  console.debug('Favorite not preloaded, loading from network:', track.title);
     }
     
     const cached = await audioCache.get(track.url);
@@ -4303,19 +4280,19 @@ function setupProgressBarInteraction() {
     const clickPosition = Math.max(0, Math.min(1, (clientX - progressBarRect.left) / progressBarRect.width));
     const seekTime = clickPosition * elements.audio.duration;
     
-    // Actualizar la visualización
+    // Update display
     elements.progress.style.width = `${clickPosition * 100}%`;
     elements.currentTime.textContent = formatTime(seekTime);
-    
-    // CORRECCIÓN: Actualizar el audio SIEMPRE, tanto en arrastre como en click
+
+    // Update audio on both drag and click
     elements.audio.currentTime = seekTime;
   };
-  
-  // Configurar eventos - ELIMINAR DUPLICADOS
+
+  // Configure events - remove duplicates
   elements.progressBar.addEventListener('mousedown', startDrag);
   document.addEventListener('mousemove', drag);
   document.addEventListener('mouseup', endDrag);
-  
+
   elements.progressBar.addEventListener('touchstart', startDrag, { passive: false });
   document.addEventListener('touchmove', drag, { passive: false });
   document.addEventListener('touchend', endDrag, { passive: false });
@@ -4348,6 +4325,10 @@ function startApp() {
   forcePlay();
 }
 
+function isRunningAsPWA() {
+  return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+}
+
 // FUNCIÓN ONPLAY CRÍTICA - DEBE ESTAR DISPONIBLE GLOBALMENTE
 function onplay(callback) {
   state.onPlayCallback = callback;
@@ -4360,30 +4341,62 @@ function registerServiceWorker() {
     if (window.location.protocol === 'https:' || window.location.hostname === 'localhost') {
       navigator.serviceWorker.register('/sw.js')
         .then((registration) => {
-          console.log('Service Worker registrado con éxito:', registration);
-          
-          // Verificar actualizaciones
+    // Service worker registered (silent in console to reduce noise)
+
+          // Intentar buscar actualización inmediatamente
+          registration.update().catch(err => console.warn('Error al solicitar update del SW:', err));
+
+          // Si ya hay un worker en estado 'waiting', solicitar activación inmediata
+          if (registration.waiting) {
+            // Waiting service worker found; request activation (no noisy log)
+            try {
+              // Pedir al worker que haga skipWaiting (el SW escucha el mensaje SKIP_WAITING)
+              registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+              showStatus('Actualizando aplicación...', 'info', 3000);
+            } catch (e) {
+              // Fallback a skipWaiting() si está disponible
+              if (typeof registration.waiting.skipWaiting === 'function') {
+                registration.waiting.skipWaiting();
+              }
+            }
+          }
+
+          // Verificar nuevas versiones durante la sesión
           registration.addEventListener('updatefound', () => {
             const newWorker = registration.installing;
-            console.log('Nueva versión del Service Worker encontrada:', newWorker);
-            
+            // New Service Worker version found (handled silently)
+
             newWorker.addEventListener('statechange', () => {
               if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                showStatus('Nueva versión disponible. Recarga la aplicación.', 'info', 5000);
+                // Auto-aplicar la actualización si se trata de la PWA (al abrir la PWA queremos actualizar automáticamente)
+                if (isRunningAsPWA()) {
+                  try {
+                    newWorker.postMessage({ type: 'SKIP_WAITING' });
+                    showStatus('Actualización disponible — aplicando ahora...', 'info', 3000);
+                  } catch (err) {
+                    console.warn('No se pudo pedir SKIP_WAITING al worker:', err);
+                  }
+                } else {
+                  showStatus('Nueva versión disponible. Recarga la aplicación.', 'info', 5000);
+                }
               }
             });
           });
         })
         .catch((error) => {
-          console.log('Error al registrar el Service Worker:', error);
+          console.error('Error registering Service Worker:', error);
         });
 
-      // Escuchar cambios de estado del service worker
+      // Escuchar cambios de estado del service worker y recargar una vez
+      let swRefreshing = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
-        console.log('Service Worker controller cambiado');
+        // Controller changed; reload once to apply the new service worker
+        if (swRefreshing) return;
+        swRefreshing = true;
+        window.location.reload();
       });
     } else {
-      console.log('Service Worker no registrado: requiere HTTPS o localhost');
+      // Service Worker not registered (requires HTTPS or localhost)
     }
   }
 }
@@ -4401,8 +4414,8 @@ function setupPWAInstall() {
   });
   
   function showInstallButton() {
-    // Puedes agregar un botón de instalación en tu UI aquí
-    console.log('La aplicación puede ser instalada');
+    // You can add an install button in the UI here
+    // App can be installed (beforeinstallprompt) - silent
     
     // Ejemplo: mostrar notificación después de 30 segundos de uso
     setTimeout(() => {
@@ -4418,10 +4431,10 @@ function setupPWAInstall() {
       const { outcome } = await deferredPrompt.userChoice;
       
       if (outcome === 'accepted') {
-        console.log('Usuario aceptó la instalación');
+        // User accepted install prompt
         showStatus('Resonate se está instalando...', 'info', 3000);
       } else {
-        console.log('Usuario rechazó la instalación');
+        // User dismissed install prompt
       }
       
       deferredPrompt = null;
@@ -4435,8 +4448,8 @@ function setupPushNotifications() {
   if ('Notification' in window && 'serviceWorker' in navigator) {
     Notification.requestPermission().then((permission) => {
       if (permission === 'granted') {
-        console.log('Permiso para notificaciones concedido');
-        // Aquí podrías suscribirte a push notifications
+        // Notification permission granted (silent)
+        // Here you could subscribe to push notifications
       }
     });
   }
@@ -4465,22 +4478,50 @@ async function initializeApp() {
   // Inicializar caché de audio primero
   try {
     await audioCache.init();
-    console.log('Caché de audio inicializada');
+    // Audio cache initialized (silent)
     
     // Mostrar estadísticas iniciales
     const stats = await audioCache.getUsageStats();
     if (stats) {
-      console.log(`Estadísticas de caché: ${stats.totalTracks} pistas, ${(stats.totalSize / 1024 / 1024).toFixed(2)}MB, ${stats.favoritesPreloaded}/${stats.favorites} favoritos precargados, ${stats.usagePercentage.toFixed(1)}% utilizado`);
+      // Cache stats available (logged only on error if needed)
     }
   } catch (error) {
     console.error('Error inicializando caché:', error);
   }
   
   loadFavorites();
+  // Preparar el CTA (se mostrará si hay favoritos precargados)
+  createStartFavoritesCTA();
   audioCache.setupLoadingSafety();
 
   setupConnectivityMonitoring();
   setupListenTracking();
+  
+  // Preparar reproducción de favoritos (sin autoplay por restricciones del navegador)
+  // Cargar primer favorito pero esperar a que el usuario haga clic para reproducir
+  if (state.favorites.length > 0) {
+    // Preparing first favorite for playback (preload only, no autoplay)
+    setTimeout(async () => {
+      try {
+        // Cargar cola FIFO de favoritos
+        await loadPlaybackQueue('favorites', state.favorites, 0);
+        if (state.playbackQueue.length > 0) {
+          const firstTrack = state.playbackQueue[0];
+          // Cargar metadata del primer favorito pero no reproducir
+          const audioBlob = await audioCache.get(firstTrack.url);
+          if (!audioBlob) {
+            // Si no está en caché, intentar precargarlo
+            await audioCache.prefetchAudio(firstTrack.url, true);
+          }
+          showStatus(`Listo para reproducir: ${firstTrack.title}. Haz clic en el botón de reproducción.`, 'info', 3000);
+          // Mostrar CTA que captura la interacción del usuario para permitir autoplay
+          showStartFavoritesCTA();
+        }
+      } catch (error) {
+  console.error('Error preparing favorites:', error);
+      }
+    }, 500);
+  }
   
   // Configurar Media Session API
   setupMediaSession();
@@ -4523,28 +4564,29 @@ async function initializeApp() {
       elements.playBtn.textContent = '▶';
       playNextInContext();
     });
-
     elements.audio.addEventListener('error', (e) => {
-      console.error('Error de audio:', e.target.error);
-      showStatus('Error de reproducción', 'error');
-      
-      // CORRECCIÓN: Restaurar estado en caso de error
+      console.error('Audio error:', e.target.error);
+      showStatus('Playback error', 'error');
+
+      // Restore state on error
       state.isLoading = false;
       elements.playBtn.disabled = false;
       elements.playBtn.textContent = '▶';
     });
   }
-  
+
   if (elements.shuffleFavoritesBtn) {
     elements.shuffleFavoritesBtn.addEventListener('click', toggleShuffleFavorites);
   }
-  
+
   if (elements.prevBtn) {
     elements.prevBtn.addEventListener('click', playPrevious);
   }
   
   if (elements.playBtn) {
     elements.playBtn.addEventListener('click', togglePlay);
+    // Ocultar CTA si el usuario hace clic en el botón de reproducir
+    elements.playBtn.addEventListener('click', hideStartFavoritesCTA);
   }
   
   if (elements.nextBtn) {
@@ -4609,6 +4651,20 @@ async function initializeApp() {
   setupPWAInstall();
   setupOfflineFunctionality();
   
+  // Si la app está ejecutándose como PWA, eliminar el splash y mostrar la app inmediatamente
+  if (isRunningAsPWA()) {
+    try {
+      if (elements.startView) elements.startView.classList.add('hidden');
+      if (elements.app) elements.app.classList.add('active');
+      // Remover cualquier elemento splash personalizado si existe
+      const splashEl = document.querySelector('.start-view');
+      if (splashEl && splashEl.parentNode) splashEl.parentNode.removeChild(splashEl);
+  console.debug('PWA detected: splash removed and app activated');
+    } catch (err) {
+      console.warn('Error while hiding splash for PWA:', err);
+    }
+  }
+  
   // EXPONER FUNCIONES GLOBALES CRÍTICAS
   window.onplay = onplay;
   window.state = state;
@@ -4634,7 +4690,7 @@ async function initializeApp() {
   window.dispatchEvent(new Event('resonate:results-rendered'));
 
   
-  console.log('Resonate inicializado con todas las mejoras');
+  // Resonate initialized with enhancements (silent)
 }
 
     // INICIALIZACIÓN SEGURA
@@ -4644,12 +4700,7 @@ async function initializeApp() {
       initializeApp();
     }
     </script>
-  
-<!-- ============================= -->
-<!-- RESONATE: mejoras no intrusivas -->
-<!-- 1) Ocultar teclado al renderizar resultados -->
-<!-- 2) Evitar cierre de la PWA con botón Atrás -->
-<!-- ============================= -->
+
 <script>
   (function () {
     // -------------------------------
