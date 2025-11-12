@@ -1011,7 +1011,7 @@
     </footer>
     <div id="status-messages"></div>
   <script>
-// ==================== CONFIGURACIÓN PRINCIPAL ====================
+// Main configuration
 const SEARCH_CONFIG = {
   maxResults: 50,
   resultsPerPage: 8,
@@ -1051,7 +1051,11 @@ class AdvancedAudioCache {
       request.onsuccess = () => {
         this.db = request.result;
         this.initialized = true;
-        this.calculateSize().then(resolve);
+        // Calculate current size after db is ready
+        this.calculateSize().then(resolve).catch((err) => {
+          console.warn('Error calculating IndexedDB size:', err);
+          resolve(0);
+        });
       };
       
       request.onupgradeneeded = (event) => {
@@ -1080,25 +1084,31 @@ class AdvancedAudioCache {
           }
         }
       };
+    });
+  }
+
+  async calculateSize() {
+    if (!this.db) return 0;
+    return new Promise((resolve) => {
+      try {
+        const transaction = this.db.transaction([this.storeName], 'readonly');
+        const store = transaction.objectStore(this.storeName);
+        const request = store.getAll();
+
+        request.onsuccess = () => {
+          this.currentSize = request.result.reduce((total, item) => total + (item.size || 0), 0);
+
+          if (this.currentSize > this.maxSize * 0.9) {
+            this.showStorageWarning();
+          }
+
+          resolve(this.currentSize);
+        };
+
+        request.onerror = () => resolve(0);
+      } catch (err) {
+        resolve(0);
       }
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        // Controller changed; reload once to apply the new service worker
-        if (swRefreshing) return;
-        swRefreshing = true;
-        window.location.reload();
-      });
-      const store = transaction.objectStore(this.storeName);
-      const request = store.getAll();
-
-      request.onsuccess = () => {
-        this.currentSize = request.result.reduce((total, item) => total + (item.size || 0), 0);
-
-        if (this.currentSize > this.maxSize * 0.9) {
-          this.showStorageWarning();
-        }
-
-        resolve(this.currentSize);
-      };
     });
   }
 
@@ -1124,18 +1134,9 @@ class AdvancedAudioCache {
       request.onerror = () => resolve(null);
     });
   }
-  
+
   async put(url, blob, updateSize = true, isFavorite = false) {
     if (!this.initialized) await this.init();
-    if (!blob) return;
-
-    const existing = await this.get(url);
-    if (existing) {
-      if (isFavorite) {
-        await this.markAsFavorite(url);
-      }
-      return true;
-    }
 
     const item = {
       url: url,
@@ -1491,7 +1492,7 @@ class AdvancedAudioCache {
   }
 }
 
-// ==================== SISTEMA DE CACHÉ MEJORADO ====================
+// Enhanced search cache system
 class EnhancedSearchCache {
   constructor() {
     this.searchCache = new Map();
@@ -1798,7 +1799,7 @@ class ContinuousPlaybackManager {
 
 const playbackManager = new ContinuousPlaybackManager();
 
-// ==================== FUNCIONES BÁSICAS SIN ASYNC ====================
+// Load favorites from local storage and update UI
 function loadFavorites() {
   try {
     const favorites = localStorage.getItem('resonate_favorites');
@@ -2129,7 +2130,7 @@ function toggleShuffleFavorites() {
   updateShuffleButton();
 }
 
-// ==================== FUNCIONES ASÍNCRONAS CORREGIDAS ====================
+// Fetch with timeout for network operations
 async function fetchWithTimeout(resource, options = {}) {
   const { timeout = 8000, ...fetchOptions } = options;
   
@@ -2380,7 +2381,7 @@ async function fetchOptimizedPlayableFiles(identifier) {
   }
 }
 
-// ==================== FUNCIONES DE UTILIDAD SINCRÓNICAS ====================
+// Check if file is playable audio (filter out metadata, images, archives)
 function isPlayableAudioFile(file) {
   if (!file.name) return false;
   
@@ -2529,7 +2530,7 @@ function extractTrackInfo(file, itemMetadata) {
   return result;
 }
 
-// ==================== CACHE DE AUDIO MEJORADO ====================
+// Load audio from cache or network
 async function loadAudioWithCache(track) {
   if (!track || !track.url) {
     throw new Error('URL de audio no disponible');
@@ -2595,7 +2596,7 @@ function preloadNextTrack() {
   }
 }
 
-// ==================== SEGUIMIENTO DE ESCUCHAS ====================
+// Track listening statistics
 function setupListenTracking() {
   let endedHandlerExecuted = false;
 
@@ -2654,7 +2655,7 @@ function setupListenTracking() {
   });
 }
 
-// ==================== FUNCIONES DE INTERFAZ ====================
+// UI setup functions
 function setupSearchOnEnter() {
   elements.searchInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
@@ -2976,7 +2977,7 @@ function setupLazyLoadingObserver() {
   observer.observe(observerElement);
 }
 
-// ==================== FUNCIÓN LOAD ALBUM INFO BACKGROUND ====================
+// Load album info and update result element metadata
 async function loadAlbumInfoBackground(identifier, resultEl) {
   try {
     const metadata = await fetchOptimizedPlayableFiles(identifier);
@@ -3025,7 +3026,7 @@ async function loadAlbumInfoBackground(identifier, resultEl) {
   }
 }
 
-// ==================== FUNCIÓN TOGGLE ALBUM TRACKS ====================
+// Toggle album tracks visibility
 function toggleAlbumTracks(albumId, tracksContainer, expandButton) {
   if (tracksContainer.style.display === 'none') {
     displayAlbumTracks(albumId, tracksContainer);
@@ -3039,7 +3040,7 @@ function toggleAlbumTracks(albumId, tracksContainer, expandButton) {
   }
 }
 
-// ==================== FUNCIÓN DISPLAY ALBUM TRACKS ====================
+// Display tracks for an album
 function displayAlbumTracks(albumId, tracksContainer) {
   tracksContainer.innerHTML = '<div class="search-loading"><span class="loader"></span>Cargando pistas...</div>';
   
@@ -3107,7 +3108,7 @@ function displayAlbumTracks(albumId, tracksContainer) {
     });
 }
 
-// ==================== FUNCIÓN PLAY SPECIFIC TRACK ====================
+// Play a specific track from an album
 async function playSpecificTrack(track, albumId, trackIndex, totalTracks) {
   if (state.isLoading) return;
   
@@ -3143,8 +3144,7 @@ async function playSpecificTrack(track, albumId, trackIndex, totalTracks) {
   }
 }
 
-// ==================== FUNCIONES DE REPRODUCCIÓN CORREGIDAS ====================
-// ==================== FUNCIÓN PLAY OPTIMIZED SEARCH RESULT CORREGIDA ====================
+// Play optimized search result
 async function playOptimizedSearchResult(result, index, allResults) {
   if (state.isLoading) {
   console.debug('Playback in progress, ignoring click');
@@ -3226,7 +3226,7 @@ async function playOptimizedSearchResult(result, index, allResults) {
   // NOTA: Eliminamos el finally aquí porque manejamos el estado en el catch y en playAudioTrackOptimized
 }
 
-// ==================== FUNCIÓN PLAY AUDIO TRACK OPTIMIZED CORREGIDA ====================
+// Play audio track with UI updates and state management
 async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalTracks = 1) {
   if (!track || !track.url) {
     throw new Error('Pista no disponible');
@@ -3420,7 +3420,7 @@ function setGenericArtwork() {
   `;
 }
 
-// ==================== CONTROL DE REPRODUCCIÓN ====================
+// Playback control functions
 function playPrevious() {
   state.userInteracted = true;
   showStatus('Pista anterior', 'info');
@@ -3473,7 +3473,7 @@ function playNext() {
   playNextInContext();
 }
 
-// ==================== FUNCIÓN FORCEPLAY MEJORADA ====================
+// Force playback by determining context and playing
 function forcePlay() {
   if (!state.isInitialized) {
     state.isInitialized = true;
@@ -3541,7 +3541,7 @@ async function playFromFavoritesQueue() {
   }
 }
 
-// ==================== FUNCIÓN PARA GESTIONAR LISTAS PRECARGADAS ====================
+// Configure preloaded playback list
 function setupPreloadedPlayback(tracks, startIndex = 0) {
   if (!tracks || tracks.length === 0) return;
   
@@ -3558,7 +3558,7 @@ function setupPreloadedPlayback(tracks, startIndex = 0) {
   console.debug(`Preloaded list configured with ${preloadedPlaylist.length} tracks`);
 }
 
-// ==================== REPRODUCCIÓN CONTINUA MEJORADA ====================
+// Enhanced continuous playback
 async function playNextInContext() {
   // PREVENT MULTIPLE EXECUTION
   if (state.isLoading) return;
@@ -3797,7 +3797,7 @@ async function playPreviousInContext() {
   }
 }
 
-// ==================== FUNCIONES DE FAVORITOS ====================
+// Favorites management
 function updatePlayButtonState() {
   if (state.favorites.length === 0) {
     elements.prevBtn.disabled = true;
@@ -3847,7 +3847,7 @@ function enableControlsForSearchResults() {
   }
 }
 
-// ==================== BANNER PARA INICIAR FAVORITOS (CAPTURA INTERACCIÓN) ====================
+// CTA banner to initiate favorites playback (captures user interaction)
 function createStartFavoritesCTA() {
   if (document.getElementById('start-favorites-cta')) return;
   const container = document.createElement('div');
@@ -4021,7 +4021,7 @@ function hideFavoritesList() {
   elements.favoritesToggle.textContent = 'Mostrar favoritos';
 }
 
-// ==================== FUNCIONES ADICIONALES ====================
+// Additional helper functions
 async function playAlbumFromFavorites(albumId) {
   if (state.isLoading) return;
   
@@ -4177,7 +4177,7 @@ async function playOptimizedRandom(genre) {
   }
 }
 
-// ==================== FUNCIONALIDAD: REPRODUCCIÓN ALEATORIA DE RESULTADOS ====================
+// Random search results playback
 async function playRandomSearchResults() {
   if (state.isLoading || state.searchResults.length === 0) return;
   
@@ -4235,7 +4235,7 @@ async function playRandomSearchResults() {
   }
 }
 
-// ==================== BARRA DE PROGRESO MEJORADA ====================
+// Enhanced progress bar interaction
 function setupProgressBarInteraction() {
   let isDragging = false;
   
@@ -4317,7 +4317,7 @@ function updateProgressBar() {
   }
 }
 
-// ==================== INICIALIZACIÓN ====================
+// Initialize application
 function startApp() {
   state.appStarted = true;
   elements.startView.classList.add('hidden');
@@ -4334,7 +4334,7 @@ function onplay(callback) {
   state.onPlayCallback = callback;
 }
 
-// ==================== REGISTRO PWA ====================
+// Register service worker and handle updates
 function registerServiceWorker() {
   if ('serviceWorker' in navigator) {
     // Solo registrar si estamos en un entorno seguro (HTTPS o localhost)
@@ -4401,7 +4401,7 @@ function registerServiceWorker() {
   }
 }
 
-// ==================== INSTALACIÓN PWA ====================
+// PWA installation prompt setup
 function setupPWAInstall() {
   let deferredPrompt;
   
@@ -4442,7 +4442,7 @@ function setupPWAInstall() {
   };
 }
 
-// ==================== NOTIFICACIONES PUSH ====================
+// Push notifications setup
 function setupPushNotifications() {
   // Solicitar permiso para notificaciones
   if ('Notification' in window && 'serviceWorker' in navigator) {
@@ -4455,7 +4455,7 @@ function setupPushNotifications() {
   }
 }
 
-// ==================== FUNCIONALIDAD OFFLINE ====================
+// Offline functionality setup
 function setupOfflineFunctionality() {
   // Detectar cambios de conectividad
   window.addEventListener('online', () => {
