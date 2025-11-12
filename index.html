@@ -962,7 +962,7 @@
             <button id="play-btn" class="play-btn" aria-label="Reproducir/Pausar">▶</button>
             <button id="next-btn" class="next-btn" aria-label="Siguiente">⏭</button>
             <button id="favorite-btn" class="favorite-btn" aria-label="Favorito">🩶</button>
-            <button id="shuffle-btn" class="shuffle-btn" aria-label="Desactivar reproducción aleatoria">S</button>
+            <button id="shuffle-favorites-btn" class="shuffle-favorites-btn" aria-label="Desactivar reproducción aleatoria de favoritos">S</button>
             <!--<button id="cast-btn" class="cast-btn" aria-label="Transmitir">C</button>-->
           </div>
           
@@ -1341,7 +1341,7 @@ class AdvancedAudioCache {
   async preloadFavorites(favorites) {
     if (!this.initialized) await this.init();
 
-  await this.loadFavoritesQueue(favorites, state.shuffle);
+    await this.loadFavoritesQueue(favorites, state.shuffleFavorites);
   }
 
   async prefetchFavorite(favorite) {
@@ -1563,7 +1563,7 @@ const elements = {
   playBtn: document.getElementById('play-btn'),
   nextBtn: document.getElementById('next-btn'),
   favoriteBtn: document.getElementById('favorite-btn'),
-    shuffleBtn: document.getElementById('shuffle-btn'),
+  shuffleFavoritesBtn: document.getElementById('shuffle-favorites-btn'),
   castBtn: document.getElementById('cast-btn'),
   genreSelect: document.getElementById('genre-select'),
   searchInput: document.getElementById('search-input'),
@@ -1600,7 +1600,7 @@ const state = {
   searchTimeout: null,
   isAndroid: /Android/.test(navigator.userAgent),
   expandedAlbums: new Set(),
-  shuffle: true,
+  shuffleFavorites: true,
   networkOnline: true,
   currentBlobUrl: null,
   autoPlaySearchResults: true,
@@ -1746,8 +1746,8 @@ class ContinuousPlaybackManager {
     
     const context = this.contextData[this.currentContext];
     
-    // Soporta shuffle tanto para 'favorites' como para 'search'
-    if ((this.currentContext === 'album' || this.currentContext === 'favorites' || this.currentContext === 'search') && state.shuffle) {
+    // Apply shuffle based on shuffleFavorites state for all contexts (album, favorites, search)
+    if ((this.currentContext === 'album' || this.currentContext === 'favorites' || this.currentContext === 'search') && state.shuffleFavorites) {
       context.currentIndex = Math.floor(Math.random() * context.items.length);
     } else {
       context.currentIndex = (context.currentIndex + 1) % context.items.length;
@@ -1800,57 +1800,43 @@ class ContinuousPlaybackManager {
 const playbackManager = new ContinuousPlaybackManager();
 
 // Load favorites from local storage and update UI
-function toggleShuffle() {
-  state.shuffle = !state.shuffle;
-
-  const context = playbackManager.getCurrentContext() || (state.favorites && state.favorites.length > 0 ? 'favorites' : 'search');
-
-  if (state.shuffle) {
-    // Activar modo aleatorio
-    if (context === 'favorites' && state.favorites.length > 0) {
-      showStatus('Reproducción aleatoria de favoritos activada', 'info', 2000);
-      loadPlaybackQueue('favorites', state.favorites, 0);
-      if (audioCache && typeof audioCache.loadFavoritesQueue === 'function') {
-        audioCache.loadFavoritesQueue(state.favorites, true);
-      }
-    } else if (context === 'search' && state.searchResults && state.searchResults.length > 0) {
-      showStatus('Reproducción aleatoria de resultados activada', 'info', 2000);
-      loadPlaybackQueue('search', state.searchResults, 0);
-      if (state.networkOnline) audioCache.preloadTracks(state.playbackQueue, true);
-    } else if (context === 'album') {
-      showStatus('Reproducción aleatoria del álbum activada', 'info', 2000);
-      // When enabling shuffle within an album, refill playback queue accordingly
-      if (audioCache && typeof audioCache.loadFavoritesQueue === 'function') {
-        // reuse favorites loader to prefetch shuffled album tracks if needed
-        audioCache.loadFavoritesQueue(playbackManager.contextData.album.items || [], true);
-      }
-    } else {
-      showStatus('Reproducción aleatoria activada', 'info', 2000);
+function loadFavorites() {
+  try {
+    const favorites = localStorage.getItem('resonate_favorites');
+    if (favorites) {
+      state.favorites = JSON.parse(favorites);
+      
+      // Precargar favoritos en cola FIFO
+      audioCache.preloadFavorites(state.favorites);
     }
-  } else {
-    // Desactivar modo aleatorio: volver a modo secuencial
-    if (context === 'favorites' && state.favorites.length > 0) {
-      showStatus('Reproducción aleatoria de favoritos desactivada', 'info', 2000);
-      const ctx = playbackManager.contextData['favorites'] || { currentIndex: 0, items: state.favorites };
-      const currentIndex = typeof ctx.currentIndex === 'number' ? ctx.currentIndex : 0;
-      loadPlaybackQueue('favorites', ctx.items.length ? ctx.items : state.favorites, currentIndex + 1);
-    } else if (context === 'search' && state.searchResults && state.searchResults.length > 0) {
-      showStatus('Reproducción secuencial de resultados activada', 'info', 2000);
-      const ctx = playbackManager.contextData['search'] || { currentIndex: 0, items: state.searchResults };
-      const currentIndex = typeof ctx.currentIndex === 'number' ? ctx.currentIndex : 0;
-      loadPlaybackQueue('search', ctx.items.length ? ctx.items : state.searchResults, currentIndex + 1);
-    } else if (context === 'album') {
-      showStatus('Reproducción secuencial de álbum activada', 'info', 2000);
-      // When disabling shuffle for an album, ensure the next track follows album order
-      const ctx = playbackManager.contextData.album || { currentIndex: 0, items: [] };
-      const currentIndex = typeof ctx.currentIndex === 'number' ? ctx.currentIndex : 0;
-      // refill playback queue sequentially from album
-      loadPlaybackQueue('album', ctx.items.length ? ctx.items : [], currentIndex + 1);
-    } else {
-      showStatus('Reproducción secuencial activada', 'info', 2000);
-    }
+    
+    // Actualizar estado del botón de reproducción
+    updatePlayButtonState();
+  } catch (e) {
+    state.favorites = [];
+    updatePlayButtonState();
   }
 }
+function saveFavorites() {
+  try {
+    const payload = JSON.stringify(state.favorites || []);
+    localStorage.setItem('resonate_favorites', payload);
+    // Request preload/update of favorites in cache if available
+    if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.preloadFavorites === 'function') {
+      audioCache.preloadFavorites(state.favorites || []);
+    }
+  } catch (err) {
+    console.error('Error saving favorites:', err);
+  }
+}
+
+function isTrackFavorite(track) {
+  if (!track || !track.url) return false;
+  return state.favorites.some(fav => fav.url === track.url);
+}
+
+function toggleFavorite(track) {
+  if (!track || !track.url) return;
   
   const isFavorite = isTrackFavorite(track);
   
@@ -2045,13 +2031,17 @@ function hideSearchResults() {
 
 function updateShuffleButton() {
   const ctx = playbackManager.getCurrentContext();
-  const noun = ctx === 'search' ? 'resultados de búsqueda' : ctx === 'album' ? 'álbum' : 'favoritos';
-  if (state.shuffle) {
-    if (elements.shuffleBtn) elements.shuffleBtn.classList.add('active');
-    if (elements.shuffleBtn) elements.shuffleBtn.setAttribute('aria-label', `Desactivar reproducción aleatoria de ${noun}`);
+  let noun = ctx === 'search' ? 'resultados de búsqueda' : ctx === 'album' ? 'álbum' : 'favoritos';
+  
+  // Shuffle button is always enabled for all contexts
+  elements.shuffleFavoritesBtn.disabled = false;
+  
+  if (state.shuffleFavorites) {
+    elements.shuffleFavoritesBtn.classList.add('active');
+    elements.shuffleFavoritesBtn.setAttribute('aria-label', `Desactivar reproducción aleatoria de ${noun}`);
   } else {
-    if (elements.shuffleBtn) elements.shuffleBtn.classList.remove('active');
-    if (elements.shuffleBtn) elements.shuffleBtn.setAttribute('aria-label', `Activar reproducción aleatoria de ${noun}`);
+    elements.shuffleFavoritesBtn.classList.remove('active');
+    elements.shuffleFavoritesBtn.setAttribute('aria-label', `Activar reproducción aleatoria de ${noun}`);
   }
 }
 
@@ -2067,7 +2057,7 @@ async function loadPlaybackQueue(context, items, startIndex = 0) {
   const queueSize = 10;
   // Queue behavior by context and shuffle mode
   if (context === 'favorites') {
-    if (state.shuffle) {
+    if (state.shuffleFavorites) {
       // Favorites random mode: load random selection for FIFO queue
       const shuffled = [...items].sort(() => Math.random() - 0.5);
       state.playbackQueue = shuffled.slice(0, queueSize);
@@ -2079,7 +2069,7 @@ async function loadPlaybackQueue(context, items, startIndex = 0) {
       }
     }
   } else if (context === 'search') {
-    if (state.shuffle) {
+    if (state.shuffleFavorites) {
       // Search random mode: shuffle and play all results
       const shuffledAll = [...items].sort(() => Math.random() - 0.5);
       state.playbackQueue = shuffledAll.slice();
@@ -2105,11 +2095,44 @@ async function loadPlaybackQueue(context, items, startIndex = 0) {
 }
 
 function toggleShuffleFavorites() {
-  // Backward-compatible wrapper for legacy name
-  return toggleShuffle();
-}
+  state.shuffleFavorites = !state.shuffleFavorites;
 
-updateShuffleButton();
+  const context = playbackManager.getCurrentContext() || (state.favorites && state.favorites.length > 0 ? 'favorites' : 'search');
+
+  if (state.shuffleFavorites) {
+    // Activar modo aleatorio
+    if (context === 'favorites' && state.favorites.length > 0) {
+      showStatus('Reproducción aleatoria de favoritos activada', 'info', 2000);
+      loadPlaybackQueue('favorites', state.favorites, 0);
+      if (audioCache && typeof audioCache.loadFavoritesQueue === 'function') {
+        audioCache.loadFavoritesQueue(state.favorites, true);
+      }
+    } else if (context === 'search' && state.searchResults && state.searchResults.length > 0) {
+      showStatus('Reproducción aleatoria de resultados activada', 'info', 2000);
+      loadPlaybackQueue('search', state.searchResults, 0);
+      if (state.networkOnline) audioCache.preloadTracks(state.playbackQueue, true);
+    } else {
+      showStatus('Reproducción aleatoria activada', 'info', 2000);
+    }
+  } else {
+    // Desactivar modo aleatorio: volver a modo secuencial
+    if (context === 'favorites' && state.favorites.length > 0) {
+      showStatus('Reproducción aleatoria de favoritos desactivada', 'info', 2000);
+      const ctx = playbackManager.contextData['favorites'] || { currentIndex: 0, items: state.favorites };
+      const currentIndex = typeof ctx.currentIndex === 'number' ? ctx.currentIndex : 0;
+      loadPlaybackQueue('favorites', ctx.items.length ? ctx.items : state.favorites, currentIndex + 1);
+    } else if (context === 'search' && state.searchResults && state.searchResults.length > 0) {
+      showStatus('Reproducción secuencial de resultados activada', 'info', 2000);
+      const ctx = playbackManager.contextData['search'] || { currentIndex: 0, items: state.searchResults };
+      const currentIndex = typeof ctx.currentIndex === 'number' ? ctx.currentIndex : 0;
+      loadPlaybackQueue('search', ctx.items.length ? ctx.items : state.searchResults, currentIndex + 1);
+    } else {
+      showStatus('Reproducción aleatoria desactivada', 'info', 2000);
+    }
+  }
+
+  updateShuffleButton();
+}
 
 // Fetch with timeout for network operations
 async function fetchWithTimeout(resource, options = {}) {
@@ -3549,6 +3572,36 @@ async function playNextInContext() {
   const currentTrackUrl = state.currentTrack?.url;
 
   try {
+    const context = playbackManager.getCurrentContext();
+    
+    // ALBUMS: Play next track based on shuffle state (sequential if shuffle off, random if shuffle on)
+    if (context === 'album') {
+      const albumContext = playbackManager.contextData.album;
+      const nextItem = playbackManager.getNextTrack();
+      
+      if (nextItem && albumContext.currentIndex < albumContext.items.length) {
+        await playAudioTrackOptimized(nextItem, playbackManager.getCurrentAlbumId(), albumContext.currentIndex, albumContext.items.length);
+        return;
+      } else if (albumContext.currentIndex >= albumContext.items.length - 1) {
+        // Album finished, check if we should continue with next search result
+        if (state.albumOrigin === 'search') {
+          const currentAlbumId = playbackManager.getCurrentAlbumId();
+          const currentIndex = state.searchResults.findIndex(item => item.identifier === currentAlbumId);
+          
+          if (currentIndex !== -1 && currentIndex < state.searchResults.length - 1) {
+            const nextResult = state.searchResults[currentIndex + 1];
+            showStatus('Continuando con siguiente resultado de búsqueda...', 'info', 2000);
+            
+            playbackManager.setContext('search', state.searchResults, currentIndex + 1);
+            await playOptimizedSearchResult(nextResult, currentIndex + 1, state.searchResults);
+            return;
+          }
+        }
+        showStatus('Fin del álbum', 'info', 2000);
+        return;
+      }
+    }
+    
     // Always play from FIFO queue if tracks available
     if (state.playbackQueue.length > 0) {
       const nextTrack = state.playbackQueue[0];
@@ -3578,8 +3631,6 @@ async function playNextInContext() {
         // Continuar con el flujo normal si hay error
       }
     }
-
-    const context = playbackManager.getCurrentContext();
     
     // Si estamos en un contexto de búsqueda con playlist precargada
     if (context === 'searchPlaylist' && state.autoPlaySearchResults) {
@@ -3591,31 +3642,6 @@ async function playNextInContext() {
       const nextItem = playbackManager.getNextTrack();
       await playAudioTrackOptimized(nextItem, nextItem.id, 0, 1);
       return;
-    }
-    
-    // Si estamos en un álbum de búsqueda
-    if (context === 'album' && state.albumOrigin === 'search') {
-      const albumContext = playbackManager.contextData.album;
-      
-      if (albumContext.currentIndex >= albumContext.items.length - 1) {
-  console.debug('End of album for search result, continuing to next result...');
-        
-        const currentAlbumId = playbackManager.getCurrentAlbumId();
-        const currentIndex = state.searchResults.findIndex(item => item.identifier === currentAlbumId);
-        
-        if (currentIndex !== -1 && currentIndex < state.searchResults.length - 1) {
-          const nextResult = state.searchResults[currentIndex + 1];
-          showStatus('Continuando con siguiente resultado de búsqueda...', 'info', 2000);
-          
-          playbackManager.setContext('search', state.searchResults, currentIndex + 1);
-          
-          await playOptimizedSearchResult(nextResult, currentIndex + 1, state.searchResults);
-          return;
-        } else {
-          showStatus('Fin de los resultados de búsqueda', 'info', 2000);
-          return;
-        }
-      }
     }
     
     // Para otros contextos, usar el comportamiento de precarga existente
@@ -3682,9 +3708,6 @@ async function playNextInContext() {
         }
         
         await playAudioTrackOptimized(track, nextItem.id, nextItem.trackIndex, nextItem.totalTracks);
-      } else if (context === 'album') {
-        const ctx = playbackManager.contextData.album;
-        await playAudioTrackOptimized(nextItem, playbackManager.getCurrentAlbumId(), ctx.currentIndex, ctx.items.length);
       }
       
     } catch (error) {
@@ -3785,25 +3808,25 @@ function updatePlayButtonState() {
     elements.playBtn.disabled = true;
     elements.nextBtn.disabled = true;
     elements.favoriteBtn.disabled = true;
-    if (elements.shuffleBtn) elements.shuffleBtn.disabled = true;
+    elements.shuffleFavoritesBtn.disabled = true;
     elements.playBtn.title = 'Realiza una búsqueda para comenzar';
     elements.prevBtn.title = 'Realiza una búsqueda para comenzar';
     elements.nextBtn.title = 'Realiza una búsqueda para comenzar';
     elements.favoriteBtn.title = 'Realiza una búsqueda para comenzar';
-    if (elements.shuffleBtn) elements.shuffleBtn.title = 'Realiza una búsqueda para comenzar';
+    elements.shuffleFavoritesBtn.title = 'Realiza una búsqueda para comenzar';
   } else {
     // Habilitar los controles relevantes cuando haya favoritos
-  if (elements.prevBtn) elements.prevBtn.disabled = false;
+    if (elements.prevBtn) elements.prevBtn.disabled = false;
     if (elements.playBtn) elements.playBtn.disabled = false;
     if (elements.nextBtn) elements.nextBtn.disabled = false;
     if (elements.favoriteBtn) elements.favoriteBtn.disabled = false;
-  if (elements.shuffleBtn) elements.shuffleBtn.disabled = false;
+    if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.disabled = false;
 
     if (elements.playBtn) elements.playBtn.title = 'Reproducir';
     if (elements.prevBtn) elements.prevBtn.title = 'Pista anterior';
     if (elements.nextBtn) elements.nextBtn.title = 'Siguiente pista';
     if (elements.favoriteBtn) elements.favoriteBtn.title = 'Quitar favorito';
-    if (elements.shuffleBtn) elements.shuffleBtn.title = 'Mezclar favoritos';
+    if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.title = 'Mezclar favoritos';
   }
 }
 
@@ -3823,8 +3846,8 @@ function enableControlsForSearchResults() {
     if (elements.nextBtn) elements.nextBtn.title = 'Siguiente pista (búsqueda)';
     
     // El botón shuffle funciona con los resultados actuales
-    if (elements.shuffleBtn) elements.shuffleBtn.disabled = false;
-    if (elements.shuffleBtn) elements.shuffleBtn.title = 'Mezclar resultados';
+    if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.disabled = false;
+    if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.title = 'Mezclar resultados';
   }
 }
 
@@ -4050,7 +4073,7 @@ async function playOptimizedFavorite(favoriteIndex = 0) {
   try {
     let actualIndex;
     
-    if (state.shuffle) {
+    if (state.shuffleFavorites) {
       actualIndex = Math.floor(Math.random() * state.favorites.length);
     } else {
       actualIndex = favoriteIndex >= 0 ? favoriteIndex : 0;
@@ -4556,8 +4579,8 @@ async function initializeApp() {
     });
   }
 
-  if (elements.shuffleBtn) {
-    elements.shuffleBtn.addEventListener('click', toggleShuffle);
+  if (elements.shuffleFavoritesBtn) {
+    elements.shuffleFavoritesBtn.addEventListener('click', toggleShuffleFavorites);
   }
 
   if (elements.prevBtn) {
@@ -4658,9 +4681,7 @@ async function initializeApp() {
   window.playOptimizedFavorite = playOptimizedFavorite;
   window.playAlbumFromFavorites = playAlbumFromFavorites;
   window.playSpecificTrack = playSpecificTrack;
-  // New name for external access; keep legacy name for compatibility
-  window.toggleShuffle = toggleShuffle;
-  window.toggleShuffleFavorites = toggleShuffle;
+  window.toggleShuffleFavorites = toggleShuffleFavorites;
   window.addAlbumToFavorites = addAlbumToFavorites;
   window.removeAlbumFromFavorites = removeAlbumFromFavorites;
   window.isAlbumInFavorites = isAlbumInFavorites;
