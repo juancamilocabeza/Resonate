@@ -4,17 +4,17 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Resonate Player</title>
-    <meta name="description" content="Resonate Player - Es un reproductor de multimedia online, que te permite descubrir y sorprenderte con contenidos que te imaginas, disfruta de una experiencia sin interrupciones en cualquier dispositivo.">
-    <meta name="keywords" content="Resonate, reproductor multimedia, música online, PWA música, música gratis, playlists, música offline">
+    <meta name="description" content="Reproductor multimedia, que te permite descubrir y disfrutar contenidos libre y privada">
+    <meta name="keywords" content="Resonate, reproductor multimedia, online, PWA, gratis, offline">
     <meta name="robots" content="index, follow">
     <meta name="author" content="Juan Cabeza">
     <meta name="theme-color" content="#000000">
-    <link rel="icon" type="image/png" href="icons/icon-192x192.png">
+    <link rel="icon" type="image/png" href="icons/favicon.svg">
     <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="msapplication-TileColor" content="#000000">
   <!-- Apple touch icon (use a transparent PNG so the black background stands out) -->
-  <link rel="apple-touch-icon" href="icons/icon-512x512.png">
+  <link rel="apple-touch-icon" href="icons/favicon.svg">
     <style>
       :root {
         --bg: #000;
@@ -1014,7 +1014,7 @@
 // Main configuration
 const SEARCH_CONFIG = {
   maxResults: 50,
-  resultsPerPage: 8,
+  resultsPerPage: 10,
   timeout: 10000,
   enableLazyLoading: true,
   cacheDuration: 10 * 60 * 1000,
@@ -1303,9 +1303,40 @@ class AdvancedAudioCache {
     setInterval(() => {
       if (state.isLoading) {
         console.warn('state.isLoading stuck, resetting...');
+
+        // Attempt to abort any pending network fetch associated with loading
+        try {
+          if (state.lastFetchController && typeof state.lastFetchController.abort === 'function') {
+            state.lastFetchController.abort();
+          }
+        } catch (e) {
+          console.warn('Error aborting pending fetch during loading safety:', e);
+        } finally {
+          try { state.lastFetchController = null; } catch (e) {}
+        }
+
+        // Try to recover audio element state
+        try {
+          if (elements.audio) {
+            // Pause and clear source to break any stuck loading
+            elements.audio.pause();
+            if (state.currentBlobUrl) {
+              try { URL.revokeObjectURL(state.currentBlobUrl); } catch (e) {}
+              state.currentBlobUrl = null;
+            }
+            elements.audio.removeAttribute('src');
+            elements.audio.load();
+          }
+        } catch (e) {
+          console.warn('Error while resetting audio element during loading safety:', e);
+        }
+
+        // Reset state and UI
         state.isLoading = false;
-        elements.playBtn.disabled = false;
-        elements.playBtn.textContent = '▶';
+        try {
+          if (elements.playBtn) elements.playBtn.disabled = false;
+          if (elements.playBtn) elements.playBtn.textContent = '▶';
+        } catch (e) {}
       }
     }, 30000);
   }
@@ -1606,6 +1637,9 @@ const state = {
   autoPlaySearchResults: true,
   searchPlaylist: [],
   currentTrackListenStart: 0,
+  // Internal helpers for guarding stuck loading operations
+  lastFetchController: null,
+  loadingWatchdogId: null,
   tracksSkippedEarly: new Map(),
   preloadedFavorites: [],
   initialPreloadDone: false,
@@ -2034,7 +2068,7 @@ function updateShuffleButton() {
   let noun = ctx === 'search' ? 'resultados de búsqueda' : ctx === 'album' ? 'álbum' : 'favoritos';
   
   // Shuffle button is always enabled for all contexts
-  elements.shuffleFavoritesBtn.disabled = false;
+  elements.shuffleFavoritesBtn.enable = false;
   
   if (state.shuffleFavorites) {
     elements.shuffleFavoritesBtn.classList.add('active');
@@ -2139,6 +2173,12 @@ async function fetchWithTimeout(resource, options = {}) {
   const { timeout = 8000, ...fetchOptions } = options;
   
   const controller = new AbortController();
+  // track the controller globally so we can abort from watchdogs
+  try {
+    state.lastFetchController = controller;
+  } catch (e) {
+    // state may not be available in some rare cases during early init
+  }
   const timeoutId = setTimeout(() => {
     controller.abort();
   }, timeout);
@@ -2149,10 +2189,12 @@ async function fetchWithTimeout(resource, options = {}) {
       signal: controller.signal  
     });
     clearTimeout(timeoutId);
+    try { state.lastFetchController = null; } catch (e) {}
     return response;
   } catch (error) {
     clearTimeout(timeoutId);
-    if (error.name === 'AbortError') {
+    try { state.lastFetchController = null; } catch (e) {}
+    if (error && error.name === 'AbortError') {
       throw new Error(`Timeout: La petición tardó más de ${timeout}ms`);
     }
     throw error;
@@ -3857,7 +3899,7 @@ function createStartFavoritesCTA() {
   const container = document.createElement('div');
   container.id = 'start-favorites-cta';
   // Banner pequeño fijo en la parte inferior
-  container.style.position = 'fixed';
+  container.style.position = 'absolute';
   container.style.bottom = '16px';
   container.style.left = '50%';
   container.style.transform = 'translateX(-50%)';
@@ -3868,15 +3910,9 @@ function createStartFavoritesCTA() {
   container.style.zIndex = '9999';
 
   container.innerHTML = `
-    <div style="display:flex; align-items:center; gap:12px; background: rgba(255,255,255,0.98); padding:10px 14px; border-radius:24px; box-shadow:0 6px 18px rgba(0,0,0,0.18); max-width:calc(100% - 32px);">
-      <div style="display:flex; flex-direction:column; min-width:0;">
-        <div style="font-weight:600; font-size:14px; color:#111; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Tienes favoritos</div>
-        <div style="font-size:12px; color:#444; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Reproducir tus favoritos precargados</div>
-      </div>
-      <div style="display:flex; align-items:center; gap:8px;">
-        <button id="start-favorites-btn" style="background:#1e88e5; color:#fff; border:none; padding:8px 12px; font-size:14px; border-radius:12px; cursor:pointer;">Reproducir</button>
-        <button id="start-favorites-close" aria-label="Cerrar" style="background:transparent; border:none; color:#666; font-size:16px; cursor:pointer;">✕</button>
-      </div>
+    <div>
+      <button id="start-favorites-btn" style="background:#6ee7b7; color:#000; border:none; padding:8px 12px; font-size:14px; border-radius:12px; cursor:pointer;">Reproducir favoritos</button>
+      <button id="start-favorites-close" aria-label="Cerrar" style="background:transparent; border:none; color:#666; font-size:16px; cursor:pointer;">✕</button>
     </div>
   `;
 
@@ -4519,7 +4555,7 @@ async function initializeApp() {
           }
           showStatus(`Listo para reproducir: ${firstTrack.title}. Haz clic en el botón de reproducción.`, 'info', 3000);
           // Mostrar CTA que captura la interacción del usuario para permitir autoplay
-          showStartFavoritesCTA();
+          //showStartFavoritesCTA();
         }
       } catch (error) {
   console.error('Error preparing favorites:', error);
