@@ -281,7 +281,7 @@
       }
 
       .favorites-header {
-        display: none;
+        display: flex;
         justify-content: space-between;
         align-items: center;
         margin-bottom: 5px;
@@ -930,8 +930,7 @@
      
       <div class="favorites-section">
         <div class="favorites-header">
-          <div class="favorites-label">Favoritos</div>
-          <button id="favorites-toggle" class="favorites-toggle">Mostrar favoritos</button>
+          <button id="favorites-toggle" class="favorites-toggle">Mostrar favoritos❤️</button>
         </div>
         <div id="favorites-list" class="favorites-list"></div>
       </div>
@@ -962,7 +961,7 @@
             <button id="play-btn" class="play-btn" aria-label="Reproducir/Pausar">▶</button>
             <button id="next-btn" class="next-btn" aria-label="Siguiente">⏭</button>
             <button id="favorite-btn" class="favorite-btn" aria-label="Favorito">🩶</button>
-            <button id="shuffle-favorites-btn" class="shuffle-favorites-btn" aria-label="Desactivar reproducción aleatoria de favoritos">S</button>
+            <button id="shuffle-favorites-btn" class="shuffle-favorites-btn" aria-label="Desactivar reproducción aleatoria">⇄</button>
             <!--<button id="cast-btn" class="cast-btn" aria-label="Transmitir">C</button>-->
           </div>
           
@@ -3864,7 +3863,7 @@ function updatePlayButtonState() {
     if (elements.favoriteBtn) elements.favoriteBtn.disabled = false;
     if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.disabled = false;
 
-    if (elements.playBtn) elements.playBtn.title = 'Reproducir';
+    if (elements.playBtn) elements.playBtn.title = 'Reproducir favoritos';
     if (elements.prevBtn) elements.prevBtn.title = 'Pista anterior';
     if (elements.nextBtn) elements.nextBtn.title = 'Siguiente pista';
     if (elements.favoriteBtn) elements.favoriteBtn.title = 'Quitar favorito';
@@ -4005,9 +4004,9 @@ function updateFavoritesList() {
       </div>
       <div class="favorite-actions">
         <button class="favorite-play" data-id="${albumId}" data-is-album="${isAlbum}"> ▶ </button>
-        <button class="favorite-remove" data-id="${albumId}"> X </button>
+        <button class="favorite-remove" data-id="${albumId}"> ✕ </button>
       </div>
-    `;
+ `
     
     const playBtn = albumItem.querySelector('.favorite-play');
     const removeBtn = albumItem.querySelector('.favorite-remove');
@@ -4047,18 +4046,18 @@ function toggleFavoritesList() {
     
     if (state.favoritesVisible) {
         elements.favoritesList.classList.add('active');
-        elements.favoritesToggle.textContent = 'Ocultar favoritos';
+        elements.favoritesToggle.textContent = 'Ocultar favoritos ❤️';
         updateFavoritesList();
     } else {
         elements.favoritesList.classList.remove('active');
-        elements.favoritesToggle.textContent = 'Mostrar favoritos';
+        elements.favoritesToggle.textContent = 'Mostrar favoritos ❤️';
     }
 }
 
 function hideFavoritesList() {
   state.favoritesVisible = false;
   elements.favoritesList.classList.remove('active');
-  elements.favoritesToggle.textContent = 'Mostrar favoritos';
+  elements.favoritesToggle.textContent = 'Mostrar favoritos ❤️';
 }
 
 // Additional helper functions
