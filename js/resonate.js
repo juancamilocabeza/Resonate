@@ -572,6 +572,7 @@ const elements = {
   art: document.getElementById('art'),
   title: document.getElementById('title'),
   creator: document.getElementById('creator'),
+  description: document.getElementById('description'),
   statusMessages: document.getElementById('status-messages'),
   progressBar: document.getElementById('progress-bar'),
   progress: document.getElementById('progress'),
@@ -1244,7 +1245,7 @@ async function performOptimizedSearch(query, page = 0) {
       identifier: item.identifier,
       title: item.title || 'Untitled',
       creator: item.creator || 'Unknown',
-      description: item.description || '',
+      description: item.description || '', // Asegurar que la descripción esté incluida
       isAlbum: null,
       trackCount: null,
       relevanceScore: calculateRelevanceScore(item, query)
@@ -1472,6 +1473,7 @@ function createPlayableFiles(audioFiles, identifier, metadata) {
           url: `https://archive.org/download/${identifier}/${encodeURIComponent(file.name)}`,
           title: trackInfo.title || metadata.metadata?.title || file.name || identifier,
           creator: trackInfo.artist || metadata.metadata?.creator || 'Artista desconocido',
+          description: metadata.metadata?.description || '', // Añadido descripción
           id: identifier,
           format: file.name.split('.').pop()?.toUpperCase() || 'MP3',
           trackNumber: trackInfo.trackNumber,
@@ -1497,6 +1499,7 @@ function createPlayableFiles(audioFiles, identifier, metadata) {
       url: `https://archive.org/download/${identifier}/${encodeURIComponent(audioFile.name)}`,
       title: trackInfo.title || metadata.metadata?.title || audioFile.name || identifier,
       creator: trackInfo.artist || metadata.metadata?.creator || 'Artista desconocido',
+      description: metadata.metadata?.description || '', // Añadido descripción
       id: identifier,
       format: audioFile.name.split('.').pop()?.toUpperCase() || 'MP3',
       album: metadata.metadata?.title || identifier,
@@ -2275,6 +2278,23 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
     elements.creator.textContent = track.creator;
   }
 
+  // ACTUALIZACIÓN: Mostrar descripción si está disponible de forma segura
+  if (elements.description) {
+    if (track.description && track.description.trim() !== '') {
+      elements.description.textContent = track.description;
+      // Asegurar que el contenedor padre esté visible
+      if (elements.description.parentElement) {
+        elements.description.parentElement.style.display = 'block';
+      }
+    } else {
+      elements.description.textContent = '';
+      // Ocultar el contenedor si no hay descripción
+      if (elements.description.parentElement) {
+        elements.description.parentElement.style.display = 'none';
+      }
+    }
+  }
+
   await setArtwork(track, identifier);
 
   state.currentTrack = {
@@ -2288,8 +2308,6 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
   };
 
   updateFavoriteButton();
-
-  // Actualizar Media Session
   updateMediaSessionMetadata(track, identifier);
 
   showStatus(`Cargando: ${track.title}`, 'info', 0);

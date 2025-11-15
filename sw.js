@@ -55,7 +55,7 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
-  
+
   // Estrategia Cache First para archivos estáticos
   if (STATIC_FILES.some(file => url.pathname.endsWith(file))) {
     event.respondWith(
@@ -66,17 +66,17 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Estrategia Cache First para archivos de audio de archive.org
-  if (url.pathname.includes('/download/') && 
-      (url.pathname.endsWith('.mp3') || 
-       url.pathname.endsWith('.ogg') || 
-       url.pathname.endsWith('.wav'))) {
+  if (url.pathname.includes('/download/') &&
+    (url.pathname.endsWith('.mp3') ||
+      url.pathname.endsWith('.ogg') ||
+      url.pathname.endsWith('.wav'))) {
     event.respondWith(handleAudioRequest(event.request));
     return;
   }
 
   // Estrategia Stale-While-Revalidate para metadatos
-  if (url.pathname.includes('/metadata/') || 
-      url.pathname.includes('/advancedsearch.php')) {
+  if (url.pathname.includes('/metadata/') ||
+    url.pathname.includes('/advancedsearch.php')) {
     event.respondWith(handleMetadataRequest(event.request));
     return;
   }
@@ -88,14 +88,14 @@ self.addEventListener('fetch', (event) => {
 async function handleAudioRequest(request) {
   const cache = await caches.open(CACHE_NAME);
   const cachedResponse = await cache.match(request);
-  
+
   // Devolver desde caché si está disponible
   if (cachedResponse) {
     // Actualizar caché en segundo plano
     fetchAndCache(request, cache);
     return cachedResponse;
   }
-  
+
   // Si no está en caché, buscar en red y cachear
   try {
     const networkResponse = await fetch(request);
@@ -115,7 +115,7 @@ async function handleAudioRequest(request) {
 async function handleMetadataRequest(request) {
   const cache = await caches.open(METADATA_CACHE);
   const cachedResponse = await cache.match(request);
-  
+
   // Siempre intentar obtener datos frescos
   try {
     const networkResponse = await fetch(request);
