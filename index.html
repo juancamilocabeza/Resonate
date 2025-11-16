@@ -24,20 +24,18 @@
     <h1><img src="icons/favicon.svg" height="20px">&nbsp;Resonate</h1>
   </header>
   <div class="app" id="app">
-    <div class="favorites-section">
-      <div class="favorites-header">
-        <button id="favorites-toggle" class="favorites-toggle">Ver favoritos ❤️</button>
-      </div>
-      <div id="favorites-list" class="favorites-list"></div>
-    </div>
     <div class="search-section">
       <div class="search-container">
         <input type="text" id="search-input" class="search-input" placeholder="Buscar ">
+        <button id="play-all-favorites-btn" class=""
+          style="background: var(--btn); color: var(--btn); color: var(--accent)">▶❤️</button>
+        <button id="favorites-toggle" class="button">Ver ❤️</button>
       </div>
     </div>
     <div id="search-results" class="search-results">
       <div id="search-results-list" class="search-results-list"></div>
     </div>
+    <div id="favorites-list" class="favorites-list"></div>
     <div class="player-container">
       <div class="player-content" id="player-content">
         <div class="art" id="art">
@@ -53,6 +51,10 @@
           <button id="next-btn" class="next-btn" aria-label="Siguiente">⏭</button>
           <button id="favorite-btn" class="favorite-btn" aria-label="Favorito">🩶</button>
           <button id="shuffle-favorites-btn" class="shuffle-favorites-btn">⇄</button>
+          <div class="volume-control">
+            <span class="volume-icon" id="volume-icon">🔊</span>
+            <input type="range" id="volume-slider" class="volume-slider" min="0" max="1" step="0.1" value="1">
+          </div>
         </div>
         <div class="progress-section">
           <div class="progress-bar" id="progress-bar">
@@ -62,6 +64,16 @@
             <span class="current-time" id="current-time">0:00</span>
             <span class="total-time" id="total-time">0:00</span>
           </div>
+        </div>
+        <div class="genre-buttons-section">
+          <button class="genre-btn" data-genre="rock">Rock</button>
+          <button class="genre-btn" data-genre="jazz">Jazz</button>
+          <button class="genre-btn" data-genre="electronic">Electronic</button>
+          <button class="genre-btn" data-genre="classical">Classical</button>
+          <button class="genre-btn" data-genre="hiphop">Hip-Hop</button>
+          <button class="genre-btn" data-genre="latin">Latin</button>
+          <button class="genre-btn" data-genre="reggae">Reggae</button>
+          <button class="genre-btn" data-genre="alternative">Alternative</button>
         </div>
       </div>
     </div>

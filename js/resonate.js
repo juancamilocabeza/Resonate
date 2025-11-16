@@ -35,14 +35,16 @@ class AdvancedAudioCache {
         reject(request.error);
       };
 
-      request.onsuccess = () => {
+      request.onsuccess = async () => {
         this.db = request.result;
         this.initialized = true;
-        // Calculate current size after db is ready
-        this.calculateSize().then(resolve).catch((err) => {
+        try {
+          this.currentSize = await this.calculateSize();
+          resolve();
+        } catch (err) {
           console.warn('Error calculating IndexedDB size:', err);
-          resolve(0);
-        });
+          resolve();
+        }
       };
 
       request.onupgradeneeded = (event) => {
@@ -68,93 +70,6 @@ class AdvancedAudioCache {
           if (!store.indexNames.contains('fullyListened')) {
             store.createIndex('fullyListened', 'fullyListened', { unique: false });
           }
-          if (!store.indexNames.contains('isFavorite')) {
-            store.createIndex('isFavorite', 'isFavorite', { unique: false });
-          }
-          if (!store.indexNames.contains('lastAccessed')) {
-            store.createIndex('lastAccessed', 'lastAccessed', { unique: false });
-          }
-        }
-      };
-    });
-  }
-
-  async calculateSize() {
-    if (!this.db) return 0;
-    return new Promise((resolve) => {
-      try {
-        const transaction = this.db.transaction([this.storeName], 'readonly');
-        const store = transaction.objectStore(this.storeName);
-        const request = store.getAll();
-
-        request.onsuccess = () => {
-          this.currentSize = request.result.reduce((total, item) => total + (item.size || 0), 0);
-
-          if (this.currentSize > this.maxSize * 0.9) {
-            this.showStorageWarning();
-          }
-
-          resolve(this.currentSize);
-        };
-
-        request.onerror = () => resolve(0);
-      } catch (err) {
-        resolve(0);
-      }
-    });
-  }
-
-  async get(url) {
-    if (!this.initialized) await this.init();
-
-    return new Promise((resolve) => {
-      const transaction = this.db.transaction([this.storeName], 'readwrite');
-      const store = transaction.objectStore(this.storeName);
-      const request = store.get(url);
-
-      request.onsuccess = () => {
-        if (request.result) {
-          request.result.lastAccessed = Date.now();
-          request.result.playCount = (request.result.playCount || 0) + 1;
-          store.put(request.result);
-          resolve(request.result.blob);
-        } else {
-          resolve(null);
-        }
-      };
-
-      request.onerror = () => resolve(null);
-    });
-  }
-
-  async put(url, blob, updateSize = true, isFavorite = false) {
-    if (!this.initialized) await this.init();
-
-    const item = {
-      url: url,
-      blob: blob,
-      size: blob.size,
-      timestamp: Date.now(),
-      lastAccessed: Date.now(),
-      playCount: 0,
-      fullyListened: false,
-      lastPlayed: null,
-      isFavorite: isFavorite
-    };
-
-    return new Promise(async (resolve) => {
-      if (updateSize) {
-        this.currentSize += blob.size;
-        await this.ensureSpace();
-      }
-
-      const transaction = this.db.transaction([this.storeName], 'readwrite');
-      const store = transaction.objectStore(this.storeName);
-      const request = store.put(item);
-
-      request.onsuccess = () => {
-        if (isFavorite) {
-          this.addToFavoritesQueue(url);
         }
         resolve(true);
       };
@@ -176,32 +91,6 @@ class AdvancedAudioCache {
           item.fullyListened = true;
           item.lastPlayed = Date.now();
           store.put(item);
-          resolve(true);
-        } else {
-          resolve(false);
-        }
-      };
-
-      request.onerror = () => resolve(false);
-    });
-  }
-
-  async markAsFavorite(url) {
-    if (!this.initialized) await this.init();
-
-    return new Promise((resolve) => {
-      const transaction = this.db.transaction([this.storeName], 'readwrite');
-      const store = transaction.objectStore(this.storeName);
-      const request = store.get(url);
-
-      request.onsuccess = () => {
-        if (request.result) {
-          const item = request.result;
-          item.isFavorite = true;
-          item.lastAccessed = Date.now();
-          store.put(item);
-
-          this.addToFavoritesQueue(url);
           resolve(true);
         } else {
           resolve(false);
@@ -389,6 +278,106 @@ class AdvancedAudioCache {
       [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
     }
     return newArray;
+  }
+
+  async calculateSize() {
+    return new Promise((resolve) => {
+      if (!this.initialized) {
+        resolve(0);
+        return;
+      }
+
+      const transaction = this.db.transaction([this.storeName], 'readonly');
+      const store = transaction.objectStore(this.storeName);
+      const request = store.getAll();
+
+      request.onsuccess = () => {
+        const items = request.result;
+        this.currentSize = items.reduce((total, item) => total + (item.size || 0), 0);
+        resolve(this.currentSize);
+      };
+
+      request.onerror = () => {
+        console.warn('Error calculating size:', request.error);
+        resolve(0);
+      };
+    });
+  }
+
+  async get(url) {
+    if (!this.initialized) await this.init();
+
+    return new Promise((resolve) => {
+      const transaction = this.db.transaction([this.storeName], 'readwrite');
+      const store = transaction.objectStore(this.storeName);
+      const request = store.get(url);
+
+      request.onsuccess = () => {
+        const result = request.result;
+        if (result && result.blob && result.blob instanceof Blob) {
+          // Update lastAccessed time
+          result.lastAccessed = Date.now();
+          store.put(result).onerror = () => {
+            // Ignore update errors - don't fail the operation
+          };
+          resolve(result);
+        } else {
+          // Invalid or corrupted data
+          console.warn('Invalid cached data for:', url);
+          store.delete(url).onerror = () => {
+            // Ignore delete errors
+          };
+          resolve(null);
+        }
+      };
+
+      request.onerror = () => {
+        console.warn('Error retrieving from cache:', request.error);
+        resolve(null);
+      };
+    });
+  }
+
+  async put(url, blob, isInitial = false, isFavorite = false) {
+    if (!this.initialized) await this.init();
+
+    try {
+      const blobSize = blob.size;
+      const data = {
+        url,
+        blob,
+        size: blobSize,
+        timestamp: Date.now(),
+        lastAccessed: Date.now(),
+        playCount: 0,
+        lastPlayed: null,
+        fullyListened: false,
+        isFavorite
+      };
+
+      const transaction = this.db.transaction([this.storeName], 'readwrite');
+      const store = transaction.objectStore(this.storeName);
+
+      // Check if we need to make space
+      await this.ensureSpace();
+
+      const request = store.put(data);
+
+      return new Promise((resolve, reject) => {
+        request.onsuccess = () => {
+          this.currentSize += blobSize;
+          resolve(true);
+        };
+
+        request.onerror = () => {
+          console.error('Error storing in cache:', request.error);
+          reject(request.error);
+        };
+      });
+    } catch (error) {
+      console.error('Error in put operation:', error);
+      return false;
+    }
   }
 
   async ensureSpace() {
@@ -593,8 +582,11 @@ const elements = {
   searchInput: document.getElementById('search-input'),
   searchResults: document.getElementById('search-results'),
   searchResultsList: document.getElementById('search-results-list'),
+  playAllFavoritesBtn: document.getElementById('play-all-favorites-btn'),
   favoritesToggle: document.getElementById('favorites-toggle'),
   favoritesList: document.getElementById('favorites-list'),
+  volumeIcon: document.getElementById('volume-icon'),
+  volumeSlider: document.getElementById('volume-slider'),
   startView: document.getElementById('start-view'),
   startButton: document.getElementById('start-button'),
   app: document.getElementById('app'),
@@ -603,7 +595,7 @@ const elements = {
 
 // Application state
 const state = {
-  currentGenre: 'rock',
+  currentGenre: null,
   currentTrack: null,
   isLoading: false,
   favorites: [],
@@ -644,7 +636,9 @@ const state = {
   currentSearchPage: 0,
   currentSearchHasMore: false,
   currentSearchQuery: '',
-  isLoadingMore: false
+  isLoadingMore: false,
+  // Track played tracks by genre to avoid repetition
+  playedTracksByGenre: new Map()
 };
 
 function setupMediaSession() {
@@ -744,6 +738,105 @@ function setupConnectivityMonitoring() {
   });
 }
 
+// Page visibility and playback resume management
+function setupPageVisibilityHandling() {
+  let savedPlaybackState = null;
+
+  // Save playback state when app becomes hidden
+  const savePlaybackState = () => {
+    if (state.currentTrack && elements.audio && elements.audio.src) {
+      savedPlaybackState = {
+        track: state.currentTrack,
+        currentTime: elements.audio.currentTime,
+        volume: elements.audio.volume,
+        muted: elements.audio.muted,
+        playbackManager: {
+          context: playbackManager.getCurrentContext(),
+          contextData: { ...playbackManager.contextData }
+        },
+        playbackQueue: [...state.playbackQueue],
+        playbackHistory: [...state.playbackHistory],
+        wasPlaying: !elements.audio.paused,
+        timestamp: Date.now()
+      };
+
+      try {
+        localStorage.setItem('resonate_playback_state', JSON.stringify(savedPlaybackState));
+        console.debug('Playback state saved');
+      } catch (e) {
+        console.warn('Failed to save playback state:', e);
+      }
+    }
+  };
+
+  // Restore playback state when app becomes visible (only if recent)
+  const restorePlaybackState = async () => {
+    if (!savedPlaybackState) {
+      try {
+        const saved = localStorage.getItem('resonate_playback_state');
+        if (saved) {
+          savedPlaybackState = JSON.parse(saved);
+        }
+      } catch (e) {
+        console.warn('Failed to load saved playback state:', e);
+        return;
+      }
+    }
+
+    if (savedPlaybackState && state.currentTrack) {
+      // Only restore if the state is recent (within 30 minutes)
+      const age = Date.now() - (savedPlaybackState.timestamp || 0);
+      const maxAge = 30 * 60 * 1000; // 30 minutes
+
+      if (age > maxAge) {
+        console.debug('Saved playback state too old, discarding');
+        localStorage.removeItem('resonate_playback_state');
+        savedPlaybackState = null;
+        return;
+      }
+
+      // Optional: only restore if user interacted recently or if auto-resume is preferred
+      // For now, always attempt to resume to the same position
+      if (savedPlaybackState.track && savedPlaybackState.currentTime) {
+        try {
+          elements.audio.currentTime = savedPlaybackState.currentTime;
+          console.debug('Playback position restored to:', formatTime(savedPlaybackState.currentTime));
+
+          if (savedPlaybackState.volume !== undefined) {
+            elements.audio.volume = savedPlaybackState.volume;
+          }
+
+          if (savedPlaybackState.muted !== undefined) {
+            elements.audio.muted = savedPlaybackState.muted;
+          }
+
+        } catch (e) {
+          console.warn('Failed to restore playback position:', e);
+        }
+      }
+    }
+  };
+
+  // Listen for visibility changes
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      // App is hidden - save state
+      savePlaybackState();
+    } else {
+      // App became visible - optionally restore state
+      setTimeout(() => {
+        restorePlaybackState();
+      }, 100); // Small delay to ensure DOM is ready
+    }
+  });
+
+  // Also save state when page unloads
+  window.addEventListener('beforeunload', savePlaybackState);
+
+  // Also save state when PWA might be closed (pagehide is better for mobile)
+  window.addEventListener('pagehide', savePlaybackState);
+}
+
 // Continuous playback management
 class ContinuousPlaybackManager {
   constructor() {
@@ -824,6 +917,7 @@ class ContinuousPlaybackManager {
   }
 }
 
+
 const playbackManager = new ContinuousPlaybackManager();
 
 // Load favorites from local storage and update UI
@@ -843,6 +937,108 @@ function loadFavorites() {
     state.favorites = [];
     updatePlayButtonState();
   }
+}
+
+function saveFavorites() {
+  try {
+    const payload = JSON.stringify(state.favorites || []);
+    localStorage.setItem('resonate_favorites', payload);
+    // Request preload/update of favorites in cache if available
+    if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.preloadFavorites === 'function') {
+      audioCache.preloadFavorites(state.favorites || []);
+    }
+  } catch (err) {
+    console.error('Error saving favorites:', err);
+  }
+}
+
+// Volume control functions
+function loadVolume() {
+  try {
+    const savedVolume = localStorage.getItem('resonate_volume');
+    const savedMuted = localStorage.getItem('resonate_muted');
+
+    if (savedVolume !== null) {
+      const volume = parseFloat(savedVolume);
+      if (!isNaN(volume) && volume >= 0 && volume <= 1) {
+        state.currentVolume = volume;
+        elements.audio.volume = volume;
+        if (elements.volumeSlider) {
+          elements.volumeSlider.value = volume;
+        }
+      }
+    }
+
+    if (savedMuted === 'true') {
+      elements.audio.muted = true;
+      updateVolumeIcon();
+    } else {
+      elements.audio.muted = false;
+    }
+
+    updateVolumeIcon();
+  } catch (e) {
+    console.warn('Error loading volume settings:', e);
+    // Set default volume
+    elements.audio.volume = 0.7;
+    if (elements.volumeSlider) {
+      elements.volumeSlider.value = 0.7;
+    }
+    state.currentVolume = 0.7;
+  }
+}
+
+function saveVolume(volume) {
+  try {
+    localStorage.setItem('resonate_volume', volume.toString());
+    state.currentVolume = volume;
+  } catch (e) {
+    console.warn('Error saving volume:', e);
+  }
+}
+
+function saveMutedState(muted) {
+  try {
+    localStorage.setItem('resonate_muted', muted.toString());
+  } catch (e) {
+    console.warn('Error saving mute state:', e);
+  }
+}
+
+function updateVolumeIcon() {
+  if (!elements.volumeIcon || !elements.volumeSlider) return;
+
+  const volume = elements.audio.muted ? 0 : elements.volumeSlider.value;
+  const volumeLevel = parseFloat(volume);
+
+  if (elements.audio.muted || volumeLevel === 0) {
+    elements.volumeIcon.textContent = '🔇'; // Muted
+  } else if (volumeLevel < 0.3) {
+    elements.volumeIcon.textContent = '🔈'; // Low volume
+  } else if (volumeLevel < 0.7) {
+    elements.volumeIcon.textContent = '🔉'; // Medium volume
+  } else {
+    elements.volumeIcon.textContent = '🔊'; // High volume
+  }
+}
+
+function toggleMute() {
+  const isMuted = !elements.audio.muted;
+  elements.audio.muted = isMuted;
+
+  if (isMuted) {
+    // When muting, remember the current volume for unmuting
+    state.currentVolume = elements.volumeSlider.value;
+    saveMutedState(true);
+  } else {
+    // When unmuting, restore the previous volume
+    elements.audio.volume = state.currentVolume;
+    elements.volumeSlider.value = state.currentVolume;
+    saveMutedState(false);
+  }
+
+  updateVolumeIcon();
+  showStatus(isMuted ? 'Silenciado' : 'Volumen activado', 'info', 1000);
 }
 function saveFavorites() {
   try {
@@ -1316,9 +1512,9 @@ async function performOptimizedSearch(query, page = 0) {
 function calculateRelevanceScore(item, query) {
   let score = 0;
   const queryLower = query.toLowerCase();
-  const titleLower = (item.title || '').toLowerCase();
-  const creatorLower = (item.creator || '').toLowerCase();
-  const descriptionLower = (item.description || '').toLowerCase();
+  const titleLower = safeToLowerCase(item.title);
+  const creatorLower = safeToLowerCase(item.creator);
+  const descriptionLower = safeToLowerCase(item.description);
 
   // Puntos por coincidencia exacta en título
   if (titleLower.includes(queryLower)) {
@@ -1348,28 +1544,19 @@ function calculateRelevanceScore(item, query) {
   return score;
 }
 
+// Función segura para convertir valores a string y luego a minúsculas
+function safeToLowerCase(value) {
+  if (typeof value === 'string') {
+    return value.toLowerCase();
+  }
+  if (value == null) {
+    return '';
+  }
+  // Convertir array u objeto a string si es necesario
+  return String(value).toLowerCase();
+}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-async function fetchOptimizedPlayableFiles(identifier) {
+async function fetchOptimizedPlayableFiles(identifier, timeoutMs = 10000) {
   const cached = enhancedCache.get('metadata', identifier);
 
   if (cached) {
@@ -1379,7 +1566,7 @@ async function fetchOptimizedPlayableFiles(identifier) {
   const url = `https://archive.org/metadata/${identifier}`;
 
   try {
-    const response = await fetchWithTimeout(url, { timeout: 10000 });
+    const response = await fetchWithTimeout(url, { timeout: timeoutMs });
     if (!response.ok) throw new Error('Error al cargar metadatos');
     const metadata = await response.json();
 
@@ -1574,11 +1761,11 @@ async function loadAudioWithCache(track) {
 
   try {
     // Intentar obtener de la caché primero
-    const cachedBlob = await audioCache.get(track.url);
+    const cacheResult = await audioCache.get(track.url);
 
-    if (cachedBlob) {
+    if (cacheResult && cacheResult.blob) {
       console.debug('Playing from cache:', track.title);
-      const blobUrl = URL.createObjectURL(cachedBlob);
+      const blobUrl = URL.createObjectURL(cacheResult.blob);
       return blobUrl;
     }
 
@@ -1657,6 +1844,15 @@ function setupListenTracking() {
       // Si se escuchó al menos el 90% de la pista, marcarla como escuchada completamente
       if (listenDuration >= trackDuration * 0.9) {
         await audioCache.markAsFullyListened(state.currentTrack.url);
+        // Track played track by genre to avoid repetition
+        if (playbackManager.getCurrentContext() === 'genre' && state.currentTrack.id) {
+          if (!state.playedTracksByGenre.has(state.currentGenre)) {
+            state.playedTracksByGenre.set(state.currentGenre, new Set());
+          }
+          const genrePlayed = state.playedTracksByGenre.get(state.currentGenre);
+          genrePlayed.add(state.currentTrack.id);
+          console.debug(`Registered track ${state.currentTrack.id} as played for genre ${state.currentGenre}`);
+        }
         // Replace in FIFO when playback completes
         if (isTrackFavorite(state.currentTrack)) {
           await audioCache.replaceFavoritesQueueItem(state.currentTrack.url, null, state.favorites);
@@ -1716,12 +1912,15 @@ function setupSearchFocusBehavior() {
   elements.searchInput.addEventListener('focus', () => {
     if (isCleaning) return;
 
-    // Mostrar resultados solo si hay coincidencia exacta con la última búsqueda
+    // Restore search results when refocusing if search term still matches
     if (state.searchResults.length > 0 &&
       elements.searchInput.value.trim() === state.currentSearchQuery &&
       state.currentSearchQuery.length > 0) {
       elements.searchResults.classList.add('active');
       state.searchActive = true;
+
+      // Auto-hide favorites when search is active
+      hideFavoritesList();
     }
   });
 
@@ -1738,6 +1937,11 @@ function setupSearchFocusBehavior() {
     else {
       isCleaning = false;
       displaySearchResults();
+
+      // Auto-hide favorites when search is active
+      if (currentQuery.length > 0) {
+        hideFavoritesList();
+      }
     }
 
     lastSearchQuery = currentQuery;
@@ -2427,45 +2631,11 @@ async function setArtwork(track, identifier) {
   };
 
   img.onerror = () => {
-    setGenericArtwork();
+    // No genre-specific artwork generation: just show placeholder
+    elements.art.innerHTML = '<span class="hint">Sin portada</span>';
   };
 
   img.src = archiveCoverUrl;
-}
-
-function setGenericArtwork() {
-  const genreColors = {
-    classical: '#8B4513',
-    jazz: '#FF6B35',
-    rock: '#DC143C',
-    electronic: '#00CED1',
-    reggae: '#FFD700',
-    blues: '#1E90FF',
-    hiphop: '#FF1493',
-    pop: '#32CD32',
-    metal: '#2F4F4F',
-    folk: '#DAA520',
-    country: '#FF8C00',
-    rnb: '#9932CC',
-    latin: '#FF4500',
-    ambient: '#4682B4',
-    punk: '#00FF00',
-    funk: '#FF69B4',
-    soul: '#FFD700',
-    disco: '#FF00FF',
-    indie: '#87CEEB',
-    alternative: '#DA70D6'
-  };
-
-  const color = genreColors[state.currentGenre] || '#6ee7b7';
-  const genreName = elements.genreSelect.options[elements.genreSelect.selectedIndex].text;
-
-  elements.art.innerHTML = `
-    <div style="width: 100%; height: 100%; background: ${color}; display: flex; align-items: center; justify-content: center; color: white; flex-direction: column; padding: 20px; text-align: center;">
-      <div style="font-size: 48px; margin-bottom: 10px;">♫</div>
-      <div style="font-size: 14px; font-weight: 600;">${genreName}</div>
-    </div>
-  `;
 }
 
 // Playback control functions
@@ -2895,6 +3065,45 @@ function enableControlsForSearchResults() {
   }
 }
 
+function enableControlsForGenrePlayback() {
+  // Habilitar controles de reproducción cuando los botones de género estén disponibles
+  const genreButtons = document.querySelectorAll('.genre-btn');
+
+  if (genreButtons.length > 0 && elements.playBtn) {
+    elements.playBtn.disabled = false;
+
+    // Si hay un género actual seleccionado, actualizar el title
+    if (state.currentGenre) {
+      elements.playBtn.title = `Reproducir ${state.currentGenre}`;
+    } else {
+      elements.playBtn.title = 'Selecciona un género para comenzar';
+    }
+
+    if (elements.favoriteBtn) {
+      elements.favoriteBtn.disabled = false;
+      elements.favoriteBtn.title = 'Agregar a favoritos';
+    }
+
+    // Los botones prev/next funcionan dentro del contexto de género
+    if (elements.prevBtn) {
+      elements.prevBtn.disabled = false;
+      elements.prevBtn.title = 'Pista anterior (género)';
+    }
+    if (elements.nextBtn) {
+      elements.nextBtn.disabled = false;
+      elements.nextBtn.title = 'Siguiente pista (género)';
+    }
+
+    // El botón shuffle funciona con el género actual
+    if (elements.shuffleFavoritesBtn) {
+      elements.shuffleFavoritesBtn.disabled = false;
+      elements.shuffleFavoritesBtn.title = 'Mezclar pistas de género';
+    }
+
+    // No hay generador de artwork genérico para géneros específicos
+  }
+}
+
 // CTA banner to initiate favorites playback (captures user interaction)
 function createStartFavoritesCTA() {
   if (document.getElementById('start-favorites-cta')) return;
@@ -3056,18 +3265,18 @@ function toggleFavoritesList() {
 
   if (state.favoritesVisible) {
     elements.favoritesList.classList.add('active');
-    elements.favoritesToggle.textContent = 'Ocultar favoritos ❤️';
+    elements.favoritesToggle.textContent = 'Ocultar ❤️';
     updateFavoritesList();
   } else {
     elements.favoritesList.classList.remove('active');
-    elements.favoritesToggle.textContent = 'Ver favoritos ❤️';
+    elements.favoritesToggle.textContent = 'Ver ❤️';
   }
 }
 
 function hideFavoritesList() {
   state.favoritesVisible = false;
   elements.favoritesList.classList.remove('active');
-  elements.favoritesToggle.textContent = 'Ver favoritos ❤️';
+  elements.favoritesToggle.textContent = 'Ver ❤️';
 }
 
 // Additional helper functions
@@ -3189,6 +3398,138 @@ async function playOptimizedFavorite(favoriteIndex = 0) {
   }
 }
 
+async function playGenreFromFIFO(genre) {
+  if (state.isLoading) return;
+
+  state.isLoading = true;
+  elements.playBtn.disabled = true;
+  elements.playBtn.innerHTML = '<span class="loader"></span>';
+
+  try {
+    // Search for genre results
+    const simpleQuery = `${genre}`;
+    const items = await performOptimizedSearch(simpleQuery, 0);
+
+    if (items.results.length === 0) {
+      throw new Error(`No se encontraron pistas para ${genre}. Intenta con otro género`);
+    }
+
+    // Filter out already played tracks for this genre to avoid repetition
+    const playedTracksForGenre = state.playedTracksByGenre.get(genre) || new Set();
+    const availableResults = items.results.filter(result => !playedTracksForGenre.has(result.identifier));
+
+    // If all results were already played, reset the history for this genre
+    let filteredResults = availableResults;
+    if (filteredResults.length === 0) {
+      console.debug(`All ${genre} tracks played, resetting history for fresh start`);
+      state.playedTracksByGenre.set(genre, new Set());
+      filteredResults = items.results;
+    }
+
+    // Pre-filter results to ensure they have playable files
+    const validatedResults = [];
+    showStatus(`Validando pistas disponibles para ${genre}...`, 'info', 0);
+
+    // Parallel validation with concurrency limit and extended timeout
+    const concurrencyLimit = 6;
+    const extendedTimeoutMs = 15000; // Extended timeout for validation
+
+    for (let i = 0; i < filteredResults.length; i += concurrencyLimit) {
+      const batch = filteredResults.slice(i, i + concurrencyLimit);
+      const batchPromises = batch.map(async (result) => {
+        try {
+          const files = await fetchOptimizedPlayableFiles(result.identifier, extendedTimeoutMs);
+          if (files.length > 0) {
+            return result;
+          }
+        } catch (error) {
+          console.debug(`Skipping ${result.identifier}: ${error.message}`);
+        }
+        return null;
+      });
+
+      const batchResults = await Promise.allSettled(batchPromises);
+
+      for (const result of batchResults) {
+        if (result.status === 'fulfilled' && result.value) {
+          validatedResults.push(result.value);
+          // Stop after collecting enough valid results
+          if (validatedResults.length >= 20) break;
+        }
+      }
+
+      // Break early if we have enough results
+      if (validatedResults.length >= 20) break;
+    }
+
+    if (validatedResults.length === 0) {
+      throw new Error(`No se encontraron pistas reproducibles para ${genre}`);
+    }
+
+    // Set context for continuous playback
+    playbackManager.setContext('genre', validatedResults, -1); // Start at -1 so first getNextTrack() returns index 0
+
+    // Load genre results into FIFO queue - ALWAYS use shuffle mode for genres
+    await loadPlaybackQueueGenre(validatedResults, 0);
+
+    if (state.playbackQueue.length === 0) {
+      throw new Error('No se pudieron cargar pistas en la cola');
+    }
+
+    // Find first playable track
+    let track = null;
+    let trackIdentifier = null;
+
+    for (const result of validatedResults) {
+      try {
+        const files = await fetchOptimizedPlayableFiles(result.identifier);
+        if (files.length > 0 && files[0].url) {
+          track = files[0];
+          trackIdentifier = result.identifier;
+          break;
+        }
+      } catch (error) {
+        console.debug(`Error fetching ${result.identifier}:`, error);
+      }
+    }
+
+    if (!track) {
+      throw new Error('No se pudo encontrar una pista reproducible');
+    }
+
+    showStatus(`Encontradas ${validatedResults.length} pistas reproducibles para ${genre}`, 'info', 2000);
+    await playAudioTrackOptimized(track, trackIdentifier, 0, 1);
+
+  } catch (error) {
+    console.error('Error en playGenreFromFIFO:', error);
+    showStatus(`Error: ${error.message}`, 'error');
+  } finally {
+    state.isLoading = false;
+    elements.playBtn.disabled = false;
+    elements.playBtn.textContent = '||';
+  }
+}
+
+// Special loadPlaybackQueue function for genres that always shuffles
+async function loadPlaybackQueueGenre(validatedResults, startIndex) {
+  state.playbackQueue = [];
+
+  if (!validatedResults || validatedResults.length === 0) {
+    return;
+  }
+
+  const queueSize = 10;
+
+  // Genres ALWAYS play in shuffle (random) mode
+  const shuffled = [...validatedResults].sort(() => Math.random() - 0.5);
+  state.playbackQueue = shuffled.slice(0, queueSize);
+
+  // Preload tracks from queue
+  if (state.networkOnline) {
+    audioCache.preloadTracks(state.playbackQueue, true);
+  }
+}
+
 async function playOptimizedRandom(genre) {
   if (state.isLoading) return;
 
@@ -3200,20 +3541,27 @@ async function playOptimizedRandom(genre) {
   state.isPlayingFavorites = false;
 
   try {
+    console.log('Iniciando búsqueda de género:', genre);
     showStatus(`Buscando ${genre}...`, 'info', 0);
 
     const simpleQuery = `${genre}`;
+    console.log('Realizando búsqueda con query:', simpleQuery);
     const items = await performOptimizedSearch(simpleQuery, 0);
+    console.log('Resultados de búsqueda:', items);
 
     if (items.results.length === 0) {
       throw new Error(`No se encontraron pistas para ${genre}. Intenta con otro género`);
     }
 
-    playbackManager.setContext('genre', items.results);
+    console.log('Configurando contexto para reproducción de género');
+    // Set context for continuous playback
+    playbackManager.setContext('genre', items.results, -1); // Start at -1 so first getNextTrack() returns index 0
 
     // Cargar cola FIFO con los resultados
     loadPlaybackQueue('genre', items.results, 0);
 
+    console.log('Iniciando reproducción del primer resultado');
+    // Play the first track immediately
     await playNextInContext();
 
   } catch (error) {
@@ -3544,6 +3892,7 @@ async function initializeApp() {
   audioCache.setupLoadingSafety();
 
   setupConnectivityMonitoring();
+  setupPageVisibilityHandling();
   setupListenTracking();
 
   // Preparar reproducción de favoritos (sin autoplay por restricciones del navegador)
@@ -3585,6 +3934,35 @@ async function initializeApp() {
   }
 
   // Configurar elementos opcionales - SOLO SI EXISTEN
+  if (elements.playAllFavoritesBtn) {
+    elements.playAllFavoritesBtn.addEventListener('click', async () => {
+      if (state.favorites.length === 0) {
+        showStatus('No hay favoritos para reproducir', 'info');
+        return;
+      }
+
+      state.userInteracted = true;
+      showStatus('Reproduciendo todos los favoritos', 'info');
+      await playFromFavoritesQueue();
+    });
+  }
+
+  // Volume control event listeners
+  if (elements.volumeSlider) {
+    elements.volumeSlider.addEventListener('input', (e) => {
+      const volume = parseFloat(e.target.value);
+      if (!isNaN(volume)) {
+        elements.audio.volume = volume;
+        saveVolume(volume);
+        updateVolumeIcon();
+      }
+    });
+  }
+
+  if (elements.volumeIcon) {
+    elements.volumeIcon.addEventListener('click', toggleMute);
+  }
+
   if (elements.favoritesToggle) {
     elements.favoritesToggle.addEventListener('click', toggleFavoritesList);
   }
@@ -3662,16 +4040,90 @@ async function initializeApp() {
   }
 
   if (elements.genreSelect) {
-    elements.genreSelect.addEventListener('change', (e) => {
-      state.currentGenre = e.target.value;
+    elements.genreSelect.addEventListener('change', async (e) => {
+      const selectedGenre = e.target.value;
+
+      // Auto-hide favorites when genre is selected
+      hideFavoritesList();
+
+      state.currentGenre = selectedGenre;
       state.userInteracted = true;
       state.retryCount = 0;
       state.isPlayingFavorites = false;
-      if (state.isInitialized) {
-        playOptimizedRandom(state.currentGenre);
+      state.albumOrigin = null;
+
+      // Wait for app initialization if needed
+      if (!state.isInitialized) {
+        state.isInitialized = true;
+        enableControlsForGenrePlayback();
+        updateShuffleButton();
+      }
+
+      try {
+        // Stop current playback
+        elements.audio.pause();
+        elements.audio.currentTime = 0;
+
+        // Clear any delayed playback
+        if (state.lastFetchController) {
+          state.lastFetchController.abort();
+        }
+
+        // Load genre results into FIFO queue and start playing
+        await playGenreFromFIFO(selectedGenre);
+      } catch (error) {
+        console.error('Error playing genre:', error);
+        showStatus('Error reproduciendo género', 'error', 3000);
       }
     });
   }
+
+  // Setup genre button event listeners
+  const genreButtons = document.querySelectorAll('.genre-btn');
+  genreButtons.forEach(button => {
+    button.addEventListener('click', async (e) => {
+      const genre = e.target.getAttribute('data-genre');
+      if (!genre) return;
+
+      // Auto-hide favorites when genre is selected
+      hideFavoritesList();
+
+      state.currentGenre = genre;
+      state.userInteracted = true;
+      state.retryCount = 0;
+      state.isPlayingFavorites = false;
+      state.albumOrigin = null;
+
+      // Remove active class from all genre buttons
+      document.querySelectorAll('.genre-btn').forEach(btn => btn.classList.remove('active'));
+      // Add active class to clicked button
+      e.target.classList.add('active');
+
+      // Wait for app initialization if needed
+      if (!state.isInitialized) {
+        state.isInitialized = true;
+        updateShuffleButton();
+      }
+
+      try {
+        // Stop current playback
+        elements.audio.pause();
+        elements.audio.currentTime = 0;
+
+        // Clear any delayed playback
+        if (state.lastFetchController) {
+          state.lastFetchController.abort();
+        }
+
+        // Load genre results into FIFO queue and start playing
+        await playGenreFromFIFO(genre);
+        updatePlayButtonState();
+      } catch (error) {
+        console.error('Error playing genre:', error);
+        showStatus('Error reproduciendo género', 'error', 3000);
+      }
+    });
+  });
 
   if (elements.favoritesToggle) {
     elements.favoritesToggle.addEventListener('click', toggleFavoritesList);
@@ -3695,10 +4147,41 @@ async function initializeApp() {
 
   updateShuffleButton();
 
+  // Inicializar selector de género
+  if (elements.genreSelect) {
+    elements.genreSelect.value = state.currentGenre;
+  }
+
+  enableControlsForGenrePlayback();
+
   // Inicializar PWA
   registerServiceWorker();
   setupPWAInstall();
   setupOfflineFunctionality();
+
+  // Disable back button in PWA to prevent accidental closure
+  if (isRunningAsPWA()) {
+    // Prevent navigation on back button press
+    window.addEventListener('popstate', (e) => {
+      e.preventDefault();
+      // Push a new state to prevent going back
+      window.history.pushState(null, '', window.location.href);
+      showStatus('Presiona el botón de acción flotante para cerrar la aplicación', 'info', 3000);
+    });
+
+    // Initialize push state to catch back button attempts
+    window.history.pushState(null, '', window.location.href);
+
+    // Additional safeguard: disable back button navigation entirely
+    let lastUrl = window.location.href;
+    setInterval(() => {
+      if (window.location.href !== lastUrl && isRunningAsPWA()) {
+        // If URL changed and we're in PWA, prevent it
+        window.location.href = lastUrl;
+      }
+      lastUrl = window.location.href;
+    }, 1000);
+  }
 
   // Si la app está ejecutándose como PWA, eliminar el splash y mostrar la app inmediatamente
   if (isRunningAsPWA()) {

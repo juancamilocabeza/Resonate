@@ -223,6 +223,51 @@ button:active:not(:disabled) {
   stroke-linejoin: round;
 }
 
+.volume-control {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 10px;
+}
+
+.volume-icon {
+  font-size: 16px;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 5px;
+}
+
+.volume-slider {
+  width: 60px;
+  height: 4px;
+  background: var(--card);
+  border-radius: 2px;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+  display: none;
+}
+
+.volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  background: var(--accent);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.volume-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  background: var(--accent);
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+}
+
 .shuffle-favorites-btn.active svg {
   stroke: var(--accent);
 }
@@ -254,7 +299,7 @@ button:active:not(:disabled) {
   flex-shrink: 0;
   width: 100%;
   padding: 0 5px;
-  display: none;
+  display: block;
 }
 
 .genre-label {
@@ -277,6 +322,62 @@ select {
 
 select:focus {
   outline: 2px solid var(--accent);
+}
+
+.genre-buttons-section {
+  margin: 15px 0 20px 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  max-width: 100%;
+  padding: 0 5px;
+}
+
+.genre-btn {
+  flex: 0 0 auto;
+  height: 40px;
+  background: var(--btn);
+  color: var(--accent);
+  border: 1px solid rgba(110, 231, 183, 0.2);
+  border-radius: 6px;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.genre-btn:hover {
+  background: rgba(110, 231, 183, 0.1);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.genre-btn:active {
+  transform: scale(0.95);
+  background: var(--accent);
+  color: #000;
+}
+
+.genre-btn.active {
+  background: var(--accent);
+  color: #000;
+  border-color: var(--accent);
+}
+
+@media (max-width: 480px) {
+  .genre-buttons-section {
+    gap: 8px;
+  }
+
+  .genre-btn {
+    height: 40px;
+    font-size: 15px;
+  }
 }
 
 .favorites-section {
@@ -539,6 +640,7 @@ select:focus {
   position: relative;
   display: flex;
   margin: 0 2px;
+  gap: 8px
 }
 
 .search-input {
