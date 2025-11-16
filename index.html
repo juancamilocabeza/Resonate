@@ -46,9 +46,6 @@
         <div class="current-track-info">
           <div class="title" id="title"></div>
           <div class="creator" id="creator"></div>
-          <div class="description-container">
-            <div class="description" id="description" style="display: none"></div>
-          </div>
         </div>
         <div class="controls">
           <button id="prev-btn" class="prev-btn" aria-label="Anterior">⏮</button>
@@ -76,7 +73,7 @@
   </footer>
   <div id="status-messages"></div>
   <script src="js/resonate.js"></script>
-  
+
   <script>
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js')
