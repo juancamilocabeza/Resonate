@@ -1040,18 +1040,6 @@ function toggleMute() {
   updateVolumeIcon();
   showStatus(isMuted ? 'Silenciado' : 'Volumen activado', 'info', 1000);
 }
-function saveFavorites() {
-  try {
-    const payload = JSON.stringify(state.favorites || []);
-    localStorage.setItem('resonate_favorites', payload);
-    // Request preload/update of favorites in cache if available
-    if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.preloadFavorites === 'function') {
-      audioCache.preloadFavorites(state.favorites || []);
-    }
-  } catch (err) {
-    console.error('Error saving favorites:', err);
-  }
-}
 
 function isTrackFavorite(track) {
   if (!track || !track.url) return false;
