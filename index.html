@@ -47,7 +47,7 @@
           <div class="title" id="title"></div>
           <div class="creator" id="creator"></div>
           <div class="description-container">
-            <div class="description" id="description" style="display: none;"></div>
+            <div class="description" id="description" style="display: none"></div>
           </div>
         </div>
         <div class="controls">
@@ -76,6 +76,36 @@
   </footer>
   <div id="status-messages"></div>
   <script src="js/resonate.js"></script>
+  
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js')
+        .then((registration) => {
+          console.log('Service Worker registrado:', registration);
+
+          // Verificar actualizaciones cada 60 segundos
+          setInterval(() => {
+            registration.update();
+          }, 60000);
+
+          // Notificar cuando hay una nueva versión disponible
+          registration.addEventListener('updatefound', () => {
+            const newWorker = registration.installing;
+            newWorker.addEventListener('statechange', () => {
+              if (newWorker.state === 'activated') {
+                // Mostrar notificación de actualización
+                if (confirm('Nueva versión disponible. ¿Deseas actualizar?')) {
+                  window.location.reload();
+                }
+              }
+            });
+          });
+        })
+        .catch((error) => {
+          console.error('Error al registrar Service Worker:', error);
+        });
+    }
+  </script>
 </body>
 
 </html>

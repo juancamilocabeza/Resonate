@@ -1049,11 +1049,6 @@ function showStatus(message, type = 'info', duration = 3000) {
 function hideSearchResults() {
   elements.searchResults.classList.remove('active');
   state.searchActive = false;
-
-  // Opcional: quitar el foco del input para mejor UX en móviles
-  if (window.innerWidth < 768) {
-    elements.searchInput.blur();
-  }
 }
 
 function updateShuffleButton() {
@@ -1739,16 +1734,10 @@ function setupSearchFocusBehavior() {
 
       // Realizar limpieza completa inmediatamente
       performCompleteCleanup();
-
-      // Si el campo no está vacío después de borrar, 
-      // podrías considerar hacer una nueva búsqueda después de un delay
-      if (currentQuery.length > 0) {
-        setTimeout(() => {
-          isCleaning = false;
-        }, 100);
-      }
-    } else {
+    }
+    else {
       isCleaning = false;
+      displaySearchResults();
     }
 
     lastSearchQuery = currentQuery;

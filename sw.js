@@ -1,16 +1,17 @@
 // sw.js - Service Worker mejorado para caché de audio y metadatos
-const CACHE_NAME = 'resonate-audio-cache-v3';
-const STATIC_CACHE = 'static-resonate-v3';
-const METADATA_CACHE = 'metadata-resonate-v2';
+const CACHE_NAME = 'resonate-v1';
+const STATIC_CACHE = 'static-v1';
+const METADATA_CACHE = 'metadata-v1';
 
 // Archivos críticos para caché
 const STATIC_FILES = [
   '/',
   '/index.html',
-  '/manifest.json'
-];
+  '/manifest.json',
+  '/css/resonate.css',
+  '/js/resonate.js',
+  '/sw.js']
 
-// Estrategias de caché
 const CACHE_STRATEGIES = {
   STATIC: 'cache-first',
   AUDIO: 'cache-first',
@@ -18,71 +19,66 @@ const CACHE_STRATEGIES = {
   API: 'network-first'
 };
 
+// Instalación del Service Worker
 self.addEventListener('install', (event) => {
-  console.log('Service Worker mejorado instalando...');
   event.waitUntil(
-    Promise.all([
-      caches.open(STATIC_CACHE)
-        .then(cache => {
-          console.log('Cacheando archivos estáticos críticos');
-          return cache.addAll(STATIC_FILES);
-        }),
-      caches.open(METADATA_CACHE)
-        .then(cache => {
-          console.log('Cache de metadatos listo');
-          return true;
-        })
-    ]).then(() => self.skipWaiting())
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(urlsToCache);
+    })
   );
+  self.skipWaiting(); // Activar inmediatamente
 });
 
+// Activación y limpieza de cachés antiguos
 self.addEventListener('activate', (event) => {
-  console.log('Service Worker mejorado activado');
   event.waitUntil(
-    caches.keys().then(cacheNames => {
+    caches.keys().then((cacheNames) => {
       return Promise.all(
-        cacheNames.map(cacheName => {
-          // Eliminar caches antiguos
-          if (![STATIC_CACHE, CACHE_NAME, METADATA_CACHE].includes(cacheName)) {
-            console.log('Eliminando cache antiguo:', cacheName);
+        cacheNames.map((cacheName) => {
+          if (cacheName !== CACHE_NAME) {
             return caches.delete(cacheName);
           }
         })
       );
-    }).then(() => self.clients.claim())
+    })
+  );
+  self.clients.claim();
+});
+
+// Estrategia de actualización: Network First, luego Cache
+self.addEventListener('fetch', (event) => {
+  event.respondWith(
+    fetch(event.request)
+      .then((response) => {
+        if (!response || response.status !== 200 || response.type === 'error') {
+          return caches.match(event.request);
+        }
+        const responseClone = response.clone();
+        caches.open(CACHE_NAME).then((cache) => {
+          cache.put(event.request, responseClone);
+        });
+        return response;
+      })
+      .catch(() => {
+        return caches.match(event.request);
+      })
   );
 });
 
-self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
-
-  // Estrategia Cache First para archivos estáticos
-  if (STATIC_FILES.some(file => url.pathname.endsWith(file))) {
-    event.respondWith(
-      caches.match(event.request)
-        .then(response => response || fetch(event.request))
-    );
-    return;
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'CLEAR_CACHE') {
+    caches.delete(CACHE_NAME).then(() => {
+      if (event.ports && event.ports[0]) {
+        event.ports[0].postMessage({ success: true });
+      }
+    });
   }
 
-  // Estrategia Cache First para archivos de audio de archive.org
-  if (url.pathname.includes('/download/') &&
-    (url.pathname.endsWith('.mp3') ||
-      url.pathname.endsWith('.ogg') ||
-      url.pathname.endsWith('.wav'))) {
-    event.respondWith(handleAudioRequest(event.request));
-    return;
+  // Soporta activación inmediata desde la página (skipWaiting)
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    console.log('SW: recibir SKIP_WAITING desde cliente, ejecutando skipWaiting()');
+    self.skipWaiting();
   }
-
-  // Estrategia Stale-While-Revalidate para metadatos
-  if (url.pathname.includes('/metadata/') ||
-    url.pathname.includes('/advancedsearch.php')) {
-    event.respondWith(handleMetadataRequest(event.request));
-    return;
-  }
-
-  // Estrategia Network First para otras peticiones
-  event.respondWith(handleApiRequest(event.request));
 });
 
 async function handleAudioRequest(request) {
@@ -155,20 +151,3 @@ async function fetchAndCache(request, cache) {
     console.log('Error actualizando caché en segundo plano:', error);
   }
 }
-
-// Manejar mensajes para limpiar caché
-self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'CLEAR_CACHE') {
-    caches.delete(CACHE_NAME).then(() => {
-      if (event.ports && event.ports[0]) {
-        event.ports[0].postMessage({ success: true });
-      }
-    });
-  }
-
-  // Soporta activación inmediata desde la página (skipWaiting)
-  if (event.data && event.data.type === 'SKIP_WAITING') {
-    console.log('SW: recibir SKIP_WAITING desde cliente, ejecutando skipWaiting()');
-    self.skipWaiting();
-  }
-});
