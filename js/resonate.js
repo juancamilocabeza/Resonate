@@ -12,7 +12,7 @@ const SEARCH_CONFIG = {
 class AdvancedAudioCache {
   constructor() {
     this.dbName = 'ResonateAudioCache';
-    this.dbVersion = 4;
+    this.dbVersion = 5;
     this.storeName = 'audioFiles';
     this.maxSize = 10 * 1024 * 1024 * 1024; // 10GB máximo
     this.currentSize = 0;
@@ -57,6 +57,8 @@ class AdvancedAudioCache {
           store.createIndex('isFavorite', 'isFavorite', { unique: false });
         } else {
           const store = event.currentTarget.transaction.objectStore(this.storeName);
+          store.createIndex('lastAccessed', 'lastAccessed', { unique: false });
+
           if (!store.indexNames.contains('playCount')) {
             store.createIndex('playCount', 'playCount', { unique: false });
           }
@@ -68,6 +70,9 @@ class AdvancedAudioCache {
           }
           if (!store.indexNames.contains('isFavorite')) {
             store.createIndex('isFavorite', 'isFavorite', { unique: false });
+          }
+          if (!store.indexNames.contains('lastAccessed')) {
+            store.createIndex('lastAccessed', 'lastAccessed', { unique: false });
           }
         }
       };
@@ -1831,25 +1836,29 @@ function createSearchResultElement(result, globalIndex) {
 
   resultEl.innerHTML = `
     <div class="result-actions">
+      <div class="result-cover">
+        <img src="https://archive.org/services/img/${result.identifier}" 
+          alt="${result.title}" 
+          loading="lazy"
+          onerror="sin portada">
+      </div>
       <div class="result-info">
         <div class="result-title">
-        ${result.title}
+          ${result.title}
         </div>
-        <div class="result-creator">${result.creator}</div>
-        <div class="result-meta">
-          <span class="result-album"></span>
+          <div class="result-creator">${result.creator}</div>
+          <div class="result-meta"><span class="result-album"></span></div>
         </div>
-      </div>
-      <button class="result-play-btn" title="Reproducir">
-        <span class="play-icon">▶</span>
-      </button>
-      <button class="result-favorite ${hasFavoriteTrack ? 'active' : ''}" title="${hasFavoriteTrack ? 'Quitar de favoritos' : 'Agregar a favoritos'}">
-        ${hasFavoriteTrack ? '❤️' : '🩶'}
-      </button>
-      <button class="result-expand" title="Ver pistas del álbum">
-        <span class="expand-icon">▼</span>
-      </button>
-    </div>    
+        <button class="result-play-btn" title="Reproducir">
+          <span class="play-icon">▶</span>
+        </button>
+        <button class="result-favorite ${hasFavoriteTrack ? 'active' : ''}" title="${hasFavoriteTrack ? 'Quitar de favoritos' : 'Agregar a favoritos'}">
+          ${hasFavoriteTrack ? '❤️' : '🩶'}
+        </button>
+        <button class="result-expand" title="Ver pistas del álbum">
+          <span class="expand-icon">▼</span>
+        </button>
+      </div>    
   `;
 
   // Cargar información de álbum en segundo plano
@@ -3001,6 +3010,12 @@ function updateFavoritesList() {
       '';
 
     albumItem.innerHTML = `
+      <div class="result-cover">
+        <img src="https://archive.org/services/img/${albumId}" 
+        alt="${albumData.albumTitle}" 
+        loading="lazy"
+        onerror="sin portada">
+      </div>  
       <div class="favorite-info">
         <div class="favorite-title">
           ${albumData.albumTitle || 'Sin título'}
