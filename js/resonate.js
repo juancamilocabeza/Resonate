@@ -1837,7 +1837,7 @@ function createSearchResultElement(result, globalIndex) {
         </div>
         <div class="result-creator">${result.creator}</div>
         <div class="result-meta">
-          <span class="result-album">Cargando información...</span>
+          <span class="result-album"></span>
         </div>
       </div>
       <button class="result-play-btn" title="Reproducir">
@@ -2077,7 +2077,7 @@ function toggleAlbumTracks(albumId, tracksContainer, expandButton) {
 
 // Display tracks for an album
 function displayAlbumTracks(albumId, tracksContainer) {
-  tracksContainer.innerHTML = '<div class="search-loading"><span class="loader"></span>Cargando pistas...</div>';
+  tracksContainer.innerHTML = '<div class="search-loading"><span class="loader"></span></div>';
 
   fetchOptimizedPlayableFiles(albumId)
     .then(files => {

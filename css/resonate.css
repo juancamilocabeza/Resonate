@@ -47,6 +47,17 @@ h1 {
   text-overflow: ellipsis;
 }
 
+.art {
+  text-align: center;
+}
+
+.current-track-info {
+  flex: 1;
+  margin-left: 10px;
+  text-align: center;
+}
+
+
 .progress-section {
   width: 100%;
   margin: 5% 0;
