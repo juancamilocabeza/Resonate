@@ -3279,6 +3279,36 @@ function hideFavoritesList() {
   elements.favoritesToggle.textContent = 'Ver ❤️';
 }
 
+function hideFavoritesList() {
+  state.favoritesVisible = false;
+  elements.favoritesList.classList.remove('active');
+  elements.favoritesToggle.textContent = 'Ver ❤️';
+}
+
+// Hide favorites list when playing a favorite
+function addHideFavoritesOnPlay() {
+  // In playFromFavoritesQueue
+  const originalPlayFromFavoritesQueue = window.playFromFavoritesQueue;
+  window.playFromFavoritesQueue = async function(...args) {
+    hideFavoritesList();
+    return originalPlayFromFavoritesQueue.apply(this, args);
+  };
+
+  // In playAlbumFromFavorites
+  const originalPlayAlbumFromFavorites = window.playAlbumFromFavorites;
+  window.playAlbumFromFavorites = async function(...args) {
+    hideFavoritesList();
+    return originalPlayAlbumFromFavorites.apply(this, args);
+  };
+
+  // In playOptimizedFavorite
+  const originalPlayOptimizedFavorite = window.playOptimizedFavorite;
+  window.playOptimizedFavorite = async function(...args) {
+    hideFavoritesList();
+    return originalPlayOptimizedFavorite.apply(this, args);
+  };
+}
+
 // Additional helper functions
 async function playAlbumFromFavorites(albumId) {
   if (state.isLoading) return;
@@ -3674,7 +3704,13 @@ function setupProgressBarInteraction() {
       clientX = e.clientX;
     }
 
-    const clickPosition = Math.max(0, Math.min(1, (clientX - progressBarRect.left) / progressBarRect.width));
+    // Adjust for the 42px offset occupied by current-time text
+    // The clickable area is progressBarRect.width - 42px (current-time width) - 5px (total-time margin)
+    const offsetLeft = 42; // Width of current-time element
+    const offsetRight = 5; // Right margin for total-time
+    const effectiveWidth = progressBarRect.width - offsetLeft - offsetRight;
+
+    const clickPosition = Math.max(0, Math.min(1, (clientX - (progressBarRect.left + offsetLeft)) / effectiveWidth));
     const seekTime = clickPosition * elements.audio.duration;
 
     // Update display
@@ -4196,6 +4232,9 @@ async function initializeApp() {
       console.warn('Error while hiding splash for PWA:', err);
     }
   }
+
+  // Hide favorites list when playing a favorite
+  addHideFavoritesOnPlay();
 
   // EXPONER FUNCIONES GLOBALES CRÍTICAS
   window.onplay = onplay;
