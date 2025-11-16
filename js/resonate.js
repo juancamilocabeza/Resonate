@@ -891,6 +891,8 @@ function setupQualityIndicator() {
   setInterval(updateQualityIndicator, 5000); // Update every 5 seconds if needed
 }
 
+
+
 // DOM Elements
 const elements = {
   audio: document.getElementById('audio'),
@@ -918,6 +920,12 @@ const elements = {
   favoritesList: document.getElementById('favorites-list'),
   volumeIcon: document.getElementById('volume-icon'),
   volumeSlider: document.getElementById('volume-slider'),
+  // New elements for tab navigation
+  navTabs: document.querySelectorAll('.nav-tab'),
+  playerTab: document.getElementById('player-tab'),
+  searchTab: document.getElementById('search-tab'),
+  favoritesTab: document.getElementById('favorites-tab'),
+  genresTab: document.getElementById('genres-tab'),
   startView: document.getElementById('start-view'),
   startButton: document.getElementById('start-button'),
   app: document.getElementById('app'),
@@ -4291,6 +4299,8 @@ async function initializeApp() {
       }
     }, 500);
   }
+
+
 
   // Configurar Media Session API
   setupMediaSession();
