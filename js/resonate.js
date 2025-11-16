@@ -8,6 +8,151 @@ const SEARCH_CONFIG = {
   preloadMetadata: true
 };
 
+// Enhanced bandwidth monitoring and adaptive streaming
+class AdaptiveStreamingManager {
+  constructor() {
+    this.bandwidthHistory = [];
+    this.connectionType = navigator.connection?.effectiveType || 'unknown';
+    this.bandwidthEstimate = 0; // Mbps
+    this.lastBandwidthCheck = 0;
+    this.bandwidthCheckInterval = 30000; // 30 seconds
+    this.qualityProfile = 'auto'; // auto, high, medium, low
+    this.monitoringActive = false;
+  }
+
+  async startMonitoring() {
+    if (this.monitoringActive) return;
+    this.monitoringActive = true;
+    console.debug('Starting adaptive streaming monitoring');
+
+    // Initial bandwidth check
+    await this.measureBandwidth();
+
+    // Set up periodic monitoring
+    setInterval(() => this.measureBandwidth(), this.bandwidthCheckInterval);
+
+    // Listen for connection changes
+    if ('connection' in navigator) {
+      navigator.connection.addEventListener('change', () => {
+        this.connectionType = navigator.connection.effectiveType;
+        this.adjustQualityProfile();
+        showStatus(`Connection: ${this.connectionType}`, 'info', 2000);
+      });
+    }
+  }
+
+  async measureBandwidth() {
+    const now = Date.now();
+    if (now - this.lastBandwidthCheck < 5000) return; // Throttle checks
+    this.lastBandwidthCheck = now;
+
+    try {
+      // Create a small test request to measure bandwidth
+      const testUrl = 'https://archive.org/services/img/test.jpg'; // Small image for testing
+      const startTime = performance.now();
+
+      const response = await fetch(testUrl + '?t=' + Date.now(), {
+        method: 'HEAD', // Only headers
+        cache: 'no-cache'
+      });
+
+      if (response.ok) {
+        const responseSize = parseInt(response.headers.get('content-length') || '2048');
+        const endTime = performance.now();
+        const duration = (endTime - startTime) / 1000; // seconds
+        const bandwidthMbps = (responseSize * 8) / (duration * 1000000); // Mbps
+        const latency = duration * 1000; // ms
+
+        this.bandwidthHistory.push({
+          bandwidth: bandwidthMbps,
+          latency: latency,
+          timestamp: now,
+          connectionType: this.connectionType
+        });
+
+        // Keep only last 10 measurements
+        if (this.bandwidthHistory.length > 10) {
+          this.bandwidthHistory.shift();
+        }
+
+        // Calculate rolling average
+        this.bandwidthEstimate = this.bandwidthHistory.reduce((sum, m) => sum + m.bandwidth, 0) / this.bandwidthHistory.length;
+
+        this.adjustQualityProfile();
+      }
+    } catch (error) {
+      console.warn('Bandwidth measurement failed:', error);
+    }
+  }
+
+  adjustQualityProfile() {
+    if (this.qualityProfile === 'auto') {
+      // Auto-adjust based on measured bandwidth
+      if (this.bandwidthEstimate > 10) {
+        state.adaptiveQuality = 'high';
+      } else if (this.bandwidthEstimate > 5) {
+        state.adaptiveQuality = 'medium';
+      } else if (this.bandwidthEstimate > 2) {
+        state.adaptiveQuality = 'low';
+      } else {
+        state.adaptiveQuality = 'lowest';
+      }
+    } else {
+      // Manual override
+      state.adaptiveQuality = this.qualityProfile;
+    }
+
+    // Adjust cache behavior
+    this.adjustCacheStrategy();
+
+    console.debug(`Adaptive quality: ${state.adaptiveQuality}, Bandwidth: ${this.bandwidthEstimate.toFixed(1)} Mbps`);
+  }
+
+  setQualityProfile(profile) {
+    this.qualityProfile = profile;
+    this.adjustQualityProfile();
+    showStatus(`Quality: ${profile}`, 'info', 2000);
+  }
+
+  adjustCacheStrategy() {
+    // Adjust preload behavior based on bandwidth
+    if (this.bandwidthEstimate > 5) {
+      // Fast connection - aggressive preloading
+      audioCache.maxFavorites = 8;
+      SEARCH_CONFIG.maxResults = 60;
+    } else if (this.bandwidthEstimate > 2) {
+      // Medium connection - moderate preloading
+      audioCache.maxFavorites = 5;
+      SEARCH_CONFIG.maxResults = 50;
+    } else {
+      // Slow connection - conservative preloading
+      audioCache.maxFavorites = 2;
+      SEARCH_CONFIG.maxResults = 30;
+    }
+  }
+
+  getQualityPreference(formats) {
+    const qualityPrefs = {
+      high: ['.flac', '.wav', '.m4a', '.mp3', '.ogg', '.aac'],
+      medium: ['.mp3', '.m4a', '.flac', '.ogg', '.wav', '.aac'],
+      low: ['.mp3', '.aac', '.ogg', '.m4a', '.flac', '.wav'],
+      lowest: ['.aac', '.mp3', '.ogg', '.m4a', '.flac', '.wav']
+    };
+
+    const currentQuality = state.adaptiveQuality || 'medium';
+    const prefs = qualityPrefs[currentQuality] || qualityPrefs.medium;
+
+    // Find the best available format based on quality preference
+    for (const preferredFormat of prefs) {
+      const found = formats.find(f => f.name.toLowerCase().endsWith(preferredFormat));
+      if (found) return found;
+    }
+
+    // Fallback to first available
+    return formats[0];
+  }
+}
+
 // Advanced audio caching system
 class AdvancedAudioCache {
   constructor() {
@@ -559,6 +704,32 @@ class EnhancedSearchCache {
 
 const enhancedCache = new EnhancedSearchCache();
 const audioCache = new AdvancedAudioCache();
+const adaptiveStreaming = new AdaptiveStreamingManager();
+
+// Quality indicator functionality
+function updateQualityIndicator() {
+  if (elements.qualityText) {
+    const displayText = adaptiveStreaming.qualityProfile === 'auto' ?
+      `${state.adaptiveQuality || 'auto'}` : adaptiveStreaming.qualityProfile;
+    elements.qualityText.textContent = displayText;
+  }
+}
+
+function setupQualityIndicator() {
+  if (elements.qualityIndicator) {
+    elements.qualityIndicator.addEventListener('click', () => {
+      // Cycle through quality options: auto → high → medium → low → lowest → auto
+      const qualities = ['auto', 'high', 'medium', 'low', 'lowest'];
+      const currentIndex = qualities.indexOf(adaptiveStreaming.qualityProfile);
+      const nextQuality = qualities[(currentIndex + 1) % qualities.length];
+      adaptiveStreaming.setQualityProfile(nextQuality);
+      updateQualityIndicator();
+    });
+  }
+
+  // Update quality indicator periodically and on quality changes
+  setInterval(updateQualityIndicator, 5000); // Update every 5 seconds if needed
+}
 
 // DOM Elements
 const elements = {
@@ -590,7 +761,9 @@ const elements = {
   startView: document.getElementById('start-view'),
   startButton: document.getElementById('start-button'),
   app: document.getElementById('app'),
-  playerContent: document.getElementById('player-content')
+  playerContent: document.getElementById('player-content'),
+  qualityIndicator: document.getElementById('quality-indicator'),
+  qualityText: document.getElementById('quality-text')
 };
 
 // Application state
@@ -1562,9 +1735,21 @@ async function fetchOptimizedPlayableFiles(identifier, timeoutMs = 10000) {
       throw new Error('Metadatos inválidos');
     }
 
-    const audioFiles = metadata.files.filter(file =>
+    let audioFiles = metadata.files.filter(file =>
       isPlayableAudioFile(file)
-    ).sort((a, b) => {
+    );
+
+    // Aplicar selección de calidad adaptativa
+    if (audioFiles.length > 1) {
+      const bestFile = adaptiveStreaming.getQualityPreference(audioFiles);
+      if (bestFile) {
+        // Poner el archivo preferido primero
+        audioFiles = [bestFile, ...audioFiles.filter(f => f !== bestFile)];
+      }
+    }
+
+    // Sort remaining files by size (backup sorting)
+    audioFiles.sort((a, b) => {
       const aIsMp3 = a.name.toLowerCase().endsWith('.mp3');
       const bIsMp3 = b.name.toLowerCase().endsWith('.mp3');
 
@@ -3900,14 +4085,16 @@ async function initializeApp() {
   try {
     await audioCache.init();
     // Audio cache initialized (silent)
-
-    // Mostrar estadísticas iniciales
-    const stats = await audioCache.getUsageStats();
-    if (stats) {
-      // Cache stats available (logged only on error if needed)
-    }
   } catch (error) {
     console.error('Error inicializando caché:', error);
+  }
+
+  // Inicializar streaming adaptativo
+  try {
+    await adaptiveStreaming.startMonitoring();
+    console.debug('Adaptive streaming monitoring started');
+  } catch (error) {
+    console.warn('Error starting adaptive streaming monitoring:', error);
   }
 
   loadFavorites();
@@ -3951,6 +4138,7 @@ async function initializeApp() {
   setupSearchOnEnter();
   setupSearchFocusBehavior();
   setupProgressBarInteraction();
+  setupQualityIndicator();
 
   // Configurar botón de transmisión - SOLO SI EL ELEMENTO EXISTE
   if (elements.castBtn) {

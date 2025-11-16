@@ -281,6 +281,33 @@ button:active:not(:disabled) {
   stroke: var(--accent);
 }
 
+/* Adaptive quality indicator */
+.adaptive-quality-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--btn);
+  border-radius: 6px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.2s;
+  height: 28px;
+  min-width: 40px;
+}
+
+.adaptive-quality-indicator:hover {
+  background: rgba(110, 231, 183, 0.1);
+  color: var(--accent);
+}
+
+.adaptive-quality-indicator:active {
+  transform: scale(0.95);
+  background: var(--card);
+}
+
 /* Volume control */
 .volume-control {
   display: flex;
