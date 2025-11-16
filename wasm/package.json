@@ -1,0 +1,14 @@
+{
+  "name": "resonate-audio-processor",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "asbuild": "asc audio-processor.ts --target release --bindings esm",
+    "build": "npm run asbuild",
+    "clean": "rm -f audio-processor.wasm audio-processor.wasm.d.ts"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "assemblyscript": "^0.27.23"
+  }
+}

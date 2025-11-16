@@ -706,6 +706,166 @@ const enhancedCache = new EnhancedSearchCache();
 const audioCache = new AdvancedAudioCache();
 const adaptiveStreaming = new AdaptiveStreamingManager();
 
+// WebAssembly Audio Processor
+class WebAssemblyAudioProcessor {
+  constructor() {
+    this.wasmModule = null;
+    this.instance = null;
+    this.memory = null;
+    this.initialized = false;
+  }
+
+  async init() {
+    if (this.initialized) return;
+
+    try {
+      const response = await fetch('wasm/audio-processor.wasm');
+      const bytes = await response.arrayBuffer();
+      const result = await WebAssembly.instantiate(bytes, {
+        env: {},
+        console: {
+          log: (ptr, len) => console.log(this.getString(ptr, len))
+        }
+      });
+      this.wasmModule = result.module;
+      this.instance = result.instance;
+      this.memory = this.instance.exports.memory;
+      this.initialized = true;
+      console.debug('WebAssembly audio processor initialized');
+    } catch (error) {
+      console.warn('WebAssembly not available, using fallback processing:', error);
+      // Fallback to JavaScript implementation will be used
+    }
+  }
+
+  // Apply volume adjustment using WebAssembly
+  applyVolumeAdjustment(audioData, volume) {
+    if (!this.initialized) {
+      return this.applyVolumeAdjustmentJS(audioData, volume);
+    }
+
+    try {
+      const length = audioData.length;
+      const ptr = this.instance.exports.malloc(length * 4); // Float32Array
+
+      if (!ptr) {
+        console.warn('WebAssembly malloc failed, using JS fallback');
+        return this.applyVolumeAdjustmentJS(audioData, volume);
+      }
+
+      const wasmArray = new Float32Array(this.memory.buffer, ptr, length);
+      wasmArray.set(audioData);
+
+      this.instance.exports.apply_volume(ptr, length, volume);
+
+      const result = new Float32Array(audioData);
+      result.set(wasmArray);
+
+      this.instance.exports.free(ptr);
+      return result;
+    } catch (error) {
+      console.warn('WebAssembly volume adjustment failed:', error);
+      return this.applyVolumeAdjustmentJS(audioData, volume);
+    }
+  }
+
+  // JavaScript fallback for volume adjustment
+  applyVolumeAdjustmentJS(audioData, volume) {
+    const result = new Float32Array(audioData.length);
+    for (let i = 0; i < audioData.length; i++) {
+      result[i] = audioData[i] * volume;
+    }
+    return result;
+  }
+
+  // Simple echo effect using WebAssembly
+  applyEchoEffect(audioData, delay = 0.5, decay = 0.3) {
+    if (!this.initialized) {
+      return this.applyEchoEffectJS(audioData, delay, decay);
+    }
+
+    try {
+      const sampleRate = 44100; // Assume 44.1kHz
+      const delaySamples = Math.floor(delay * sampleRate);
+      const length = audioData.length + delaySamples;
+      const ptr = this.instance.exports.malloc(length * 4);
+
+      if (!ptr) {
+        console.warn('WebAssembly malloc failed, using JS fallback');
+        return this.applyEchoEffectJS(audioData, delay, decay);
+      }
+
+      const inputPtr = ptr;
+      const outputPtr = ptr + (audioData.length * 4);
+
+      const inputArray = new Float32Array(this.memory.buffer, inputPtr, audioData.length);
+      const outputArray = new Float32Array(this.memory.buffer, outputPtr, audioData.length + delaySamples);
+
+      inputArray.set(audioData);
+
+      this.instance.exports.apply_echo(inputPtr, outputPtr, audioData.length, delaySamples, decay);
+
+      const result = new Float32Array(audioData.length);
+      result.set(outputArray.subarray(0, audioData.length));
+
+      this.instance.exports.free(ptr);
+      return result;
+    } catch (error) {
+      console.warn('WebAssembly echo effect failed:', error);
+      return this.applyEchoEffectJS(audioData, delay, decay);
+    }
+  }
+
+  // JavaScript fallback for echo effect
+  applyEchoEffectJS(audioData, delay = 0.5, decay = 0.3) {
+    const sampleRate = 44100;
+    const delaySamples = Math.floor(delay * sampleRate);
+    const result = new Float32Array(audioData.length);
+
+    for (let i = 0; i < audioData.length; i++) {
+      result[i] = audioData[i];
+      if (i >= delaySamples) {
+        result[i] += audioData[i - delaySamples] * decay;
+      }
+    }
+
+    return result;
+  }
+
+  getString(ptr, len) {
+    const view = new Uint8Array(this.memory.buffer, ptr, len);
+    return new TextDecoder('utf-8').decode(view);
+  }
+}
+
+const wasmAudioProcessor = new WebAssemblyAudioProcessor();
+
+// Initialize WebAssembly processor
+async function initializeWebAssembly() {
+  try {
+    await wasmAudioProcessor.init();
+    showStatus('WebAssembly audio processor cargado', 'info');
+  } catch (error) {
+    console.warn('WebAssembly initialization failed, using fallback processing:', error);
+    showStatus('Usando procesamiento JavaScript (WebAssembly no disponible)', 'info');
+  }
+}
+
+// Test WebAssembly audio processing
+function testWebAssemblyAudio() {
+  const testBuffer = new Float32Array(1024);
+  // Fill with test data (sine wave)
+  for (let i = 0; i < testBuffer.length; i++) {
+    testBuffer[i] = Math.sin(i * 0.1) * 0.5;
+  }
+
+  const volume = 0.8;
+  const processed = wasmAudioProcessor.applyVolumeAdjustment(testBuffer, volume);
+
+  console.debug('WebAssembly audio test completed, processed', processed.length, 'samples');
+  return processed;
+}
+
 // Quality indicator functionality
 function updateQualityIndicator() {
   if (elements.qualityText) {

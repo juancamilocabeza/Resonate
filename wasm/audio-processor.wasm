@@ -1,0 +1,8 @@
+# This is a placeholder file - in a real implementation,
+# this would be the compiled WebAssembly binary.
+#
+# To compile this properly, you would use:
+# wat2wasm audio-processor.wast -o audio-processor.wasm
+#
+# Since we don't have wat2wasm available, we'll test with fallback JavaScript.
+# In production, replace this placeholder with a proper compiled .wasm file.
