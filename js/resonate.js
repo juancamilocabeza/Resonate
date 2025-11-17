@@ -1936,7 +1936,7 @@ async function fetchOptimizedPlayableFiles(identifier, timeoutMs = 10000) {
     });
 
     if (audioFiles.length === 0) {
-      throw new Error('No hay archivos de audio reproducibles');
+      return [];
     }
 
     const playableFiles = createPlayableFiles(audioFiles, identifier, metadata);
@@ -2468,6 +2468,7 @@ function createSearchResultElement(result, globalIndex) {
 }
 
 function displaySearchResults(searchData, clearExisting = true) {
+  if (!searchData) return;
   const { results, hasMore, total } = searchData;
 
   if (clearExisting) {
@@ -2563,9 +2564,13 @@ async function loadAlbumInfoBackground(identifier, resultEl) {
 
     const metaElement = resultEl.querySelector('.result-meta');
     if (metaElement) {
-      metaElement.innerHTML = isAlbum ?
-        `<span class="album-indicator">Álbum: ${trackCount} pistas</span>` :
-        `<span class="album-indicator">Pista individual</span>`;
+      if (trackCount === 0) {
+        metaElement.innerHTML = '<span style="color: var(--muted); font-size: 10px;">No hay pistas reproducibles</span>';
+      } else {
+        metaElement.innerHTML = isAlbum ?
+          `<span class="album-indicator">Álbum: ${trackCount} pistas</span>` :
+          `<span class="album-indicator">Pista individual</span>`;
+      }
     }
 
     // Actualizar el estado del botón de favorito
@@ -2578,7 +2583,7 @@ async function loadAlbumInfoBackground(identifier, resultEl) {
     }
 
     // Si es un álbum, agregar botón para expandir pistas
-    if (isAlbum && !resultEl.querySelector('.expand-tracks')) {
+    if (isAlbum && trackCount > 0 && !resultEl.querySelector('.expand-tracks')) {
       const expandButton = document.createElement('button');
       expandButton.className = 'expand-tracks';
       expandButton.innerHTML = '▼ <span>Ver pistas</span>';
