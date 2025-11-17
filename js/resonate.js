@@ -82,6 +82,20 @@ class AdaptiveStreamingManager {
       }
     } catch (error) {
       console.warn('Bandwidth measurement failed:', error);
+      // Set a fallback bandwidth estimate if this is our first measurement
+      if (this.bandwidthHistory.length === 0) {
+        const fallbackMbps = this.connectionType === '4g' ? 10 : this.connectionType === '3g' ? 2 : 5;
+        this.bandwidthEstimate = fallbackMbps;
+
+        this.bandwidthHistory.push({
+          bandwidth: fallbackMbps,
+          latency: 100,
+          timestamp: now,
+          connectionType: this.connectionType
+        });
+
+        this.adjustQualityProfile();
+      }
     }
   }
 
@@ -911,7 +925,6 @@ const elements = {
   favoriteBtn: document.getElementById('favorite-btn'),
   shuffleFavoritesBtn: document.getElementById('shuffle-favorites-btn'),
   castBtn: document.getElementById('cast-btn'),
-  genreSelect: document.getElementById('genre-select'),
   searchInput: document.getElementById('search-input'),
   searchResults: document.getElementById('search-results'),
   searchResultsList: document.getElementById('search-results-list'),
@@ -925,7 +938,6 @@ const elements = {
   playerTab: document.getElementById('player-tab'),
   searchTab: document.getElementById('search-tab'),
   favoritesTab: document.getElementById('favorites-tab'),
-  genresTab: document.getElementById('genres-tab'),
   startView: document.getElementById('start-view'),
   startButton: document.getElementById('start-button'),
   app: document.getElementById('app'),
@@ -936,7 +948,6 @@ const elements = {
 
 // Application state
 const state = {
-  currentGenre: null,
   currentTrack: null,
   isLoading: false,
   favorites: [],
@@ -977,9 +988,7 @@ const state = {
   currentSearchPage: 0,
   currentSearchHasMore: false,
   currentSearchQuery: '',
-  isLoadingMore: false,
-  // Track played tracks by genre to avoid repetition
-  playedTracksByGenre: new Map()
+  isLoadingMore: false
 };
 
 function setupMediaSession() {
@@ -1183,7 +1192,6 @@ class ContinuousPlaybackManager {
   constructor() {
     this.currentContext = null;
     this.contextData = {
-      genre: { currentIndex: -1, items: [] },
       search: { currentIndex: -1, items: [] },
       favorites: { currentIndex: -1, items: [] },
       album: { currentIndex: -1, items: [], currentAlbumId: null },
@@ -2185,15 +2193,6 @@ function setupListenTracking() {
       // Si se escuchó al menos el 90% de la pista, marcarla como escuchada completamente
       if (listenDuration >= trackDuration * 0.9) {
         await audioCache.markAsFullyListened(state.currentTrack.url);
-        // Track played track by genre to avoid repetition
-        if (playbackManager.getCurrentContext() === 'genre' && state.currentTrack.id) {
-          if (!state.playedTracksByGenre.has(state.currentGenre)) {
-            state.playedTracksByGenre.set(state.currentGenre, new Set());
-          }
-          const genrePlayed = state.playedTracksByGenre.get(state.currentGenre);
-          genrePlayed.add(state.currentTrack.id);
-          console.debug(`Registered track ${state.currentTrack.id} as played for genre ${state.currentGenre}`);
-        }
         // Replace in FIFO when playback completes
         if (isTrackFavorite(state.currentTrack)) {
           await audioCache.replaceFavoritesQueueItem(state.currentTrack.url, null, state.favorites);
@@ -2880,7 +2879,6 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
             state.onPlayCallback({
               title: track.title,
               creator: track.creator,
-              genre: state.currentGenre,
               duration: audio.duration,
               currentTime: audio.currentTime,
               id: state.currentTrack.id
@@ -3052,7 +3050,7 @@ function forcePlay() {
     showStatus('Playing favorites from FIFO queue', 'info');
     playFromFavoritesQueue();
   } else {
-    showStatus('No hay favoritos. Selecciona un género para comenzar', 'info');
+    showStatus('No hay favoritos. Realiza una búsqueda para comenzar', 'info');
   }
 
 }
@@ -3201,13 +3199,11 @@ async function playNextInContext() {
 
     // Para otros contextos, usar el comportamiento de precarga existente
     if (!playbackManager.hasNextTrack()) {
-      if (context === 'genre') {
-        await playOptimizedRandom(state.currentGenre);
-      } else if (context === 'album') {
+      if (context === 'album') {
         showStatus('Fin del álbum', 'info', 2000);
         return;
       } else if (context === 'favorites') {
-        showStatus('Fin de los favoritos. Selecciona un género para continuar', 'info', 2000);
+        showStatus('Fin de los favoritos. Realiza una búsqueda para continuar', 'info', 2000);
         return;
       }
       if (context === 'search') {
@@ -3221,7 +3217,7 @@ async function playNextInContext() {
 
     try {
       if (context === 'genre' || context === 'search') {
-        const files = await fetchOptimizedPlayableFiles(nextItem.identifier, state.currentGenre);
+        const files = await fetchOptimizedPlayableFiles(nextItem.identifier);
         if (files && files.length > 0) {
           const track = files[0];
           await playAudioTrackOptimized(track, nextItem.identifier);
@@ -3309,7 +3305,7 @@ async function playPreviousInContext() {
 
   try {
     if (context === 'genre' || context === 'search') {
-      const files = await fetchOptimizedPlayableFiles(prevItem.identifier, state.currentGenre);
+      const files = await fetchOptimizedPlayableFiles(prevItem.identifier);
       if (files && files.length > 0) {
         const track = files[0];
         await playAudioTrackOptimized(track, prevItem.identifier);
@@ -3358,17 +3354,31 @@ async function playPreviousInContext() {
 
 // Favorites management
 function updatePlayButtonState() {
+  // Disable/enable all buttons in the player-content div based on favorites count
+  const playerContent = elements.playerContent;
+  if (playerContent) {
+    const buttons = playerContent.querySelectorAll('button');
+    buttons.forEach(button => {
+      button.disabled = state.favorites.length === 0;
+    });
+  }
+
   if (state.favorites.length === 0) {
     elements.prevBtn.disabled = true;
     elements.playBtn.disabled = true;
     elements.nextBtn.disabled = true;
     elements.favoriteBtn.disabled = true;
     elements.shuffleFavoritesBtn.disabled = true;
+    elements.playAllFavoritesBtn.disabled = true;
     elements.playBtn.title = 'Realiza una búsqueda para comenzar';
     elements.prevBtn.title = 'Realiza una búsqueda para comenzar';
     elements.nextBtn.title = 'Realiza una búsqueda para comenzar';
     elements.favoriteBtn.title = 'Realiza una búsqueda para comenzar';
     elements.shuffleFavoritesBtn.title = 'Realiza una búsqueda para comenzar';
+
+    // Disable favorites controls
+    if (elements.favoritesToggle) elements.favoritesToggle.classList.add('disabled');
+    if (elements.playAllFavoritesBtn) elements.playAllFavoritesBtn.classList.add('disabled');
   } else {
     // Habilitar los controles relevantes cuando haya favoritos
     if (elements.prevBtn) elements.prevBtn.disabled = false;
@@ -3382,6 +3392,10 @@ function updatePlayButtonState() {
     if (elements.nextBtn) elements.nextBtn.title = 'Siguiente pista';
     if (elements.favoriteBtn) elements.favoriteBtn.title = 'Quitar favorito';
     if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.title = 'Mezclar favoritos';
+
+    // Enable favorites controls
+    if (elements.favoritesToggle) elements.favoritesToggle.classList.remove('disabled');
+    if (elements.playAllFavoritesBtn) elements.playAllFavoritesBtn.classList.remove('disabled');
   }
 }
 
@@ -3406,44 +3420,7 @@ function enableControlsForSearchResults() {
   }
 }
 
-function enableControlsForGenrePlayback() {
-  // Habilitar controles de reproducción cuando los botones de género estén disponibles
-  const genreButtons = document.querySelectorAll('.genre-btn');
 
-  if (genreButtons.length > 0 && elements.playBtn) {
-    elements.playBtn.disabled = false;
-
-    // Si hay un género actual seleccionado, actualizar el title
-    if (state.currentGenre) {
-      elements.playBtn.title = `Reproducir ${state.currentGenre}`;
-    } else {
-      elements.playBtn.title = 'Selecciona un género para comenzar';
-    }
-
-    if (elements.favoriteBtn) {
-      elements.favoriteBtn.disabled = false;
-      elements.favoriteBtn.title = 'Agregar a favoritos';
-    }
-
-    // Los botones prev/next funcionan dentro del contexto de género
-    if (elements.prevBtn) {
-      elements.prevBtn.disabled = false;
-      elements.prevBtn.title = 'Pista anterior (género)';
-    }
-    if (elements.nextBtn) {
-      elements.nextBtn.disabled = false;
-      elements.nextBtn.title = 'Siguiente pista (género)';
-    }
-
-    // El botón shuffle funciona con el género actual
-    if (elements.shuffleFavoritesBtn) {
-      elements.shuffleFavoritesBtn.disabled = false;
-      elements.shuffleFavoritesBtn.title = 'Mezclar pistas de género';
-    }
-
-    // No hay generador de artwork genérico para géneros específicos
-  }
-}
 
 // CTA banner to initiate favorites playback (captures user interaction)
 function createStartFavoritesCTA() {
@@ -3602,49 +3579,51 @@ function updateFavoritesList() {
 }
 
 function toggleFavoritesList() {
+  if (elements.favoritesToggle.classList.contains('disabled')) return;
+
   state.favoritesVisible = !state.favoritesVisible;
 
   if (state.favoritesVisible) {
     elements.favoritesList.classList.add('active');
-    elements.favoritesToggle.textContent = 'Ocultar ❤️';
+    elements.favoritesToggle.textContent = '▲ ❤️';
     updateFavoritesList();
   } else {
     elements.favoritesList.classList.remove('active');
-    elements.favoritesToggle.textContent = 'Ver ❤️';
+    elements.favoritesToggle.textContent = '▼ ❤️';
   }
 }
 
 function hideFavoritesList() {
   state.favoritesVisible = false;
   elements.favoritesList.classList.remove('active');
-  elements.favoritesToggle.textContent = 'Ver ❤️';
+  elements.favoritesToggle.textContent = '▼ ❤️';
 }
 
 function hideFavoritesList() {
   state.favoritesVisible = false;
   elements.favoritesList.classList.remove('active');
-  elements.favoritesToggle.textContent = 'Ver ❤️';
+  elements.favoritesToggle.textContent = '▼ ❤️';
 }
 
 // Hide favorites list when playing a favorite
 function addHideFavoritesOnPlay() {
   // In playFromFavoritesQueue
   const originalPlayFromFavoritesQueue = window.playFromFavoritesQueue;
-  window.playFromFavoritesQueue = async function(...args) {
+  window.playFromFavoritesQueue = async function (...args) {
     hideFavoritesList();
     return originalPlayFromFavoritesQueue.apply(this, args);
   };
 
   // In playAlbumFromFavorites
   const originalPlayAlbumFromFavorites = window.playAlbumFromFavorites;
-  window.playAlbumFromFavorites = async function(...args) {
+  window.playAlbumFromFavorites = async function (...args) {
     hideFavoritesList();
     return originalPlayAlbumFromFavorites.apply(this, args);
   };
 
   // In playOptimizedFavorite
   const originalPlayOptimizedFavorite = window.playOptimizedFavorite;
-  window.playOptimizedFavorite = async function(...args) {
+  window.playOptimizedFavorite = async function (...args) {
     hideFavoritesList();
     return originalPlayOptimizedFavorite.apply(this, args);
   };
@@ -3769,181 +3748,7 @@ async function playOptimizedFavorite(favoriteIndex = 0) {
   }
 }
 
-async function playGenreFromFIFO(genre) {
-  if (state.isLoading) return;
 
-  state.isLoading = true;
-  elements.playBtn.disabled = true;
-  elements.playBtn.innerHTML = '<span class="loader"></span>';
-
-  try {
-    // Search for genre results
-    const simpleQuery = `${genre}`;
-    const items = await performOptimizedSearch(simpleQuery, 0);
-
-    if (items.results.length === 0) {
-      throw new Error(`No se encontraron pistas para ${genre}. Intenta con otro género`);
-    }
-
-    // Filter out already played tracks for this genre to avoid repetition
-    const playedTracksForGenre = state.playedTracksByGenre.get(genre) || new Set();
-    const availableResults = items.results.filter(result => !playedTracksForGenre.has(result.identifier));
-
-    // If all results were already played, reset the history for this genre
-    let filteredResults = availableResults;
-    if (filteredResults.length === 0) {
-      console.debug(`All ${genre} tracks played, resetting history for fresh start`);
-      state.playedTracksByGenre.set(genre, new Set());
-      filteredResults = items.results;
-    }
-
-    // Pre-filter results to ensure they have playable files
-    const validatedResults = [];
-    showStatus(`Validando pistas disponibles para ${genre}...`, 'info', 0);
-
-    // Parallel validation with concurrency limit and extended timeout
-    const concurrencyLimit = 6;
-    const extendedTimeoutMs = 15000; // Extended timeout for validation
-
-    for (let i = 0; i < filteredResults.length; i += concurrencyLimit) {
-      const batch = filteredResults.slice(i, i + concurrencyLimit);
-      const batchPromises = batch.map(async (result) => {
-        try {
-          const files = await fetchOptimizedPlayableFiles(result.identifier, extendedTimeoutMs);
-          if (files.length > 0) {
-            return result;
-          }
-        } catch (error) {
-          console.debug(`Skipping ${result.identifier}: ${error.message}`);
-        }
-        return null;
-      });
-
-      const batchResults = await Promise.allSettled(batchPromises);
-
-      for (const result of batchResults) {
-        if (result.status === 'fulfilled' && result.value) {
-          validatedResults.push(result.value);
-          // Stop after collecting enough valid results
-          if (validatedResults.length >= 20) break;
-        }
-      }
-
-      // Break early if we have enough results
-      if (validatedResults.length >= 20) break;
-    }
-
-    if (validatedResults.length === 0) {
-      throw new Error(`No se encontraron pistas reproducibles para ${genre}`);
-    }
-
-    // Set context for continuous playback
-    playbackManager.setContext('genre', validatedResults, -1); // Start at -1 so first getNextTrack() returns index 0
-
-    // Load genre results into FIFO queue - ALWAYS use shuffle mode for genres
-    await loadPlaybackQueueGenre(validatedResults, 0);
-
-    if (state.playbackQueue.length === 0) {
-      throw new Error('No se pudieron cargar pistas en la cola');
-    }
-
-    // Find first playable track
-    let track = null;
-    let trackIdentifier = null;
-
-    for (const result of validatedResults) {
-      try {
-        const files = await fetchOptimizedPlayableFiles(result.identifier);
-        if (files.length > 0 && files[0].url) {
-          track = files[0];
-          trackIdentifier = result.identifier;
-          break;
-        }
-      } catch (error) {
-        console.debug(`Error fetching ${result.identifier}:`, error);
-      }
-    }
-
-    if (!track) {
-      throw new Error('No se pudo encontrar una pista reproducible');
-    }
-
-    showStatus(`Encontradas ${validatedResults.length} pistas reproducibles para ${genre}`, 'info', 2000);
-    await playAudioTrackOptimized(track, trackIdentifier, 0, 1);
-
-  } catch (error) {
-    console.error('Error en playGenreFromFIFO:', error);
-    showStatus(`Error: ${error.message}`, 'error');
-  } finally {
-    state.isLoading = false;
-    elements.playBtn.disabled = false;
-    elements.playBtn.textContent = '||';
-  }
-}
-
-// Special loadPlaybackQueue function for genres that always shuffles
-async function loadPlaybackQueueGenre(validatedResults, startIndex) {
-  state.playbackQueue = [];
-
-  if (!validatedResults || validatedResults.length === 0) {
-    return;
-  }
-
-  const queueSize = 10;
-
-  // Genres ALWAYS play in shuffle (random) mode
-  const shuffled = [...validatedResults].sort(() => Math.random() - 0.5);
-  state.playbackQueue = shuffled.slice(0, queueSize);
-
-  // Preload tracks from queue
-  if (state.networkOnline) {
-    audioCache.preloadTracks(state.playbackQueue, true);
-  }
-}
-
-async function playOptimizedRandom(genre) {
-  if (state.isLoading) return;
-
-  state.isLoading = true;
-  elements.playBtn.disabled = true;
-  elements.playBtn.innerHTML = '<span class="loader"></span>';
-
-  state.currentGenre = genre;
-  state.isPlayingFavorites = false;
-
-  try {
-    console.log('Iniciando búsqueda de género:', genre);
-    showStatus(`Buscando ${genre}...`, 'info', 0);
-
-    const simpleQuery = `${genre}`;
-    console.log('Realizando búsqueda con query:', simpleQuery);
-    const items = await performOptimizedSearch(simpleQuery, 0);
-    console.log('Resultados de búsqueda:', items);
-
-    if (items.results.length === 0) {
-      throw new Error(`No se encontraron pistas para ${genre}. Intenta con otro género`);
-    }
-
-    console.log('Configurando contexto para reproducción de género');
-    // Set context for continuous playback
-    playbackManager.setContext('genre', items.results, -1); // Start at -1 so first getNextTrack() returns index 0
-
-    // Cargar cola FIFO con los resultados
-    loadPlaybackQueue('genre', items.results, 0);
-
-    console.log('Iniciando reproducción del primer resultado');
-    // Play the first track immediately
-    await playNextInContext();
-
-  } catch (error) {
-    console.error('Error en playOptimizedRandom:', error);
-    showStatus(`Error: ${error.message}`, 'error');
-  } finally {
-    state.isLoading = false;
-    elements.playBtn.disabled = false;
-    elements.playBtn.textContent = '||';
-  }
-}
 
 // Random search results playback
 async function playRandomSearchResults() {
@@ -4421,91 +4226,7 @@ async function initializeApp() {
     });
   }
 
-  if (elements.genreSelect) {
-    elements.genreSelect.addEventListener('change', async (e) => {
-      const selectedGenre = e.target.value;
 
-      // Auto-hide favorites when genre is selected
-      hideFavoritesList();
-
-      state.currentGenre = selectedGenre;
-      state.userInteracted = true;
-      state.retryCount = 0;
-      state.isPlayingFavorites = false;
-      state.albumOrigin = null;
-
-      // Wait for app initialization if needed
-      if (!state.isInitialized) {
-        state.isInitialized = true;
-        enableControlsForGenrePlayback();
-        updateShuffleButton();
-      }
-
-      try {
-        // Stop current playback
-        elements.audio.pause();
-        elements.audio.currentTime = 0;
-
-        // Clear any delayed playback
-        if (state.lastFetchController) {
-          state.lastFetchController.abort();
-        }
-
-        // Load genre results into FIFO queue and start playing
-        await playGenreFromFIFO(selectedGenre);
-      } catch (error) {
-        console.error('Error playing genre:', error);
-        showStatus('Error reproduciendo género', 'error', 3000);
-      }
-    });
-  }
-
-  // Setup genre button event listeners
-  const genreButtons = document.querySelectorAll('.genre-btn');
-  genreButtons.forEach(button => {
-    button.addEventListener('click', async (e) => {
-      const genre = e.target.getAttribute('data-genre');
-      if (!genre) return;
-
-      // Auto-hide favorites when genre is selected
-      hideFavoritesList();
-
-      state.currentGenre = genre;
-      state.userInteracted = true;
-      state.retryCount = 0;
-      state.isPlayingFavorites = false;
-      state.albumOrigin = null;
-
-      // Remove active class from all genre buttons
-      document.querySelectorAll('.genre-btn').forEach(btn => btn.classList.remove('active'));
-      // Add active class to clicked button
-      e.target.classList.add('active');
-
-      // Wait for app initialization if needed
-      if (!state.isInitialized) {
-        state.isInitialized = true;
-        updateShuffleButton();
-      }
-
-      try {
-        // Stop current playback
-        elements.audio.pause();
-        elements.audio.currentTime = 0;
-
-        // Clear any delayed playback
-        if (state.lastFetchController) {
-          state.lastFetchController.abort();
-        }
-
-        // Load genre results into FIFO queue and start playing
-        await playGenreFromFIFO(genre);
-        updatePlayButtonState();
-      } catch (error) {
-        console.error('Error playing genre:', error);
-        showStatus('Error reproduciendo género', 'error', 3000);
-      }
-    });
-  });
 
   if (elements.favoritesToggle) {
     elements.favoritesToggle.addEventListener('click', toggleFavoritesList);
@@ -4529,12 +4250,7 @@ async function initializeApp() {
 
   updateShuffleButton();
 
-  // Inicializar selector de género
-  if (elements.genreSelect) {
-    elements.genreSelect.value = state.currentGenre;
-  }
 
-  enableControlsForGenrePlayback();
 
   // Inicializar PWA
   registerServiceWorker();

@@ -21,10 +21,30 @@
 
 <body>
   <header>
-    <h1><img src="icons/favicon.svg" height="20px">&nbsp;Resonate</h1>
+    <h1>&nbsp;Resonate</h1>
   </header>
+
+  <!-- Search and Discovery Section -->
+  <div class="discovery-section">
+    <div class="search-section">
+      <div class="search-container">
+        <input type="text" id="search-input" class="search-input" placeholder="Buscar">
+      </div>
+      <div id="search-results" class="search-results">
+        <div id="search-results-list" class="search-results-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Player Section -->
   <div class="app" id="app">
-    <!-- Main Player Section -->
+    <!-- Favorites Section -->
+    <div class="favorites-section">
+      <div class="favorites-header">
+        <div id="favorites-toggle" class="favorites-label">▼ ❤️</div>
+      </div>
+      <div id="favorites-list" class="favorites-list"></div>
+    </div>
     <div class="main-player-section">
       <div class="player-container">
         <div class="player-content" id="player-content">
@@ -36,19 +56,16 @@
             <div class="creator" id="creator"></div>
           </div>
           <div class="controls">
+            <button id="shuffle-favorites-btn" class="shuffle-favorites-btn">⇄</button>
             <button id="prev-btn" class="prev-btn" aria-label="Anterior">⏮</button>
             <button id="play-btn" class="play-btn" aria-label="Reproducir/Pausar">▶</button>
             <button id="next-btn" class="next-btn" aria-label="Siguiente">⏭</button>
             <button id="favorite-btn" class="favorite-btn" aria-label="Favorito">🩶</button>
-            <button id="shuffle-favorites-btn" class="shuffle-favorites-btn">⇄</button>
             <div class="adaptive-quality-indicator" id="quality-indicator" title="Calidad adaptativa">
               <span id="quality-text">auto</span>
             </div>
-            <div class="volume-control">
-              <span class="volume-icon" id="volume-icon">🔊</span>
-              <input type="range" id="volume-slider" class="volume-slider" min="0" max="1" step="0.1" value="1">
-            </div>
           </div>
+          <div id="play-all-favorites-btn" class="favorites-label">▶❤️</div>
           <div class="progress-section">
             <div class="progress-bar" id="progress-bar">
               <span class="current-time" id="current-time">0:00</span>
@@ -59,47 +76,11 @@
         </div>
       </div>
     </div>
-
-    <!-- Search and Discovery Section -->
-    <div class="discovery-section">
-      <div class="search-section">
-        <div class="search-container">
-          <input type="text" id="search-input" class="search-input" placeholder="Buscar">
-        </div>
-        <div id="search-results" class="search-results">
-          <div id="search-results-list" class="search-results-list"></div>
-        </div>
-      </div>
-
-      <!-- Favorites Section -->
-      <div class="favorites-section">
-        <div class="favorites-header">
-          <span id="favorites-toggle" class="favorites-label">Ver ❤️</span>
-          <span id="play-all-favorites-btn" class="favorites-label">Reproducir ❤️</span>
-        </div>
-        <div id="favorites-list" class="favorites-list"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Genres Section (moved above footer) -->
-  <div class="genres-section-above-footer">
-    <h3>Explora por Géneros</h3>
-    <div class="genre-buttons-grid">
-      <button class="genre-btn" data-genre="rock">Rock</button>
-      <button class="genre-btn" data-genre="electronic">Electronic</button>
-      <button class="genre-btn" data-genre="classical">Classical</button>
-      <button class="genre-btn" data-genre="hiphop">Hip-Hop</button>
-      <button class="genre-btn" data-genre="latina">Latina</button>
-      <button class="genre-btn" data-genre="reggae">Reggae</button>
-      <button class="genre-btn" data-genre="jazz">Jazz</button>
-      <button class="genre-btn" data-genre="pop">Pop</button>
-    </div>
   </div>
   <audio id="audio" crossorigin="anonymous" preload="metadata"></audio>
   <footer class="footer">
-    <div>&copy; 2025 Resonate Player. Todos los derechos reservados</div>
-    <div>Prohibida la reproducción total o parcial sin autorización</div>
+    <div>&copy; 2025 Resonate Player</div>
+    <div>Todos los derechos reservados. Prohibida la reproducción total o parcial sin autorización</div>
   </footer>
   <div id="status-messages"></div>
   <script src="js/resonate.js"></script>
@@ -133,6 +114,7 @@
         });
     }
   </script>
+
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-BM0DX9WY1D"></script>
   <script>
