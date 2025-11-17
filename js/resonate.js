@@ -23,7 +23,7 @@ class AdaptiveStreamingManager {
   async startMonitoring() {
     if (this.monitoringActive) return;
     this.monitoringActive = true;
-    console.debug('Starting adaptive streaming monitoring');
+    console.log('Starting adaptive streaming monitoring');
 
     // Initial bandwidth check
     await this.measureBandwidth();
@@ -46,21 +46,32 @@ class AdaptiveStreamingManager {
     if (now - this.lastBandwidthCheck < 5000) return; // Throttle checks
     this.lastBandwidthCheck = now;
 
-    try {
-      // Create a small test request to measure bandwidth
-      const testUrl = 'https://archive.org/services/img/test.jpg'; // Small image for testing
-      const startTime = performance.now();
+    // Try multiple fallback URLs for local development
+    const testUrls = [
+      'https://archive.org/services/img/test.jpg', // Original archive.org test image
+      'https://resonate-aws-bucket.s3.us-east-2.amazonaws.com/icons/maskable_icon_x192.png',
+      'https://via.placeholder.com/64x64.png', // Small placeholder image
+      'https://httpbin.org/image/png' // HTTPBin test image
+    ];
 
-      const response = await fetch(testUrl + '?t=' + Date.now(), {
-        method: 'HEAD', // Only headers
-        cache: 'no-cache'
-      });
+    for (const testUrl of testUrls) {
+      try {
+        const startTime = performance.now();
 
-      if (response.ok) {
-        const responseSize = parseInt(response.headers.get('content-length') || '2048');
+        const response = await fetch(testUrl + '?t=' + Date.now(), {
+          method: 'HEAD',
+          cache: 'no-cache',
+          mode: 'no-cors', // Allow cross-origin requests
+          timeout: 5000 // 5 second timeout
+        });
+
+        // For no-cors, we can't read headers, but we can measure timing
         const endTime = performance.now();
         const duration = (endTime - startTime) / 1000; // seconds
-        const bandwidthMbps = (responseSize * 8) / (duration * 1000000); // Mbps
+
+        // Estimate size based on duration (rough approximation)
+        const estimatedSize = Math.max(1024, duration * 50000); // Minimum 1KB, scale with time
+        const bandwidthMbps = (estimatedSize * 8) / (duration * 1000000); // Mbps
         const latency = duration * 1000; // ms
 
         this.bandwidthHistory.push({
@@ -79,24 +90,27 @@ class AdaptiveStreamingManager {
         this.bandwidthEstimate = this.bandwidthHistory.reduce((sum, m) => sum + m.bandwidth, 0) / this.bandwidthHistory.length;
 
         this.adjustQualityProfile();
-      }
-    } catch (error) {
-      console.warn('Bandwidth measurement failed:', error);
-      // Set a fallback bandwidth estimate if this is our first measurement
-      if (this.bandwidthHistory.length === 0) {
-        const fallbackMbps = this.connectionType === '4g' ? 10 : this.connectionType === '3g' ? 2 : 5;
-        this.bandwidthEstimate = fallbackMbps;
+        return; // Success, exit the loop
 
-        this.bandwidthHistory.push({
-          bandwidth: fallbackMbps,
-          latency: 100,
-          timestamp: now,
-          connectionType: this.connectionType
-        });
-
-        this.adjustQualityProfile();
+      } catch (error) {
+        console.warn(`Bandwidth test with ${testUrl} failed:`, error.message);
+        continue; // Try next URL
       }
     }
+
+    // All URLs failed, use connection type fallback
+    console.warn('All bandwidth measurement URLs failed, using fallback estimate');
+    const fallbackMbps = this.connectionType === '4g' ? 10 : this.connectionType === '3g' ? 2 : 5;
+    this.bandwidthEstimate = fallbackMbps;
+
+    this.bandwidthHistory.push({
+      bandwidth: fallbackMbps,
+      latency: 100,
+      timestamp: now,
+      connectionType: this.connectionType
+    });
+
+    this.adjustQualityProfile();
   }
 
   adjustQualityProfile() {
@@ -119,7 +133,7 @@ class AdaptiveStreamingManager {
     // Adjust cache behavior
     this.adjustCacheStrategy();
 
-    console.debug(`Adaptive quality: ${state.adaptiveQuality}, Bandwidth: ${this.bandwidthEstimate.toFixed(1)} Mbps`);
+    console.log(`Adaptive quality: ${state.adaptiveQuality}, Bandwidth: ${this.bandwidthEstimate.toFixed(1)} Mbps`);
   }
 
   setQualityProfile(profile) {
@@ -481,8 +495,7 @@ class AdvancedAudioCache {
           };
           resolve(result);
         } else {
-          // Invalid or corrupted data
-          console.warn('Invalid cached data for:', url);
+          // Invalid or corrupted data (silent cleanup)
           store.delete(url).onerror = () => {
             // Ignore delete errors
           };
@@ -745,7 +758,7 @@ class WebAssemblyAudioProcessor {
       this.instance = result.instance;
       this.memory = this.instance.exports.memory;
       this.initialized = true;
-      console.debug('WebAssembly audio processor initialized');
+      console.log('WebAssembly audio processor initialized');
     } catch (error) {
       console.warn('WebAssembly not available, using fallback processing:', error);
       // Fallback to JavaScript implementation will be used
@@ -876,7 +889,7 @@ function testWebAssemblyAudio() {
   const volume = 0.8;
   const processed = wasmAudioProcessor.applyVolumeAdjustment(testBuffer, volume);
 
-  console.debug('WebAssembly audio test completed, processed', processed.length, 'samples');
+  console.log('WebAssembly audio test completed, processed', processed.length, 'samples');
   return processed;
 }
 
@@ -968,7 +981,7 @@ const state = {
   searchTimeout: null,
   isAndroid: /Android/.test(navigator.userAgent),
   expandedAlbums: new Set(),
-  shuffleFavorites: true,
+  shuffleFavorites: false,
   networkOnline: true,
   currentBlobUrl: null,
   autoPlaySearchResults: true,
@@ -1112,7 +1125,7 @@ function setupPageVisibilityHandling() {
 
       try {
         localStorage.setItem('resonate_playback_state', JSON.stringify(savedPlaybackState));
-        console.debug('Playback state saved');
+        console.log('Playback state saved');
       } catch (e) {
         console.warn('Failed to save playback state:', e);
       }
@@ -1139,7 +1152,7 @@ function setupPageVisibilityHandling() {
       const maxAge = 30 * 60 * 1000; // 30 minutes
 
       if (age > maxAge) {
-        console.debug('Saved playback state too old, discarding');
+        console.log('Saved playback state too old, discarding');
         localStorage.removeItem('resonate_playback_state');
         savedPlaybackState = null;
         return;
@@ -1150,7 +1163,7 @@ function setupPageVisibilityHandling() {
       if (savedPlaybackState.track && savedPlaybackState.currentTime) {
         try {
           elements.audio.currentTime = savedPlaybackState.currentTime;
-          console.debug('Playback position restored to:', formatTime(savedPlaybackState.currentTime));
+          console.log('Playback position restored to:', formatTime(savedPlaybackState.currentTime));
 
           if (savedPlaybackState.volume !== undefined) {
             elements.audio.volume = savedPlaybackState.volume;
@@ -1732,7 +1745,7 @@ async function performOptimizedSearch(query, page = 0) {
   const cached = enhancedCache.get('search', cacheKey);
 
   if (cached) {
-    console.debug('Cached results count:', cached.results.length);
+    console.log('Cached results count:', cached.results.length);
     return cached;
   }
 
@@ -2113,7 +2126,7 @@ async function loadAudioWithCache(track) {
     const cacheResult = await audioCache.get(track.url);
 
     if (cacheResult && cacheResult.blob) {
-      console.debug('Playing from cache:', track.title);
+      console.log('Playing from cache:', track.title);
       const blobUrl = URL.createObjectURL(cacheResult.blob);
       return blobUrl;
     }
@@ -2329,10 +2342,13 @@ function performCompleteCleanup() {
     lazyObserver.remove();
   }
 
-  console.debug('Cleanup complete: search results hidden and state reset');
+  console.log('Cleanup complete: search results hidden and state reset');
 }
 
 function hideSearchResults() {
+  // Verificar si había resultados para ocultar antes de limpiar y registrar
+  const hadActiveResults = elements.searchResults && elements.searchResults.classList.contains('active');
+
   // Ocultar visualmente los resultados
   elements.searchResults.classList.remove('active');
   state.searchActive = false;
@@ -2358,7 +2374,10 @@ function hideSearchResults() {
     lazyObserver.remove();
   }
 
-  console.debug('Search results hidden and cleared');
+  // Solo registrar si efectivamente había resultados activos naturales (no siempre).
+  if (hadActiveResults) {
+    console.log('Search results hidden and cleared');
+  }
 }
 
 function createSearchResultElement(result, globalIndex) {
@@ -2729,7 +2748,7 @@ async function playSpecificTrack(track, albumId, trackIndex, totalTracks) {
 // Play optimized search result
 async function playOptimizedSearchResult(result, index, allResults) {
   if (state.isLoading) {
-    console.debug('Playback in progress, ignoring click');
+    console.log('Playback in progress, ignoring click');
     return;
   }
 
@@ -3117,7 +3136,7 @@ function setupPreloadedPlayback(tracks, startIndex = 0) {
   playbackManager.setContext('searchPlaylist', preloadedPlaylist, startIndex);
   state.autoPlaySearchResults = true;
 
-  console.debug(`Preloaded list configured with ${preloadedPlaylist.length} tracks`);
+  console.log(`Preloaded list configured with ${preloadedPlaylist.length} tracks`);
 }
 
 // Enhanced continuous playback
@@ -3722,9 +3741,9 @@ async function playOptimizedFavorite(favoriteIndex = 0) {
     const isPreloaded = favoritesQueue.includes(track.url);
 
     if (isPreloaded) {
-      console.debug('Playing from preloaded favorites:', track.title);
+      console.log('Playing from preloaded favorites:', track.title);
     } else {
-      console.debug('Favorite not preloaded, loading from network:', track.title);
+      console.log('Favorite not preloaded, loading from network:', track.title);
     }
 
     const cached = await audioCache.get(track.url);
@@ -4070,7 +4089,7 @@ async function initializeApp() {
   // Inicializar streaming adaptativo
   try {
     await adaptiveStreaming.startMonitoring();
-    console.debug('Adaptive streaming monitoring started');
+    console.log('Adaptive streaming monitoring started');
   } catch (error) {
     console.warn('Error starting adaptive streaming monitoring:', error);
   }
@@ -4110,11 +4129,8 @@ async function initializeApp() {
     }, 500);
   }
 
-
-
   // Configurar Media Session API
   setupMediaSession();
-
   setupSearchOnEnter();
   setupSearchFocusBehavior();
   setupProgressBarInteraction();
@@ -4294,7 +4310,7 @@ async function initializeApp() {
       // Remover cualquier elemento splash personalizado si existe
       const splashEl = document.querySelector('.start-view');
       if (splashEl && splashEl.parentNode) splashEl.parentNode.removeChild(splashEl);
-      console.debug('PWA detected: splash removed and app activated');
+      console.log('PWA detected: splash removed and app activated');
     } catch (err) {
       console.warn('Error while hiding splash for PWA:', err);
     }
@@ -4327,8 +4343,6 @@ async function initializeApp() {
   window.playFromFavoritesQueue = playFromFavoritesQueue;
   window.dispatchEvent(new Event('resonate:results-rendered'));
 
-
-  // Resonate initialized with enhancements (silent)
 }
 
 // INICIALIZACIÓN SEGURA
