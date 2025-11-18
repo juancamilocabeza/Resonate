@@ -1,12 +1,17 @@
 /* ===== VARIABLES & RESET ===== */
 :root {
-  --bg: #000;
-  --fg: #e7e9ee;
-  --muted: #888;
-  --accent: #6ee7b7;
-  --card: #1a1a1a;
-  --btn: #333;
-  --error: #ff6b6b;
+  --bg: #0b0f1a;
+  --fg: #f8fafc;
+  --muted: #94a3b8;
+  --accent: #0284c7;
+  --accent-alt: #38bdf8;
+  --highlight: #f472b6;
+  --secondary: #fbbf24;
+  --card: #1e293b;
+  --btn: #334155;
+  --neutral: #e2e8f0;
+  --error: #ef4444;
+  /* rojo coral */
 }
 
 * {
@@ -79,6 +84,7 @@ h1 {
   display: flex;
   align-items: center;
   gap: 6px;
+  padding: 15px 0px;
 }
 
 h2 {

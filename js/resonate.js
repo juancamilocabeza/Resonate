@@ -2584,7 +2584,7 @@ async function loadAlbumInfoBackground(identifier, resultEl) {
         metaElement.innerHTML = '<span style="color: var(--muted); font-size: 10px;">No hay pistas reproducibles</span>';
       } else {
         metaElement.innerHTML = isAlbum ?
-          `<span class="album-indicator">Álbum: ${trackCount} pistas</span>` :
+          `<span class="album-indicator">${trackCount} pistas</span>` :
           `<span class="album-indicator">Pista individual</span>`;
       }
     }
@@ -3543,7 +3543,7 @@ function updateFavoritesList() {
     albumItem.className = 'favorite-item';
 
     const albumIndicator = isAlbum ?
-      `<span class="album-indicator">Álbum: ${albumData.tracks.length} pistas</span>` :
+      `<span class="album-indicator">${albumData.tracks.length} pistas</span>` :
       '';
 
     albumItem.innerHTML = `
