@@ -12,9 +12,12 @@
   --neutral: #e2e8f0;
   --error: #ef4444;
   /* rojo coral */
+
+  /* Loader properties */
+  --loader-size: 32px;
+  --loader-border-width: 4px;
+  --loader-animation-duration: 0.8s;
 }
-
-
 
 * {
   margin: 0;
@@ -1093,18 +1096,24 @@ select:focus {
 }
 
 .loader {
-  display: inline-flex;
-  width: 15px;
-  height: 15px;
-  border: 2px solid var(--muted);
+  --size: var(--loader-size);
+  width: var(--size);
+  height: var(--size);
+  border: var(--loader-border-width) solid var(--bg);
   border-radius: 50%;
   border-top-color: var(--accent);
-  animation: spin 1s linear infinite;
+  animation: spin var(--loader-animation-duration) linear infinite;
 }
 
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loader {
+    animation: none;
   }
 }
 
