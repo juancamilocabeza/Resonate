@@ -5,18 +5,35 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Resonate Player</title>
+  <meta name="application-name" content="Resonate Player">
   <meta name="description"
-    content="Reproductor multimedia, que te permite descubrir y disfrutar contenidos libre y privada">
+    content="Reproductor multimedia, que te permite descubrir y disfrutar contenidos de manera libre y privada">
   <meta name="keywords" content="Resonate, reproductor multimedia, online, PWA, gratis, offline">
   <meta name="robots" content="index, follow">
   <meta name="author" content="Juan Cabeza">
-  <meta name="theme-color" content="#000000">
-  <link rel="icon" type="image/png" href="icons/favicon.svg">
+  <meta name="copyright" content="2025 Resonate Player">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#FF0000">
+  <link rel="icon" type="image/svg+xml" href="icons/favicon.svg" />
+  <link rel="apple-touch-icon" href="icons/icon.svg" />
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="msapplication-TileColor" content="#000000">
-  <link rel="stylesheet" href="css/resonate.css" />
+  <meta name="apple-mobile-web-app-title" content="Resonate Player">
+  <meta name="og:title" content="Resonate Player">
+  <meta name="og:description"
+    content="Reproductor multimedia, que te permite descubrir y disfrutar contenidos de manera libre y privada">
+  <meta name="og:image" content="icons/maskable_icon_x512.png">
+  <meta name="og:type" content="website">
+  <meta name="og:url" content="https://www.resonateplayer.com">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Resonate Player">
+  <meta name="twitter:description"
+    content="Reproductor multimedia, que te permite descubrir y disfrutar contenidos de manera libre y privada">
+  <meta name="twitter:image" content="icons/maskable_icon_x512.png">
+  <meta name="twitter:site" content="https://www.resonateplayer.com">
   <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="css/resonate.css" />
+
 </head>
 
 <body>
@@ -36,7 +53,6 @@
     </div>
   </div>
 
-  <!-- Main Player Section -->
   <div class="app" id="app">
     <!-- Favorites Section -->
     <div class="favorites-section">
@@ -45,6 +61,7 @@
       </div>
       <div id="favorites-list" class="favorites-list"></div>
     </div>
+    <!-- Main Player Section -->
     <div class="main-player-section">
       <div class="player-container">
         <div class="player-content" id="player-content">
@@ -85,8 +102,8 @@
     <div>Todos los derechos reservados. Prohibida la reproducción total o parcial sin autorización</div>
   </footer>
   <div id="status-messages"></div>
-  <script src="js/resonate.js"></script>
 
+  <!--Service Worker-->
   <script>
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js')
@@ -117,8 +134,13 @@
     }
   </script>
 
+  <!-- Resonate JS -->
+  <script src="js/resonate.js">
+  </script>
+
   <!-- Google tag (gtag.js) -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-BM0DX9WY1D"></script>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-BM0DX9WY1D">
+  </script>
   <script>
     window.dataLayer = window.dataLayer || [];
     function gtag() { dataLayer.push(arguments); }

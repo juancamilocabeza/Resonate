@@ -48,10 +48,7 @@ class AdaptiveStreamingManager {
 
     // Try multiple fallback URLs for local development
     const testUrls = [
-      'https://archive.org/services/img/test.jpg', // Original archive.org test image
       'https://resonate-aws-bucket.s3.us-east-2.amazonaws.com/icons/maskable_icon_x192.png',
-      'https://via.placeholder.com/64x64.png', // Small placeholder image
-      'https://httpbin.org/image/png' // HTTPBin test image
     ];
 
     for (const testUrl of testUrls) {
