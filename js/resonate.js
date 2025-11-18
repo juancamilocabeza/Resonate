@@ -1000,7 +1000,8 @@ const state = {
   currentSearchPage: 0,
   currentSearchHasMore: false,
   currentSearchQuery: '',
-  isLoadingMore: false
+  isLoadingMore: false,
+  savedPlaybackState: null
 };
 
 function setupMediaSession() {
@@ -1100,39 +1101,12 @@ function setupConnectivityMonitoring() {
   });
 }
 
-// Page visibility and playback resume management (only saving, no restoration)
+// Page visibility and playback resume management
 function setupPageVisibilityHandling() {
-  // Save playback state when app becomes hidden (no restoration)
-  const savePlaybackState = () => {
-    if (state.currentTrack && elements.audio && elements.audio.src) {
-      const playbackState = {
-        track: state.currentTrack,
-        currentTime: elements.audio.currentTime,
-        volume: elements.audio.volume,
-        muted: elements.audio.muted,
-        playbackManager: {
-          context: playbackManager.getCurrentContext(),
-          contextData: { ...playbackManager.contextData }
-        },
-        playbackQueue: [...state.playbackQueue],
-        playbackHistory: [...state.playbackHistory],
-        wasPlaying: !elements.audio.paused,
-        timestamp: Date.now()
-      };
-
-      try {
-        localStorage.setItem('resonate_playback_state', JSON.stringify(playbackState));
-        console.log('Playback state saved');
-      } catch (e) {
-        console.warn('Failed to save playback state:', e);
-      }
-    }
-  };
-
   // Listen for visibility changes
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
-      // App is hidden - save state (no restoration)
+      // App is hidden - save state
       savePlaybackState();
     }
   });
@@ -2967,7 +2941,13 @@ function playPrevious() {
 function togglePlay() {
   if (state.isLoading) return;
 
-  // Check if there's a saved track to resume
+  // Check if there's a saved playback state to resume
+  if (elements.audio.paused && !elements.audio.src && state.savedPlaybackState) {
+    resumeSavedPlayback();
+    return;
+  }
+
+  // Check if there's a saved track to resume (legacy)
   if (elements.audio.paused && !elements.audio.src && state.currentTrack && state.currentTrack.url) {
     // Resume last track
     playAudioTrackOptimized(state.currentTrack, state.currentTrack.id, state.currentTrack.trackIndex, state.currentTrack.totalTracks).catch(error => {
@@ -3011,6 +2991,61 @@ function togglePlay() {
     if ('mediaSession' in navigator) {
       navigator.mediaSession.playbackState = 'paused';
     }
+  }
+}
+
+// Resume playback from saved state
+async function resumeSavedPlayback() {
+  const savedState = state.savedPlaybackState;
+  if (!savedState) return;
+
+  state.isLoading = true;
+  if (elements.playBtn) {
+    elements.playBtn.disabled = true;
+    elements.playBtn.innerHTML = '<span class="loader"></span>';
+  }
+
+  state.userInteracted = true;
+
+  try {
+    // Restore volume and mute settings
+    if (savedState.volume !== undefined && elements.audio) {
+      elements.audio.volume = savedState.volume;
+      if (elements.volumeSlider) {
+        elements.volumeSlider.value = savedState.volume;
+      }
+      state.currentVolume = savedState.volume;
+    }
+    if (savedState.muted !== undefined && elements.audio) {
+      elements.audio.muted = savedState.muted;
+      updateVolumeIcon();
+    }
+
+    showStatus(`Reprodiciendo pista guardada: ${savedState.track.title}`, 'info', 0);
+
+    // Play the track
+    await playAudioTrackOptimized(savedState.track, savedState.track.id, savedState.track.trackIndex, savedState.track.totalTracks);
+
+    // Set the saved position
+    if (savedState.currentTime && elements.audio && elements.audio.duration) {
+      elements.audio.currentTime = savedState.currentTime;
+      updateProgressBar();
+    }
+
+    // Clear the saved state since we resumed it
+    state.savedPlaybackState = null;
+    localStorage.removeItem('resonate_playback_state');
+
+  } catch (error) {
+    console.error('Error resuming saved playback:', error);
+    showStatus(`Error al reanudar pista guardada: ${error.message}`, 'error');
+    state.isLoading = false;
+    if (elements.playBtn) {
+      elements.playBtn.disabled = false;
+      elements.playBtn.innerHTML = '▶';
+    }
+    // Try force play as fallback
+    forcePlay();
   }
 }
 
@@ -3850,6 +3885,7 @@ function setupProgressBarInteraction() {
     isDragging = true;
     state.isSeeking = true;
     elements.progressBar.classList.add('dragging');
+    elements.progressSection.classList.add('dragging');
 
     // Actualizar inmediatamente al comenzar el arrastre
     updateProgressOnDrag(e);
@@ -4066,18 +4102,42 @@ function setupPushNotifications() {
   }
 }
 
+// Save current playback state to localStorage
+function savePlaybackState() {
+  if (state.currentTrack && elements.audio && elements.audio.src) {
+    const playbackState = {
+      track: state.currentTrack,
+      currentTime: elements.audio.currentTime,
+      volume: elements.audio.volume,
+      muted: elements.audio.muted,
+      wasPlaying: !elements.audio.paused,
+      timestamp: Date.now()
+    };
+
+    try {
+      localStorage.setItem('resonate_playback_state', JSON.stringify(playbackState));
+      state.savedPlaybackState = playbackState;
+      console.log('Playback state saved');
+    } catch (e) {
+      console.warn('Failed to save playback state:', e);
+    }
+  }
+}
+
 // Load saved playback state from previous session
 function loadSavedPlaybackState() {
   try {
     const savedStateStr = localStorage.getItem('resonate_playback_state');
-    if (!savedStateStr) return;
+    if (!savedStateStr) return null;
 
     const savedState = JSON.parse(savedStateStr);
     const age = Date.now() - (savedState.timestamp || 0);
     const maxAge = 24 * 60 * 60 * 1000; // 24 hours
 
     if (age < maxAge && savedState.track && savedState.currentTime !== undefined) {
-      // Restore the track information
+      state.savedPlaybackState = savedState;
+
+      // Restore the track information (but don't start playing yet)
       state.currentTrack = savedState.track;
       elements.title.textContent = state.currentTrack.title;
       elements.creator.textContent = state.currentTrack.totalTracks > 1 ?
@@ -4086,14 +4146,18 @@ function loadSavedPlaybackState() {
       setArtwork(state.currentTrack, state.currentTrack.id);
       updateFavoriteButton();
 
-      // Load volume settings
-      loadVolume();
-
       showStatus(`Última pista: ${savedState.track.title} en ${formatTime(savedState.currentTime)}`, 'info', 5000);
+      return savedState;
+    } else {
+      // Expired, remove it
+      localStorage.removeItem('resonate_playback_state');
+      state.savedPlaybackState = null;
     }
   } catch (error) {
     console.warn('Error loading saved playback state:', error);
+    state.savedPlaybackState = null;
   }
+  return null;
 }
 
 // Offline functionality setup
