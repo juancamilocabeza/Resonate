@@ -1098,14 +1098,12 @@ function setupConnectivityMonitoring() {
   });
 }
 
-// Page visibility and playback resume management
+// Page visibility and playback resume management (only saving, no restoration)
 function setupPageVisibilityHandling() {
-  let savedPlaybackState = null;
-
-  // Save playback state when app becomes hidden
+  // Save playback state when app becomes hidden (no restoration)
   const savePlaybackState = () => {
     if (state.currentTrack && elements.audio && elements.audio.src) {
-      savedPlaybackState = {
+      const playbackState = {
         track: state.currentTrack,
         currentTime: elements.audio.currentTime,
         volume: elements.audio.volume,
@@ -1121,7 +1119,7 @@ function setupPageVisibilityHandling() {
       };
 
       try {
-        localStorage.setItem('resonate_playback_state', JSON.stringify(savedPlaybackState));
+        localStorage.setItem('resonate_playback_state', JSON.stringify(playbackState));
         console.log('Playback state saved');
       } catch (e) {
         console.warn('Failed to save playback state:', e);
@@ -1129,64 +1127,11 @@ function setupPageVisibilityHandling() {
     }
   };
 
-  // Restore playback state when app becomes visible (only if recent)
-  const restorePlaybackState = async () => {
-    if (!savedPlaybackState) {
-      try {
-        const saved = localStorage.getItem('resonate_playback_state');
-        if (saved) {
-          savedPlaybackState = JSON.parse(saved);
-        }
-      } catch (e) {
-        console.warn('Failed to load saved playback state:', e);
-        return;
-      }
-    }
-
-    if (savedPlaybackState && state.currentTrack) {
-      // Only restore if the state is recent (within 30 minutes)
-      const age = Date.now() - (savedPlaybackState.timestamp || 0);
-      const maxAge = 30 * 60 * 1000; // 30 minutes
-
-      if (age > maxAge) {
-        console.log('Saved playback state too old, discarding');
-        localStorage.removeItem('resonate_playback_state');
-        savedPlaybackState = null;
-        return;
-      }
-
-      // Optional: only restore if user interacted recently or if auto-resume is preferred
-      // For now, always attempt to resume to the same position
-      if (savedPlaybackState.track && savedPlaybackState.currentTime) {
-        try {
-          elements.audio.currentTime = savedPlaybackState.currentTime;
-          console.log('Playback position restored to:', formatTime(savedPlaybackState.currentTime));
-
-          if (savedPlaybackState.volume !== undefined) {
-            elements.audio.volume = savedPlaybackState.volume;
-          }
-
-          if (savedPlaybackState.muted !== undefined) {
-            elements.audio.muted = savedPlaybackState.muted;
-          }
-
-        } catch (e) {
-          console.warn('Failed to restore playback position:', e);
-        }
-      }
-    }
-  };
-
   // Listen for visibility changes
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
-      // App is hidden - save state
+      // App is hidden - save state (no restoration)
       savePlaybackState();
-    } else {
-      // App became visible - optionally restore state
-      setTimeout(() => {
-        restorePlaybackState();
-      }, 100); // Small delay to ensure DOM is ready
     }
   });
 
@@ -2223,10 +2168,8 @@ function setupListenTracking() {
       state.currentTrackListenStart = 0;
     }
 
-    // Small delay before playing next track to prevent cache conflicts
-    setTimeout(() => {
-      playNextInContext();
-    }, 100);
+    // Call immediately to reduce gap between tracks
+    playNextInContext();
   });
 
   elements.audio.addEventListener('seeked', () => {
@@ -2888,24 +2831,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
         elements.playBtn.disabled = false;
         elements.playBtn.textContent = '| |';
 
-        // Check for pending resume state
-        if (state.pendingResume && state.pendingResume.trackUrl === track.url) {
-          const resumeTime = Math.min(state.pendingResume.currentTime, audio.duration);
-          audio.currentTime = resumeTime;
 
-          // Apply saved volume and mute state
-          if (state.pendingResume.volume !== undefined) {
-            audio.volume = state.pendingResume.volume;
-            elements.volumeSlider.value = state.pendingResume.volume;
-          }
-          if (state.pendingResume.muted !== undefined) {
-            audio.muted = state.pendingResume.muted;
-            updateVolumeIcon();
-          }
-
-          state.pendingResume = null;
-          showStatus(`Reanudado en ${formatTime(resumeTime)}`, 'info', 2000);
-        }
 
         if (totalTracks > 1) {
           showStatus(`Playing: ${track.title} (${trackIndex + 1}/${totalTracks})`, 'info');
@@ -4107,13 +4033,6 @@ function loadSavedPlaybackState() {
       // Load volume settings
       loadVolume();
 
-      state.pendingResume = {
-        currentTime: savedState.currentTime,
-        volume: savedState.volume,
-        muted: savedState.muted,
-        trackUrl: savedState.track.url
-      };
-
       showStatus(`Última pista: ${savedState.track.title} en ${formatTime(savedState.currentTime)}`, 'info', 5000);
     }
   } catch (error) {
@@ -4260,11 +4179,12 @@ async function initializeApp() {
       }
     });
 
-    elements.audio.addEventListener('ended', () => {
-      // Asegurar que el botón esté en estado correcto
-      elements.playBtn.textContent = '▶';
-      playNextInContext();
-    });
+  elements.audio.addEventListener('ended', () => {
+    // Asegurar que el botón esté en estado correcto
+    elements.playBtn.textContent = '▶';
+    // Llamar inmediatamente para reducir gap entre pistas
+    playNextInContext();
+  });
     elements.audio.addEventListener('error', (e) => {
       console.error('Audio error:', e.target.error);
       showStatus('Playback error', 'error');
