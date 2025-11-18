@@ -953,7 +953,8 @@ const elements = {
   app: document.getElementById('app'),
   playerContent: document.getElementById('player-content'),
   qualityIndicator: document.getElementById('quality-indicator'),
-  qualityText: document.getElementById('quality-text')
+  qualityText: document.getElementById('quality-text'),
+  repeatBtn: document.getElementById('repeat-btn')
 };
 
 // Application state
@@ -979,6 +980,7 @@ const state = {
   isAndroid: /Android/.test(navigator.userAgent),
   expandedAlbums: new Set(),
   shuffleFavorites: false,
+  repeatMode: 'all', // 'all', 'one', 'off'
   networkOnline: true,
   currentBlobUrl: null,
   autoPlaySearchResults: true,
@@ -2168,8 +2170,20 @@ function setupListenTracking() {
       state.currentTrackListenStart = 0;
     }
 
-    // Call immediately to reduce gap between tracks
-    playNextInContext();
+    // Apply repeat mode
+    if (state.repeatMode === 'one') {
+      // Replay current track
+      elements.audio.currentTime = 0;
+      elements.audio.play();
+      endedHandlerExecuted = false; // Allow loop
+      return;
+    } else if (state.repeatMode === 'all') {
+      // Play next in context
+      playNextInContext();
+    } else {
+      // 'off': Do nothing, stop playback
+      showStatus('Reproducción finalizada', 'info', 2000);
+    }
   });
 
   elements.audio.addEventListener('seeked', () => {
@@ -3396,6 +3410,48 @@ function enableControlsForSearchResults() {
   }
 }
 
+// Repeat mode functions
+function toggleRepeatMode() {
+  const modes = ['all', 'one', 'off'];
+  const currentIndex = modes.indexOf(state.repeatMode);
+  state.repeatMode = modes[(currentIndex + 1) % modes.length];
+  saveRepeatMode(state.repeatMode);
+  updateRepeatBtn();
+  showStatus(`Modo de repetición: ${state.repeatMode === 'all' ? 'Todas' : state.repeatMode === 'one' ? 'Una' : 'Apagado'}`, 'info', 2000);
+}
+
+function updateRepeatBtn() {
+  if (!elements.repeatBtn) return;
+
+  const icons = {
+    all: '🔁', // Repeat all
+    one: '🔂', // Repeat one
+    off: '➡️'   // No repeat
+  };
+
+  elements.repeatBtn.textContent = icons[state.repeatMode] || '🔁';
+  elements.repeatBtn.title = `Modo de repetición: ${state.repeatMode === 'all' ? 'Todas' : state.repeatMode === 'one' ? 'Una' : 'Apagado'}`;
+}
+
+function loadRepeatMode() {
+  try {
+    const saved = localStorage.getItem('resonate_repeat_mode');
+    if (saved && ['all', 'one', 'off'].includes(saved)) {
+      state.repeatMode = saved;
+    }
+  } catch (e) {
+    state.repeatMode = 'all'; // Default
+  }
+}
+
+function saveRepeatMode(mode) {
+  try {
+    localStorage.setItem('resonate_repeat_mode', mode);
+  } catch (e) {
+    console.warn('Error saving repeat mode:', e);
+  }
+}
+
 
 
 // CTA banner to initiate favorites playback (captures user interaction)
@@ -4179,12 +4235,7 @@ async function initializeApp() {
       }
     });
 
-  elements.audio.addEventListener('ended', () => {
-    // Asegurar que el botón esté en estado correcto
-    elements.playBtn.textContent = '▶';
-    // Llamar inmediatamente para reducir gap entre pistas
-    playNextInContext();
-  });
+
     elements.audio.addEventListener('error', (e) => {
       console.error('Audio error:', e.target.error);
       showStatus('Playback error', 'error');
@@ -4256,6 +4307,13 @@ async function initializeApp() {
   }
 
   updateShuffleButton();
+
+  if (elements.repeatBtn) {
+    elements.repeatBtn.addEventListener('click', toggleRepeatMode);
+    updateRepeatBtn();
+  }
+
+  loadRepeatMode();
 
 
 
