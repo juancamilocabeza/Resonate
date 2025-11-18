@@ -292,8 +292,8 @@ button {
   border: none;
   border-radius: 10px;
   background: var(--btn);
-  color: var(--accent);
-  font-size: 15px;
+  color: var(--neutral);
+  font-size: 20px;
   cursor: pointer;
   padding: 0 14px;
   transition: transform 0.1s, background-color 0.2s;
@@ -323,7 +323,7 @@ button:active:not(:disabled) {
   background: var(--accent);
   color: #000;
   font-weight: bold;
-  font-size: 19px;
+  font-size: 20px;
 }
 
 .prev-btn,
@@ -347,8 +347,8 @@ button:active:not(:disabled) {
 
 .shuffle-favorites-btn {
   background: var(--btn);
-  color: var(--muted);
-  font-size: 19px;
+  color: var(--neutral);
+  font-size: 20px;
   width: 68px;
   height: 40px;
   padding: 0;

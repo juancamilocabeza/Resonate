@@ -2882,11 +2882,30 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
 
     const onCanPlay = () => {
       cleanup();
-      audio.play().then(() => {
+      audio.play().then(async () => {
         // Restore button state when playback starts
         state.isLoading = false;
         elements.playBtn.disabled = false;
         elements.playBtn.textContent = '| |';
+
+        // Check for pending resume state
+        if (state.pendingResume && state.pendingResume.trackUrl === track.url) {
+          const resumeTime = Math.min(state.pendingResume.currentTime, audio.duration);
+          audio.currentTime = resumeTime;
+
+          // Apply saved volume and mute state
+          if (state.pendingResume.volume !== undefined) {
+            audio.volume = state.pendingResume.volume;
+            elements.volumeSlider.value = state.pendingResume.volume;
+          }
+          if (state.pendingResume.muted !== undefined) {
+            audio.muted = state.pendingResume.muted;
+            updateVolumeIcon();
+          }
+
+          state.pendingResume = null;
+          showStatus(`Reanudado en ${formatTime(resumeTime)}`, 'info', 2000);
+        }
 
         if (totalTracks > 1) {
           showStatus(`Playing: ${track.title} (${trackIndex + 1}/${totalTracks})`, 'info');
@@ -3007,6 +3026,16 @@ function playPrevious() {
 
 function togglePlay() {
   if (state.isLoading) return;
+
+  // Check if there's a saved track to resume
+  if (elements.audio.paused && !elements.audio.src && state.currentTrack && state.currentTrack.url) {
+    // Resume last track
+    playAudioTrackOptimized(state.currentTrack, state.currentTrack.id, state.currentTrack.trackIndex, state.currentTrack.totalTracks).catch(error => {
+      console.error('Error resuming track:', error);
+      forcePlay();
+    });
+    return;
+  }
 
   // Prevenir reproducción si no hay favoritos y no hay audio cargado
   if (elements.audio.paused && !elements.audio.src && state.favorites.length === 0) {
@@ -4055,6 +4084,43 @@ function setupPushNotifications() {
   }
 }
 
+// Load saved playback state from previous session
+function loadSavedPlaybackState() {
+  try {
+    const savedStateStr = localStorage.getItem('resonate_playback_state');
+    if (!savedStateStr) return;
+
+    const savedState = JSON.parse(savedStateStr);
+    const age = Date.now() - (savedState.timestamp || 0);
+    const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+
+    if (age < maxAge && savedState.track && savedState.currentTime !== undefined) {
+      // Restore the track information
+      state.currentTrack = savedState.track;
+      elements.title.textContent = state.currentTrack.title;
+      elements.creator.textContent = state.currentTrack.totalTracks > 1 ?
+        `${state.currentTrack.creator || 'Desconocido'} (${state.currentTrack.trackIndex + 1}/${state.currentTrack.totalTracks})` :
+        `${state.currentTrack.creator || 'Desconocido'}`;
+      setArtwork(state.currentTrack, state.currentTrack.id);
+      updateFavoriteButton();
+
+      // Load volume settings
+      loadVolume();
+
+      state.pendingResume = {
+        currentTime: savedState.currentTime,
+        volume: savedState.volume,
+        muted: savedState.muted,
+        trackUrl: savedState.track.url
+      };
+
+      showStatus(`Última pista: ${savedState.track.title} en ${formatTime(savedState.currentTime)}`, 'info', 5000);
+    }
+  } catch (error) {
+    console.warn('Error loading saved playback state:', error);
+  }
+}
+
 // Offline functionality setup
 function setupOfflineFunctionality() {
   // Detectar cambios de conectividad
@@ -4095,6 +4161,9 @@ async function initializeApp() {
   // Preparar el CTA (se mostrará si hay favoritos precargados)
   createStartFavoritesCTA();
   audioCache.setupLoadingSafety();
+
+  // Cargar estado de reproducción guardado (última sesión)
+  loadSavedPlaybackState();
 
   setupConnectivityMonitoring();
   setupPageVisibilityHandling();
