@@ -3302,7 +3302,7 @@ function setupPreloadedPlayback(tracks, startIndex = 0) {
 }
 
 // Enhanced continuous playback
-async function playNextInContext() {
+async function playNextInContext(maxRetries = 3) {
   // PREVENT MULTIPLE EXECUTION
   if (state.isLoading) return;
   state.isLoading = true;
@@ -3319,8 +3319,21 @@ async function playNextInContext() {
       const nextItem = playbackManager.getNextTrack();
 
       if (nextItem && albumContext.currentIndex < albumContext.items.length) {
-        await playAudioTrackOptimized(nextItem, playbackManager.getCurrentAlbumId(), albumContext.currentIndex, albumContext.items.length);
-        return;
+        try {
+          await playAudioTrackOptimized(nextItem, playbackManager.getCurrentAlbumId(), albumContext.currentIndex, albumContext.items.length);
+          return;
+        } catch (error) {
+          console.error('Error reproduciendo pista de álbum:', error);
+
+          // Automatically try next track for albums
+          if (maxRetries > 0) {
+            showStatus(`Pista problemática - saltando a la siguiente...`, 'error', 1500);
+            return playNextInContext(maxRetries - 1);
+          } else {
+            showStatus('Múltiples pistas con errores - deteniendo reproducción', 'error', 3000);
+            return;
+          }
+        }
       } else if (albumContext.currentIndex >= albumContext.items.length - 1) {
         // Album finished, check if we should continue with next search result
         if (state.albumOrigin === 'search') {
@@ -3350,7 +3363,7 @@ async function playNextInContext() {
         // Skipping same track, moving to next
         state.playbackQueue.shift(); // Remover la duplicada
         if (state.playbackQueue.length > 0) {
-          await playNextInContext(); // Intentar con la siguiente
+          await playNextInContext(maxRetries); // Intentar con la siguiente
           return;
         }
       }
@@ -3367,7 +3380,15 @@ async function playNextInContext() {
         return;
       } catch (error) {
         console.error('Error reproduciendo desde cola FIFO:', error);
-        // Continuar con el flujo normal si hay error
+
+        // Automatically try next track instead of stopping
+        if (maxRetries > 0) {
+          showStatus(`Error en pista "${actualNextTrack.title || 'desconocida'}" - intentado siguiente...`, 'error', 2000);
+          return playNextInContext(maxRetries - 1);
+        } else {
+          showStatus('Múltiples pistas con errores - deteniendo reproducción automática', 'error', 3000);
+          return;
+        }
       }
     }
 
