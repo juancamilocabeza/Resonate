@@ -401,7 +401,7 @@ button:active:not(:disabled) {
 
 /* Adaptive quality indicator */
 .adaptive-quality-indicator {
-  display: none;
+  /*display: none;*/
   align-items: center;
   justify-content: center;
   background: var(--btn);

@@ -19,18 +19,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Resonate Player">
-  <meta name="og:title" content="Resonate Player">
-  <meta name="og:description"
-    content="Reproductor multimedia, que te permite descubrir y disfrutar contenidos de manera libre y privada">
-  <meta name="og:image" content="icons/maskable_icon_x512.png">
-  <meta name="og:type" content="website">
-  <meta name="og:url" content="https://www.resonateplayer.com">
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Resonate Player">
-  <meta name="twitter:description"
-    content="Reproductor multimedia, que te permite descubrir y disfrutar contenidos de manera libre y privada">
-  <meta name="twitter:image" content="icons/maskable_icon_x512.png">
-  <meta name="twitter:site" content="https://www.resonateplayer.com">
+
   <link rel="manifest" href="manifest.json" />
   <link rel="stylesheet" href="css/resonate.css" />
 
@@ -72,6 +61,8 @@
           <div class="current-track-info">
             <div class="title" id="title"></div>
             <div class="creator" id="creator"></div>
+            <div class="creator" id="quality-text">auto</div>
+
           </div>
           <div class="progress-section">
             <div class="progress-bar" id="progress-bar">
@@ -88,9 +79,6 @@
             <button id="favorite-btn" class="favorite-btn" aria-label="Favorito">🩶</button>
             <button id="play-all-favorites-btn" class="favorite-btn"
               aria-label="Reproducir todos los favoritos">▶❤️</button>
-            <div class="adaptive-quality-indicator" id="quality-indicator" title="Calidad adaptativa">
-              <span id="quality-text">auto</span>
-            </div>
           </div>
         </div>
       </div>

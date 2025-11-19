@@ -1655,7 +1655,8 @@ async function fetchWithTimeout(resource, options = {}) {
 
 async function performOptimizedSearch(query, page = 0) {
   if (!query.trim()) {
-    hideSearchResults();
+    elements.searchResults.classList.remove('active');
+    state.searchActive = false;
     return { results: [], hasMore: false };
   }
 
@@ -2178,9 +2179,9 @@ function setupSearchOnEnter() {
         performOptimizedSearch(state.currentSearchQuery, 0)
           .then(result => displaySearchResults(result, true));
       } else {
-        hideSearchResults();
+        elements.searchResults.classList.remove('active');
+        state.searchActive = false;
       }
-    } else if (e.key === 'Escape') {
       hideSearchResults();
     }
   });
