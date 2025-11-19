@@ -1156,7 +1156,7 @@ const state = {
   playbackQueue: [],
   isCasting: false,
   castSession: null,
-  castAvailable: false,
+  castAvailable: true,
   currentSearchPage: 0,
   currentSearchHasMore: false,
   currentSearchQuery: '',

@@ -465,7 +465,6 @@ button:active:not(:disabled) {
 
 /* Cast button */
 .cast-btn {
-  display: none;
   background: var(--btn);
   color: var(--muted);
   font-size: 19px;
