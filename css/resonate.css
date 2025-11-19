@@ -14,8 +14,8 @@
   /* rojo coral */
 
   /* Loader properties */
-  --loader-size: 32px;
-  --loader-border-width: 4px;
+  --loader-size: 22px;
+  --loader-border-width: 2px;
   --loader-animation-duration: 0.8s;
 }
 
