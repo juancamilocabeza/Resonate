@@ -4402,7 +4402,7 @@ async function initializeApp() {
   setupProgressBarInteraction();
   setupQualityIndicator();
 
-  // Configurar botón de transmisión - SOLO SI EL ELEMENTO EXISTE
+// Crear presentación para transmitir a segunda pantalla
   if (elements.castBtn) {
     elements.castBtn.style.display = 'flex';
   }
