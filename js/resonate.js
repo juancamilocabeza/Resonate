@@ -8,6 +8,30 @@ const SEARCH_CONFIG = {
   preloadMetadata: true
 };
 
+// Production-ready adaptive streaming configuration
+const ADAPTIVE_STREAMING_CONFIG = {
+  development: {
+    testUrls: [
+      'https://www.google.com/favicon.ico',
+      'https://httpbin.org/status/200',
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+    ],
+    checkInterval: 30000, // 30 seconds
+    defaultBandwidth: 15, // Mbps
+    verboseLogging: true
+  },
+  production: {
+    testUrls: [
+      'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css',
+      'https://fonts.gstatic.com/s/roboto/v30/KFOmCnqEu92Fr1Mu4mxK.woff2',
+      'https://www.google-analytics.com/analytics.js'
+    ],
+    checkInterval: 60000, // 1 minute
+    defaultBandwidth: 5, // Mbps (more conservative)
+    verboseLogging: false
+  }
+};
+
 // Enhanced bandwidth monitoring and adaptive streaming
 class AdaptiveStreamingManager {
   constructor() {
@@ -15,9 +39,39 @@ class AdaptiveStreamingManager {
     this.connectionType = navigator.connection?.effectiveType || 'unknown';
     this.bandwidthEstimate = 0; // Mbps
     this.lastBandwidthCheck = 0;
-    this.bandwidthCheckInterval = 30000; // 30 seconds
     this.qualityProfile = 'auto'; // auto, high, medium, low
     this.monitoringActive = false;
+
+    // Initialize environment-specific configuration
+    this.config = this.detectEnvironment();
+    this.testUrls = this.config.testUrls;
+    this.checkInterval = this.config.checkInterval;
+    this.defaultBandwidth = this.config.defaultBandwidth;
+  }
+
+  detectEnvironment() {
+    // Detect if we're running in development environment
+    const isDevelopment =
+      window.location.protocol === 'file:' ||
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1' ||
+      window.location.hostname.includes('dev.') ||
+      window.location.port === '3000' ||
+      window.location.port === '8080';
+
+    // Additional check: look for development indicators
+    const hasDevIndicators =
+      window.location.search.includes('debug=true') ||
+      window.location.hash.includes('#dev') ||
+      localStorage.getItem('resonate_dev_mode') === 'true';
+
+    if (isDevelopment || hasDevIndicators) {
+      console.log('Adaptive streaming: Development environment detected');
+      return ADAPTIVE_STREAMING_CONFIG.development;
+    } else {
+      console.log('Adaptive streaming: Production environment detected');
+      return ADAPTIVE_STREAMING_CONFIG.production;
+    }
   }
 
   async startMonitoring() {
@@ -43,71 +97,177 @@ class AdaptiveStreamingManager {
 
   async measureBandwidth() {
     const now = Date.now();
-    if (now - this.lastBandwidthCheck < 5000) return; // Throttle checks
+    const throttleTime = this.config.verboseLogging ? 5000 : 5000; // Same throttling for both
+    if (now - this.lastBandwidthCheck < throttleTime) return;
+
     this.lastBandwidthCheck = now;
 
-    // Try multiple fallback URLs for local development
-    const testUrls = [
-      'https://resonate-aws-bucket.s3.us-east-2.amazonaws.com/icons/maskable_icon_x192.png',
-    ];
+    // Log only in development mode
+    if (this.config.verboseLogging) {
+      console.log('Starting bandwidth measurement...');
+    }
 
-    for (const testUrl of testUrls) {
+    for (const testUrl of this.testUrls) {
       try {
         const startTime = performance.now();
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
 
         const response = await fetch(testUrl + '?t=' + Date.now(), {
           method: 'HEAD',
           cache: 'no-cache',
           mode: 'no-cors', // Allow cross-origin requests
-          timeout: 5000 // 5 second timeout
+          signal: controller.signal
         });
+
+        clearTimeout(timeoutId);
 
         // For no-cors, we can't read headers, but we can measure timing
         const endTime = performance.now();
         const duration = (endTime - startTime) / 1000; // seconds
 
-        // Estimate size based on duration (rough approximation)
-        const estimatedSize = Math.max(1024, duration * 50000); // Minimum 1KB, scale with time
-        const bandwidthMbps = (estimatedSize * 8) / (duration * 1000000); // Mbps
-        const latency = duration * 1000; // ms
-
-        this.bandwidthHistory.push({
-          bandwidth: bandwidthMbps,
-          latency: latency,
-          timestamp: now,
-          connectionType: this.connectionType
-        });
-
-        // Keep only last 10 measurements
-        if (this.bandwidthHistory.length > 10) {
-          this.bandwidthHistory.shift();
+        // More accurate size estimation based on CDN patterns
+        let estimatedSize;
+        if (testUrl.includes('favicon.ico')) {
+          estimatedSize = 2000; // Google favicon ~2KB
+        } else if (testUrl.includes('jsdelivr') && testUrl.includes('.css')) {
+          estimatedSize = 15000; // Bootstrap CSS ~15KB
+        } else if (testUrl.includes('fonts.gstatic')) {
+          estimatedSize = 50000; // Roboto font ~50KB
+        } else if (testUrl.includes('google-analytics.com')) {
+          estimatedSize = 10000; // Analytics JS ~10KB
+        } else if (testUrl.startsWith('data:')) {
+          estimatedSize = 64; // Actual small PNG data
+        } else {
+          estimatedSize = Math.max(1000, duration * 40000); // Fallback estimation
         }
 
-        // Calculate rolling average
-        this.bandwidthEstimate = this.bandwidthHistory.reduce((sum, m) => sum + m.bandwidth, 0) / this.bandwidthHistory.length;
+        const bandwidthMbps = (estimatedSize * 8) / (duration * 1000000);
 
-        this.adjustQualityProfile();
-        return; // Success, exit the loop
+        // Better latency estimation (response time vs processing time)
+        const latency = duration * 1000; // ms
+
+        // Filter out unrealistic results
+        if (bandwidthMbps > 0 && bandwidthMbps < 1000) { // Reasonable range
+          this.bandwidthHistory.push({
+            bandwidth: bandwidthMbps,
+            latency: latency,
+            timestamp: now,
+            connectionType: this.connectionType
+          });
+
+          // Keep only last measurements (more in production)
+          const historyLength = this.config.verboseLogging ? 5 : 10;
+          while (this.bandwidthHistory.length > historyLength) {
+            this.bandwidthHistory.shift();
+          }
+
+          // Calculate weighted moving average (more recent = higher weight)
+          const weights = this.bandwidthHistory.map((_, i) => i + 1);
+          const weightSum = weights.reduce((a, b) => a + b, 0);
+          this.bandwidthEstimate = this.bandwidthHistory.reduce(
+            (sum, m, i) => sum + (m.bandwidth * weights[i]),
+            0
+          ) / weightSum;
+
+          this.adjustQualityProfile();
+
+          if (this.config.verboseLogging) {
+            console.log(`Bandwidth measurement successful: ${bandwidthMbps.toFixed(2)} Mbps (avg: ${this.bandwidthEstimate.toFixed(2)} Mbps)`);
+          }
+
+          return; // Success, exit the loop
+        }
 
       } catch (error) {
-        console.warn(`Bandwidth test with ${testUrl} failed:`, error.message);
+        if (this.config.verboseLogging) {
+          console.warn(`Bandwidth test with ${testUrl.split('?')[0]} failed:`, error.message);
+        }
         continue; // Try next URL
       }
     }
 
-    // All URLs failed, use connection type fallback
-    console.warn('All bandwidth measurement URLs failed, using fallback estimate');
-    const fallbackMbps = this.connectionType === '4g' ? 10 : this.connectionType === '3g' ? 2 : 5;
-    this.bandwidthEstimate = fallbackMbps;
+      // All URLs failed, use intelligent fallback based on environment and connection data
+      if (!this.config.verboseLogging) {
+        console.warn('All bandwidth measurement URLs failed, using intelligent fallback');
+      }
 
-    this.bandwidthHistory.push({
-      bandwidth: fallbackMbps,
-      latency: 100,
-      timestamp: now,
-      connectionType: this.connectionType
-    });
+      let fallbackMbps = this.config.defaultBandwidth; // Start with config default
 
-    this.adjustQualityProfile();
+      // Factor in Network Information API if available
+      if (navigator.connection) {
+        const connection = navigator.connection;
+
+        // Use effectiveType if available
+        if (connection.effectiveType) {
+          switch (connection.effectiveType) {
+            case 'slow-2g':
+              fallbackMbps = Math.min(fallbackMbps, 0.1);
+              break;
+            case '2g':
+              fallbackMbps = Math.min(fallbackMbps, 0.3);
+              break;
+            case '3g':
+              fallbackMbps = Math.min(fallbackMbps, 3);
+              break;
+            case '4g':
+              fallbackMbps = Math.min(fallbackMbps, 15);
+              break;
+            default:
+              // Keep default
+              break;
+          }
+        }
+
+        // Use downlink as additional validation/fallback
+        if (connection.downlink && connection.downlink > 0) {
+          fallbackMbps = Math.min(fallbackMbps, connection.downlink * 1.2); // Add 20% buffer
+        }
+
+        // Reduce for high latency connections
+        if (connection.rtt && connection.rtt > 1000) {
+          fallbackMbps *= 0.5; // Reduce by half for very high latency
+        }
+      }
+
+      // Further reduce based on common browser heuristics
+      if (state.networkOnline === false) {
+        fallbackMbps = Math.min(fallbackMbps, 0.1); // Very slow when offline indicator present
+      }
+
+      // Ensure reasonable minimum
+      fallbackMbps = Math.max(fallbackMbps, 0.1);
+
+      this.bandwidthEstimate = fallbackMbps;
+
+      this.bandwidthHistory.push({
+        bandwidth: fallbackMbps,
+        latency: 200, // Higher latency for fallback estimates
+        timestamp: now,
+        connectionType: this.connectionType,
+        isFallback: true
+      });
+
+      // Keep history size appropriate for environment
+      const historyLength = this.config.verboseLogging ? 5 : 10;
+      while (this.bandwidthHistory.length > historyLength) {
+        this.bandwidthHistory.shift();
+      }
+
+      // Calculate weighted average again for consistency
+      const weights = this.bandwidthHistory.map((_, i) => i + 1);
+      const weightSum = weights.reduce((a, b) => a + b, 0);
+      this.bandwidthEstimate = this.bandwidthHistory.reduce(
+        (sum, m, i) => sum + (m.bandwidth * weights[i]),
+        0
+      ) / weightSum;
+
+      this.adjustQualityProfile();
+
+      if (this.config.verboseLogging) {
+        console.log(`Bandwidth fallback estimate: ${fallbackMbps.toFixed(2)} Mbps (effective: ${this.bandwidthEstimate.toFixed(2)} Mbps)`);
+      }
   }
 
   adjustQualityProfile() {
