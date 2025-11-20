@@ -16,8 +16,8 @@ const ADAPTIVE_STREAMING_CONFIG = {
       'https://httpbin.org/status/200',
       'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
     ],
-    checkInterval: 30000, // 30 seconds
-    defaultBandwidth: 15, // Mbps
+    checkInterval: 60000, // 60 seconds
+    defaultBandwidth: 10, // Mbps (lower default for development)
     verboseLogging: true
   },
   production: {
@@ -26,8 +26,8 @@ const ADAPTIVE_STREAMING_CONFIG = {
       'https://fonts.gstatic.com/s/roboto/v30/KFOmCnqEu92Fr1Mu4mxK.woff2',
       'https://www.google-analytics.com/analytics.js'
     ],
-    checkInterval: 60000, // 1 minute
-    defaultBandwidth: 5, // Mbps (more conservative)
+    checkInterval: 60000, // 60 seconds
+    defaultBandwidth: 15, // Mbps (higher default for production)
     verboseLogging: false
   }
 };
@@ -63,7 +63,7 @@ class AdaptiveStreamingManager {
     const hasDevIndicators =
       window.location.search.includes('debug=true') ||
       window.location.hash.includes('#dev') ||
-      localStorage.getItem('resonate_dev_mode') === 'true';
+      localStorage.getItem('resonate_dev_mode') === 'false';
 
     if (isDevelopment || hasDevIndicators) {
       console.log('Adaptive streaming: Development environment detected');
@@ -188,86 +188,86 @@ class AdaptiveStreamingManager {
       }
     }
 
-      // All URLs failed, use intelligent fallback based on environment and connection data
-      if (!this.config.verboseLogging) {
-        console.warn('All bandwidth measurement URLs failed, using intelligent fallback');
-      }
+    // All URLs failed, use intelligent fallback based on environment and connection data
+    if (!this.config.verboseLogging) {
+      console.warn('All bandwidth measurement URLs failed, using intelligent fallback');
+    }
 
-      let fallbackMbps = this.config.defaultBandwidth; // Start with config default
+    let fallbackMbps = this.config.defaultBandwidth; // Start with config default
 
-      // Factor in Network Information API if available
-      if (navigator.connection) {
-        const connection = navigator.connection;
+    // Factor in Network Information API if available
+    if (navigator.connection) {
+      const connection = navigator.connection;
 
-        // Use effectiveType if available
-        if (connection.effectiveType) {
-          switch (connection.effectiveType) {
-            case 'slow-2g':
-              fallbackMbps = Math.min(fallbackMbps, 0.1);
-              break;
-            case '2g':
-              fallbackMbps = Math.min(fallbackMbps, 0.3);
-              break;
-            case '3g':
-              fallbackMbps = Math.min(fallbackMbps, 3);
-              break;
-            case '4g':
-              fallbackMbps = Math.min(fallbackMbps, 15);
-              break;
-            default:
-              // Keep default
-              break;
-          }
-        }
-
-        // Use downlink as additional validation/fallback
-        if (connection.downlink && connection.downlink > 0) {
-          fallbackMbps = Math.min(fallbackMbps, connection.downlink * 1.2); // Add 20% buffer
-        }
-
-        // Reduce for high latency connections
-        if (connection.rtt && connection.rtt > 1000) {
-          fallbackMbps *= 0.5; // Reduce by half for very high latency
+      // Use effectiveType if available
+      if (connection.effectiveType) {
+        switch (connection.effectiveType) {
+          case 'slow-2g':
+            fallbackMbps = Math.min(fallbackMbps, 0.1);
+            break;
+          case '2g':
+            fallbackMbps = Math.min(fallbackMbps, 0.3);
+            break;
+          case '3g':
+            fallbackMbps = Math.min(fallbackMbps, 3);
+            break;
+          case '4g':
+            fallbackMbps = Math.min(fallbackMbps, 15);
+            break;
+          default:
+            // Keep default
+            break;
         }
       }
 
-      // Further reduce based on common browser heuristics
-      if (state.networkOnline === false) {
-        fallbackMbps = Math.min(fallbackMbps, 0.1); // Very slow when offline indicator present
+      // Use downlink as additional validation/fallback
+      if (connection.downlink && connection.downlink > 0) {
+        fallbackMbps = Math.min(fallbackMbps, connection.downlink * 1.2); // Add 20% buffer
       }
 
-      // Ensure reasonable minimum
-      fallbackMbps = Math.max(fallbackMbps, 0.1);
-
-      this.bandwidthEstimate = fallbackMbps;
-
-      this.bandwidthHistory.push({
-        bandwidth: fallbackMbps,
-        latency: 200, // Higher latency for fallback estimates
-        timestamp: now,
-        connectionType: this.connectionType,
-        isFallback: true
-      });
-
-      // Keep history size appropriate for environment
-      const historyLength = this.config.verboseLogging ? 5 : 10;
-      while (this.bandwidthHistory.length > historyLength) {
-        this.bandwidthHistory.shift();
+      // Reduce for high latency connections
+      if (connection.rtt && connection.rtt > 1000) {
+        fallbackMbps *= 0.5; // Reduce by half for very high latency
       }
+    }
 
-      // Calculate weighted average again for consistency
-      const weights = this.bandwidthHistory.map((_, i) => i + 1);
-      const weightSum = weights.reduce((a, b) => a + b, 0);
-      this.bandwidthEstimate = this.bandwidthHistory.reduce(
-        (sum, m, i) => sum + (m.bandwidth * weights[i]),
-        0
-      ) / weightSum;
+    // Further reduce based on common browser heuristics
+    if (state.networkOnline === false) {
+      fallbackMbps = Math.min(fallbackMbps, 0.1); // Very slow when offline indicator present
+    }
 
-      this.adjustQualityProfile();
+    // Ensure reasonable minimum
+    fallbackMbps = Math.max(fallbackMbps, 0.1);
 
-      if (this.config.verboseLogging) {
-        console.log(`Bandwidth fallback estimate: ${fallbackMbps.toFixed(2)} Mbps (effective: ${this.bandwidthEstimate.toFixed(2)} Mbps)`);
-      }
+    this.bandwidthEstimate = fallbackMbps;
+
+    this.bandwidthHistory.push({
+      bandwidth: fallbackMbps,
+      latency: 200, // Higher latency for fallback estimates
+      timestamp: now,
+      connectionType: this.connectionType,
+      isFallback: true
+    });
+
+    // Keep history size appropriate for environment
+    const historyLength = this.config.verboseLogging ? 5 : 10;
+    while (this.bandwidthHistory.length > historyLength) {
+      this.bandwidthHistory.shift();
+    }
+
+    // Calculate weighted average again for consistency
+    const weights = this.bandwidthHistory.map((_, i) => i + 1);
+    const weightSum = weights.reduce((a, b) => a + b, 0);
+    this.bandwidthEstimate = this.bandwidthHistory.reduce(
+      (sum, m, i) => sum + (m.bandwidth * weights[i]),
+      0
+    ) / weightSum;
+
+    this.adjustQualityProfile();
+
+    if (this.config.verboseLogging) {
+      console.log(`Bandwidth fallback estimate: ${fallbackMbps.toFixed(2)} Mbps (effective: ${this.bandwidthEstimate.toFixed(2)} Mbps)`);
+    }
   }
 
   adjustQualityProfile() {
@@ -1155,8 +1155,8 @@ const state = {
   playbackHistory: [],
   playbackQueue: [],
   isCasting: false,
-  castSession: null,
-  castAvailable: true,
+  castSession: false,
+  castAvailable: false,
   currentSearchPage: 0,
   currentSearchHasMore: false,
   currentSearchQuery: '',
@@ -4423,7 +4423,7 @@ async function initializeApp() {
   setupProgressBarInteraction();
   setupQualityIndicator();
 
-// Crear presentación para transmitir a segunda pantalla
+  // Crear presentación para transmitir a segunda pantalla
   if (elements.castBtn) {
     elements.castBtn.style.display = 'flex';
   }
