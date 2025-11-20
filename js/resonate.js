@@ -2,7 +2,7 @@
 const SEARCH_CONFIG = {
   maxResults: 50,
   resultsPerPage: 10,
-  timeout: 10000,
+  timeout: 20000, // Increased from 10000ms to 20000ms for better reliability
   enableLazyLoading: true,
   cacheDuration: 10 * 60 * 1000,
   preloadMetadata: true
@@ -1807,7 +1807,19 @@ async function fetchWithTimeout(resource, options = {}) {
     clearTimeout(timeoutId);
     try { state.lastFetchController = null; } catch (e) { }
     if (error && error.name === 'AbortError') {
-      throw new Error(`Timeout: La petición tardó más de ${timeout}ms`);
+      const isLocal = window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const timeoutMsg = `Timeout: La petición tardó más de ${timeout}ms`;
+      if (isLocal) {
+        throw new Error(`${timeoutMsg}. Si ejecutas desde un archivo local, utiliza un servidor HTTP (ej: python -m http.server) para funcionalidad completa.`);
+      }
+      throw new Error(`${timeoutMsg}. Revisa tu conexión a internet.`);
+    }
+    // Provide better error messages for common network issues in development
+    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+      const isLocal = window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      if (isLocal) {
+        throw new Error('Error de red: Si abriste index.html directamente, ejecuta un servidor local (python -m http.server) para acceso completo a APIs.');
+      }
     }
     throw error;
   }

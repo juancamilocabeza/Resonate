@@ -27,7 +27,7 @@
 
 <body>
   <header>
-    <h1>&nbsp;Resonate</h1>
+    <h1><a href="https://www.resonateplayer.com" style="text-decoration: none; color: inherit;">&nbsp;Resonate</a></h1>
   </header>
 
   <!-- Search and Discovery Section -->
@@ -90,7 +90,7 @@
 
   <!--Service Worker-->
   <script>
-    if ('serviceWorker' in navigator) {
+    if ('serviceWorker' in navigator && window.location.protocol !== 'file:') {
       navigator.serviceWorker.register('/sw.js')
         .then((registration) => {
           console.log('Service Worker registrado:', registration);
@@ -115,7 +115,13 @@
         })
         .catch((error) => {
           console.error('Error al registrar Service Worker:', error);
+          // Mostrar advertencia en desarrollo si es error de protocolo
+          if (window.location.protocol === 'file:') {
+            console.warn('Service Worker no se puede registrar en protocolo file://. Ejecuta un servidor local para funcionalidad completa.');
+          }
         });
+    } else if (window.location.protocol === 'file:') {
+      console.warn('Ejecutando desde archivo local (file://). Las funciones offline estarán limitadas. Usa un servidor local para funcionalidad completa.');
     }
   </script>
 
