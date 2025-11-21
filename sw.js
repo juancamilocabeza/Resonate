@@ -49,20 +49,55 @@ self.addEventListener('activate', (event) => {
 // Estrategia de actualización: Network First, luego Cache
 self.addEventListener('fetch', (event) => {
   event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        if (!response || response.status !== 200 || response.type === 'error') {
-          return caches.match(event.request);
+    (async () => {
+      try {
+        const networkResponse = await fetch(event.request);
+
+        // Validar que la respuesta sea válida
+        if (!networkResponse || !networkResponse.ok || networkResponse.type === 'error') {
+          const cachedResponse = await caches.match(event.request);
+          if (cachedResponse) {
+            return cachedResponse;
+          }
+          // Si no hay cache y respuesta inválida, retornar error
+          return new Response('Network error', {
+            status: 408,
+            statusText: 'Request Timeout',
+            headers: { 'Content-Type': 'text/plain' }
+          });
         }
-        const responseClone = response.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseClone);
+
+        // Cache exitoso si es audio o metadatos
+        const url = new URL(event.request.url);
+        if (url.hostname === 'archive.org' && (
+          event.request.destination === 'audio' ||
+          url.pathname.includes('/metadata/') ||
+          url.pathname.includes('/services/img/')
+        )) {
+          // Cache en segundo plano para no bloquear
+          caches.open(CACHE_NAME).then((cache) => {
+            return cache.put(event.request, networkResponse.clone());
+          }).catch((err) => {
+            console.warn('Failed to cache response:', err);
+          });
+        }
+
+        return networkResponse;
+      } catch (error) {
+        console.warn('Network fetch failed for:', event.request.url, error);
+        // Intentar desde caché
+        const cachedResponse = await caches.match(event.request);
+        if (cachedResponse) {
+          return cachedResponse;
+        }
+        // Si no hay cache disponible
+        return new Response('Network unavailable and not in cache', {
+          status: 503,
+          statusText: 'Service Unavailable',
+          headers: { 'Content-Type': 'text/plain' }
         });
-        return response;
-      })
-      .catch(() => {
-        return caches.match(event.request);
-      })
+      }
+    })()
   );
 });
 

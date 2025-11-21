@@ -1356,72 +1356,28 @@ async function handleStartFavoritesCTA() {
            window.navigator.standalone === true;
   }
 
-  // Función para manejar errores de carga de portadas
 function handleCoverError(imgElement, retryCount = 0) {
-  const maxRetries = 1;
-
-  if (retryCount >= maxRetries) {
-    // Mostrar imagen por defecto con icono genérico en SVG Data URI
-    imgElement.src = 'data:image/svg+xml;base64,' + btoa(`
-      <svg width="128" height="128" xmlns="http://www.w3.org/2000/svg">
-        <rect width="128" height="128" fill="#f5f5f5"/>
-        <circle cx="64" cy="40" r="16" fill="#cccccc"/>
-        <rect x="48" y="62" width="32" height="16" rx="2" fill="#cccccc"/>
-        <text x="64" y="105" text-anchor="middle" fill="#999999" font-family="Arial, sans-serif" font-size="11">Sin portada</text>
-      </svg>
-    `);
-    imgElement.style.opacity = '0.5';
-    return;
+  // Log para debugging (sólo en desarrollo para evitar spam)
+  if (window.logger) {
+    logger.debug('Cover image fallback triggered for: ' + imgElement.src, 'UI');
+  } else {
+    console.debug('Cover image fallback triggered for: ' + imgElement.src);
   }
 
-  // Intentar URLs alternativas de Archive.org
-  const currentSrc = imgElement.src;
-  if (!currentSrc.includes('archive.org/services/img/')) {
-    handleCoverError(imgElement, maxRetries);
-    return;
+  // Solución inmediata: usar SVG placeholder sin intentar más requests de archive.org
+  // que están bloqueados (ERR_FAILED)
+  const svgPlaceholder = 'data:image/svg+xml;base64,' + btoa(`<svg width="128" height="128" xmlns="http://www.w3.org/2000/svg"><rect width="128" height="128" fill="#f0f0f0" stroke="#ddd"/><circle cx="64" cy="50" r="20" fill="#ccc"/><rect x="44" y="78" width="40" height="8" rx="4" fill="#ccc"/><rect x="54" y="90" width="20" height="6" rx="3" fill="#ccc"/><text x="64" y="115" text-anchor="middle" fill="#999" font-family="Arial, sans-serif" font-size="10">Sin portada</text></svg>`);
+
+  imgElement.src = svgPlaceholder;
+  imgElement.style.opacity = '0.7';
+  imgElement.style.border = '1px solid #eee';
+
+  // Remover listeners de onerror para evitar loops
+  imgElement.onerror = null;
+
+  if (window.logger) {
+    logger.info('Cover set to SVG placeholder', 'UI');
   }
-
-  const identifier = currentSrc.split('/services/img/')[1]?.split('?')[0]?.split('#')[0];
-  if (!identifier) {
-    handleCoverError(imgElement, maxRetries);
-    return;
-  }
-
-  // URLs alternativas ordenadas por prioridad
-  const fallbackUrls = [
-    `https://archive.org/services/img/${identifier}?output=png`,
-    `https://archive.org/download/${identifier}/__ia_thumb.jpg`,
-    `https://archive.org/services/get-item-image.php?identifier=${identifier}`
-  ];
-
-  // Intentar cargar la primera URL alternativa
-  const tryFallback = (index) => {
-    if (index >= fallbackUrls.length) {
-      handleCoverError(imgElement, retryCount + 1);
-      return;
-    }
-
-    const fallbackImg = new Image();
-    const timeout = setTimeout(() => {
-      if (!fallbackImg.complete) {
-        tryFallback(index + 1);
-      }
-    }, 3000);
-
-    fallbackImg.onload = () => {
-      clearTimeout(timeout);
-      imgElement.src = fallbackUrls[index];
-    };
-
-    fallbackImg.onerror = () => {
-      clearTimeout(timeout);
-      tryFallback(index + 1);
-    };
-
-    fallbackImg.src = fallbackUrls[index];
-  };
-
-  tryFallback(0);
 }
 
 // Exponer la función globalmente
@@ -1445,4 +1401,3 @@ window.handleCoverError = handleCoverError;
   window.isRunningAsPWA = isRunningAsPWA;
 
 window.isRunningAsPWA = isRunningAsPWA;
-

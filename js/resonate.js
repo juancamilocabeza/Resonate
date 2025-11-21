@@ -10,6 +10,9 @@ const SEARCH_CONFIG = {
 
 // Función para manejar errores de carga de portadas - SOLUCIÓN PARA PRODUCCIÓN
 function handleCoverError(img) {
+  // Log the cover loading error for debugging
+  console.error('Cover image failed to load:', img.src);
+  logger.error('Cover image failed to load: ' + img.src, 'UI');
   img.style.display = 'none';
   const container = img.parentElement;
   if (container && !container.querySelector('.cover-placeholder')) {
@@ -4298,4 +4301,3 @@ if (document.readyState === 'loading') {
   initializeApp();
 }
 /*2025 Resonate Player. Todos los derechos reservados. Prohibida la reproducción total o parcial sin autorización*/
-
