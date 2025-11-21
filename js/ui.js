@@ -1356,6 +1356,78 @@ async function handleStartFavoritesCTA() {
            window.navigator.standalone === true;
   }
 
+  // Función para manejar errores de carga de portadas
+function handleCoverError(imgElement, retryCount = 0) {
+  const maxRetries = 1;
+
+  if (retryCount >= maxRetries) {
+    // Mostrar imagen por defecto con icono genérico en SVG Data URI
+    imgElement.src = 'data:image/svg+xml;base64,' + btoa(`
+      <svg width="128" height="128" xmlns="http://www.w3.org/2000/svg">
+        <rect width="128" height="128" fill="#f5f5f5"/>
+        <circle cx="64" cy="40" r="16" fill="#cccccc"/>
+        <rect x="48" y="62" width="32" height="16" rx="2" fill="#cccccc"/>
+        <text x="64" y="105" text-anchor="middle" fill="#999999" font-family="Arial, sans-serif" font-size="11">Sin portada</text>
+      </svg>
+    `);
+    imgElement.style.opacity = '0.5';
+    return;
+  }
+
+  // Intentar URLs alternativas de Archive.org
+  const currentSrc = imgElement.src;
+  if (!currentSrc.includes('archive.org/services/img/')) {
+    handleCoverError(imgElement, maxRetries);
+    return;
+  }
+
+  const identifier = currentSrc.split('/services/img/')[1]?.split('?')[0]?.split('#')[0];
+  if (!identifier) {
+    handleCoverError(imgElement, maxRetries);
+    return;
+  }
+
+  // URLs alternativas ordenadas por prioridad
+  const fallbackUrls = [
+    `https://archive.org/services/img/${identifier}?output=png`,
+    `https://archive.org/download/${identifier}/__ia_thumb.jpg`,
+    `https://archive.org/services/get-item-image.php?identifier=${identifier}`
+  ];
+
+  // Intentar cargar la primera URL alternativa
+  const tryFallback = (index) => {
+    if (index >= fallbackUrls.length) {
+      handleCoverError(imgElement, retryCount + 1);
+      return;
+    }
+
+    const fallbackImg = new Image();
+    const timeout = setTimeout(() => {
+      if (!fallbackImg.complete) {
+        tryFallback(index + 1);
+      }
+    }, 3000);
+
+    fallbackImg.onload = () => {
+      clearTimeout(timeout);
+      imgElement.src = fallbackUrls[index];
+    };
+
+    fallbackImg.onerror = () => {
+      clearTimeout(timeout);
+      tryFallback(index + 1);
+    };
+
+    fallbackImg.src = fallbackUrls[index];
+  };
+
+  tryFallback(0);
+}
+
+// Exponer la función globalmente
+window.handleCoverError = handleCoverError;
+
+
   // Expose critical functions globally for cross-module access
   window.loadFavorites = loadFavorites;
   window.saveFavorites = saveFavorites;
