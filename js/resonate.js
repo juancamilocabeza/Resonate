@@ -8,6 +8,28 @@ const SEARCH_CONFIG = {
   preloadMetadata: true
 };
 
+// Función para manejar errores de carga de portadas - SOLUCIÓN PARA PRODUCCIÓN
+function handleCoverError(img) {
+  img.style.display = 'none';
+  const container = img.parentElement;
+  if (container && !container.querySelector('.cover-placeholder')) {
+    const placeholder = document.createElement('div');
+    placeholder.className = 'cover-placeholder';
+    placeholder.innerHTML = '<span class="hint">Sin portada</span>';
+    placeholder.style.cssText = `
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-secondary, #f0f0f0);
+      border: 1px solid var(--border, #ddd);
+      font-size: 0.8em;
+      color: var(--muted, #666);
+    `;
+    container.appendChild(placeholder);
+  }
+}
 
 // Advanced audio caching system
 class AdvancedAudioCache {
@@ -2120,12 +2142,12 @@ function createSearchResultElement(result, globalIndex) {
   const hasFavoriteTrack = isAlbumInFavorites(result.identifier);
 
   resultEl.innerHTML = `
-    <div class="result-actions">
-      <div class="result-cover">
-        <img src="https://archive.org/services/img/${result.identifier}" 
-          alt="${result.title}" 
-          loading="lazy"
-          onerror="sin portada">
+  <div class="result-actions">
+    <div class="result-cover">
+      <img src="https://archive.org/services/img/${result.identifier}"
+        alt="${result.title}"
+        loading="lazy"
+        onerror="handleCoverError(this)">
       </div>
       <div class="result-info">
         <div class="result-title">
@@ -3420,12 +3442,12 @@ function updateFavoritesList() {
       '';
 
     albumItem.innerHTML = `
-      <div class="result-cover">
-        <img src="https://archive.org/services/img/${albumId}" 
-        alt="${albumData.albumTitle}" 
-        loading="lazy"
-        onerror="sin portada">
-      </div>  
+    <div class="result-cover">
+    <img src="https://archive.org/services/img/${albumId}" 
+      alt="${albumData.albumTitle}" 
+      loading="lazy"
+      onerror="handleCoverError(this)">
+      </div>
       <div class="favorite-info">
         <div class="favorite-title">
           ${albumData.albumTitle || 'Sin título'}
