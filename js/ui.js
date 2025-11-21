@@ -16,7 +16,6 @@ const elements = {
   favoriteBtn: document.getElementById('favorite-btn'),
   shuffleFavoritesBtn: document.getElementById('shuffle-favorites-btn'),
   searchInput: document.getElementById('search-input'),
-  searchInput: document.getElementById('search-input'),
   searchResults: document.getElementById('search-results'),
   searchResultsList: document.getElementById('search-results-list'),
   playAllFavoritesBtn: document.getElementById('play-all-favorites-btn'),
@@ -408,8 +407,9 @@ function updateMediaSessionMetadata(track, identifier) {
 
   try {
     const artwork = [];
-    const archiveCoverUrl = `https://archive.org/services/img/${identifier}`;
-
+    let metadata = window.enhancedCache.get('metadata', identifier);
+    const archiveCoverUrl = getCoverUrl(identifier, metadata);
+    
     artwork.push({ src: archiveCoverUrl, sizes: '300x300', type: 'image/jpeg' });
     artwork.push({ src: archiveCoverUrl, sizes: '512x512', type: 'image/jpeg' });
 
@@ -657,6 +657,10 @@ function setupLazyLoadingObserver() {
 async function loadAlbumInfoBackground(identifier, resultEl) {
   try {
     const metadata = await fetchOptimizedPlayableFiles(identifier);
+    const itemMetadata = metadata[0]?.metadata;
+    const coverUrl = getCoverUrl(identifier, itemMetadata);
+    const coverImg = resultEl.querySelector('.result-cover img');
+if (coverImg) coverImg.src = coverUrl;
     const isAlbum = metadata.length > 1;
     const trackCount = metadata.length;
 
@@ -1114,6 +1118,7 @@ function updateFavoritesList() {
         <img src="https://archive.org/services/img/${albumId}"
         alt="${albumData.albumTitle}"
         loading="lazy"
+        crossorigin="anonymous"
         onerror="handleCoverError(this)">
       </div>
       <div class="favorite-info">
@@ -1127,7 +1132,25 @@ function updateFavoritesList() {
         <button class="button" data-id="${albumId}" data-is-album="${isAlbum}">▶</button>
         <button class="button" data-id="${albumId}">❤️</button>
       </div>
- `;
+     `;
+
+    const coverImg = albumItem.querySelector('.result-cover img');
+    if (coverImg) {
+      // Try to get metadata for direct URL
+      let metadata = window.enhancedCache ? window.enhancedCache.get('metadata', albumId) : null;
+      if (metadata) {
+        coverImg.src = getCoverUrl(albumId, metadata);
+      } else {
+        // Load in background if not cached
+        fetchOptimizedPlayableFiles(albumId).then(files => {
+          if (files && files[0]?.metadata) {
+            coverImg.src = getCoverUrl(albumId, files[0].metadata);
+          }
+        }).catch(() => {
+          // Keep fallback image
+        });
+      }
+    }
 
     const playBtn = albumItem.querySelector('.button');
     const removeBtn = albumItem.querySelector('.button:nth-child(2)');
@@ -1380,8 +1403,31 @@ function handleCoverError(imgElement, retryCount = 0) {
   }
 }
 
-// Exponer la función globalmente
-window.handleCoverError = handleCoverError;
+// Función para obtener URL de portada desde metadatos o fallback
+function getCoverUrl(identifier, metadata) {
+  if (metadata && metadata.files) {
+    // Buscar archivos de imagen válidos
+    const imageFiles = metadata.files.filter(file =>
+      file.name && /\.(jpg|jpeg|png|gif)$/i.test(file.name) && file.size > 1000
+    );
+
+    if (imageFiles.length > 0) {
+      // Priorizar nombres comunes de portadas
+      const coverPattern = /(cover|folder|album|capa|art|front)\./i;
+      let coverFile = imageFiles.find(file => coverPattern.test(file.name));
+      if (!coverFile) coverFile = imageFiles[0]; // Primera imagen
+
+      return `https://archive.org/download/${identifier}/${encodeURIComponent(coverFile.name)}`;
+    }
+  }
+
+  // Fallback a services/img (que puede generar placeholder)
+  return `https://archive.org/services/img/${identifier}`;
+}
+
+  // Exponer la función globalmente
+  window.handleCoverError = handleCoverError;
+  window.getCoverUrl = getCoverUrl;
 
 
   // Expose critical functions globally for cross-module access

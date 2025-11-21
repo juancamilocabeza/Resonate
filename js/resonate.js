@@ -34,6 +34,50 @@ function handleCoverError(img) {
   }
 }
 
+// Función para obtener URL de portada desde metadatos o fallback como blob
+async function getCoverUrl(identifier, metadata) {
+  if (metadata && metadata.files) {
+    // Buscar archivos de imagen válidos
+    const imageFiles = metadata.files.filter(file =>
+      file.name && /\.(jpg|jpeg|png|gif)$/i.test(file.name) && file.size > 1000
+    );
+
+    if (imageFiles.length > 0) {
+      // Priorizar nombres comunes de portadas
+      const coverPattern = /(cover|folder|album|capa|art|front)\./i;
+      let coverFile = imageFiles.find(file => coverPattern.test(file.name));
+      if (!coverFile) coverFile = imageFiles[0]; // Primera imagen
+
+      try {
+        // Crear blob URL para evitar CORS
+        const imageUrl = `https://archive.org/download/${identifier}/${encodeURIComponent(coverFile.name)}`;
+        const response = await fetch(imageUrl);
+        if (response.ok) {
+          const blob = await response.blob();
+          return URL.createObjectURL(blob);
+        }
+      } catch (error) {
+        console.warn('Error loading cover image:', error);
+      }
+    }
+  }
+
+  // Fallback a services/img (que puede generar placeholder) - intentar como blob también
+  try {
+    const fallbackUrl = `https://archive.org/services/img/${identifier}`;
+    const response = await fetch(fallbackUrl);
+    if (response.ok) {
+      const blob = await response.blob();
+      return URL.createObjectURL(blob);
+    }
+  } catch (error) {
+    console.warn('Error loading fallback image:', error);
+  }
+
+  // Si todo falla, retornar la URL normal (aunque puede causar CORS)
+  return `https://archive.org/services/img/${identifier}`;
+}
+
 // Advanced audio caching system
 class AdvancedAudioCache {
   constructor() {
@@ -3445,8 +3489,8 @@ function updateFavoritesList() {
 
     albumItem.innerHTML = `
     <div class="result-cover">
-    <img src="https://archive.org/services/img/${albumId}" 
-    alt="${albumData.albumTitle}" 
+    <img src="https://archive.org/services/img/${albumId}"
+    alt="${albumData.albumTitle}"
     loading="lazy"
     crossorigin="anonymous"
     onerror="handleCoverError(this)">
@@ -3463,6 +3507,32 @@ function updateFavoritesList() {
         <button class="button" data-id="${albumId}">❤️</button>
       </div>
  `
+
+    const coverImg = albumItem.querySelector('.result-cover img');
+    if (coverImg) {
+      // Try to get metadata for direct URL
+      let metadata = window.enhancedCache ? window.enhancedCache.get('metadata', albumId) : null;
+      if (metadata) {
+        getCoverUrl(albumId, metadata).then(coverSrc => {
+          coverImg.src = coverSrc;
+        }).catch(() => {
+          // Keep fallback image
+        });
+      } else {
+        // Load in background if not cached
+        fetchOptimizedPlayableFiles(albumId).then(files => {
+          if (files && files[0]?.metadata) {
+            getCoverUrl(albumId, files[0].metadata).then(coverSrc => {
+              coverImg.src = coverSrc;
+            }).catch(() => {
+              // Keep fallback image
+            });
+          }
+        }).catch(() => {
+          // Keep fallback image
+        });
+      }
+    }
 
     const playBtn = albumItem.querySelector('.button');
     const removeBtn = albumItem.querySelector('.button:nth-child(2)');

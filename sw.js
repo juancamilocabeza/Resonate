@@ -72,7 +72,8 @@ self.addEventListener('fetch', (event) => {
         if (url.hostname === 'archive.org' && (
           event.request.destination === 'audio' ||
           url.pathname.includes('/metadata/') ||
-          url.pathname.includes('/services/img/')
+          url.pathname.includes('/services/img/') ||
+          url.pathname.includes('/download/')
         )) {
           // Cache en segundo plano para no bloquear
           caches.open(CACHE_NAME).then((cache) => {
