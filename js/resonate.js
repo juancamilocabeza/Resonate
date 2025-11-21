@@ -8,335 +8,6 @@ const SEARCH_CONFIG = {
   preloadMetadata: true
 };
 
-// Production-ready adaptive streaming configuration
-const ADAPTIVE_STREAMING_CONFIG = {
-  development: {
-    testUrls: [
-      'https://www.google.com/favicon.ico',
-      'https://httpbin.org/status/200',
-      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
-    ],
-    checkInterval: 60000, // 60 seconds
-    defaultBandwidth: 10, // Mbps (lower default for development)
-    verboseLogging: true
-  },
-  production: {
-    testUrls: [
-      'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css',
-      'https://fonts.gstatic.com/s/roboto/v30/KFOmCnqEu92Fr1Mu4mxK.woff2',
-      'https://www.google-analytics.com/analytics.js'
-    ],
-    checkInterval: 60000, // 60 seconds
-    defaultBandwidth: 40, // Mbps (higher default for production)
-    verboseLogging: false
-  }
-};
-
-// Enhanced bandwidth monitoring and adaptive streaming
-class AdaptiveStreamingManager {
-  constructor() {
-    this.bandwidthHistory = [];
-    this.connectionType = navigator.connection?.effectiveType || 'unknown';
-    this.bandwidthEstimate = 0; // Mbps
-    this.lastBandwidthCheck = 0;
-    this.qualityProfile = 'auto'; // auto, high, medium, low
-    this.monitoringActive = false;
-
-    // Initialize environment-specific configuration
-    this.config = this.detectEnvironment();
-    this.testUrls = this.config.testUrls;
-    this.checkInterval = this.config.checkInterval;
-    this.defaultBandwidth = this.config.defaultBandwidth;
-  }
-
-  detectEnvironment() {
-    // Detect if we're running in development environment
-    const isDevelopment =
-      window.location.protocol === 'file:' ||
-      window.location.hostname === 'localhost' ||
-      window.location.hostname === '127.0.0.1' ||
-      window.location.hostname.includes('dev.') ||
-      window.location.port === '3000' ||
-      window.location.port === '8080';
-
-    // Additional check: look for development indicators
-    const hasDevIndicators =
-      window.location.search.includes('debug=true') ||
-      window.location.hash.includes('#dev') ||
-      localStorage.getItem('resonate_dev_mode') === 'false';
-
-    if (isDevelopment || hasDevIndicators) {
-      console.log('Adaptive streaming: Development environment detected');
-      return ADAPTIVE_STREAMING_CONFIG.development;
-    } else {
-      console.log('Adaptive streaming: Production environment detected');
-      return ADAPTIVE_STREAMING_CONFIG.production;
-    }
-  }
-
-  async startMonitoring() {
-    if (this.monitoringActive) return;
-    this.monitoringActive = true;
-    console.log('Starting adaptive streaming monitoring');
-
-    // Initial bandwidth check
-    await this.measureBandwidth();
-
-    // Set up periodic monitoring
-    setInterval(() => this.measureBandwidth(), this.bandwidthCheckInterval);
-
-    // Listen for connection changes
-    if ('connection' in navigator) {
-      navigator.connection.addEventListener('change', () => {
-        this.connectionType = navigator.connection.effectiveType;
-        this.adjustQualityProfile();
-        showStatus(`Connection: ${this.connectionType}`, 'info', 2000);
-      });
-    }
-  }
-
-  async measureBandwidth() {
-    const now = Date.now();
-    const throttleTime = this.config.verboseLogging ? 5000 : 5000; // Same throttling for both
-    if (now - this.lastBandwidthCheck < throttleTime) return;
-
-    this.lastBandwidthCheck = now;
-
-    // Log only in development mode
-    if (this.config.verboseLogging) {
-      console.log('Starting bandwidth measurement...');
-    }
-
-    for (const testUrl of this.testUrls) {
-      try {
-        const startTime = performance.now();
-
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
-
-        const response = await fetch(testUrl + '?t=' + Date.now(), {
-          method: 'HEAD',
-          cache: 'no-cache',
-          mode: 'no-cors', // Allow cross-origin requests
-          signal: controller.signal
-        });
-
-        clearTimeout(timeoutId);
-
-        // For no-cors, we can't read headers, but we can measure timing
-        const endTime = performance.now();
-        const duration = (endTime - startTime) / 1000; // seconds
-
-        // More accurate size estimation based on CDN patterns
-        let estimatedSize;
-        if (testUrl.includes('favicon.ico')) {
-          estimatedSize = 2000; // Google favicon ~2KB
-        } else if (testUrl.includes('jsdelivr') && testUrl.includes('.css')) {
-          estimatedSize = 15000; // Bootstrap CSS ~15KB
-        } else if (testUrl.includes('fonts.gstatic')) {
-          estimatedSize = 50000; // Roboto font ~50KB
-        } else if (testUrl.includes('google-analytics.com')) {
-          estimatedSize = 10000; // Analytics JS ~10KB
-        } else if (testUrl.startsWith('data:')) {
-          estimatedSize = 64; // Actual small PNG data
-        } else {
-          estimatedSize = Math.max(1000, duration * 40000); // Fallback estimation
-        }
-
-        const bandwidthMbps = (estimatedSize * 8) / (duration * 1000000);
-
-        // Better latency estimation (response time vs processing time)
-        const latency = duration * 1000; // ms
-
-        // Filter out unrealistic results
-        if (bandwidthMbps > 0 && bandwidthMbps < 1000) { // Reasonable range
-          this.bandwidthHistory.push({
-            bandwidth: bandwidthMbps,
-            latency: latency,
-            timestamp: now,
-            connectionType: this.connectionType
-          });
-
-          // Keep only last measurements (more in production)
-          const historyLength = this.config.verboseLogging ? 5 : 10;
-          while (this.bandwidthHistory.length > historyLength) {
-            this.bandwidthHistory.shift();
-          }
-
-          // Calculate weighted moving average (more recent = higher weight)
-          const weights = this.bandwidthHistory.map((_, i) => i + 1);
-          const weightSum = weights.reduce((a, b) => a + b, 0);
-          this.bandwidthEstimate = this.bandwidthHistory.reduce(
-            (sum, m, i) => sum + (m.bandwidth * weights[i]),
-            0
-          ) / weightSum;
-
-          this.adjustQualityProfile();
-
-          if (this.config.verboseLogging) {
-            console.log(`Bandwidth measurement successful: ${bandwidthMbps.toFixed(2)} Mbps (avg: ${this.bandwidthEstimate.toFixed(2)} Mbps)`);
-          }
-
-          return; // Success, exit the loop
-        }
-
-      } catch (error) {
-        if (this.config.verboseLogging) {
-          console.warn(`Bandwidth test with ${testUrl.split('?')[0]} failed:`, error.message);
-        }
-        continue; // Try next URL
-      }
-    }
-
-    // All URLs failed, use intelligent fallback based on environment and connection data
-    if (!this.config.verboseLogging) {
-      console.warn('All bandwidth measurement URLs failed, using intelligent fallback');
-    }
-
-    let fallbackMbps = this.config.defaultBandwidth; // Start with config default
-
-    // Factor in Network Information API if available
-    if (navigator.connection) {
-      const connection = navigator.connection;
-
-      // Use effectiveType if available
-      if (connection.effectiveType) {
-        switch (connection.effectiveType) {
-          case 'slow-2g':
-            fallbackMbps = Math.min(fallbackMbps, 0.1);
-            break;
-          case '2g':
-            fallbackMbps = Math.min(fallbackMbps, 0.3);
-            break;
-          case '3g':
-            fallbackMbps = Math.min(fallbackMbps, 3);
-            break;
-          case '4g':
-            fallbackMbps = Math.min(fallbackMbps, 15);
-            break;
-          default:
-            // Keep default
-            break;
-        }
-      }
-
-      // Use downlink as additional validation/fallback
-      if (connection.downlink && connection.downlink > 0) {
-        fallbackMbps = Math.min(fallbackMbps, connection.downlink * 1.2); // Add 20% buffer
-      }
-
-      // Reduce for high latency connections
-      if (connection.rtt && connection.rtt > 1000) {
-        fallbackMbps *= 0.5; // Reduce by half for very high latency
-      }
-    }
-
-    // Further reduce based on common browser heuristics
-    if (state.networkOnline === false) {
-      fallbackMbps = Math.min(fallbackMbps, 0.1); // Very slow when offline indicator present
-    }
-
-    // Ensure reasonable minimum
-    fallbackMbps = Math.max(fallbackMbps, 0.1);
-
-    this.bandwidthEstimate = fallbackMbps;
-
-    this.bandwidthHistory.push({
-      bandwidth: fallbackMbps,
-      latency: 200, // Higher latency for fallback estimates
-      timestamp: now,
-      connectionType: this.connectionType,
-      isFallback: true
-    });
-
-    // Keep history size appropriate for environment
-    const historyLength = this.config.verboseLogging ? 5 : 10;
-    while (this.bandwidthHistory.length > historyLength) {
-      this.bandwidthHistory.shift();
-    }
-
-    // Calculate weighted average again for consistency
-    const weights = this.bandwidthHistory.map((_, i) => i + 1);
-    const weightSum = weights.reduce((a, b) => a + b, 0);
-    this.bandwidthEstimate = this.bandwidthHistory.reduce(
-      (sum, m, i) => sum + (m.bandwidth * weights[i]),
-      0
-    ) / weightSum;
-
-    this.adjustQualityProfile();
-
-    if (this.config.verboseLogging) {
-      console.log(`Bandwidth fallback estimate: ${fallbackMbps.toFixed(2)} Mbps (effective: ${this.bandwidthEstimate.toFixed(2)} Mbps)`);
-    }
-  }
-
-  adjustQualityProfile() {
-    if (this.qualityProfile === 'auto') {
-      // Auto-adjust based on measured bandwidth
-      if (this.bandwidthEstimate > 10) {
-        state.adaptiveQuality = 'high';
-      } else if (this.bandwidthEstimate > 5) {
-        state.adaptiveQuality = 'medium';
-      } else if (this.bandwidthEstimate > 2) {
-        state.adaptiveQuality = 'low';
-      } else {
-        state.adaptiveQuality = 'lowest';
-      }
-    } else {
-      // Manual override
-      state.adaptiveQuality = this.qualityProfile;
-    }
-
-    // Adjust cache behavior
-    this.adjustCacheStrategy();
-
-    console.log(`Adaptive quality: ${state.adaptiveQuality}, Bandwidth: ${this.bandwidthEstimate.toFixed(1)} Mbps`);
-  }
-
-  setQualityProfile(profile) {
-    this.qualityProfile = profile;
-    this.adjustQualityProfile();
-    showStatus(`Quality: ${profile}`, 'info', 2000);
-  }
-
-  adjustCacheStrategy() {
-    // Adjust preload behavior based on bandwidth
-    if (this.bandwidthEstimate > 5) {
-      // Fast connection - aggressive preloading
-      audioCache.maxFavorites = 8;
-      SEARCH_CONFIG.maxResults = 60;
-    } else if (this.bandwidthEstimate > 2) {
-      // Medium connection - moderate preloading
-      audioCache.maxFavorites = 5;
-      SEARCH_CONFIG.maxResults = 50;
-    } else {
-      // Slow connection - conservative preloading
-      audioCache.maxFavorites = 2;
-      SEARCH_CONFIG.maxResults = 30;
-    }
-  }
-
-  getQualityPreference(formats) {
-    const qualityPrefs = {
-      high: ['.flac', '.wav', '.m4a', '.mp3', '.ogg', '.aac'],
-      medium: ['.mp3', '.m4a', '.flac', '.ogg', '.wav', '.aac'],
-      low: ['.mp3', '.aac', '.ogg', '.m4a', '.flac', '.wav'],
-      lowest: ['.aac', '.mp3', '.ogg', '.m4a', '.flac', '.wav']
-    };
-
-    const currentQuality = state.adaptiveQuality || 'medium';
-    const prefs = qualityPrefs[currentQuality] || qualityPrefs.medium;
-
-    // Find the best available format based on quality preference
-    for (const preferredFormat of prefs) {
-      const found = formats.find(f => f.name.toLowerCase().endsWith(preferredFormat));
-      if (found) return found;
-    }
-
-    // Fallback to first available
-    return formats[0];
-  }
-}
 
 // Advanced audio caching system
 class AdvancedAudioCache {
@@ -888,7 +559,6 @@ class EnhancedSearchCache {
 
 const enhancedCache = new EnhancedSearchCache();
 const audioCache = new AdvancedAudioCache();
-const adaptiveStreaming = new AdaptiveStreamingManager();
 
 // WebAssembly Audio Processor
 class WebAssemblyAudioProcessor {
@@ -1035,7 +705,6 @@ async function initializeWebAssembly() {
   }
 }
 
-// Test WebAssembly audio processing
 function testWebAssemblyAudio() {
   const testBuffer = new Float32Array(1024);
   // Fill with test data (sine wave)
@@ -1049,32 +718,6 @@ function testWebAssemblyAudio() {
   console.log('WebAssembly audio test completed, processed', processed.length, 'samples');
   return processed;
 }
-
-// Quality indicator functionality
-function updateQualityIndicator() {
-  if (elements.qualityText) {
-    const displayText = adaptiveStreaming.qualityProfile === 'auto' ?
-      `${state.adaptiveQuality || 'auto'}` : adaptiveStreaming.qualityProfile;
-    elements.qualityText.textContent = displayText;
-  }
-}
-
-function setupQualityIndicator() {
-  if (elements.qualityIndicator) {
-    elements.qualityIndicator.addEventListener('click', () => {
-      // Cycle through quality options: auto → high → medium → low → lowest → auto
-      const qualities = ['auto', 'high', 'medium', 'low', 'lowest'];
-      const currentIndex = qualities.indexOf(adaptiveStreaming.qualityProfile);
-      const nextQuality = qualities[(currentIndex + 1) % qualities.length];
-      adaptiveStreaming.setQualityProfile(nextQuality);
-      updateQualityIndicator();
-    });
-  }
-
-  // Update quality indicator periodically and on quality changes
-  setInterval(updateQualityIndicator, 5000); // Update every 5 seconds if needed
-}
-
 
 
 // DOM Elements
@@ -1112,8 +755,6 @@ const elements = {
   startButton: document.getElementById('start-button'),
   app: document.getElementById('app'),
   playerContent: document.getElementById('player-content'),
-  qualityIndicator: document.getElementById('quality-indicator'),
-  qualityText: document.getElementById('quality-text'),
   repeatBtn: document.getElementById('repeat-btn')
 };
 
@@ -2018,15 +1659,6 @@ async function fetchOptimizedPlayableFiles(identifier, timeoutMs = 10000) {
     let audioFiles = metadata.files.filter(file =>
       isPlayableAudioFile(file)
     );
-
-    // Aplicar selección de calidad adaptativa
-    if (audioFiles.length > 1) {
-      const bestFile = adaptiveStreaming.getQualityPreference(audioFiles);
-      if (bestFile) {
-        // Poner el archivo preferido primero
-        audioFiles = [bestFile, ...audioFiles.filter(f => f !== bestFile)];
-      }
-    }
 
     // Sort remaining files by size (backup sorting)
     audioFiles.sort((a, b) => {
@@ -3571,29 +3203,30 @@ async function playPreviousInContext() {
   }
 }
 
-// Favorites management
 function updatePlayButtonState() {
   // Disable/enable all buttons in the player-content div based on favorites count
   const playerContent = elements.playerContent;
   if (playerContent) {
     const buttons = playerContent.querySelectorAll('button');
-    buttons.forEach(button => {
-      button.disabled = state.favorites.length === 0;
-    });
+    if (buttons) {
+      buttons.forEach(button => {
+        if (button) button.disabled = state.favorites.length === 0;
+      });
+    }
   }
 
-  if (state.favorites.length === 0) {
-    elements.prevBtn.disabled = true;
-    elements.playBtn.disabled = true;
-    elements.nextBtn.disabled = true;
-    elements.favoriteBtn.disabled = true;
-    elements.shuffleFavoritesBtn.disabled = true;
-    elements.playAllFavoritesBtn.disabled = true;
-    elements.playBtn.title = 'Realiza una búsqueda para comenzar';
-    elements.prevBtn.title = 'Realiza una búsqueda para comenzar';
-    elements.nextBtn.title = 'Realiza una búsqueda para comenzar';
-    elements.favoriteBtn.title = 'Realiza una búsqueda para comenzar';
-    elements.shuffleFavoritesBtn.title = 'Realiza una búsqueda para comenzar';
+  if (!state.favorites || state.favorites.length === 0) {
+    if (elements.prevBtn) elements.prevBtn.disabled = true;
+    if (elements.playBtn) elements.playBtn.disabled = true;
+    if (elements.nextBtn) elements.nextBtn.disabled = true;
+    if (elements.favoriteBtn) elements.favoriteBtn.disabled = true;
+    if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.disabled = true;
+    if (elements.playAllFavoritesBtn) elements.playAllFavoritesBtn.disabled = true;
+    if (elements.playBtn) elements.playBtn.title = 'Realiza una búsqueda para comenzar';
+    if (elements.prevBtn) elements.prevBtn.title = 'Realiza una búsqueda para comenzar';
+    if (elements.nextBtn) elements.nextBtn.title = 'Realiza una búsqueda para comenzar';
+    if (elements.favoriteBtn) elements.favoriteBtn.title = 'Realiza una búsqueda para comenzar';
+    if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.title = 'Realiza una búsqueda para comenzar';
 
     // Disable favorites controls
     if (elements.favoritesToggle) elements.favoritesToggle.classList.add('disabled');
@@ -4382,14 +4015,6 @@ async function initializeApp() {
     console.error('Error inicializando caché:', error);
   }
 
-  // Inicializar streaming adaptativo
-  try {
-    await adaptiveStreaming.startMonitoring();
-    console.log('Adaptive streaming monitoring started');
-  } catch (error) {
-    console.warn('Error starting adaptive streaming monitoring:', error);
-  }
-
   loadFavorites();
   // Preparar el CTA (se mostrará si hay favoritos precargados)
   createStartFavoritesCTA();
@@ -4433,7 +4058,6 @@ async function initializeApp() {
   setupSearchOnEnter();
   setupSearchFocusBehavior();
   setupProgressBarInteraction();
-  setupQualityIndicator();
 
   // Crear presentación para transmitir a segunda pantalla
   if (elements.castBtn) {

@@ -1,5 +1,12 @@
-/* ===== VARIABLES & RESET ===== */
+/**
+ * Resonate Player - Enhanced CSS (2025)
+ * Modern music streaming interface with adaptive design
+ * Optimized for performance and user experience across devices
+ */
+
+/* ===== CSS VARIABLES & RESET ===== */
 :root {
+  /* Color Palette */
   --bg: #000;
   --fg: #fff;
   --muted: #94a3b8;
@@ -7,23 +14,55 @@
   --accent-alt: #38bdf8;
   --highlight: #f472b6;
   --secondary: #fbbf24;
+  --error: #ef4444;
+  --success: #10b981;
+  --warning: #f59e0b;
+
+  /* UI Components */
   --card: #1e293b;
   --btn: #334155;
+  --btn-hover: rgba(110, 231, 183, 0.08);
+  --btn-active: #111;
   --neutral: #e2e8f0;
-  --error: #ef4444;
-  /* rojo coral */
 
-  /* Loader properties */
+  /* Spacing & Sizing */
+  --border-radius: 8px;
+  --border-radius-large: 10px;
+  --border-radius-small: 6px;
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 20px;
+  --spacing-xxl: 30px;
+
+  /* Shadows & Effects */
+  --shadow-light: 0 2px 8px rgba(0, 0, 0, 0.15);
+  --shadow-heavy: 0 8px 32px rgba(0, 0, 0, 0.3);
+
+  /* Transitions */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.2s ease;
+  --transition-slow: 0.3s ease;
+
+  /* Loader Properties */
   --loader-size: 22px;
   --loader-border-width: 2px;
-  --loader-animation-duration: 0.8s;
+  --loader-duration: 0.8s;
+
+  /* Component Sizes */
+  --art-size: 180px;
+  --btn-size: 40px;
+  --btn-large: 50px;
+  --search-height: 40px;
+  --progress-height: 6px;
 }
 
+/* ===== GLOBAL RESET & BASE STYLES ===== */
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  -webkit-tap-highlight-color: transparent;
 }
 
 html,
@@ -33,28 +72,24 @@ body {
   color: var(--fg);
   font: 15px/1.4 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   overflow-x: hidden;
+  -webkit-tap-highlight-color: transparent;
 }
 
-/* ===== LAYOUT PRINCIPAL ===== */
+/* ===== LAYOUT SYSTEM ===== */
 .app {
   display: flex;
   flex-direction: column;
   position: relative;
   overflow: hidden;
-  /* height: 100vh; */
-  /* Full viewport height */
-  /* padding-bottom: 60px; */
-  /* Space for footer */
+  min-height: 100vh;
 }
 
-/* ===== MAIN PLAYER SECTION ===== */
 .main-player-section {
   flex-shrink: 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  padding: 20px 0;
+  padding: var(--spacing-xl) 0;
 }
 
-/* ===== DISCOVERY SECTION ===== */
 .discovery-section {
   flex: 1;
   display: flex;
@@ -62,7 +97,7 @@ body {
   padding-bottom: env(safe-area-inset-bottom, 0);
 }
 
-/* ===== HEADER ===== */
+/* ===== HEADER & NAVIGATION ===== */
 header {
   flex-shrink: 0;
   display: flex;
@@ -72,6 +107,7 @@ header {
   top: 0;
   background: var(--bg);
   z-index: 10;
+  padding: var(--spacing-md) 0;
 }
 
 /* ===== TYPOGRAPHY HIERARCHY ===== */
@@ -1087,7 +1123,7 @@ select:focus {
   font-size: 12px;
   padding: 8px 10px;
   margin: 3px 0;
-  display: none;
+  display: flex;
 }
 
 .status-info {

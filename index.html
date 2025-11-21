@@ -88,42 +88,10 @@
   </footer>
   <div id="status-messages"></div>
 
-  <!--Service Worker-->
-  <script>
-    if ('serviceWorker' in navigator && window.location.protocol !== 'file:') {
-      navigator.serviceWorker.register('/sw.js')
-        .then((registration) => {
-          console.log('Service Worker registrado:', registration);
 
-          // Verificar actualizaciones cada 60 segundos
-          setInterval(() => {
-            registration.update();
-          }, 60000);
 
-          // Notificar cuando hay una nueva versión disponible
-          registration.addEventListener('updatefound', () => {
-            const newWorker = registration.installing;
-            newWorker.addEventListener('statechange', () => {
-              if (newWorker.state === 'activated') {
-                // Mostrar notificación de actualización
-                if (confirm('Nueva versión disponible. ¿Deseas actualizar?')) {
-                  window.location.reload();
-                }
-              }
-            });
-          });
-        })
-        .catch((error) => {
-          console.error('Error al registrar Service Worker:', error);
-          // Mostrar advertencia en desarrollo si es error de protocolo
-          if (window.location.protocol === 'file:') {
-            console.warn('Service Worker no se puede registrar en protocolo file://. Ejecuta un servidor local para funcionalidad completa.');
-          }
-        });
-    } else if (window.location.protocol === 'file:') {
-      console.warn('Ejecutando desde archivo local (file://). Las funciones offline estarán limitadas. Usa un servidor local para funcionalidad completa.');
-    }
-  </script>
+  <!-- Logger JS -->
+  <script src="js/logger.js"></script>
 
   <!-- Resonate JS -->
   <script src="js/resonate.js">

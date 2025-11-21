@@ -10,7 +10,8 @@ const STATIC_FILES = [
   '/manifest.json',
   '/css/resonate.css',
   '/js/resonate.js',
-  '/sw.js']
+  '/sw.js'
+];
 
 const CACHE_STRATEGIES = {
   STATIC: 'cache-first',
@@ -22,8 +23,8 @@ const CACHE_STRATEGIES = {
 // Instalación del Service Worker
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(urlsToCache);
+    caches.open(STATIC_CACHE).then((cache) => {
+      return cache.addAll(STATIC_FILES);
     })
   );
   self.skipWaiting(); // Activar inmediatamente
