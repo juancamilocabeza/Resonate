@@ -658,9 +658,10 @@ async function loadAlbumInfoBackground(identifier, resultEl) {
   try {
     const metadata = await fetchOptimizedPlayableFiles(identifier);
     const itemMetadata = metadata[0]?.metadata;
-    const coverUrl = getCoverUrl(identifier, itemMetadata);
     const coverImg = resultEl.querySelector('.result-cover img');
-if (coverImg) coverImg.src = coverUrl;
+    if (coverImg) {
+      preloadCover(identifier, coverImg);
+    }
     const isAlbum = metadata.length > 1;
     const trackCount = metadata.length;
 
@@ -719,10 +720,7 @@ function createSearchResultElement(result, globalIndex) {
   resultEl.innerHTML = `
     <div class="result-actions">
       <div class="result-cover">
-        <img src="https://archive.org/services/img/${result.identifier}"
-          alt="${result.title}"
-          loading="lazy"
-          onerror="handleCoverError(this)">
+        <img src="" alt="${result.title}" loading="lazy" onerror="handleCoverError(this)">
       </div>
       <div class="result-info">
         <div class="result-title">
@@ -1115,7 +1113,7 @@ function updateFavoritesList() {
 
     albumItem.innerHTML = `
       <div class="result-cover">
-        <img src="https://archive.org/services/img/${albumId}"
+        <img src=""
         alt="${albumData.albumTitle}"
         loading="lazy"
         onerror="handleCoverError(this)">
@@ -1135,20 +1133,7 @@ function updateFavoritesList() {
 
     const coverImg = albumItem.querySelector('.result-cover img');
     if (coverImg) {
-      // Try to get metadata for direct URL
-      let metadata = window.enhancedCache ? window.enhancedCache.get('metadata', albumId) : null;
-      if (metadata) {
-        coverImg.src = getCoverUrl(albumId, metadata);
-      } else {
-        // Load in background if not cached
-        fetchOptimizedPlayableFiles(albumId).then(files => {
-          if (files && files[0]?.metadata) {
-            coverImg.src = getCoverUrl(albumId, files[0].metadata);
-          }
-        }).catch(() => {
-          // Keep fallback image
-        });
-      }
+      preloadCover(albumId, coverImg);
     }
 
     const playBtn = albumItem.querySelector('.button');
@@ -1379,32 +1364,32 @@ async function handleStartFavoritesCTA() {
   }
   function handleCoverError(imgElement, retryCount = 0) {
     const maxRetries = 2;
-    
+
     // Log para debugging
     if (window.logger) {
       logger.debug(`Cover image error (retry ${retryCount}): ${imgElement.src}`, 'UI');
     }
-  
+
     // Extraer identifier de la URL actual
     const currentUrl = imgElement.src;
-    const identifierMatch = currentUrl.match(/archive\.org\/(?:services\/img|download)\/([^\/\?]+)/);
-    
+    const identifierMatch = currentUrl.match(/archive\.org\/services\/img\/([^\/\?]+)/);
+
     if (!identifierMatch) {
       // No podemos extraer identifier, usar placeholder
       useSVGPlaceholder(imgElement);
       return;
     }
-    
+
     const identifier = identifierMatch[1];
-  
-    // Estrategia de fallback progresiva
+
+    // Solo usar services/img API, que no causa CORS. No intentar download directo.
     if (retryCount === 0) {
-      // Primer intento fallido: intentar con services/img/__ia_thumb.jpg
+      // Reintento único: recargar desde services/img con throttle
       imgElement.src = `https://archive.org/services/img/${identifier}`;
       imgElement.onerror = () => handleCoverError(imgElement, 1);
     } else if (retryCount === 1) {
-      // Segundo intento: buscar cover.jpg directamente
-      imgElement.src = `https://archive.org/download/${identifier}/cover.jpg`;
+      // Segundo intento: recargar con timestamp para forzar refresh
+      imgElement.src = `https://archive.org/services/img/${identifier}?${Date.now()}`;
       imgElement.onerror = () => handleCoverError(imgElement, 2);
     } else {
       // Todos los intentos fallaron: usar placeholder SVG
@@ -1529,7 +1514,3 @@ async function preloadCover(identifier, imgElement) {
   window.hideStartFavoritesCTA = hideStartFavoritesCTA;
   window.registerServiceWorker = registerServiceWorker;
   window.setupPWAInstall = setupPWAInstall;
-  window.setupPushNotifications = setupPushNotifications;
-  window.isRunningAsPWA = isRunningAsPWA;
-
-window.isRunningAsPWA = isRunningAsPWA;
