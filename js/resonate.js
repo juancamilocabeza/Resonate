@@ -737,7 +737,7 @@ const elements = {
   nextBtn: document.getElementById('next-btn'),
   favoriteBtn: document.getElementById('favorite-btn'),
   shuffleFavoritesBtn: document.getElementById('shuffle-favorites-btn'),
-  castBtn: document.getElementById('cast-btn'),
+
   searchInput: document.getElementById('search-input'),
   searchResults: document.getElementById('search-results'),
   searchResultsList: document.getElementById('search-results-list'),
@@ -795,9 +795,9 @@ const state = {
   initialPreloadDone: false,
   playbackHistory: [],
   playbackQueue: [],
-  isCasting: false,
-  castSession: false,
-  castAvailable: false,
+
+
+
   currentSearchPage: 0,
   currentSearchHasMore: false,
   currentSearchQuery: '',
@@ -4060,9 +4060,7 @@ async function initializeApp() {
   setupProgressBarInteraction();
 
   // Crear presentación para transmitir a segunda pantalla
-  if (elements.castBtn) {
-    elements.castBtn.style.display = 'flex';
-  }
+  
 
   // Configurar elementos opcionales - SOLO SI EXISTEN
   if (elements.playAllFavoritesBtn) {
@@ -4278,3 +4276,4 @@ if (document.readyState === 'loading') {
   initializeApp();
 }
 /*2025 Resonate Player. Todos los derechos reservados. Prohibida la reproducción total o parcial sin autorización*/
+

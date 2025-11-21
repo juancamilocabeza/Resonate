@@ -499,30 +499,6 @@ button:active:not(:disabled) {
   border: none;
 }
 
-/* Cast button */
-.cast-btn {
-  background: var(--btn);
-  color: var(--muted);
-  font-size: 19px;
-  width: 68px;
-  height: 40px;
-  padding: 0;
-  display: none;
-}
-
-.cast-btn.active {
-  color: var(--accent);
-  background: var(--btn);
-  outline: 2px solid var(--accent);
-  display: none;
-}
-
-.cast-btn:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
-  display: none;
-}
-
 /* ===== GENRES SECTION ===== */
 .genre-section {
   margin: 6px 0;
