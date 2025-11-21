@@ -27,7 +27,7 @@ const ADAPTIVE_STREAMING_CONFIG = {
       'https://www.google-analytics.com/analytics.js'
     ],
     checkInterval: 60000, // 60 seconds
-    defaultBandwidth: 15, // Mbps (higher default for production)
+    defaultBandwidth: 40, // Mbps (higher default for production)
     verboseLogging: false
   }
 };
