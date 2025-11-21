@@ -2142,12 +2142,11 @@ function createSearchResultElement(result, globalIndex) {
   const hasFavoriteTrack = isAlbumInFavorites(result.identifier);
 
   resultEl.innerHTML = `
-  <div class="result-actions">
-    <div class="result-cover">
-      <img src="https://archive.org/services/img/${result.identifier}"
-        alt="${result.title}"
-        loading="lazy"
-        onerror="handleCoverError(this)">
+  <img src="https://archive.org/services/img/${result.identifier}"
+  alt="${result.title}"
+  loading="lazy"
+  crossorigin="anonymous"
+  onerror="handleCoverError(this)">
       </div>
       <div class="result-info">
         <div class="result-title">
@@ -3444,9 +3443,10 @@ function updateFavoritesList() {
     albumItem.innerHTML = `
     <div class="result-cover">
     <img src="https://archive.org/services/img/${albumId}" 
-      alt="${albumData.albumTitle}" 
-      loading="lazy"
-      onerror="handleCoverError(this)">
+    alt="${albumData.albumTitle}" 
+    loading="lazy"
+    crossorigin="anonymous"
+    onerror="handleCoverError(this)">
       </div>
       <div class="favorite-info">
         <div class="favorite-title">
