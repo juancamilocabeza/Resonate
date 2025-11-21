@@ -718,7 +718,7 @@ function createSearchResultElement(result, globalIndex) {
         <img src="https://archive.org/services/img/${result.identifier}"
           alt="${result.title}"
           loading="lazy"
-          onerror="sin portada">
+          onerror="handleCoverError(this)">
       </div>
       <div class="result-info">
         <div class="result-title">
@@ -1114,7 +1114,7 @@ function updateFavoritesList() {
         <img src="https://archive.org/services/img/${albumId}"
         alt="${albumData.albumTitle}"
         loading="lazy"
-        onerror="sin portada">
+        onerror="handleCoverError(this)">
       </div>
       <div class="favorite-info">
         <div class="favorite-title">
@@ -1371,4 +1371,6 @@ async function handleStartFavoritesCTA() {
   window.setupPWAInstall = setupPWAInstall;
   window.setupPushNotifications = setupPushNotifications;
   window.isRunningAsPWA = isRunningAsPWA;
+
+window.isRunningAsPWA = isRunningAsPWA;
 
