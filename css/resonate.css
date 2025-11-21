@@ -1100,6 +1100,8 @@ select:focus {
   padding: 8px 10px;
   margin: 3px 0;
   display: flex;
+  display: none;
+
 }
 
 .status-info {

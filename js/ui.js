@@ -1118,7 +1118,6 @@ function updateFavoritesList() {
         <img src="https://archive.org/services/img/${albumId}"
         alt="${albumData.albumTitle}"
         loading="lazy"
-        crossorigin="anonymous"
         onerror="handleCoverError(this)">
       </div>
       <div class="favorite-info">
@@ -1378,52 +1377,139 @@ async function handleStartFavoritesCTA() {
     return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
            window.navigator.standalone === true;
   }
-
-function handleCoverError(imgElement, retryCount = 0) {
-  // Log para debugging (sólo en desarrollo para evitar spam)
-  if (window.logger) {
-    logger.debug('Cover image fallback triggered for: ' + imgElement.src, 'UI');
-  } else {
-    console.debug('Cover image fallback triggered for: ' + imgElement.src);
+  function handleCoverError(imgElement, retryCount = 0) {
+    const maxRetries = 2;
+    
+    // Log para debugging
+    if (window.logger) {
+      logger.debug(`Cover image error (retry ${retryCount}): ${imgElement.src}`, 'UI');
+    }
+  
+    // Extraer identifier de la URL actual
+    const currentUrl = imgElement.src;
+    const identifierMatch = currentUrl.match(/archive\.org\/(?:services\/img|download)\/([^\/\?]+)/);
+    
+    if (!identifierMatch) {
+      // No podemos extraer identifier, usar placeholder
+      useSVGPlaceholder(imgElement);
+      return;
+    }
+    
+    const identifier = identifierMatch[1];
+  
+    // Estrategia de fallback progresiva
+    if (retryCount === 0) {
+      // Primer intento fallido: intentar con services/img/__ia_thumb.jpg
+      imgElement.src = `https://archive.org/services/img/${identifier}`;
+      imgElement.onerror = () => handleCoverError(imgElement, 1);
+    } else if (retryCount === 1) {
+      // Segundo intento: buscar cover.jpg directamente
+      imgElement.src = `https://archive.org/download/${identifier}/cover.jpg`;
+      imgElement.onerror = () => handleCoverError(imgElement, 2);
+    } else {
+      // Todos los intentos fallaron: usar placeholder SVG
+      useSVGPlaceholder(imgElement);
+    }
   }
-
-  // Solución inmediata: usar SVG placeholder sin intentar más requests de archive.org
-  // que están bloqueados (ERR_FAILED)
-  const svgPlaceholder = 'data:image/svg+xml;base64,' + btoa(`<svg width="128" height="128" xmlns="http://www.w3.org/2000/svg"><rect width="128" height="128" fill="#f0f0f0" stroke="#ddd"/><circle cx="64" cy="50" r="20" fill="#ccc"/><rect x="44" y="78" width="40" height="8" rx="4" fill="#ccc"/><rect x="54" y="90" width="20" height="6" rx="3" fill="#ccc"/><text x="64" y="115" text-anchor="middle" fill="#999" font-family="Arial, sans-serif" font-size="10">Sin portada</text></svg>`);
-
-  imgElement.src = svgPlaceholder;
-  imgElement.style.opacity = '0.7';
-  imgElement.style.border = '1px solid #eee';
-
-  // Remover listeners de onerror para evitar loops
-  imgElement.onerror = null;
-
-  if (window.logger) {
-    logger.info('Cover set to SVG placeholder', 'UI');
-  }
-}
-
-// Función para obtener URL de portada desde metadatos o fallback
-function getCoverUrl(identifier, metadata) {
-  if (metadata && metadata.files) {
-    // Buscar archivos de imagen válidos
-    const imageFiles = metadata.files.filter(file =>
-      file.name && /\.(jpg|jpeg|png|gif)$/i.test(file.name) && file.size > 1000
-    );
-
-    if (imageFiles.length > 0) {
-      // Priorizar nombres comunes de portadas
-      const coverPattern = /(cover|folder|album|capa|art|front)\./i;
-      let coverFile = imageFiles.find(file => coverPattern.test(file.name));
-      if (!coverFile) coverFile = imageFiles[0]; // Primera imagen
-
-      return `https://archive.org/download/${identifier}/${encodeURIComponent(coverFile.name)}`;
+ 
+  function useSVGPlaceholder(imgElement) {
+    const svgPlaceholder = 'data:image/svg+xml;base64,' + btoa(`
+      <svg width="128" height="128" xmlns="http://www.w3.org/2000/svg">
+        <rect width="128" height="128" fill="#1e293b" stroke="#334155"/>
+        <circle cx="64" cy="50" r="20" fill="#475569"/>
+        <rect x="44" y="78" width="40" height="8" rx="4" fill="#475569"/>
+        <rect x="54" y="90" width="20" height="6" rx="3" fill="#475569"/>
+        <text x="64" y="115" text-anchor="middle" fill="#94a3b8" font-family="Arial, sans-serif" font-size="10">Sin portada</text>
+      </svg>
+    `);
+  
+    imgElement.src = svgPlaceholder;
+    imgElement.style.opacity = '0.8';
+    imgElement.style.border = '1px solid #334155';
+    imgElement.onerror = null; // Remover handler para evitar loops
+  
+    if (window.logger) {
+      logger.info('Cover set to SVG placeholder', 'UI');
     }
   }
 
-  // Fallback a services/img (que puede generar placeholder)
+// Función para obtener URL de portada desde metadatos o fallback
+function getCoverUrl(identifier, metadata) {
+  // Estrategia 1: Buscar imagen de portada en metadatos
+  if (metadata && metadata.files) {
+    const imageFiles = metadata.files.filter(file =>
+      file.name && /\.(jpg|jpeg|png|gif)$/i.test(file.name) && 
+      file.size > 5000 && // Mínimo 5KB
+      file.size < 5000000 // Máximo 5MB
+    );
+
+    if (imageFiles.length > 0) {
+      // Priorizar archivos con nombres comunes de portada
+      const coverPatterns = [
+        /^cover\./i,
+        /^folder\./i,
+        /^album.*\.(jpg|jpeg|png)$/i,
+        /^front\./i,
+        /__ia_thumb\.jpg$/i, // Thumbnail de Internet Archive
+        /\.jpg$/i // Cualquier JPG como último recurso
+      ];
+
+      for (const pattern of coverPatterns) {
+        const coverFile = imageFiles.find(file => pattern.test(file.name));
+        if (coverFile) {
+          // Usar download API directamente (sin CORS)
+          return `https://archive.org/download/${identifier}/${encodeURIComponent(coverFile.name)}`;
+        }
+      }
+
+      // Si hay imágenes pero ninguna coincide con patterns, usar la primera
+      const firstImage = imageFiles[0];
+      return `https://archive.org/download/${identifier}/${encodeURIComponent(firstImage.name)}`;
+    }
+  }
+
+  // Estrategia 2: Usar services/img que genera thumbnails automáticamente
+  // Esta API maneja CORS correctamente y genera imágenes si no existen
   return `https://archive.org/services/img/${identifier}`;
 }
+async function preloadCover(identifier, imgElement) {
+  try {
+    // Intentar obtener metadatos en caché primero
+    const metadata = window.enhancedCache ? 
+      window.enhancedCache.get('metadata', identifier) : null;
+
+    if (metadata) {
+      // Tenemos metadatos, buscar mejor imagen
+      const coverUrl = getCoverUrl(identifier, metadata);
+      imgElement.src = coverUrl;
+    } else {
+      // Sin metadatos en caché, usar services API
+      imgElement.src = `https://archive.org/services/img/${identifier}`;
+      
+      // Cargar metadatos en background para futuras referencias
+      fetchOptimizedPlayableFiles(identifier)
+        .then(files => {
+          if (files && files[0]) {
+            // Metadatos cargados, actualizar imagen si es mejor
+            const betterUrl = getCoverUrl(identifier, { files });
+            if (betterUrl !== imgElement.src && !imgElement.complete) {
+              imgElement.src = betterUrl;
+            }
+          }
+        })
+        .catch(err => {
+          console.debug('Background metadata fetch failed:', err);
+          // No hacer nada, la imagen por defecto ya está cargándose
+        });
+    }
+  } catch (error) {
+    console.error('Error in preloadCover:', error);
+    // Fallback a services API
+    imgElement.src = `https://archive.org/services/img/${identifier}`;
+  }
+}
+
+
 
   // Exponer la función globalmente
   window.handleCoverError = handleCoverError;

@@ -124,7 +124,7 @@ function createLogger() {
     window.location.hash.includes('#dev');
 
   const config = {
-    level: 'DEBUG', // Always use DEBUG level to show errors in console in production too
+    level: isDevelopment ? 'DEBUG' : 'INFO', // DEBUG for development, INFO for production
     environment: isDevelopment ? 'development' : 'production',
     verbose: isDevelopment,
     timestamps: isDevelopment,
