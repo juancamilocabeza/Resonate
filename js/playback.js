@@ -208,7 +208,6 @@ async function setArtwork(track, identifier) {
 
   const img = new Image();
   img.alt = 'Portada del álbum';
-  img.crossOrigin = 'anonymous';
 
   const archiveCoverUrl = `https://archive.org/services/img/${identifier}`;
 

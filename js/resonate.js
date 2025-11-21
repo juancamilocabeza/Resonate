@@ -2754,7 +2754,7 @@ async function setArtwork(track, identifier) {
     elements.art.innerHTML = '<span class="hint">Sin portada</span>';
   };
 
-  img.src = archiveCoverUrl;
+  // img.crossOrigin = 'anonymous';
 }
 
 // Playback control functions
