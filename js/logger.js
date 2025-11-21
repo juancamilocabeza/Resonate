@@ -124,7 +124,7 @@ function createLogger() {
     window.location.hash.includes('#dev');
 
   const config = {
-    level: isDevelopment ? 'DEBUG' : 'INFO',
+    level: 'DEBUG',
     environment: isDevelopment ? 'development' : 'production',
     verbose: isDevelopment,
     timestamps: isDevelopment,
