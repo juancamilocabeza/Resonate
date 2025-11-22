@@ -407,9 +407,13 @@ function updateMediaSessionMetadata(track, identifier) {
 
   try {
     const artwork = [];
+    const isLocal = window.location.protocol === 'file:';
     const resonateIconUrl = 'icons/favicon.svg';
 
-    artwork.push({ src: resonateIconUrl, sizes: '512x512', type: 'image/svg+xml' });
+    // Only set artwork if not running locally, as file:// URLs are not allowed in Media Session
+    if (!isLocal) {
+      artwork.push({ src: resonateIconUrl, sizes: '512x512', type: 'image/svg+xml' });
+    }
 
     navigator.mediaSession.metadata = new MediaMetadata({
       title: track.title || 'Untitled',

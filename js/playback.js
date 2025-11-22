@@ -82,7 +82,9 @@ const playbackManager = new ContinuousPlaybackManager();
 
 // Fetch with timeout for network operations
 async function fetchWithTimeout(resource, options = {}) {
-  const { timeout = 8000, ...fetchOptions } = options;
+  const isLocal = window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  const defaultTimeout = isLocal ? 30000 : 8000; // Higher timeout for local development
+  const { timeout = defaultTimeout, ...fetchOptions } = options;
 
   const controller = new AbortController();
   // track the controller globally so we can abort from watchdogs
@@ -687,7 +689,7 @@ async function playNextInContext(maxRetries = 3) {
       const nextTrack = state.playbackQueue[0];
 
       // Check it's not the same as current track
-      if (currentTrackUrl && nextTrack.url === currentTrackUrl) {
+      if (nextTrack && currentTrackUrl && nextTrack.url === currentTrackUrl) {
         // Skipping same track, moving to next
         state.playbackQueue.shift(); // Remover la duplicada
         if (state.playbackQueue.length > 0) {
@@ -697,6 +699,11 @@ async function playNextInContext(maxRetries = 3) {
       }
 
       const actualNextTrack = state.playbackQueue.shift();
+
+      if (!actualNextTrack) {
+        // No track available
+        return;
+      }
 
       // Agregar la pista actual al historial solo si es diferente
       if (state.currentTrack && state.currentTrack.url !== actualNextTrack.url) {
