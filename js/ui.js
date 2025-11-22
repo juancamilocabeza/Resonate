@@ -407,11 +407,9 @@ function updateMediaSessionMetadata(track, identifier) {
 
   try {
     const artwork = [];
-    let metadata = window.enhancedCache.get('metadata', identifier);
-    const archiveCoverUrl = getCoverUrl(identifier, metadata);
-    
-    artwork.push({ src: archiveCoverUrl, sizes: '300x300', type: 'image/jpeg' });
-    artwork.push({ src: archiveCoverUrl, sizes: '512x512', type: 'image/jpeg' });
+    const resonateIconUrl = 'icons/favicon.svg';
+
+    artwork.push({ src: resonateIconUrl, sizes: '512x512', type: 'image/svg+xml' });
 
     navigator.mediaSession.metadata = new MediaMetadata({
       title: track.title || 'Untitled',
@@ -719,9 +717,6 @@ function createSearchResultElement(result, globalIndex) {
 
   resultEl.innerHTML = `
     <div class="result-actions">
-      <div class="result-cover">
-        <img src="" alt="${result.title}" loading="lazy" onerror="handleCoverError(this)">
-      </div>
       <div class="result-info">
         <div class="result-title">
           ${result.title}
@@ -1112,12 +1107,6 @@ function updateFavoritesList() {
       '';
 
     albumItem.innerHTML = `
-      <div class="result-cover">
-        <img src=""
-        alt="${albumData.albumTitle}"
-        loading="lazy"
-        onerror="handleCoverError(this)">
-      </div>
       <div class="favorite-info">
         <div class="favorite-title">
           ${albumData.albumTitle || 'Sin título'}
@@ -1363,38 +1352,8 @@ async function handleStartFavoritesCTA() {
            window.navigator.standalone === true;
   }
   function handleCoverError(imgElement, retryCount = 0) {
-    const maxRetries = 2;
-
-    // Log para debugging
-    if (window.logger) {
-      logger.debug(`Cover image error (retry ${retryCount}): ${imgElement.src}`, 'UI');
-    }
-
-    // Extraer identifier de la URL actual
-    const currentUrl = imgElement.src;
-    const identifierMatch = currentUrl.match(/archive\.org\/services\/img\/([^\/\?]+)/);
-
-    if (!identifierMatch) {
-      // No podemos extraer identifier, usar placeholder
-      useSVGPlaceholder(imgElement);
-      return;
-    }
-
-    const identifier = identifierMatch[1];
-
-    // Solo usar services/img API, que no causa CORS. No intentar download directo.
-    if (retryCount === 0) {
-      // Reintento único: recargar desde services/img con throttle
-      imgElement.src = `https://archive.org/services/img/${identifier}`;
-      imgElement.onerror = () => handleCoverError(imgElement, 1);
-    } else if (retryCount === 1) {
-      // Segundo intento: recargar con timestamp para forzar refresh
-      imgElement.src = `https://archive.org/services/img/${identifier}?${Date.now()}`;
-      imgElement.onerror = () => handleCoverError(imgElement, 2);
-    } else {
-      // Todos los intentos fallaron: usar placeholder SVG
-      useSVGPlaceholder(imgElement);
-    }
+    // Siempre usar el ícono de Resonate
+    useSVGPlaceholder(imgElement);
   }
  
   function useSVGPlaceholder(imgElement) {
@@ -1409,80 +1368,15 @@ async function handleStartFavoritesCTA() {
     }
   }
 
-// Función para obtener URL de portada desde metadatos o fallback
+// Función para obtener URL de portada: siempre retornar el ícono de Resonate
 function getCoverUrl(identifier, metadata) {
-  // Estrategia 1: Buscar imagen de portada en metadatos
-  if (metadata && metadata.files) {
-    const imageFiles = metadata.files.filter(file =>
-      file.name && /\.(jpg|jpeg|png|gif)$/i.test(file.name) && 
-      file.size > 5000 && // Mínimo 5KB
-      file.size < 5000000 // Máximo 5MB
-    );
-
-    if (imageFiles.length > 0) {
-      // Priorizar archivos con nombres comunes de portada
-      const coverPatterns = [
-        /^cover\./i,
-        /^folder\./i,
-        /^album.*\.(jpg|jpeg|png)$/i,
-        /^front\./i,
-        /__ia_thumb\.jpg$/i, // Thumbnail de Internet Archive
-        /\.jpg$/i // Cualquier JPG como último recurso
-      ];
-
-      for (const pattern of coverPatterns) {
-        const coverFile = imageFiles.find(file => pattern.test(file.name));
-        if (coverFile) {
-          // Usar download API directamente (sin CORS)
-          return `https://archive.org/download/${identifier}/${encodeURIComponent(coverFile.name)}`;
-        }
-      }
-
-      // Si hay imágenes pero ninguna coincide con patterns, usar la primera
-      const firstImage = imageFiles[0];
-      return `https://archive.org/download/${identifier}/${encodeURIComponent(firstImage.name)}`;
-    }
-  }
-
-  // Estrategia 2: Usar services/img que genera thumbnails automáticamente
-  // Esta API maneja CORS correctamente y genera imágenes si no existen
-  return `https://archive.org/services/img/${identifier}`;
+  // Siempre mostrar el ícono de Resonate
+  return 'icons/favicon.svg';
 }
 async function preloadCover(identifier, imgElement) {
-  try {
-    // Intentar obtener metadatos en caché primero
-    const metadata = window.enhancedCache ? 
-      window.enhancedCache.get('metadata', identifier) : null;
-
-    if (metadata) {
-      // Tenemos metadatos, buscar mejor imagen
-      const coverUrl = getCoverUrl(identifier, metadata);
-      imgElement.src = coverUrl;
-    } else {
-      // Sin metadatos en caché, usar services API
-      imgElement.src = `https://archive.org/services/img/${identifier}`;
-      
-      // Cargar metadatos en background para futuras referencias
-      fetchOptimizedPlayableFiles(identifier)
-        .then(files => {
-          if (files && files[0]) {
-            // Metadatos cargados, actualizar imagen si es mejor
-            const betterUrl = getCoverUrl(identifier, { files });
-            if (betterUrl !== imgElement.src && !imgElement.complete) {
-              imgElement.src = betterUrl;
-            }
-          }
-        })
-        .catch(err => {
-          console.debug('Background metadata fetch failed:', err);
-          // No hacer nada, la imagen por defecto ya está cargándose
-        });
-    }
-  } catch (error) {
-    console.error('Error in preloadCover:', error);
-    // Fallback a services API
-    imgElement.src = `https://archive.org/services/img/${identifier}`;
-  }
+  // Siempre usar el ícono de Resonate
+  imgElement.src = 'icons/favicon.svg';
+  imgElement.alt = 'Ícono de Resonate';
 }
 
 
