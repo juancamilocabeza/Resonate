@@ -3524,24 +3524,24 @@ function toggleFavoritesList() {
 
   if (state.favoritesVisible) {
     elements.favoritesList.classList.add('active');
-    elements.favoritesToggle.textContent = '▲ ❤️';
+    elements.favoritesToggle.textContent = 'ocultar ❤️';
     updateFavoritesList();
   } else {
     elements.favoritesList.classList.remove('active');
-    elements.favoritesToggle.textContent = '▼ ❤️';
+    elements.favoritesToggle.textContent = 'ver ❤️';
   }
 }
 
 function hideFavoritesList() {
   state.favoritesVisible = false;
   elements.favoritesList.classList.remove('active');
-  elements.favoritesToggle.textContent = '▼ ❤️';
+  elements.favoritesToggle.textContent = 'ver ❤️';
 }
 
 function hideFavoritesList() {
   state.favoritesVisible = false;
   elements.favoritesList.classList.remove('active');
-  elements.favoritesToggle.textContent = '▼ ❤️';
+  elements.favoritesToggle.textContent = 'ver ❤️';
 }
 
 // Hide favorites list when playing a favorite

@@ -10,7 +10,7 @@
   --bg: #000;
   --fg: #fff;
   --muted: #94a3b8;
-  --accent: #B6B6E5;
+  --accent: #c4c4dd;
   --accent-alt: #38bdf8;
   --highlight: #f472b6;
   --secondary: #fbbf24;
@@ -577,10 +577,9 @@ select:focus {
 /* ===== FAVORITES SECTION ===== */
 .favorites-section {
   flex-shrink: 0;
-  /*width: 100%;*/
   padding: 0 5px;
   display: none;
-  /* Hide favorites section by default */
+  flex-direction: row-reverse;
 }
 
 .favorites-header {
@@ -1311,7 +1310,7 @@ select:focus {
 /* ===== FAVORITES TAB ===== */
 .favorites-section {
   display: flex;
-  flex-direction: column;
+  flex-direction: row-reverse;
   /*height: 100%;*/
 }
 
@@ -1391,9 +1390,15 @@ select:focus {
 }
 
 /* ===== FOOTER ===== */
+.stage {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+/* ===== FOOTER ===== */
 .footer {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 10px;
   text-align: center;
   padding: 8px;
 }
