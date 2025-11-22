@@ -19,45 +19,10 @@ function handleCoverError(img) {
   img.style.opacity = '0.8';
 }
 
-// Función para obtener URL de portada desde metadatos o fallback como blob
+// Función para obtener URL de portada - eliminada, siempre presenta ícono de Resonate
 async function getCoverUrl(identifier, metadata) {
-  if (metadata && metadata.files) {
-    // Buscar archivos de imagen válidos
-    const imageFiles = metadata.files.filter(file =>
-      file.name && /\.(jpg|jpeg|png|gif)$/i.test(file.name) && file.size > 1000
-    );
-
-    if (imageFiles.length > 0) {
-      // Priorizar nombres comunes de portadas
-      const coverPattern = /(cover|folder|album|capa|art|front)\./i;
-      let coverFile = imageFiles.find(file => coverPattern.test(file.name));
-      if (!coverFile) coverFile = imageFiles[0]; // Primera imagen
-
-      try {
-        // Crear blob URL para evitar CORS
-        const imageUrl = `https://archive.org/download/${identifier}/${encodeURIComponent(coverFile.name)}`;
-        const response = await fetch(imageUrl);
-        if (response.ok) {
-          const blob = await response.blob();
-          return URL.createObjectURL(blob);
-        }
-      } catch (error) {
-        console.warn('Error loading cover image:', error);
-      }
-    }
-  }
-
-  // Fallback a services/img (que puede generar placeholder) - intentar como blob también
-  try {
-    const fallbackUrl = `https://archive.org/services/img/${identifier}`;
-    const response = await fetch(fallbackUrl);
-    if (response.ok) {
-      const blob = await response.blob();
-      return URL.createObjectURL(blob);
-    }
-  } catch (error) {
-    console.warn('Error loading fallback image:', error);
-  }
+  return 'icons/favicon.svg';
+}
 
   // Si todo falla, retornar la URL normal (aunque puede causar CORS)
   return `https://archive.org/services/img/${identifier}`;
