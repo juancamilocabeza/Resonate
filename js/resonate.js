@@ -11,27 +11,12 @@ const SEARCH_CONFIG = {
 // Función para manejar errores de carga de portadas - SOLUCIÓN PARA PRODUCCIÓN
 function handleCoverError(img) {
   // Log the cover loading error for debugging
+  if (img.src.includes('favicon.svg')) return;
   console.error('Cover image failed to load:', img.src);
   logger.error('Cover image failed to load: ' + img.src, 'UI');
-  img.style.display = 'none';
-  const container = img.parentElement;
-  if (container && !container.querySelector('.cover-placeholder')) {
-    const placeholder = document.createElement('div');
-    placeholder.className = 'cover-placeholder';
-    placeholder.innerHTML = '<span class="hint">Sin portada</span>';
-    placeholder.style.cssText = `
-      width: 100%;
-      height: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: var(--bg-secondary, #f0f0f0);
-      border: 1px solid var(--border, #ddd);
-      font-size: 0.8em;
-      color: var(--muted, #666);
-    `;
-    container.appendChild(placeholder);
-  }
+  img.src = 'icons/favicon.svg';
+  img.alt = 'Ícono de Resonate';
+  img.style.opacity = '0.8';
 }
 
 // Función para obtener URL de portada desde metadatos o fallback como blob
