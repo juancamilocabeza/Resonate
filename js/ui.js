@@ -1404,7 +1404,7 @@ async function handleStartFavoritesCTA() {
         <circle cx="64" cy="50" r="20" fill="#475569"/>
         <rect x="44" y="78" width="40" height="8" rx="4" fill="#475569"/>
         <rect x="54" y="90" width="20" height="6" rx="3" fill="#475569"/>
-        <text x="64" y="115" text-anchor="middle" fill="#94a3b8" font-family="Arial, sans-serif" font-size="10">Sin portada</text>
+        <text x="64" y="115" text-anchor="middle" fill="#94a3b8" font-family="Arial, sans-serif" font-size="10">Sin portada de momento...</text>
       </svg>
     `);
   
