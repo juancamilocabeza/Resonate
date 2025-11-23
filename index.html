@@ -143,8 +143,8 @@
         const iconRect = donateIconLink.getBoundingClientRect();
 
         // Center horizontally in the screen
-        const tooltipWidth = 320;
-        const tooltipHeight = 400; // Approximate height
+        const tooltipWidth = window.innerWidth-20; // Approximate width
+        const tooltipHeight = 500; // Approximate height
         let left = (window.innerWidth - tooltipWidth) / 2;
         let top = iconRect.top - tooltipHeight - 10; // 10px space
 

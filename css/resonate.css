@@ -1568,12 +1568,13 @@ select:focus {
   }
 
   .donation-tooltip {
-    padding: 5px !important;
+    padding: 10px !important;
   }
 }
 
 /* ===== DONATION MODAL ===== */
 .donation-tooltip {
+  position: fixed;
   top: 0;
   left: 0;
   width: auto;
@@ -1582,7 +1583,7 @@ select:focus {
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding-top: 80px;
+  padding-top: 10px;
   z-index: 1000;
   opacity: 0;
   visibility: hidden;
@@ -1606,7 +1607,6 @@ select:focus {
 }
 
 .tooltip-close {
-  position: absolute;
   top: 10px;
   right: 10px;
   background: transparent;
