@@ -1645,7 +1645,7 @@ select:focus {
 }
 
 .qr-code {
-  /*width: 200px;*/
+  width: 100% !important;
   height: 100% !important;
   border-radius: 8px;
   margin: 15px auto 15px;
