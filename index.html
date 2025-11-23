@@ -29,7 +29,7 @@
   <header>
     <h1><a href="https://www.resonateplayer.com" style="text-decoration: none; color: inherit;">&nbsp;Resonate</a></h1>
     <!-- Search and Discovery Section -->
-    <div class="stage">&nbsp;&nbsp;Early stage</div>  
+    <div class="stage">&nbsp;&nbsp;Early stage</div>
   </header>
 
 
@@ -86,21 +86,28 @@
   </div>
   <audio id="audio" preload="metadata"></audio>
 
-  <div  style="display: flex; justify-content: center; align-items: center;" >
-  <a href="https://wa.me/573126907942" target="_blank" ><img src="icons/wa_icon.png" aria-label="Contáctanos"></a>
-  <a style="cursor: not-allowed"><img src="icons/donate_icon_x48.png" aria-label="Pronto podrás hacer tus donaciones al proyecto"></a>
-
-  </div>
-
   <footer class="footer">
+    <div class="contact-section"> 
+      <a href="https://wa.me/573126907942" target="_blank" aria-label="WhatsApp" style="color: #25d366; text-decoration: none;">&nbspWhatsApp</a><a href="#" aria-label="Donar" style="color: var(--accent-alt); text-decoration: none;">&nbspDonar</a>
+    </div>
     <div style="font-weight: bold;">&copy; 2025 Resonate Player - Early Stage</div>
-    <div>Todos los derechos reservados. Prohibida la reproducción total o parcial sin
-      autorización</div>
-      
+    <div style="font-size: 12px;">Todos los derechos reservados. Prohibida la reproducción total o parcial sin
+      autorización.
+    </div>
   </footer>
+
+  <!-- Donation QR Tooltip -->
+  <div id="donation-tooltip" class="donation-tooltip">
+    <div class="tooltip-content">
+      <button class="tooltip-close" aria-label="Cerrar">×</button>
+      <h3>Apoya donando a Resonate</h3>
+      <p>Escanea el código QR para donar con Nequi desde Colombia</p>
+      <img src="utils/nequi-qr.jpeg" alt="QR para donar con Nequi" class="qr-code">
+      <button class="download-qr-btn"><a href="utils/nequi-qr.jpeg" download="qr-donar-por-nequi.jpg" style="text-decoration: none;">Descargar QR</a></button>
+    </div>
+  </div>
+  
   <div id="status-messages"></div>
-
-
 
   <!-- Logger JS -->
   <script src="js/logger.js"></script>
@@ -119,6 +126,100 @@
 
   <!-- Initialization JS -->
   <script src="js/initialization.js"></script>
+
+  <!-- Donation Tooltip Functionality -->
+  <script>
+    // Donation tooltip functionality
+    let donationTooltipVisible = false;
+    const donationTooltip = document.getElementById('donation-tooltip');
+    const donateIconLink = document.querySelector('.contact-section a:nth-child(2)');
+    const tooltipCloseBtn = document.querySelector('.tooltip-close');
+    const downloadBtn = document.querySelector('.download-qr-btn');
+
+    function toggleDonationTooltip() {
+      donationTooltipVisible = !donationTooltipVisible;
+      if (donationTooltipVisible) {
+        // Calculate position above the donate icon
+        const iconRect = donateIconLink.getBoundingClientRect();
+
+        // Center horizontally in the screen
+        const tooltipWidth = 320;
+        const tooltipHeight = 400; // Approximate height
+        let left = (window.innerWidth - tooltipWidth) / 2;
+        let top = iconRect.top - tooltipHeight - 10; // 10px space
+
+        // Ensure tooltip stays within viewport
+        if (left < 10) left = 10;
+        if (left + tooltipWidth > window.innerWidth - 10) left = window.innerWidth - tooltipWidth - 10;
+        if (top < 10) top = iconRect.bottom + 10; // Show below if no space above
+
+        donationTooltip.style.left = left + 'px';
+        donationTooltip.style.top = top + 'px';
+        donationTooltip.style.bottom = 'auto';
+        donationTooltip.classList.add('active');
+      } else {
+        donationTooltip.classList.remove('active');
+      }
+    }
+
+    function closeDonationTooltip() {
+      donationTooltipVisible = false;
+      donationTooltip.classList.remove('active');
+    }
+
+    function downloadQRCode() {
+      const qrImg = document.querySelector('.qr-code');
+      const imgSrc = qrImg.src;
+
+      // Create download link
+      const link = document.createElement('a');
+      link.href = imgSrc;
+      link.download = 'qr-donado-nequi.jpg';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      // Show success message
+      showStatus('QR descargado exitosamente', 'info', 2000);
+    }
+
+    // Add event listeners when DOM is loaded
+    document.addEventListener('DOMContentLoaded', function() {
+      // Click on donate icon
+      if (donateIconLink) {
+        donateIconLink.addEventListener('click', function(e) {
+          e.preventDefault();
+          toggleDonationTooltip();
+        });
+      }
+
+      // Close button
+      if (tooltipCloseBtn) {
+        tooltipCloseBtn.addEventListener('click', closeDonationTooltip);
+      }
+
+      // Download button
+      if (downloadBtn) {
+        downloadBtn.addEventListener('click', downloadQRCode);
+      }
+
+      // Close tooltip when clicking outside
+      document.addEventListener('click', function(e) {
+        if (!donationTooltip.contains(e.target) &&
+            !donateIconLink.contains(e.target) &&
+            donationTooltipVisible) {
+          closeDonationTooltip();
+        }
+      });
+
+      // Close tooltip on escape key
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && donationTooltipVisible) {
+          closeDonationTooltip();
+        }
+      });
+    });
+  </script>
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-BM0DX9WY1D">
