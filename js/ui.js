@@ -718,27 +718,21 @@ function createSearchResultElement(result, globalIndex) {
   resultEl.className = 'search-result';
 
   const hasFavoriteTrack = isAlbumInFavorites(result.identifier);
-
   resultEl.innerHTML = `
-    <div class="result-actions">
+  <div class="result-actions">
+
+    <div class="result-cover">
+      <img src="icons/favicon.svg" alt="Portada de ${result.title}">
+    </div>
       <div class="result-info">
-        <div class="result-title">
-          ${result.title}
-        </div>
-          <div class="result-creator">${result.creator}</div>
-          <div class="result-meta"><span class="result-album"></span></div>
-        </div>
-        <button class="result-play-btn" title="Reproducir">
-          <span class="play-icon">▶</span>
-        </button>
-        <button class="result-favorite ${hasFavoriteTrack ? 'active' : ''}" title="${hasFavoriteTrack ? 'Quitar de favoritos' : 'Agregar a favoritos'}">
-          ${hasFavoriteTrack ? '❤️' : '🩶'}
-        </button>
-        <button class="result-expand" title="Ver pistas del álbum">
-          <span class="expand-icon">▼</span>
-        </button>
+        <div class="result-title">${result.title}</div>
+        <div class="result-creator">${result.creator}</div>
+        <div class="result-meta"><span class="result-album"></span></div>
       </div>
-  `;
+      <button class="result-play-btn" title="Reproducir"><span class="play-icon">▶</span></button>
+      <button class="result-favorite ${hasFavoriteTrack ? 'active' : ''}" title="${hasFavoriteTrack ? 'Quitar de favoritos' : 'Agregar a favoritos'}">${hasFavoriteTrack ? '❤️' : '🩶'}</button>
+      <button class="result-expand" title="Ver pistas del álbum"><span class="expand-icon">▼</span></button>
+    </div>`;
 
   // Cargar información de álbum en segundo plano
   loadAlbumInfoBackground(result.identifier, resultEl);
@@ -1111,6 +1105,9 @@ function updateFavoritesList() {
       '';
 
     albumItem.innerHTML = `
+      <div class="result-cover">
+        <img src="icons/favicon.svg" alt="Portada de ${albumData.albumTitle}">
+      </div>
       <div class="favorite-info">
         <div class="favorite-title">
           ${albumData.albumTitle || 'Sin título'}
@@ -1370,15 +1367,24 @@ async function handleStartFavoritesCTA() {
     }
   }
 
-// Función para obtener URL de portada: siempre retornar el ícono de Resonate
-function getCoverUrl(identifier, metadata) {
-  // Siempre mostrar el ícono de Resonate
-  return 'icons/favicon.svg';
+// Función para obtener URL de portada: retornar la portada de Archive.org si existe
+async function getCoverUrl(identifier, metadata) {
+  // Intentar obtener la portada de Archive.org
+  const archiveCoverUrl = `https://archive.org/services/img/${identifier}`;
+
+  // Crear una promesa para verificar si la imagen carga
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(archiveCoverUrl);
+    img.onerror = () => resolve('icons/favicon.svg'); // Fallback al ícono
+    img.src = archiveCoverUrl;
+  });
 }
 async function preloadCover(identifier, imgElement) {
-  // Siempre usar el ícono de Resonate
-  imgElement.src = 'icons/favicon.svg';
-  imgElement.alt = 'Ícono de Resonate';
+  // Obtener la URL de portada (Archive.org o fallback)
+  const coverUrl = await getCoverUrl(identifier);
+  imgElement.src = coverUrl;
+  imgElement.alt = `Portada de ${identifier}`;
 }
 
 // Exponer la función globalmente
