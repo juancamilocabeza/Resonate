@@ -2,7 +2,7 @@
 class Logger {
   constructor(config = {}) {
     this.config = {
-      level: config.level || 'INFO', // DEBUG, INFO, WARN, ERROR, NONE
+      level: config.level || 'DEBUG', // DEBUG, INFO, WARN, ERROR, NONE
       environment: config.environment || 'development',
       verbose: config.verbose !== false,
       timestamps: config.timestamps !== false,

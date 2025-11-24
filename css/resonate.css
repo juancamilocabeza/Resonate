@@ -1310,31 +1310,6 @@ select:focus {
   border-color: var(--accent);
 }
 
-/* Mobile genres section */
-.mobile-genres-section {
-  display: none;
-}
-
-@media (max-width: 768px) {
-  .mobile-genres-section {
-    display: block;
-    margin-top: 20px;
-    text-align: center;
-  }
-
-  .mobile-genres-section .genre-buttons-section {
-    justify-content: flex-start;
-    overflow-x: auto;
-    padding: 0;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-  }
-
-  .mobile-genres-section .genre-buttons-section::-webkit-scrollbar {
-    display: none;
-  }
-}
-
 /* ===== FAVORITES TAB ===== */
 .favorites-section {
   display: flex;
@@ -1379,42 +1354,6 @@ select:focus {
 .volume-slider {
   display: block;
   /* Always visible */
-}
-
-/* ===== GENRES ABOVE FOOTER ===== */
-.genres-section-above-footer {
-  width: 100%;
-  /*padding: 20px 15px 10px 15px;*/
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  background: linear-gradient(180deg, var(--bg) 0%, rgba(0, 0, 0, 0.95) 100%);
-  /*margin-top: 20px;*/
-}
-
-.genres-section-above-footer h3 {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--accent);
-  margin: 0 0 16px 0;
-  text-align: center;
-}
-
-.genres-section-above-footer .genre-buttons-grid {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 12px;
-  width: 100%;
-  max-width: 900px;
-  margin: 0 0 16px 0;
-}
-
-.genres-section-above-footer .genre-btn {
-  height: 44px;
-  font-size: 14px;
-  min-width: fit-content;
-  flex-shrink: 0;
 }
 
 /* ===== FOOTER ===== */
@@ -1484,33 +1423,6 @@ select:focus {
     margin: 3px 0 0 0;
   }
 
-  .genre-buttons-section {
-    gap: 6px;
-  }
-
-  .genre-btn {
-    height: 28px;
-    font-size: 12px;
-    padding: 0 6px;
-  }
-
-  .genre-buttons-grid {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-  }
-
-  .genres-section h3 {
-    font-size: 16px;
-    /*margin-bottom: 12px;*/
-  }
-
-  /* Donation modal responsive */
-  .tooltip-content {
-    padding: 12px !important;
-    min-width: auto !important;
-    max-width: 90vw !important;
-  }
-
   .qr-code {
     width: 160px !important;
     height: 100% !important;
@@ -1575,11 +1487,8 @@ select:focus {
 /* ===== DONATION MODAL ===== */
 .donation-tooltip {
   position: fixed;
-  top: 0;
-  left: 0;
   width: auto;
   height: auto;
-  background: rgba(0, 0, 0, 0.8);
   display: flex;
   align-items: flex-start;
   justify-content: center;

@@ -32,7 +32,6 @@
     <div class="stage">&nbsp;&nbsp;Early stage</div>
   </header>
 
-
   <!-- Search and Discovery Section -->
   <div class="discovery-section">
     <div class="search-section">
@@ -84,18 +83,6 @@
       </div>
     </div>
   </div>
-  <audio id="audio" preload="metadata"></audio>
-
-  <footer class="footer">
-    <div class="contact-section"> 
-      <a href="https://wa.me/573126907942" target="_blank" aria-label="WhatsApp" style="color: #25d366; text-decoration: none;">&nbspWhatsApp</a><a href="#" aria-label="Donar" style="color: var(--accent-alt); text-decoration: none;">&nbspDonar</a>
-    </div>
-    <div style="font-weight: bold;">&copy; 2025 Resonate Player - Early Stage</div>
-    <div>Todos los derechos reservados. Prohibida la reproducción total o parcial sin
-      autorización.
-    </div>
-  </footer>
-
   <!-- Donation QR Tooltip -->
   <div id="donation-tooltip" class="donation-tooltip">
     <div class="tooltip-content">
@@ -106,9 +93,21 @@
       <button class="download-qr-btn"><a href="utils/nequi-qr.jpeg" style="text-decoration: none;">Descargar QR</a></button>
     </div>
   </div>
+
+  <footer class="footer">
+    <div class="contact-section"> 
+      <a href="https://wa.me/573126907942" target="_blank" aria-label="WhatsApp" style="color: #25d366; text-decoration: none;">&nbspWhatsApp</a><a href="#" aria-label="Donar" style="color: var(--accent-alt); text-decoration: none;">&nbspDonar</a>
+    </div>
+    <div style="font-weight: bold;">&copy; 2025 Resonate Player - Early Stage</div>
+    <div>Todos los derechos reservados. Prohibida la reproducción total o parcial sin
+      autorización.
+    </div>
+  </footer>
   
   <div id="status-messages"></div>
-
+  
+  <audio id="audio" preload="metadata"></audio>
+  
   <!-- Logger JS -->
   <script src="js/logger.js"></script>
 
@@ -144,9 +143,10 @@
 
         // Center horizontally in the screen
         const tooltipWidth = window.innerWidth-20; // Approximate width
-        const tooltipHeight = 500; // Approximate height
-        let left = (window.innerWidth - tooltipWidth) / 2;
-        let top = iconRect.top - tooltipHeight - 10; // 10px space
+        const tooltipHeight = window.innerHeight-150; // Approximate height
+        let left = (window.innerWidth - tooltipWidth);
+        let top = (window.innerHeight - tooltipHeight);
+
 
         // Ensure tooltip stays within viewport
         if (left < 10) left = 10;
@@ -228,9 +228,8 @@
     function gtag() { dataLayer.push(arguments); }
     gtag('js', new Date());
     gtag('config', 'G-BM0DX9WY1D');
-  </script>
-
-</body>
-
+    </script>
+    
+  </body>
 </html>
 <!--2025 Resonate Player. Todos los derechos reservados. Prohibida la reproducción total o parcial sin autorización.-->

@@ -1266,8 +1266,6 @@ async function handleStartFavoritesCTA() {
   };
 
 }
-
-  // Register service worker and handle updates
   // Register service worker and handle updates
   function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
@@ -1383,12 +1381,9 @@ async function preloadCover(identifier, imgElement) {
   imgElement.alt = 'Ícono de Resonate';
 }
 
-
-
-  // Exponer la función globalmente
+// Exponer la función globalmente
   window.handleCoverError = handleCoverError;
   window.getCoverUrl = getCoverUrl;
-
 
   // Expose critical functions globally for cross-module access
   window.loadFavorites = loadFavorites;

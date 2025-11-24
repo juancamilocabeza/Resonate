@@ -1,7 +1,7 @@
 // Main configuration
 const SEARCH_CONFIG = {
   maxResults: 50,
-  resultsPerPage: 10,
+  resultsPerPage: 5,
   timeout: 20000,
   enableLazyLoading: true,
   cacheDuration: 10 * 60 * 1000,
@@ -58,7 +58,7 @@ class EnhancedSearchCache {
 class AdvancedAudioCache {
   constructor() {
     this.dbName = 'ResonateAudioCache';
-    this.dbVersion = 5;
+    this.dbVersion = 6;
     this.storeName = 'audioFiles';
     this.maxSize = 10 * 1024 * 1024 * 1024; // 10GB máximo
     this.currentSize = 0;
@@ -103,6 +103,7 @@ class AdvancedAudioCache {
           store.createIndex('lastPlayed', 'lastPlayed', { unique: false });
           store.createIndex('fullyListened', 'fullyListened', { unique: false });
           store.createIndex('isFavorite', 'isFavorite', { unique: false });
+          store.createIndex('lastAccessed', 'lastAccessed', { unique: false });
         } else {
           const store = event.currentTarget.transaction.objectStore(this.storeName);
           store.createIndex('lastAccessed', 'lastAccessed', { unique: false });

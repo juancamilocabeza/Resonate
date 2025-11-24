@@ -1,14 +1,14 @@
 // Main configuration
 const SEARCH_CONFIG = {
   maxResults: 50,
-  resultsPerPage: 10,
+  resultsPerPage: 5,
   timeout: 20000, // Increased from 10000ms to 20000ms for better reliability
   enableLazyLoading: true,
   cacheDuration: 10 * 60 * 1000,
   preloadMetadata: true
 };
 
-// Función para manejar errores de carga de portadas - SOLUCIÓN PARA PRODUCCIÓN
+// Función para manejar errores de carga de portadas
 function handleCoverError(img) {
   // Log the cover loading error for debugging
   if (img.src.includes('favicon.svg')) return;
@@ -22,10 +22,6 @@ function handleCoverError(img) {
 // Función para obtener URL de portada - eliminada, siempre presenta ícono de Resonate
 async function getCoverUrl(identifier, metadata) {
   return 'icons/favicon.svg';
-}
-
-  // Si todo falla, retornar la URL normal (aunque puede causar CORS)
-  return `https://archive.org/services/img/${identifier}`;
 }
 
 // Advanced audio caching system
@@ -814,9 +810,6 @@ const state = {
   initialPreloadDone: false,
   playbackHistory: [],
   playbackQueue: [],
-
-
-
   currentSearchPage: 0,
   currentSearchHasMore: false,
   currentSearchQuery: '',
@@ -3332,8 +3325,6 @@ function saveRepeatMode(mode) {
   }
 }
 
-
-
 // CTA banner to initiate favorites playback (captures user interaction)
 function createStartFavoritesCTA() {
   if (document.getElementById('start-favorites-cta')) return;
@@ -4062,7 +4053,7 @@ async function initializeApp() {
 
   loadFavorites();
   // Preparar el CTA (se mostrará si hay favoritos precargados)
-  createStartFavoritesCTA();
+  //createStartFavoritesCTA();
   audioCache.setupLoadingSafety();
 
   // Cargar estado de reproducción guardado (última sesión)
@@ -4103,9 +4094,6 @@ async function initializeApp() {
   setupSearchOnEnter();
   setupSearchFocusBehavior();
   setupProgressBarInteraction();
-
-  // Crear presentación para transmitir a segunda pantalla
-  
 
   // Configurar elementos opcionales - SOLO SI EXISTEN
   if (elements.playAllFavoritesBtn) {
@@ -4160,7 +4148,6 @@ async function initializeApp() {
       }
     });
 
-
     elements.audio.addEventListener('error', (e) => {
       console.error('Audio error:', e.target.error);
       showStatus('Playback error', 'error');
@@ -4209,8 +4196,6 @@ async function initializeApp() {
     });
   }
 
-
-
   if (elements.favoritesToggle) {
     elements.favoritesToggle.addEventListener('click', toggleFavoritesList);
   }
@@ -4240,8 +4225,6 @@ async function initializeApp() {
 
   loadRepeatMode();
 
-
-
   // Inicializar PWA
   registerServiceWorker();
   setupPWAInstall();
@@ -4270,7 +4253,6 @@ async function initializeApp() {
       lastUrl = window.location.href;
     }, 1000);
   }
-
   // Si la app está ejecutándose como PWA, eliminar el splash y mostrar la app inmediatamente
   if (isRunningAsPWA()) {
     try {

@@ -11,7 +11,7 @@ async function initializeApp() {
 
   loadFavorites();
   // Preparar el CTA (se mostrará si hay favoritos precargados)
-  createStartFavoritesCTA();
+  //createStartFavoritesCTA();
   audioCache.setupLoadingSafety();
 
   // Cargar estado de reproducción guardado (última sesión)
@@ -52,9 +52,6 @@ async function initializeApp() {
   setupSearchOnEnter();
   setupSearchFocusBehavior();
   setupProgressBarInteraction();
-
-  // Crear presentación para transmitir a segunda pantalla
-
 
   // Configurar elementos opcionales - SOLO SI EXISTEN
   if (elements.playAllFavoritesBtn) {
