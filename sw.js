@@ -9,15 +9,6 @@ const STATIC_FILES = [
   '/index.html',
   '/manifest.json',
   '/css/resonate.css',
-  '/css/resonate.js',
-  '/js/logger.js',
-  '/js/cache.js',
-  '/js/playback.js',
-  '/js/search.js',
-  '/js/ui.js',
-  '/js/initialization.js',
-  '/icons/favicon.svg',
-  '/icons/maskable_icon_x192.png',
   '/sw.js'
 ];
 
