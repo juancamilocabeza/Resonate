@@ -140,9 +140,15 @@ async function loadAudioWithCache(track) {
     throw new Error('URL de audio no disponible');
   }
 
+  // Only allow .ogg and .mp3 files
+  const urlLower = track.url.toLowerCase();
+  if (!urlLower.endsWith('.ogg') && !urlLower.endsWith('.mp3')) {
+    throw new Error('Solo se permiten archivos .ogg y .mp3');
+  }
+
   try {
     // Intentar obtener de la caché primero
-    const cacheResult = await audioCache.get(track.url);
+    const cacheResult = typeof audioCache !== 'undefined' && audioCache && typeof audioCache.get === 'function' ? await audioCache.get(track.url) : null;
 
     if (cacheResult && cacheResult.blob) {
       console.log('Playing from cache:', track.title);
@@ -156,7 +162,6 @@ async function loadAudioWithCache(track) {
     }
 
     // Load from network
-    showStatus('Downloading audio...', 'info', 0);
     elements.playBtn.innerHTML = '<span class="loader"></span>';
 
     const response = await fetchWithTimeout(track.url, { timeout: 15000 });
@@ -169,9 +174,11 @@ async function loadAudioWithCache(track) {
 
     // Save to cache for future use (background)
     const isFavorite = isTrackFavorite(track);
-    audioCache.put(track.url, blob, true, isFavorite).catch(error => {
-      console.error('Error saving to cache:', error);
-    });
+    if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.put === 'function') {
+      audioCache.put(track.url, blob, true, isFavorite).catch(error => {
+        console.error('Error saving to cache:', error);
+      });
+    }
 
     const blobUrl = URL.createObjectURL(blob);
 
@@ -195,7 +202,9 @@ function preloadNextTrack() {
   if (state.playbackQueue.length > 0) {
     const nextTrack = state.playbackQueue[0];
     if (nextTrack && nextTrack.url) {
-      audioCache.prefetchAudio(nextTrack.url).catch(console.error);
+      if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.prefetchAudio === 'function') {
+        audioCache.prefetchAudio(nextTrack.url).catch(console.error);
+      }
     }
   }
 }
@@ -544,7 +553,9 @@ function loadPlaybackQueue(context, items, startIndex = 0) {
 
   // Preload tracks from queue
   if (state.networkOnline) {
-    audioCache.preloadTracks(state.playbackQueue, true);
+    if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.preloadTracks === 'function') {
+      audioCache.preloadTracks(state.playbackQueue, true);
+    }
   }
 }
 
@@ -793,7 +804,7 @@ async function playNextInContext(maxRetries = 3) {
         }
 
         // Verificar si está en caché antes de reproducir
-        const cached = await audioCache.get(track.url);
+        const cached = typeof audioCache !== 'undefined' && audioCache && typeof audioCache.get === 'function' ? await audioCache.get(track.url) : null;
         if (!cached && !state.networkOnline) {
           showStatus('Pista no disponible sin conexión, saltando...', 'error', 2000);
           setTimeout(() => playNextInContext(), 1000);
@@ -874,7 +885,7 @@ async function playPreviousInContext() {
       };
 
       // Verificar si está en caché antes de reproducir
-      const cached = await audioCache.get(track.url);
+      const cached = typeof audioCache !== 'undefined' && audioCache && typeof audioCache.get === 'function' ? await audioCache.get(track.url) : null;
       if (!cached && !state.networkOnline) {
         showStatus('Pista no disponible sin conexión, saltando...', 'error', 2000);
         setTimeout(() => playPreviousInContext(), 1000);
@@ -1120,13 +1131,17 @@ function toggleShuffleFavorites() {
     if (context === 'favorites' && state.favorites.length > 0) {
       showStatus('Reproducción aleatoria de favoritos activada', 'info', 2000);
       loadPlaybackQueue('favorites', state.favorites, 0);
-      if (audioCache && typeof audioCache.loadFavoritesQueue === 'function') {
+      if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.loadFavoritesQueue === 'function') {
         audioCache.loadFavoritesQueue(state.favorites, true);
       }
     } else if (context === 'search' && state.searchResults && state.searchResults.length > 0) {
       showStatus('Reproducción aleatoria de resultados activada', 'info', 2000);
       loadPlaybackQueue('search', state.searchResults, 0);
-      if (state.networkOnline) audioCache.preloadTracks(state.playbackQueue, true);
+      if (state.networkOnline) {
+        if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.preloadTracks === 'function') {
+          audioCache.preloadTracks(state.playbackQueue, true);
+        }
+      }
     } else {
       showStatus('Reproducción aleatoria activada', 'info', 2000);
     }
@@ -1195,15 +1210,175 @@ function setupMediaSession() {
   }
 }
 
-window.playbackManager = playbackManager;
-window.loadPlaybackQueue = loadPlaybackQueue;
-window.playFromFavoritesQueue = playFromFavoritesQueue;
-window.playAudioTrackOptimized = playAudioTrackOptimized;
-window.playNextInContext = playNextInContext;
-window.playPreviousInContext = playPreviousInContext;
-window.forcePlay = forcePlay;
-window.togglePlay = togglePlay;
+async function playOptimizedFavorite(favoriteIndex = 0) {
+  if (state.isLoading || state.favorites.length === 0) return;
+
+  state.isLoading = true;
+  elements.playBtn.disabled = true;
+  elements.playBtn.innerHTML = '<span class="loader"></span>';
+
+  state.isPlayingFavorites = true;
+
+  try {
+    let actualIndex;
+
+    if (state.shuffleFavorites) {
+      actualIndex = Math.floor(Math.random() * state.favorites.length);
+    } else {
+      actualIndex = favoriteIndex >= 0 ? favoriteIndex : 0;
+    }
+
+    playbackManager.setContext('favorites', state.favorites, actualIndex);
+
+    const favorite = state.favorites[actualIndex];
+
+    // Validate favorite has URL
+    if (!favorite.url) {
+      console.error('Favorite without valid URL:', favorite);
+      showStatus('Error: Invalid favorite, skipping to next', 'error', 2000);
+      const nextIndex = (actualIndex + 1) % state.favorites.length;
+      return playOptimizedFavorite(nextIndex);
+    }
+
+    showStatus(`Loading favorite: ${favorite.title}`, 'info', 0);
+
+    const track = {
+      url: favorite.url,
+      title: favorite.title || 'Untitled',
+      creator: favorite.creator || 'Unknown',
+      id: favorite.id,
+      isAlbumTrack: favorite.isAlbumTrack || false,
+      albumId: favorite.albumId || favorite.id,
+      trackIndex: favorite.trackIndex || 0,
+      totalTracks: favorite.totalTracks || 1
+    };
+
+    if (!track.url || track.url === '') {
+      throw new Error('Audio URL not available in favorite');
+    }
+
+    // CHECK IF PRELOADED FAVORITES CACHE
+    const favoritesQueue = typeof audioCache !== 'undefined' && audioCache && typeof audioCache.getFavoritesQueue === 'function' ? audioCache.getFavoritesQueue() : [];
+    const isPreloaded = favoritesQueue.includes(track.url);
+
+    if (isPreloaded) {
+      console.log('Playing from preloaded favorites:', track.title);
+    } else {
+      console.log('Favorite not preloaded, loading from network:', track.title);
+    }
+
+    const cached = typeof audioCache !== 'undefined' && audioCache && typeof audioCache.get === 'function' ? await audioCache.get(track.url) : null;
+    if (!cached && !state.networkOnline) {
+      showStatus('Favorite not available offline, skipping...', 'error', 2000);
+      const nextIndex = (actualIndex + 1) % state.favorites.length;
+      return playOptimizedFavorite(nextIndex);
+    }
+
+    await playAudioTrackOptimized(track, favorite.id, favorite.trackIndex, favorite.totalTracks);
+
+    updateShuffleButton();
+
+  } catch (error) {
+    console.error('Error in playOptimizedFavorite:', error);
+    showStatus(`Error: ${error.message}`, 'error');
+
+    if (state.favorites.length > 1) {
+      const nextIndex = (favoriteIndex + 1) % state.favorites.length;
+      setTimeout(() => playOptimizedFavorite(nextIndex), 1000);
+    }
+  } finally {
+    state.isLoading = false;
+    elements.playBtn.disabled = false;
+    elements.playBtn.textContent = '| |';
+  }
+}
+
+async function playSpecificTrack(track, albumId, trackIndex, totalTracks) {
+  if (state.isLoading) return;
+
+  state.isLoading = true;
+  elements.playBtn.disabled = true;
+  elements.playBtn.innerHTML = '<span class="loader"></span>';
+
+  try {
+    hideSearchResults();
+    showStatus(`Loading: ${track.title}`, 'info', 0);
+
+    if (totalTracks > 1) {
+      const files = await fetchOptimizedPlayableFiles(albumId);
+      playbackManager.setAlbumPlaylist(albumId, files, trackIndex);
+      state.albumOrigin = 'search';
+
+      // Load FIFO queue with album tracks
+      loadPlaybackQueue('album', files, trackIndex);
+    }
+
+    await playAudioTrackOptimized(track, albumId, trackIndex, totalTracks);
+
+    // Hide search results after selecting a track
+    hideSearchResults();
+
+  } catch (error) {
+    console.error('Error in playSpecificTrack:', error);
+    showStatus(`Error: ${error.message}`, 'error');
+  } finally {
+    state.isLoading = false;
+    elements.playBtn.disabled = false;
+    elements.playBtn.textContent = '||';
+  }
+}
+
+async function playRandomSearchResults() {
+  if (state.isLoading || !state.searchResults || state.searchResults.length === 0) return;
+
+  state.isLoading = true;
+  elements.playBtn.disabled = true;
+  elements.playBtn.innerHTML = '<span class="loader"></span>';
+
+  try {
+    // Shuffle the search results
+    const shuffledResults = [...state.searchResults].sort(() => Math.random() - 0.5);
+
+    // Set up playback context for random search results
+    playbackManager.setContext('search', shuffledResults, 0);
+    state.albumOrigin = 'search';
+
+    // Load shuffled results into playback queue
+    loadPlaybackQueue('search', shuffledResults, 0);
+
+    if (state.playbackQueue.length === 0) {
+      throw new Error('No playable tracks found in search results');
+    }
+
+    const firstTrack = state.playbackQueue[0];
+
+    if (!firstTrack.url) {
+      throw new Error('First track has no URL');
+    }
+
+    showStatus(`Playing random from search results: ${firstTrack.title}`, 'info', 0);
+
+    // Remove from queue before playing
+    state.playbackQueue.shift();
+
+    await playAudioTrackOptimized(firstTrack, firstTrack.id, 0, 1);
+
+    updateShuffleButton();
+
+  } catch (error) {
+    console.error('Error in playRandomSearchResults:', error);
+    showStatus(`Error: ${error.message}`, 'error');
+  } finally {
+    state.isLoading = false;
+    elements.playBtn.disabled = false;
+    elements.playBtn.textContent = '||';
+  }
+}
+
 window.playPrevious = playPrevious;
 window.playNext = playNext;
 window.resumeSavedPlayback = resumeSavedPlayback;
 window.setupPreloadedPlayback = setupPreloadedPlayback;
+window.playOptimizedFavorite = playOptimizedFavorite;
+window.playSpecificTrack = playSpecificTrack;
+window.playRandomSearchResults = playRandomSearchResults;

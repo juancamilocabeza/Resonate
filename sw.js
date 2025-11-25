@@ -66,17 +66,19 @@ self.addEventListener('fetch', (event) => {
           });
         }
 
-        // Cache exitoso si es audio o metadatos
+        // Cache exitoso si es audio o metadatos (solo .ogg y .mp3 para audio)
         const url = new URL(event.request.url);
         if (url.hostname === 'archive.org' && (
-          event.request.destination === 'audio' ||
+          (event.request.destination === 'audio' && (url.pathname.toLowerCase().endsWith('.ogg') || url.pathname.toLowerCase().endsWith('.mp3'))) ||
           url.pathname.includes('/metadata/') ||
           url.pathname.includes('/services/img/') ||
-          url.pathname.includes('/download/')
+          (url.pathname.includes('/download/') && url.pathname.toLowerCase().endsWith('.ogg'))
         )) {
+          // Clonar la respuesta ANTES de retornarla para evitar que el body sea consumido
+          const responseClone = networkResponse.clone();
           // Cache en segundo plano para no bloquear
           caches.open(CACHE_NAME).then((cache) => {
-            return cache.put(event.request, networkResponse.clone());
+            return cache.put(event.request, responseClone);
           }).catch((err) => {
             console.warn('Failed to cache response:', err);
           });

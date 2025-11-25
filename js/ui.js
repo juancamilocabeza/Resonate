@@ -1,4 +1,4 @@
-// DOM Elements and state
+// Search configuration
 const elements = {
   audio: document.getElementById('audio'),
   art: document.getElementById('art'),
@@ -33,6 +33,13 @@ const elements = {
   app: document.getElementById('app'),
   playerContent: document.getElementById('player-content'),
   repeatBtn: document.getElementById('repeat-btn')
+};
+
+// Search configuration
+const SEARCH_CONFIG = {
+  resultsPerPage: 50,
+  timeout: 8000,
+  enableLazyLoading: true
 };
 
 // Application state
@@ -85,10 +92,28 @@ function loadFavorites() {
   try {
     const favorites = localStorage.getItem('resonate_favorites');
     if (favorites) {
-      state.favorites = JSON.parse(favorites);
+      let parsedFavorites = JSON.parse(favorites);
+
+      // Filter out non-.ogg format favorites
+      const originalCount = parsedFavorites.length;
+      parsedFavorites = parsedFavorites.filter(fav => {
+        if (!fav.url) return false;
+        const url = fav.url.toLowerCase();
+        return url.endsWith('.ogg');
+      });
+
+      if (parsedFavorites.length < originalCount) {
+        // Save filtered favorites back to localStorage
+        localStorage.setItem('resonate_favorites', JSON.stringify(parsedFavorites));
+        console.log(`Filtered ${originalCount - parsedFavorites.length} unsupported format favorites`);
+      }
+
+      state.favorites = parsedFavorites;
 
       // Precargar favoritos en cola FIFO
-      audioCache.preloadFavorites(state.favorites);
+      if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.preloadFavorites === 'function') {
+        audioCache.preloadFavorites(state.favorites);
+      }
     }
 
     // Actualizar estado del botón de reproducción
@@ -209,6 +234,13 @@ function isTrackFavorite(track) {
 function toggleFavorite(track) {
   if (!track || !track.url) return;
 
+  // Only allow .ogg and .mp3 files to be favorited
+  const urlLower = track.url.toLowerCase();
+  if (!urlLower.endsWith('.ogg') && !urlLower.endsWith('.mp3')) {
+    showStatus('Solo se pueden agregar pistas en formato .ogg y .mp3 a favoritos', 'error');
+    return;
+  }
+
   const isFavorite = isTrackFavorite(track);
 
   if (isFavorite) {
@@ -231,11 +263,15 @@ function toggleFavorite(track) {
         }
 
         // Preload new favorite
-        audioCache.prefetchAudio(newFavorite.url, true);
+        if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.prefetchAudio === 'function') {
+          audioCache.prefetchAudio(newFavorite.url, true);
+        }
       }
     }
 
-    audioCache.remove(track.url);
+    if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.remove === 'function') {
+      audioCache.remove(track.url);
+    }
     showStatus('Removed from favorites', 'info');
   } else {
     const favoriteTrack = {
@@ -252,7 +288,9 @@ function toggleFavorite(track) {
     state.favorites.push(favoriteTrack);
 
     // Precargar el favorito en caché
-    audioCache.prefetchAudio(track.url, true);
+    if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.prefetchAudio === 'function') {
+      audioCache.prefetchAudio(track.url, true);
+    }
 
     showStatus('Agregado a favoritos', 'info');
   }
@@ -287,7 +325,9 @@ function addAlbumToFavorites(albumId, files) {
       addedCount++;
 
       // Precargar cada favorito en caché
-      audioCache.prefetchAudio(track.url, true);
+      if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.prefetchAudio === 'function') {
+        audioCache.prefetchAudio(track.url, true);
+      }
     }
   });
 
@@ -309,13 +349,15 @@ function removeAlbumFromFavorites(albumId) {
   const removedCount = initialCount - state.favorites.length;
 
   // Remover de la cola FIFO de favoritos
-  const favoritesQueue = audioCache.getFavoritesQueue();
-  favoritesQueue.forEach(url => {
-    const favTrack = state.favorites.find(f => f.url === url);
-    if (!favTrack) {
-      audioCache.removeFromFavoritesQueue(url);
-    }
-  });
+  if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.getFavoritesQueue === 'function' && typeof audioCache.removeFromFavoritesQueue === 'function') {
+    const favoritesQueue = audioCache.getFavoritesQueue();
+    favoritesQueue.forEach(url => {
+      const favTrack = state.favorites.find(f => f.url === url);
+      if (!favTrack) {
+        audioCache.removeFromFavoritesQueue(url);
+      }
+    });
+  }
 
   saveFavorites();
   updateFavoriteButton();
@@ -429,19 +471,25 @@ function updateMediaSessionMetadata(track, identifier) {
 }
 
 function setupSearchOnEnter() {
+  console.log('Setting up search event listener...');
   elements.searchInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      state.currentSearchPage = 0;
-      state.currentSearchQuery = elements.searchInput.value.trim();
-      if (state.currentSearchQuery) {
-        performOptimizedSearch(state.currentSearchQuery, 0)
-          .then(result => displaySearchResults(result, true));
-      } else {
-        elements.searchResults.classList.remove('active');
-        state.searchActive = false;
+    console.log('Key pressed:', e.key);
+      if (e.key === 'Enter') {
+        console.log('Enter key pressed, performing search...');
+        state.currentSearchPage = 0;
+        state.currentSearchQuery = elements.searchInput.value.trim();
+        console.log('Search query:', state.currentSearchQuery);
+        if (state.currentSearchQuery) {
+          performOptimizedSearch(state.currentSearchQuery, 0).then(result => {
+            displaySearchResults(result);
+          }).catch(error => {
+            console.error('Search error:', error);
+            showStatus('Error en la búsqueda', 'error');
+          });
+        } else {
+          hideSearchResults();
+        }
       }
-      hideSearchResults();
-    }
   });
 }
 
@@ -657,6 +705,16 @@ function setupLazyLoadingObserver() {
 
 // Load album info and update result element metadata
 async function loadAlbumInfoBackground(identifier, resultEl) {
+  // Skip metadata loading when running locally to avoid CORS timeout errors
+  const isLocal = window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  if (isLocal) {
+    const metaElement = resultEl.querySelector('.result-meta');
+    if (metaElement) {
+      metaElement.innerHTML = '<span style="color: var(--muted); font-size: 10px;">Info no disponible localmente</span>';
+    }
+    return;
+  }
+
   try {
     const metadata = await fetchOptimizedPlayableFiles(identifier);
     const itemMetadata = metadata[0]?.metadata;
@@ -705,10 +763,19 @@ async function loadAlbumInfoBackground(identifier, resultEl) {
       });
     }
   } catch (error) {
-    console.error('Error loading album info:', error);
+    // Handle timeout errors more gracefully - don't log them as they are expected locally
+    if (!error.message.includes('Timeout')) {
+      console.error('Error loading album info:', error);
+    }
+
     const metaElement = resultEl.querySelector('.result-meta');
     if (metaElement) {
-      metaElement.innerHTML = '<span style="color: var(--muted); font-size: 10px;">Error cargando información</span>';
+      // Show a more user-friendly message for timeout errors
+      if (error.message.includes('Timeout')) {
+        metaElement.innerHTML = '<span style="color: var(--muted); font-size: 10px;">Info no disponible localmente</span>';
+      } else {
+        metaElement.innerHTML = '<span style="color: var(--muted); font-size: 10px;">Error cargando información</span>';
+      }
     }
   }
 }
@@ -1369,6 +1436,12 @@ async function handleStartFavoritesCTA() {
 
 // Función para obtener URL de portada: retornar la portada de Archive.org si existe
 async function getCoverUrl(identifier, metadata) {
+  // Skip external image loading when running locally to avoid CORS timeout errors
+  const isLocal = window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  if (isLocal) {
+    return 'icons/favicon.svg'; // Always use local icon when running locally
+  }
+
   // Intentar obtener la portada de Archive.org
   const archiveCoverUrl = `https://archive.org/services/img/${identifier}`;
 
@@ -1385,12 +1458,12 @@ async function preloadCover(identifier, imgElement) {
   const coverUrl = await getCoverUrl(identifier);
   imgElement.src = coverUrl;
   imgElement.alt = `Portada de ${identifier}`;
-}
 
-// Exponer la función globalmente
-  window.handleCoverError = handleCoverError;
-  window.getCoverUrl = getCoverUrl;
-
+  // Agregar manejador de error para fallback si la imagen falla al cargar
+  imgElement.onerror = () => {
+    imgElement.src = 'icons/favicon.svg';
+    imgElement.onerror = null; // Remover handler para evitar loops
+  };
   // Expose critical functions globally for cross-module access
   window.loadFavorites = loadFavorites;
   window.saveFavorites = saveFavorites;
@@ -1404,3 +1477,5 @@ async function preloadCover(identifier, imgElement) {
   window.hideStartFavoritesCTA = hideStartFavoritesCTA;
   window.registerServiceWorker = registerServiceWorker;
   window.setupPWAInstall = setupPWAInstall;
+  window.displaySearchResults = displaySearchResults;
+}

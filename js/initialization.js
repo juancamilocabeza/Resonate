@@ -3,16 +3,23 @@
 async function initializeApp() {
   // Inicializar caché de audio primero
   try {
-    await audioCache.init();
-    // Audio cache initialized (silent)
+    if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.init === 'function') {
+      await audioCache.init();
+      // Audio cache initialized (silent)
+    } else {
+      console.warn('audioCache no disponible, continuando sin caché');
+    }
   } catch (error) {
     console.error('Error inicializando caché:', error);
   }
 
+
   loadFavorites();
   // Preparar el CTA (se mostrará si hay favoritos precargados)
   //createStartFavoritesCTA();
-  audioCache.setupLoadingSafety();
+  if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.setupLoadingSafety === 'function') {
+    audioCache.setupLoadingSafety();
+  }
 
   // Cargar estado de reproducción guardado (última sesión)
   loadSavedPlaybackState();
@@ -22,27 +29,19 @@ async function initializeApp() {
   setupListenTracking();
 
   // Preparar reproducción de favoritos (sin autoplay por restricciones del navegador)
-  // Cargar primer favorito pero esperar a que el usuario haga clic para reproducir
+  // Solo preparar la cola sin hacer peticiones de red automáticas
   if (state.favorites.length > 0) {
-    // Preparing first favorite for playback (preload only, no autoplay)
+    // Preparing favorites queue (no network requests during init)
     setTimeout(async () => {
       try {
-        // Cargar cola FIFO de favoritos
+        // Solo cargar la cola FIFO sin precargar audio
         await loadPlaybackQueue('favorites', state.favorites, 0);
         if (state.playbackQueue.length > 0) {
           const firstTrack = state.playbackQueue[0];
-          // Cargar metadata del primer favorito pero no reproducir
-          const audioBlob = await audioCache.get(firstTrack.url);
-          if (!audioBlob) {
-            // Si no está en caché, intentar precargarlo
-            await audioCache.prefetchAudio(firstTrack.url, true);
-          }
           showStatus(`Listo para reproducir: ${firstTrack.title}. Haz clic en el botón de reproducción.`, 'info', 3000);
-          // Mostrar CTA que captura la interacción del usuario para permitir autoplay
-          //showStartFavoritesCTA();
         }
       } catch (error) {
-        console.error('Error preparing favorites:', error);
+        console.error('Error preparing favorites queue:', error);
       }
     }, 500);
   }
@@ -247,7 +246,7 @@ async function initializeApp() {
   window.removeAlbumFromFavorites = removeAlbumFromFavorites;
   window.isAlbumInFavorites = isAlbumInFavorites;
   window.playRandomSearchResults = playRandomSearchResults;
-  window.audioCache = audioCache;
+  window.audioCache = typeof audioCache !== 'undefined' ? audioCache : null;
   window.installPWA = installPWA;
   window.preloadNextTrack = preloadNextTrack;
   window.loadPlaybackQueue = loadPlaybackQueue;
@@ -256,9 +255,65 @@ async function initializeApp() {
 
 }
 
-// INICIALIZACIÓN SEGURA
+// Esperar a que los scripts críticos estén disponibles
+function waitForAllScripts() {
+  return new Promise((resolve) => {
+    let attempts = 0;
+    const maxAttempts = 500; // 5 seconds max wait
+
+    const checkScripts = () => {
+      attempts++;
+      console.log(`Verificando scripts (intento ${attempts}):`, {
+        audioCache: typeof audioCache,
+        enhancedCache: typeof enhancedCache,
+        state: typeof state,
+        elements: typeof elements,
+        showStatus: typeof showStatus,
+        loadFavorites: typeof loadFavorites
+      });
+
+      // Ser menos estricto - solo requerir los scripts más críticos
+      if (typeof state !== 'undefined' &&
+          typeof elements !== 'undefined' &&
+          typeof showStatus !== 'undefined') {
+        console.log('Scripts críticos cargados, continuando...');
+        resolve();
+      } else if (attempts >= maxAttempts) {
+        console.warn('Timeout esperando scripts, continuando con lo disponible...');
+        resolve(); // Continue anyway after timeout
+      } else {
+        setTimeout(checkScripts, 10);
+      }
+    };
+    checkScripts();
+  });
+}
+
+
+// Inicialización segura que espera a todos los scripts
+async function safeInitialize() {
+  try {
+    console.log('Esperando a que todos los scripts estén disponibles...');
+    await waitForAllScripts();
+    console.log('Todos los scripts cargados, inicializando aplicación...');
+
+    await initializeApp();
+  } catch (error) {
+    console.error('Error en inicialización segura:', error);
+    // Fallback mínimo
+    try {
+      if (typeof loadFavorites !== 'undefined') loadFavorites();
+      if (typeof setupConnectivityMonitoring !== 'undefined') setupConnectivityMonitoring();
+      console.log('Fallback básico completado');
+    } catch (fallbackError) {
+      console.error('Error en fallback:', fallbackError);
+    }
+  }
+}
+
+// Iniciar cuando el DOM esté listo
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initializeApp);
+  document.addEventListener('DOMContentLoaded', safeInitialize);
 } else {
-  initializeApp();
+  safeInitialize();
 }
