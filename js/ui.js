@@ -1498,6 +1498,13 @@ function addHideFavoritesOnPlay() {
     hideFavoritesList();
     return originalPlayAlbumFromFavorites.apply(this, args);
   };
+
+  // In playSpecificTrack
+  const originalPlaySpecificTrack = window.playSpecificTrack;
+  window.playSpecificTrack = async function (...args) {
+    hideFavoritesList();
+    return originalPlaySpecificTrack.apply(this, args);
+  };
 }
 
 // Register service worker and handle updates
