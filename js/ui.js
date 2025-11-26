@@ -38,7 +38,7 @@ const elements = {
 
 // Search configuration
 const SEARCH_CONFIG = {
-  resultsPerPage: 50,
+  resultsPerPage: 5,
   timeout: 8000,
   enableLazyLoading: true
 };
@@ -744,12 +744,12 @@ function setupLazyLoadingObserver() {
 
 // Load album info and update result element metadata
 async function loadAlbumInfoBackground(identifier, resultEl) {
-  // Skip metadata loading when running locally to avoid CORS timeout errors
-  const isLocal = window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-  if (isLocal) {
+  // Skip metadata loading only for file:// protocol to avoid CORS timeout errors
+  const isFileProtocol = window.location.protocol === 'file:';
+  if (isFileProtocol) {
     const metaElement = resultEl.querySelector('.result-meta');
     if (metaElement) {
-      metaElement.innerHTML = '<span style="color: var(--muted); font-size: 10px;">Info no disponible localmente</span>';
+      metaElement.innerHTML = '<span style="color: var(--muted); font-size: 10px;">Info no disponible (file://)</span>';
     }
     return;
   }
@@ -759,6 +759,8 @@ async function loadAlbumInfoBackground(identifier, resultEl) {
     const itemMetadata = metadata[0]?.metadata;
     const isAlbum = metadata.length > 1;
     const trackCount = metadata.length;
+
+    console.log(`Album check for ${identifier}: ${trackCount} tracks, isAlbum: ${isAlbum}`);
 
     const metaElement = resultEl.querySelector('.result-meta');
     if (metaElement) {
@@ -780,27 +782,18 @@ async function loadAlbumInfoBackground(identifier, resultEl) {
       favoriteBtn.title = isFavorite ? 'Quitar de favoritos' : 'Agregar a favoritos';
     }
 
-    // Si es un álbum, mostrar el botón de expandir
-    if (isAlbum && trackCount > 0) {
-      const expandButton = resultEl.querySelector('.expand-tracks');
-      if (expandButton) {
-        expandButton.style.display = 'inline-block';
-      }
+    // Mostrar/ocultar el botón de expandir basado en si es un álbum
+    const expandButton = resultEl.querySelector('.favorite-actions button:last-child');
+    if (expandButton) {
+      expandButton.style.display = trackCount > 1 ? 'inline-block' : 'none';
     }
   } catch (error) {
-    // Handle timeout errors more gracefully - don't log them as they are expected locally
-    if (!error.message.includes('Timeout')) {
-      console.error('Error loading album info:', error);
-    }
+    console.error('Error loading album info for:', identifier, error);
+    console.error('Error details:', error.message, error.stack);
 
     const metaElement = resultEl.querySelector('.result-meta');
     if (metaElement) {
-      // Show a more user-friendly message for timeout errors
-      if (error.message.includes('Timeout')) {
-        metaElement.innerHTML = '<span style="color: var(--muted); font-size: 10px;">Info no disponible localmente</span>';
-      } else {
-        metaElement.innerHTML = '<span style="color: var(--muted); font-size: 10px;">Error cargando información</span>';
-      }
+      metaElement.innerHTML = `<span style="color: var(--muted); font-size: 10px;">Error: ${error.message.includes('Timeout') ? 'Timeout' : 'Error desconocido'}</span>`;
     }
   }
 }
@@ -906,7 +899,7 @@ function createFavoriteActions(result, hasFavoriteTrack) {
   // Expand button (for albums)
   const expandBtn = document.createElement('button');
   expandBtn.className = ''; // Keep existing class for styling
-  expandBtn.title = '▼';
+  expandBtn.title = 'Ver pistas del álbum';
   expandBtn.textContent = '▼';
 
   actionsDiv.appendChild(playBtn);
@@ -932,8 +925,8 @@ function createSearchResultElement(result, globalIndex) {
   const infoDiv = createFavoriteInfo(result);
   const { actionsDiv, playBtn, favoriteBtn, expandBtn } = createFavoriteActions(result, hasFavoriteTrack);
 
-  // Initially hide expand button until we know it's an album
-  expandBtn.style.display = 'none';
+  // Show expand button immediately for all results
+  expandBtn.style.display = 'inline-block';
 
   resultEl.appendChild(infoDiv);
   resultEl.appendChild(actionsDiv);
@@ -1348,9 +1341,6 @@ function updateFavoritesList() {
       e.stopPropagation();
       const isAlbum = playBtn.getAttribute('data-is-album') === 'true';
       const id = playBtn.getAttribute('data-id');
-
-      // Hide favorites list when playing from favorites
-      hideFavoritesList();
 
       if (isAlbum) {
         playAlbumFromFavorites(id);
