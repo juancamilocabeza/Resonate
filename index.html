@@ -39,6 +39,9 @@
         <input type="text" id="search-input" class="search-input" placeholder="Buscar pistas">
       </div>
       <div id="search-results" class="search-results">
+        <div id="search-loader" class="search-loader" style="display: none;">
+          <span class="loader-text">Buscando...</span>
+        </div>
         <div id="search-results-list" class="search-results-list"></div>
       </div>
     </div>
@@ -48,10 +51,15 @@
     <!-- Favorites Section -->
     <div class="favorites-section">
       <div class="favorites-header">
-        <div id="favorites-toggle" class="favorites-label">ver ❤️</div>
+        <div id="favorites-toggle" class="favorites-label" aria-label="Ver lista de favoritos">
+          <span class="favorites-icon">❤️</span>
+          <span class="favorites-text">Favoritos</span>
+          <span class="favorites-count" id="favorites-count">(0)</span>
+        </div>
       </div>
-      <div id="favorites-list" class="favorites-list"></div>
     </div>
+    <div id="favorites-list" class="favorites-list"></div>
+
     <!-- Main Player Section -->
     <div class="main-player-section">
       <div class="player-container">

@@ -18,6 +18,7 @@ const elements = {
   searchInput: document.getElementById('search-input'),
   searchResults: document.getElementById('search-results'),
   searchResultsList: document.getElementById('search-results-list'),
+  searchLoader: document.getElementById('search-loader'),
   playAllFavoritesBtn: document.getElementById('play-all-favorites-btn'),
   favoritesToggle: document.getElementById('favorites-toggle'),
   favoritesList: document.getElementById('favorites-list'),
@@ -90,16 +91,24 @@ const state = {
 // Favorites management
 function loadFavorites() {
   try {
+    console.log('Loading favorites from localStorage...');
     const favorites = localStorage.getItem('resonate_favorites');
+    console.log('Raw favorites from localStorage:', favorites);
+
+    // Debug: Check all localStorage keys
+    console.log('All localStorage keys:', Object.keys(localStorage));
+    console.log('localStorage length:', localStorage.length);
+
     if (favorites) {
       let parsedFavorites = JSON.parse(favorites);
+      console.log('Parsed favorites:', parsedFavorites);
 
-      // Filter out non-.ogg format favorites
+      // Filter out unsupported format favorites (keep .ogg and .mp3)
       const originalCount = parsedFavorites.length;
       parsedFavorites = parsedFavorites.filter(fav => {
         if (!fav.url) return false;
         const url = fav.url.toLowerCase();
-        return url.endsWith('.ogg');
+        return url.endsWith('.ogg') || url.endsWith('.mp3');
       });
 
       if (parsedFavorites.length < originalCount) {
@@ -109,16 +118,26 @@ function loadFavorites() {
       }
 
       state.favorites = parsedFavorites;
+      console.log('Final favorites loaded:', state.favorites);
 
       // Precargar favoritos en cola FIFO
       if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.preloadFavorites === 'function') {
         audioCache.preloadFavorites(state.favorites);
       }
+    } else {
+      console.log('No favorites found in localStorage');
+      state.favorites = [];
     }
 
     // Actualizar estado del botón de reproducción
     updatePlayButtonState();
+
+    // Actualizar la lista visual de favoritos
+    updateFavoritesList();
+    updateFavoritesCount();
+
   } catch (e) {
+    console.error('Error loading favorites:', e);
     state.favorites = [];
     updatePlayButtonState();
   }
@@ -425,6 +444,28 @@ function showStatus(message, type = 'info', duration = 3000) {
   }
 }
 
+function setArtwork(track, identifier) {
+  if (!track || !elements.art) return;
+
+  // Clear existing artwork
+  elements.art.innerHTML = '';
+
+  // Create artwork element
+  const artworkEl = document.createElement('span');
+  artworkEl.className = 'creator';
+  artworkEl.textContent = 'Portadas desactivadas para optimizar el consumo de energía';
+
+  elements.art.appendChild(artworkEl);
+}
+
+function formatTime(seconds) {
+  if (!seconds || isNaN(seconds)) return '0:00';
+
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
 function hideSearchResults() {
   elements.searchResults.classList.remove('active');
   state.searchActive = false;
@@ -448,20 +489,10 @@ function updateMediaSessionMetadata(track, identifier) {
   if (!('mediaSession' in navigator)) return;
 
   try {
-    const artwork = [];
-    const isLocal = window.location.protocol === 'file:';
-    const resonateIconUrl = 'icons/favicon.svg';
-
-    // Only set artwork if not running locally, as file:// URLs are not allowed in Media Session
-    if (!isLocal) {
-      artwork.push({ src: resonateIconUrl, sizes: '512x512', type: 'image/svg+xml' });
-    }
-
     navigator.mediaSession.metadata = new MediaMetadata({
       title: track.title || 'Untitled',
       artist: track.creator || 'Unknown',
-      album: track.album || identifier,
-      artwork: artwork
+      album: track.album || identifier
     });
 
     updateMediaPositionState();
@@ -480,11 +511,16 @@ function setupSearchOnEnter() {
         state.currentSearchQuery = elements.searchInput.value.trim();
         console.log('Search query:', state.currentSearchQuery);
         if (state.currentSearchQuery) {
+          // Show loader
+          if (elements.searchLoader) elements.searchLoader.style.display = 'block';
+          elements.searchResults.classList.add('active');
           performOptimizedSearch(state.currentSearchQuery, 0).then(result => {
             displaySearchResults(result);
           }).catch(error => {
             console.error('Search error:', error);
             showStatus('Error en la búsqueda', 'error');
+            // Hide loader on error
+            if (elements.searchLoader) elements.searchLoader.style.display = 'none';
           });
         } else {
           hideSearchResults();
@@ -616,6 +652,9 @@ function hideSearchResults() {
 }
 
 function displaySearchResults(searchData, clearExisting = true) {
+  // Hide loader when results arrive
+  if (elements.searchLoader) elements.searchLoader.style.display = 'none';
+
   if (!searchData) return;
   const { results, hasMore, total } = searchData;
 
@@ -718,10 +757,6 @@ async function loadAlbumInfoBackground(identifier, resultEl) {
   try {
     const metadata = await fetchOptimizedPlayableFiles(identifier);
     const itemMetadata = metadata[0]?.metadata;
-    const coverImg = resultEl.querySelector('.result-cover img');
-    if (coverImg) {
-      preloadCover(identifier, coverImg);
-    }
     const isAlbum = metadata.length > 1;
     const trackCount = metadata.length;
 
@@ -745,22 +780,12 @@ async function loadAlbumInfoBackground(identifier, resultEl) {
       favoriteBtn.title = isFavorite ? 'Quitar de favoritos' : 'Agregar a favoritos';
     }
 
-    // Si es un álbum, agregar botón para expandir pistas
-    if (isAlbum && trackCount > 0 && !resultEl.querySelector('.expand-tracks')) {
-      const expandButton = document.createElement('button');
-      expandButton.className = 'expand-tracks';
-      expandButton.innerHTML = '▼ <span>Ver pistas</span>';
-      resultEl.appendChild(expandButton);
-
-      const tracksContainer = document.createElement('div');
-      tracksContainer.className = 'tracks-container';
-      tracksContainer.style.display = 'none';
-      resultEl.appendChild(tracksContainer);
-
-      expandButton.addEventListener('click', (e) => {
-        e.stopPropagation(); // Prevent triggering result listener
-        toggleAlbumTracks(identifier, tracksContainer, expandButton);
-      });
+    // Si es un álbum, mostrar el botón de expandir
+    if (isAlbum && trackCount > 0) {
+      const expandButton = resultEl.querySelector('.expand-tracks');
+      if (expandButton) {
+        expandButton.style.display = 'inline-block';
+      }
     }
   } catch (error) {
     // Handle timeout errors more gracefully - don't log them as they are expected locally
@@ -780,47 +805,157 @@ async function loadAlbumInfoBackground(identifier, resultEl) {
   }
 }
 
+// Helper functions for creating search result elements
+function createResultInfo(result) {
+  const infoDiv = document.createElement('div');
+  infoDiv.className = 'result-info';
+
+  const titleDiv = document.createElement('div');
+  titleDiv.className = 'result-title';
+  titleDiv.textContent = result.title || 'Sin título';
+
+  const creatorDiv = document.createElement('div');
+  creatorDiv.className = 'result-creator';
+  creatorDiv.textContent = result.creator || 'Desconocido';
+
+  const metaDiv = document.createElement('div');
+  metaDiv.className = 'result-meta';
+  const albumSpan = document.createElement('span');
+  albumSpan.className = 'result-album';
+  metaDiv.appendChild(albumSpan);
+
+  infoDiv.appendChild(titleDiv);
+  infoDiv.appendChild(creatorDiv);
+  infoDiv.appendChild(metaDiv);
+
+  return infoDiv;
+}
+
+function createResultButtons(result, hasFavoriteTrack) {
+  const buttonsContainer = document.createElement('div');
+  buttonsContainer.className = 'result-buttons';
+
+  // Play button
+  const playBtn = document.createElement('button');
+  playBtn.className = 'result-play-btn';
+  playBtn.title = 'Reproducir';
+  playBtn.innerHTML = '<span class="play-icon">▶</span>';
+
+  // Favorite button
+  const favoriteBtn = document.createElement('button');
+  favoriteBtn.className = `result-favorite ${hasFavoriteTrack ? 'active' : ''}`;
+  favoriteBtn.title = hasFavoriteTrack ? 'Quitar de favoritos' : 'Agregar a favoritos';
+  favoriteBtn.textContent = hasFavoriteTrack ? '❤️' : '🩶';
+
+  // Expand button
+  const expandBtn = document.createElement('button');
+  expandBtn.className = 'result-expand';
+  expandBtn.title = 'Ver pistas del álbum';
+  expandBtn.innerHTML = '<span class="expand-icon">▼</span>';
+
+  buttonsContainer.appendChild(playBtn);
+  buttonsContainer.appendChild(favoriteBtn);
+  buttonsContainer.appendChild(expandBtn);
+
+  return { buttonsContainer, playBtn, favoriteBtn, expandBtn };
+}
+
+// Helper functions for creating favorites-style elements
+function createFavoriteInfo(result) {
+  const infoDiv = document.createElement('div');
+  infoDiv.className = 'favorite-info';
+
+  const titleDiv = document.createElement('div');
+  titleDiv.className = 'favorite-title';
+  titleDiv.textContent = result.title || 'Sin título';
+
+  const creatorDiv = document.createElement('div');
+  creatorDiv.className = 'favorite-creator';
+  creatorDiv.textContent = result.creator || 'Desconocido';
+
+  // Album indicator will be added by loadAlbumInfoBackground
+  const metaDiv = document.createElement('div');
+  metaDiv.className = 'result-meta'; // Keep for compatibility with loadAlbumInfoBackground
+  const albumSpan = document.createElement('span');
+  albumSpan.className = 'result-album';
+  metaDiv.appendChild(albumSpan);
+
+  infoDiv.appendChild(titleDiv);
+  infoDiv.appendChild(creatorDiv);
+  infoDiv.appendChild(metaDiv);
+
+  return infoDiv;
+}
+
+function createFavoriteActions(result, hasFavoriteTrack) {
+  const actionsDiv = document.createElement('div');
+  actionsDiv.className = 'favorite-actions';
+
+  // Play button
+  const playBtn = document.createElement('button');
+  playBtn.className = '';
+  playBtn.title = 'Reproducir';
+  playBtn.textContent = '▶';
+
+  // Favorite button
+  const favoriteBtn = document.createElement('button');
+  favoriteBtn.className = ` ${hasFavoriteTrack ? 'active' : ''}`;
+  favoriteBtn.title = hasFavoriteTrack ? 'Quitar de favoritos' : 'Agregar a favoritos';
+  favoriteBtn.textContent = hasFavoriteTrack ? '❤️' : '🩶';
+
+  // Expand button (for albums)
+  const expandBtn = document.createElement('button');
+  expandBtn.className = ''; // Keep existing class for styling
+  expandBtn.title = 'Ver pistas del álbum';
+  expandBtn.innerHTML = '<span class="expand-icon">▼</span>';
+
+  actionsDiv.appendChild(playBtn);
+  actionsDiv.appendChild(favoriteBtn);
+  actionsDiv.appendChild(expandBtn);
+
+  return { actionsDiv, playBtn, favoriteBtn, expandBtn };
+}
+
 function createSearchResultElement(result, globalIndex) {
+  // Validate input
+  if (!result || !result.identifier) {
+    console.warn('Invalid result data provided to createSearchResultElement');
+    return document.createElement('div'); // Return empty div as fallback
+  }
+
   const resultEl = document.createElement('div');
-  resultEl.className = 'search-result';
+  resultEl.className = 'search-result favorite-item';
 
   const hasFavoriteTrack = isAlbumInFavorites(result.identifier);
-  resultEl.innerHTML = `
-  <div class="result-actions">
 
-    <div class="result-cover">
-      <img src="icons/favicon.svg" alt="Portada de ${result.title}">
-    </div>
-      <div class="result-info">
-        <div class="result-title">${result.title}</div>
-        <div class="result-creator">${result.creator}</div>
-        <div class="result-meta"><span class="result-album"></span></div>
-      </div>
-      <button class="result-play-btn" title="Reproducir"><span class="play-icon">▶</span></button>
-      <button class="result-favorite ${hasFavoriteTrack ? 'active' : ''}" title="${hasFavoriteTrack ? 'Quitar de favoritos' : 'Agregar a favoritos'}">${hasFavoriteTrack ? '❤️' : '🩶'}</button>
-      <button class="result-expand" title="Ver pistas del álbum"><span class="expand-icon">▼</span></button>
-    </div>`;
+  // Build structure using helper functions for favorites layout
+  const infoDiv = createFavoriteInfo(result);
+  const { actionsDiv, playBtn, favoriteBtn, expandBtn } = createFavoriteActions(result, hasFavoriteTrack);
 
-  // Cargar información de álbum en segundo plano
+  // Initially hide expand button until we know it's an album
+  expandBtn.style.display = 'none';
+
+  resultEl.appendChild(infoDiv);
+  resultEl.appendChild(actionsDiv);
+
+  // Load album info in background
   loadAlbumInfoBackground(result.identifier, resultEl);
 
-  // Listener para el botón de reproducción
-  const playBtn = resultEl.querySelector('.result-play-btn');
+  // Event listeners
   playBtn.addEventListener('click', async (e) => {
     e.stopPropagation();
-    showStatus(`Cargando: ${result.title}`, 'info', 0);
+    const title = result.title || 'Sin título';
+    showStatus(`Cargando: ${title}`, 'info', 0);
     await playOptimizedSearchResult(result, globalIndex, state.searchResults);
   });
 
-  // Listener para el resultado completo (área de información)
-  const resultInfo = resultEl.querySelector('.result-info');
-  resultInfo.addEventListener('click', async (e) => {
-    if (e.target.closest('.result-actions')) return;
-    showStatus(`Cargando: ${result.title}`, 'info', 0);
+  infoDiv.addEventListener('click', async (e) => {
+    if (e.target.closest('.result-buttons')) return;
+    const title = result.title || 'Sin título';
+    showStatus(`Cargando: ${title}`, 'info', 0);
     await playOptimizedSearchResult(result, globalIndex, state.searchResults);
   });
 
-  const favoriteBtn = resultEl.querySelector('.result-favorite');
   favoriteBtn.addEventListener('click', async (e) => {
     e.stopPropagation();
 
@@ -828,44 +963,43 @@ function createSearchResultElement(result, globalIndex) {
       const files = await fetchOptimizedPlayableFiles(result.identifier);
       if (files.length > 0) {
         if (files.length > 1) {
-          // Es un álbum - agregar/remover todas las pistas
+          // Album handling
           if (hasFavoriteTrack) {
             removeAlbumFromFavorites(result.identifier);
             favoriteBtn.classList.remove('active');
-            favoriteBtn.innerHTML = '🩶';
+            favoriteBtn.textContent = '🩶';
             favoriteBtn.title = 'Agregar a favoritos';
           } else {
             addAlbumToFavorites(result.identifier, files);
             favoriteBtn.classList.add('active');
-            favoriteBtn.innerHTML = '❤️';
+            favoriteBtn.textContent = '❤️';
             favoriteBtn.title = 'Quitar de favoritos';
           }
         } else {
-          // Es una pista individual
+          // Single track handling
           const track = files[0];
           toggleFavorite(track);
           const isNowFavorite = isTrackFavorite(track);
           favoriteBtn.classList.toggle('active', isNowFavorite);
-          favoriteBtn.innerHTML = isNowFavorite ? '❤️' : '🩶';
+          favoriteBtn.textContent = isNowFavorite ? '❤️' : '🩶';
           favoriteBtn.title = isNowFavorite ? 'Quitar de favoritos' : 'Agregar a favoritos';
         }
       }
     } catch (error) {
-      console.error('Error al gestionar favorito:', error);
+      console.error('Error managing favorite:', error);
       showStatus('Error al gestionar favorito', 'error');
     }
   });
 
-  const expandBtn = resultEl.querySelector('.result-expand');
   expandBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    const tracksContainer = resultEl.querySelector('.tracks-container') ||
-      document.createElement('div');
+    let tracksContainer = resultEl.nextElementSibling;
 
-    if (!resultEl.contains(tracksContainer)) {
+    if (!tracksContainer || !tracksContainer.classList.contains('tracks-container')) {
+      tracksContainer = document.createElement('div');
       tracksContainer.className = 'tracks-container';
       tracksContainer.style.display = 'none';
-      resultEl.appendChild(tracksContainer);
+      const parent = resultEl.parentNode;      if (parent) {        parent.insertBefore(tracksContainer, resultEl.nextSibling);      }
     }
 
     toggleAlbumTracks(result.identifier, tracksContainer, expandBtn);
@@ -879,11 +1013,11 @@ function toggleAlbumTracks(albumId, tracksContainer, expandButton) {
   if (tracksContainer.style.display === 'none') {
     displayAlbumTracks(albumId, tracksContainer);
     tracksContainer.style.display = 'block';
-    expandButton.innerHTML = '▲ <span>Ocultar pistas</span>';
+    expandButton.innerHTML = '▲';
     state.expandedAlbums.add(albumId);
   } else {
     tracksContainer.style.display = 'none';
-    expandButton.innerHTML = '▼ <span>Ver pistas</span>';
+    expandButton.innerHTML = '▼ <span></span>';
     state.expandedAlbums.delete(albumId);
   }
 }
@@ -1167,35 +1301,47 @@ function updateFavoritesList() {
     const albumItem = document.createElement('div');
     albumItem.className = 'favorite-item';
 
-    const albumIndicator = isAlbum ?
-      `<span class="album-indicator">${albumData.tracks.length} pistas</span>` :
-      '';
-
-    albumItem.innerHTML = `
-      <div class="result-cover">
-        <img src="icons/favicon.svg" alt="Portada de ${albumData.albumTitle}">
-      </div>
-      <div class="favorite-info">
-        <div class="favorite-title">
-          ${albumData.albumTitle || 'Sin título'}
-        </div>
-        <div class="favorite-creator">${albumData.albumCreator || 'Desconocido'}</div>
-        ${albumIndicator}
-      </div>
-      <div class="favorite-actions">
-        <button class="button" data-id="${albumId}" data-is-album="${isAlbum}">▶</button>
-        <button class="button" data-id="${albumId}">❤️</button>
-      </div>
-     `;
-
-    const coverImg = albumItem.querySelector('.result-cover img');
-    if (coverImg) {
-      preloadCover(albumId, coverImg);
+    // Highlight currently playing track
+    if (state.currentTrack && (
+      state.currentTrack.albumId === albumId ||
+      state.currentTrack.id === albumId ||
+      (isAlbum && albumData.tracks.some(track => track.url === state.currentTrack.url))
+    )) {
+      albumItem.classList.add('now-playing');
     }
 
-    const playBtn = albumItem.querySelector('.button');
-    const removeBtn = albumItem.querySelector('.button:nth-child(2)');
+    // Crear objeto mock para usar createFavoriteInfo
+    const mockResult = {
+      title: albumData.albumTitle || 'Sin título',
+      creator: albumData.albumCreator || 'Desconocido',
+      identifier: albumId
+    };
 
+    // Usar createFavoriteInfo para consistencia
+    const infoDiv = createFavoriteInfo(mockResult);
+
+    // Agregar indicador de álbum manualmente
+    const metaElement = infoDiv.querySelector('.result-meta');
+    if (metaElement && isAlbum) {
+      metaElement.innerHTML = `<span class="album-indicator">${albumData.tracks.length} pistas</span>`;
+    }
+
+    // Usar createFavoriteActions para consistencia
+    const { actionsDiv, playBtn, favoriteBtn, expandBtn } = createFavoriteActions(mockResult, true);
+
+    // Configurar botones
+    playBtn.setAttribute('data-id', albumId);
+    playBtn.setAttribute('data-is-album', isAlbum);
+    favoriteBtn.setAttribute('data-id', albumId);
+    expandBtn.setAttribute('data-id', albumId);
+
+    // Mostrar botón de expandir solo para álbumes
+    expandBtn.style.display = isAlbum ? 'inline-block' : 'none';
+
+    albumItem.appendChild(infoDiv);
+    albumItem.appendChild(actionsDiv);
+
+    // Event listeners
     playBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       const isAlbum = playBtn.getAttribute('data-is-album') === 'true';
@@ -1211,15 +1357,28 @@ function updateFavoritesList() {
       }
     });
 
-    removeBtn.addEventListener('click', (e) => {
+    favoriteBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      const albumId = removeBtn.getAttribute('data-id');
+      const albumId = favoriteBtn.getAttribute('data-id');
 
       state.favorites = state.favorites.filter(fav => fav.albumId !== albumId);
       saveFavorites();
       updateFavoritesList();
       updateFavoriteButton();
       showStatus('Eliminado de favoritos', 'info');
+    });
+
+    // Agregar funcionalidad de expandir pistas del álbum
+    expandBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      let tracksContainer = albumItem.nextElementSibling;
+      if (!tracksContainer || !tracksContainer.classList.contains('tracks-container')) {
+        tracksContainer = document.createElement('div');
+        tracksContainer.className = 'tracks-container';
+        tracksContainer.style.display = 'none';
+        favoritesList.insertBefore(tracksContainer, albumItem.nextSibling); // ← FUERA del favorite-item (CORRECTO)
+      }
+      toggleAlbumTracks(albumId, tracksContainer, expandBtn);
     });
 
     favoritesList.appendChild(albumItem);
@@ -1233,11 +1392,27 @@ function toggleFavoritesList() {
 
   if (state.favoritesVisible) {
     elements.favoritesList.classList.add('active');
-    elements.favoritesToggle.textContent = '▲ ❤️';
+    elements.favoritesToggle.classList.add('active');
     updateFavoritesList();
   } else {
     elements.favoritesList.classList.remove('active');
-    elements.favoritesToggle.textContent = '▼ ❤️';
+    elements.favoritesToggle.classList.remove('active');
+  }
+}
+
+function updateFavoritesCount() {
+  const countElement = document.getElementById('favorites-count');
+  if (countElement) {
+    const count = state.favorites ? state.favorites.length : 0;
+    countElement.textContent = `(${count})`;
+  }
+}
+
+function updateFavoritesCount() {
+  const countElement = document.getElementById('favorites-count');
+  if (countElement) {
+    const count = state.favorites ? state.favorites.length : 0;
+    countElement.textContent = `(${count})`;
   }
 }
 
@@ -1313,169 +1488,124 @@ async function handleStartFavoritesCTA() {
   }
 }
 
-  // Hide favorites list when playing a favorite
-  function addHideFavoritesOnPlay() {
-    // In playFromFavoritesQueue
-    const originalPlayFromFavoritesQueue = window.playFromFavoritesQueue;
-    window.playFromFavoritesQueue = async function (...args) {
-      hideFavoritesList();
-      return originalPlayFromFavoritesQueue.apply(this, args);
-    };
+// Hide favorites list when playing a favorite
+function addHideFavoritesOnPlay() {
+  // In playFromFavoritesQueue
+  const originalPlayFromFavoritesQueue = window.playFromFavoritesQueue;
+  window.playFromFavoritesQueue = async function (...args) {
+    hideFavoritesList();
+    return originalPlayFromFavoritesQueue.apply(this, args);
+  };
 
-    // In playAlbumFromFavorites
+  // In playAlbumFromFavorites
   const originalPlayAlbumFromFavorites = window.playAlbumFromFavorites;
   window.playAlbumFromFavorites = async function (...args) {
     hideFavoritesList();
     return originalPlayAlbumFromFavorites.apply(this, args);
   };
-
 }
-  // Register service worker and handle updates
-  function registerServiceWorker() {
-    if ('serviceWorker' in navigator) {
-      if (window.location.protocol === 'https:' || window.location.hostname === 'localhost') {
-        navigator.serviceWorker.register('/sw.js')
-          .then((registration) => {
-            registration.update().catch(err => console.warn('Update SW error:', err));
-            if (registration.waiting) {
-              try {
-                registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-                showStatus('Actualizando aplicación...', 'info', 3000);
-              } catch (e) {
-                if (typeof registration.waiting.skipWaiting === 'function') {
-                  registration.waiting.skipWaiting();
-                }
+
+// Register service worker and handle updates
+function registerServiceWorker() {
+  if ('serviceWorker' in navigator) {
+    if (window.location.protocol === 'https:' || window.location.hostname === 'localhost') {
+      navigator.serviceWorker.register('/sw.js')
+        .then((registration) => {
+          registration.update().catch(err => console.warn('Update SW error:', err));
+          if (registration.waiting) {
+            try {
+              registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+              showStatus('Actualizando aplicación...', 'info', 3000);
+            } catch (e) {
+              if (typeof registration.waiting.skipWaiting === 'function') {
+                registration.waiting.skipWaiting();
               }
             }
-            registration.addEventListener('updatefound', () => {
-              const newWorker = registration.installing;
-              newWorker.addEventListener('statechange', () => {
-                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                  if (isRunningAsPWA()) {
-                    try {
-                      newWorker.postMessage({ type: 'SKIP_WAITING' });
-                      showStatus('Actualización disponible — aplicando ahora...', 'info', 3000);
-                    } catch (err) {
-                      console.warn('SKIP_WAITING error:', err);
-                    }
-                  } else {
-                    showStatus('Nueva versión disponible. Recarga la aplicación.', 'info', 5000);
+          }
+          registration.addEventListener('updatefound', () => {
+            const newWorker = registration.installing;
+            newWorker.addEventListener('statechange', () => {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                if (isRunningAsPWA()) {
+                  try {
+                    newWorker.postMessage({ type: 'SKIP_WAITING' });
+                    showStatus('Actualización disponible — aplicando ahora...', 'info', 3000);
+                  } catch (err) {
+                    console.warn('SKIP_WAITING error:', err);
                   }
+                } else {
+                  showStatus('Nueva versión disponible. Recarga la aplicación.', 'info', 5000);
                 }
-              });
+              }
             });
-          })
-          .catch((error) => {
-            console.error('Service Worker registration error:', error);
           });
-
-        let swRefreshing = false;
-        navigator.serviceWorker.addEventListener('controllerchange', () => {
-          if (swRefreshing) return;
-          swRefreshing = true;
-          window.location.reload();
+        })
+        .catch((error) => {
+          console.error('Service Worker registration error:', error);
         });
-      }
-    }
-  }
 
-  // PWA installation prompt setup
-  function setupPWAInstall() {
-    let deferredPrompt;
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault();
-      deferredPrompt = e;
-      setTimeout(() => {
-        if (deferredPrompt) {
-          showStatus('¿Quieres instalar Resonate para una mejor experiencia?', 'info', 5000);
-        }
-      }, 30000);
-    });
-    window.installPWA = async () => {
-      if (deferredPrompt) {
-        deferredPrompt.prompt();
-        const { outcome } = await deferredPrompt.userChoice;
-        if (outcome === 'accepted') {
-          showStatus('Resonate se está instalando...', 'info', 3000);
-        }
-        deferredPrompt = null;
-      }
-    };
-  }
-
-  // Push notifications setup
-  function setupPushNotifications() {
-    if ('Notification' in window && 'serviceWorker' in navigator) {
-      Notification.requestPermission().then((permission) => {
-        // Permission granted - silent
+      let swRefreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (swRefreshing) return;
+        swRefreshing = true;
+        window.location.reload();
       });
     }
   }
+}
 
-  // PWA detection
-  function isRunningAsPWA() {
-    return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
-           window.navigator.standalone === true;
-  }
-  function handleCoverError(imgElement, retryCount = 0) {
-    // Siempre usar el ícono de Resonate
-    useSVGPlaceholder(imgElement);
-  }
- 
-  function useSVGPlaceholder(imgElement) {
-    imgElement.src = 'icons/favicon.svg';
-    imgElement.alt = 'Ícono de Resonate';
-    imgElement.style.opacity = '0.8';
-    imgElement.style.border = '1px solid #334155';
-    imgElement.onerror = null; // Remover handler para evitar loops
-
-    if (window.logger) {
-      logger.info('Cover set to Resonate icon', 'UI');
-    }
-  }
-
-// Función para obtener URL de portada: retornar la portada de Archive.org si existe
-async function getCoverUrl(identifier, metadata) {
-  // Skip external image loading when running locally to avoid CORS timeout errors
-  const isLocal = window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-  if (isLocal) {
-    return 'icons/favicon.svg'; // Always use local icon when running locally
-  }
-
-  // Intentar obtener la portada de Archive.org
-  const archiveCoverUrl = `https://archive.org/services/img/${identifier}`;
-
-  // Crear una promesa para verificar si la imagen carga
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => resolve(archiveCoverUrl);
-    img.onerror = () => resolve('icons/favicon.svg'); // Fallback al ícono
-    img.src = archiveCoverUrl;
+// PWA installation prompt setup
+function setupPWAInstall() {
+  let deferredPrompt;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    setTimeout(() => {
+      if (deferredPrompt) {
+        showStatus('¿Quieres instalar Resonate para una mejor experiencia?', 'info', 5000);
+      }
+    }, 30000);
   });
-}
-async function preloadCover(identifier, imgElement) {
-  // Obtener la URL de portada (Archive.org o fallback)
-  const coverUrl = await getCoverUrl(identifier);
-  imgElement.src = coverUrl;
-  imgElement.alt = `Portada de ${identifier}`;
-
-  // Agregar manejador de error para fallback si la imagen falla al cargar
-  imgElement.onerror = () => {
-    imgElement.src = 'icons/favicon.svg';
-    imgElement.onerror = null; // Remover handler para evitar loops
+  window.installPWA = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        showStatus('Resonate se está instalando...', 'info', 3000);
+      }
+      deferredPrompt = null;
+    }
   };
-  // Expose critical functions globally for cross-module access
-  window.loadFavorites = loadFavorites;
-  window.saveFavorites = saveFavorites;
-  window.loadVolume = loadVolume;
-  window.saveVolume = saveVolume;
-  window.saveMutedState = saveMutedState;
-  window.showStatus = showStatus;
-  window.updatePlayButtonState = updatePlayButtonState;
-  window.startApp = startApp;
-  window.createStartFavoritesCTA = createStartFavoritesCTA;
-  window.hideStartFavoritesCTA = hideStartFavoritesCTA;
-  window.registerServiceWorker = registerServiceWorker;
-  window.setupPWAInstall = setupPWAInstall;
-  window.displaySearchResults = displaySearchResults;
 }
+
+// Push notifications setup
+function setupPushNotifications() {
+  if ('Notification' in window && 'serviceWorker' in navigator) {
+    Notification.requestPermission().then((permission) => {
+      // Permission granted - silent
+    });
+  }
+}
+
+// PWA detection
+function isRunningAsPWA() {
+  return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+         window.navigator.standalone === true;
+}
+
+// Expose critical functions globally for cross-module access
+window.loadFavorites = loadFavorites;
+window.saveFavorites = saveFavorites;
+window.loadVolume = loadVolume;
+window.saveVolume = saveVolume;
+window.saveMutedState = saveMutedState;
+window.showStatus = showStatus;
+window.updatePlayButtonState = updatePlayButtonState;
+window.startApp = startApp;
+window.createStartFavoritesCTA = createStartFavoritesCTA;
+window.hideStartFavoritesCTA = hideStartFavoritesCTA;
+window.registerServiceWorker = registerServiceWorker;
+window.setupPWAInstall = setupPWAInstall;
+window.displaySearchResults = displaySearchResults;
+window.state = state;
+window.elements = elements;

@@ -164,12 +164,12 @@ h3 {
 }
 
 .art {
-  width: 180px;
+  width: 100%%;
   height: 180px;
   margin: 40px 0 20px 0;
   border-radius: 12px;
   overflow: hidden;
-  background: var(--card);
+  /*background: var(--card);*/
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
   display: flex;
   align-items: center;
@@ -505,7 +505,7 @@ button:active:not(:disabled) {
   align-items: center;
   padding: 10px;
   gap: 10px;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .contact-section a {
@@ -623,10 +623,47 @@ select:focus {
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  user-select: none;
 }
 
 .favorites-label:hover {
   color: var(--accent);
+  background: rgba(110, 231, 183, 0.08);
+}
+
+.favorites-label.active {
+  color: var(--accent);
+  background: rgba(110, 231, 183, 0.1);
+}
+
+.favorites-icon {
+  font-size: 14px;
+  transition: transform 0.2s ease;
+}
+
+.favorites-label.active .favorites-icon {
+  transform: rotate(180deg);
+}
+
+.favorites-text {
+  font-weight: 600;
+}
+
+.favorites-count {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(110, 231, 183, 0.15);
+  padding: 2px 6px;
+  border-radius: 10px;
+  min-width: 24px;
+  text-align: center;
 }
 
 .favorites-toggle {
@@ -677,7 +714,7 @@ select:focus {
   cursor: pointer;
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   transition: background-color 0.2s;
   gap: 8px;
 }
@@ -694,20 +731,29 @@ select:focus {
   background: #111;
 }
 
-/* Favorite item content */
-.favorite-info {
-  flex: 1;
-  min-width: 0;
-  text-align: left;
+.favorite-item.now-playing {
+  background: rgba(110, 231, 183, 0.1);
+  border-left: 3px solid var(--accent);
 }
+
+.favorite-item.now-playing .favorite-title {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.favorite-item.now-playing {
+  background: rgba(110, 231, 183, 0.1);
+  border-left: 3px solid var(--accent);
+}
+
 
 .favorite-title {
   font-weight: 600;
   font-size: 13px;
   margin-bottom: 4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
 }
 
 .favorite-creator {
@@ -721,6 +767,14 @@ select:focus {
 .favorite-actions {
   display: flex;
   gap: 5px;
+  align-items: flex-start;
+}
+
+.favorite-actions .button {
+  height: auto;
+  padding: 4px 8px;
+  font-size: 14px;
+  min-width: 32px;
 }
 
 .favorite-play {
@@ -840,6 +894,7 @@ select:focus {
 
 .search-results-list {
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .search-result {
@@ -847,12 +902,10 @@ select:focus {
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   cursor: pointer;
   display: flex;
-  justify-content: flex-start;
-  align-items: flex-start;
+  justify-content: space-between;
+  align-items: center;
   transition: background-color 0.2s;
-  text-align: left;
-  flex-direction: column;
-  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .search-result:last-child {
@@ -871,6 +924,13 @@ select:focus {
   width: 100%;
 }
 
+.result-buttons {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
 .result-info {
   flex: 1;
   min-width: 0;
@@ -882,17 +942,17 @@ select:focus {
   font-weight: 600;
   font-size: 13px;
   margin-bottom: 4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
 }
 
 .result-creator {
   color: var(--muted);
   font-size: 11px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
 }
 
 .result-meta {
@@ -1144,8 +1204,8 @@ select:focus {
   height: var(--size);
   border: var(--loader-border-width) solid var(--bg);
   border-radius: 50%;
-  border-top-color: var(--accent);
-  animation: spin var(--loader-animation-duration) linear infinite;
+  border-top-color: var(--fg);
+  animation: spin var(--loader-duration) linear infinite;
 }
 
 @keyframes spin {
@@ -1168,6 +1228,21 @@ select:focus {
   align-items: center;
   justify-content: center;
   gap: 8px;
+}
+
+.search-loader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.loader-text {
+  font-size: 14px;
+  color: var(--muted);
 }
 
 .no-results {
