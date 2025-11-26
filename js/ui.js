@@ -1349,6 +1349,9 @@ function updateFavoritesList() {
       const isAlbum = playBtn.getAttribute('data-is-album') === 'true';
       const id = playBtn.getAttribute('data-id');
 
+      // Hide favorites list when playing from favorites
+      hideFavoritesList();
+
       if (isAlbum) {
         playAlbumFromFavorites(id);
       } else {
