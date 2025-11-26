@@ -850,7 +850,7 @@ function createResultButtons(result, hasFavoriteTrack) {
   // Expand button
   const expandBtn = document.createElement('button');
   expandBtn.className = 'result-expand';
-  expandBtn.title = 'Ver pistas del álbum';
+  expandBtn.title = '▼';
   expandBtn.innerHTML = '<span class="expand-icon">▼</span>';
 
   buttonsContainer.appendChild(playBtn);
@@ -906,8 +906,8 @@ function createFavoriteActions(result, hasFavoriteTrack) {
   // Expand button (for albums)
   const expandBtn = document.createElement('button');
   expandBtn.className = ''; // Keep existing class for styling
-  expandBtn.title = 'Ver pistas del álbum';
-  expandBtn.innerHTML = '<span class="expand-icon">▼</span>';
+  expandBtn.title = '▼';
+  expandBtn.textContent = '▼';
 
   actionsDiv.appendChild(playBtn);
   actionsDiv.appendChild(favoriteBtn);
@@ -1013,11 +1013,13 @@ function toggleAlbumTracks(albumId, tracksContainer, expandButton) {
   if (tracksContainer.style.display === 'none') {
     displayAlbumTracks(albumId, tracksContainer);
     tracksContainer.style.display = 'block';
-    expandButton.innerHTML = '▲';
+    expandButton.textContent = '▲';
+    expandButton.title = '▲';
     state.expandedAlbums.add(albumId);
   } else {
     tracksContainer.style.display = 'none';
-    expandButton.innerHTML = '▼ <span></span>';
+    expandButton.textContent = '▼';
+    expandButton.title = '▼';
     state.expandedAlbums.delete(albumId);
   }
 }

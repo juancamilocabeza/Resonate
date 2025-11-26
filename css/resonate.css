@@ -164,7 +164,7 @@ h3 {
 }
 
 .art {
-  width: 100%%;
+  width: 100%;
   height: 180px;
   margin: 40px 0 20px 0;
   border-radius: 12px;
@@ -906,6 +906,7 @@ select:focus {
   align-items: center;
   transition: background-color 0.2s;
   gap: 8px;
+  overflow-x: hidden;
 }
 
 .search-result:last-child {
