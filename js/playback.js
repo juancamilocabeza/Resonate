@@ -27,8 +27,8 @@ class ContinuousPlaybackManager {
 
     const context = this.contextData[this.currentContext];
 
-    // Apply shuffle based on shuffleFavorites state for all contexts (album, favorites, search)
-    if ((this.currentContext === 'album' || this.currentContext === 'favorites' || this.currentContext === 'search') && state.shuffleFavorites) {
+    // Apply shuffle based on shuffleFavorites state for all contexts (album, favorites, search, searchPlaylist)
+    if ((this.currentContext === 'album' || this.currentContext === 'favorites' || this.currentContext === 'search' || this.currentContext === 'searchPlaylist') && state.shuffleFavorites) {
       context.currentIndex = Math.floor(Math.random() * context.items.length);
     } else {
       context.currentIndex = (context.currentIndex + 1) % context.items.length;
@@ -894,11 +894,28 @@ async function playPreviousInContext() {
 
       await playAudioTrackOptimized(track, prevItem.id, prevItem.trackIndex, prevItem.totalTracks);
     } else if (context === 'album') {
-      await playAudioTrackOptimized(prevItem, playbackManager.getCurrentAlbumId(), ctx.currentIndex, ctx.items.length);
+      try {
+        await playAudioTrackOptimized(prevItem, playbackManager.getCurrentAlbumId(), ctx.currentIndex, ctx.items.length);
+        return;
+      } catch (error) {
+        console.error('Error reproduciendo pista anterior de álbum:', error);
+        // Try the fallback of going back further in the context
+        setTimeout(() => playPreviousInContext(), 1000);
+      }
+    } else if (context === 'album') {
+      try {
+        await playAudioTrackOptimized(prevItem, playbackManager.getCurrentAlbumId(), ctx.currentIndex, ctx.items.length);
+        return;
+      } catch (error) {
+        console.error('Error reproduciendo pista anterior de álbum:', error);
+        setTimeout(() => playPreviousInContext(), 1000);
+      }
     } else if (context === 'searchPlaylist') {
       // Reproducir desde la lista de búsqueda precargada
       await playAudioTrackOptimized(prevItem, prevItem.id, 0, 1);
     }
+    
+    // Try/catch global para la función completa
   } catch (error) {
     console.error('Error al reproducir pista anterior:', error);
     setTimeout(() => playPreviousInContext(), 1000);
@@ -1382,3 +1399,4 @@ window.setupPreloadedPlayback = setupPreloadedPlayback;
 window.playOptimizedFavorite = playOptimizedFavorite;
 window.playSpecificTrack = playSpecificTrack;
 window.playRandomSearchResults = playRandomSearchResults;
+window.setupListenTracking = setupListenTracking;
