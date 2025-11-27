@@ -5,12 +5,12 @@ async function initializeApp() {
   try {
     if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.init === 'function') {
       await audioCache.init();
-      // Audio cache initialized (silent)
+      window.logger.info('Audio cache initialized successfully', 'CACHE');
     } else {
-      console.warn('audioCache no disponible, continuando sin caché');
+      window.logger.warn('audioCache not available, continuing without cache', 'CACHE');
     }
   } catch (error) {
-    console.error('Error inicializando caché:', error);
+    window.logger.error(`Error initializing cache: ${error.message}`, 'CACHE');
   }
 
 
@@ -19,6 +19,14 @@ async function initializeApp() {
   //createStartFavoritesCTA();
   if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.setupLoadingSafety === 'function') {
     audioCache.setupLoadingSafety();
+  }
+
+  // Inicializar el componente FavoritesToggle
+  if (typeof FavoritesToggle !== 'undefined') {
+    favoritesToggleInstance = new FavoritesToggle();
+    window.logger.info('FavoritesToggle component initialized', 'UI');
+  } else {
+    window.logger.warn('FavoritesToggle class not available', 'UI');
   }
 
   // Cargar estado de reproducción guardado (última sesión)
@@ -41,7 +49,7 @@ async function initializeApp() {
           showStatus(`Listo para reproducir: ${firstTrack.title}. Haz clic en el botón de reproducción.`, 'info', 3000);
         }
       } catch (error) {
-        console.error('Error preparing favorites queue:', error);
+        window.logger.error(`Error preparing favorites queue: ${error.message}`, 'PLAYBACK');
       }
     }, 500);
   }
@@ -74,17 +82,19 @@ async function initializeApp() {
         elements.audio.volume = volume;
         saveVolume(volume);
         updateVolumeIcon();
+        window.logger.debug(`Volume changed to ${volume}`, 'UI');
       }
     });
   }
 
   if (elements.volumeIcon) {
-    elements.volumeIcon.addEventListener('click', toggleMute);
+    elements.volumeIcon.addEventListener('click', () => {
+      window.logger.info('Mute toggle clicked', 'UI');
+      toggleMute();
+    });
   }
 
-  if (elements.favoritesToggle) {
-    elements.favoritesToggle.addEventListener('click', toggleFavoritesList);
-  }
+
 
   if (elements.audio) {
     elements.audio.addEventListener('timeupdate', updateProgressBar);
@@ -107,7 +117,7 @@ async function initializeApp() {
 
 
     elements.audio.addEventListener('error', (e) => {
-      console.error('Audio error:', e.target.error);
+      window.logger.error(`Audio error: ${e.target.error?.code} - ${e.target.error?.message}`, 'PLAYBACK');
       showStatus('Playback error', 'error');
 
       // Restore state on error
@@ -118,21 +128,33 @@ async function initializeApp() {
   }
 
   if (elements.shuffleFavoritesBtn) {
-    elements.shuffleFavoritesBtn.addEventListener('click', toggleShuffleFavorites);
+    elements.shuffleFavoritesBtn.addEventListener('click', () => {
+      window.logger.info('Shuffle favorites toggle clicked', 'UI');
+      toggleShuffleFavorites();
+    });
   }
 
   if (elements.prevBtn) {
-    elements.prevBtn.addEventListener('click', playPrevious);
+    elements.prevBtn.addEventListener('click', () => {
+      window.logger.info('Previous track button clicked', 'UI');
+      playPrevious();
+    });
   }
 
   if (elements.playBtn) {
-    elements.playBtn.addEventListener('click', togglePlay);
+    elements.playBtn.addEventListener('click', () => {
+      window.logger.info('Play/pause button clicked', 'UI');
+      togglePlay();
+    });
     // Ocultar CTA si el usuario hace clic en el botón de reproducir
     elements.playBtn.addEventListener('click', hideStartFavoritesCTA);
   }
 
   if (elements.nextBtn) {
-    elements.nextBtn.addEventListener('click', playNext);
+    elements.nextBtn.addEventListener('click', () => {
+      window.logger.info('Next track button clicked', 'UI');
+      playNext();
+    });
   }
 
   if (elements.favoriteBtn) {
@@ -145,7 +167,7 @@ async function initializeApp() {
             toggleFavorite(state.currentTrack);
           }
         } catch (error) {
-          console.error('Error al obtener URL para favorito:', error);
+          window.logger.error(`Error fetching URL for favorite: ${error.message}`, 'UI');
           showStatus('Error al agregar favorito', 'error');
         }
       } else {
@@ -154,9 +176,7 @@ async function initializeApp() {
     });
   }
 
-  if (elements.favoritesToggle) {
-    elements.favoritesToggle.addEventListener('click', toggleFavoritesList);
-  }
+
 
   document.addEventListener('click', (e) => {
     if (!elements.searchInput.contains(e.target) &&
@@ -171,13 +191,19 @@ async function initializeApp() {
 
   // Configurar botón de inicio
   if (elements.startButton) {
-    elements.startButton.addEventListener('click', startApp);
+    elements.startButton.addEventListener('click', () => {
+      window.logger.info('Start app button clicked', 'UI');
+      startApp();
+    });
   }
 
   updateShuffleButton();
 
   if (elements.repeatBtn) {
-    elements.repeatBtn.addEventListener('click', toggleRepeatMode);
+    elements.repeatBtn.addEventListener('click', () => {
+      window.logger.info('Repeat mode toggle clicked', 'UI');
+      toggleRepeatMode();
+    });
     updateRepeatBtn();
   }
 
@@ -220,9 +246,9 @@ async function initializeApp() {
       // Remover cualquier elemento splash personalizado si existe
       const splashEl = document.querySelector('.start-view');
       if (splashEl && splashEl.parentNode) splashEl.parentNode.removeChild(splashEl);
-      console.log('PWA detected: splash removed and app activated');
+      window.logger.info('PWA detected: splash removed and app activated', 'SYSTEM');
     } catch (err) {
-      console.warn('Error while hiding splash for PWA:', err);
+      window.logger.warn(`Error while hiding splash for PWA: ${err.message}`, 'SYSTEM');
     }
   }
 
@@ -263,23 +289,16 @@ function waitForAllScripts() {
 
     const checkScripts = () => {
       attempts++;
-      console.log(`Verificando scripts (intento ${attempts}):`, {
-        audioCache: typeof audioCache,
-        enhancedCache: typeof enhancedCache,
-        state: typeof state,
-        elements: typeof elements,
-        showStatus: typeof showStatus,
-        loadFavorites: typeof loadFavorites
-      });
+      window.logger.debug(`Checking scripts (attempt ${attempts})`, 'SYSTEM');
 
       // Ser menos estricto - solo requerir los scripts más críticos
       if (typeof state !== 'undefined' &&
           typeof elements !== 'undefined' &&
           typeof showStatus !== 'undefined') {
-        console.log('Scripts críticos cargados, continuando...');
+        window.logger.info('Critical scripts loaded, proceeding...', 'SYSTEM');
         resolve();
       } else if (attempts >= maxAttempts) {
-        console.warn('Timeout esperando scripts, continuando con lo disponible...');
+        window.logger.warn('Timeout waiting for scripts, proceeding with available...', 'SYSTEM');
         resolve(); // Continue anyway after timeout
       } else {
         setTimeout(checkScripts, 10);
@@ -293,20 +312,20 @@ function waitForAllScripts() {
 // Inicialización segura que espera a todos los scripts
 async function safeInitialize() {
   try {
-    console.log('Esperando a que todos los scripts estén disponibles...');
+    window.logger.info('Waiting for all scripts to be available...', 'SYSTEM');
     await waitForAllScripts();
-    console.log('Todos los scripts cargados, inicializando aplicación...');
+    window.logger.info('All scripts loaded, initializing application...', 'SYSTEM');
 
     await initializeApp();
   } catch (error) {
-    console.error('Error en inicialización segura:', error);
+    window.logger.error(`Error in safe initialization: ${error.message}`, 'SYSTEM');
     // Fallback mínimo
     try {
       if (typeof loadFavorites !== 'undefined') loadFavorites();
       if (typeof setupConnectivityMonitoring !== 'undefined') setupConnectivityMonitoring();
-      console.log('Fallback básico completado');
+      window.logger.info('Basic fallback completed', 'SYSTEM');
     } catch (fallbackError) {
-      console.error('Error en fallback:', fallbackError);
+      window.logger.error(`Error in fallback: ${fallbackError.message}`, 'SYSTEM');
     }
   }
 }

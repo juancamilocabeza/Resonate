@@ -91,17 +91,13 @@ const state = {
 // Favorites management
 function loadFavorites() {
   try {
-    console.log('Loading favorites from localStorage...');
+    window.logger.info('Loading favorites from localStorage...', 'UI');
     const favorites = localStorage.getItem('resonate_favorites');
-    console.log('Raw favorites from localStorage:', favorites);
-
-    // Debug: Check all localStorage keys
-    console.log('All localStorage keys:', Object.keys(localStorage));
-    console.log('localStorage length:', localStorage.length);
+    window.logger.debug('Raw favorites from localStorage retrieved', 'UI');
 
     if (favorites) {
       let parsedFavorites = JSON.parse(favorites);
-      console.log('Parsed favorites:', parsedFavorites);
+      window.logger.debug(`Parsed ${parsedFavorites.length} favorites`, 'UI');
 
       // Filter out unsupported format favorites (keep .ogg and .mp3)
       const originalCount = parsedFavorites.length;
@@ -114,18 +110,19 @@ function loadFavorites() {
       if (parsedFavorites.length < originalCount) {
         // Save filtered favorites back to localStorage
         localStorage.setItem('resonate_favorites', JSON.stringify(parsedFavorites));
-        console.log(`Filtered ${originalCount - parsedFavorites.length} unsupported format favorites`);
+        window.logger.info(`Filtered ${originalCount - parsedFavorites.length} unsupported format favorites`, 'UI');
       }
 
       state.favorites = parsedFavorites;
-      console.log('Final favorites loaded:', state.favorites);
+      window.logger.info(`Final favorites loaded: ${state.favorites.length} items`, 'UI');
 
       // Precargar favoritos en cola FIFO
       if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.preloadFavorites === 'function') {
         audioCache.preloadFavorites(state.favorites);
+        window.logger.debug('Favorites preload initiated', 'CACHE');
       }
     } else {
-      console.log('No favorites found in localStorage');
+      window.logger.info('No favorites found in localStorage', 'UI');
       state.favorites = [];
     }
 
@@ -137,7 +134,7 @@ function loadFavorites() {
     updateFavoritesCount();
 
   } catch (e) {
-    console.error('Error loading favorites:', e);
+    window.logger.error(`Error loading favorites: ${e.message}`, 'UI');
     state.favorites = [];
     updatePlayButtonState();
   }
@@ -147,12 +144,14 @@ function saveFavorites() {
   try {
     const payload = JSON.stringify(state.favorites || []);
     localStorage.setItem('resonate_favorites', payload);
+    window.logger.debug('Favorites saved to localStorage', 'UI');
     // Request preload/update of favorites in cache if available
     if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.preloadFavorites === 'function') {
       audioCache.preloadFavorites(state.favorites || []);
+      window.logger.debug('Favorites preload requested', 'CACHE');
     }
   } catch (err) {
-    console.error('Error saving favorites:', err);
+    window.logger.error(`Error saving favorites: ${err.message}`, 'UI');
   }
 }
 
@@ -182,7 +181,7 @@ function loadVolume() {
 
     updateVolumeIcon();
   } catch (e) {
-    console.warn('Error loading volume settings:', e);
+    window.logger.warn(`Error loading volume settings: ${e.message}`, 'UI');
     // Set default volume
     elements.audio.volume = 0.7;
     if (elements.volumeSlider) {
@@ -197,7 +196,7 @@ function saveVolume(volume) {
     localStorage.setItem('resonate_volume', volume.toString());
     state.currentVolume = volume;
   } catch (e) {
-    console.warn('Error saving volume:', e);
+    window.logger.warn(`Error saving volume: ${e.message}`, 'UI');
   }
 }
 
@@ -205,7 +204,7 @@ function saveMutedState(muted) {
   try {
     localStorage.setItem('resonate_muted', muted.toString());
   } catch (e) {
-    console.warn('Error saving mute state:', e);
+    window.logger.warn(`Error saving mute state: ${e.message}`, 'UI');
   }
 }
 
@@ -1386,18 +1385,168 @@ function updateFavoritesList() {
   });
 }
 
-function toggleFavoritesList() {
-  if (elements.favoritesToggle.classList.contains('disabled')) return;
+/**
+ * FavoritesToggle - Componente para manejar el toggle de la lista de favoritos
+ * Maneja la visibilidad, accesibilidad y estado del toggle de favoritos
+ */
+class FavoritesToggle {
+  constructor() {
+    this.element = elements.favoritesToggle;
+    this.listElement = elements.favoritesList;
+    this.isVisible = false;
+    this.isDisabled = false;
 
-  state.favoritesVisible = !state.favoritesVisible;
+    this.init();
+  }
 
-  if (state.favoritesVisible) {
-    elements.favoritesList.classList.add('active');
-    elements.favoritesToggle.classList.add('active');
+  /**
+   * Inicializa el componente
+   */
+  init() {
+    if (!this.element) {
+      console.warn('FavoritesToggle: Element not found');
+      return;
+    }
+
+    this.updateAriaAttributes();
+    this.bindEvents();
+  }
+
+  /**
+   * Vincula los eventos necesarios
+   */
+  bindEvents() {
+    this.element.addEventListener('click', this.handleClick.bind(this));
+    this.element.addEventListener('keydown', this.handleKeydown.bind(this));
+  }
+
+  /**
+   * Maneja el clic en el toggle
+   */
+  handleClick(event) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (this.isDisabled) return;
+
+    this.toggle();
+
+    // Log para debugging
+    window.logger?.info(`Favorites toggle ${this.isVisible ? 'opened' : 'closed'}`, 'UI');
+  }
+
+  /**
+   * Maneja eventos de teclado para accesibilidad
+   */
+  handleKeydown(event) {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      this.handleClick(event);
+    }
+  }
+
+  /**
+   * Alterna la visibilidad de la lista de favoritos
+   */
+  toggle() {
+    this.isVisible = !this.isVisible;
+    this.updateVisibility();
+    this.updateAriaAttributes();
+
+    // Actualizar lista cuando se muestra
+    if (this.isVisible) {
+      updateFavoritesList();
+    }
+  }
+
+  /**
+   * Muestra la lista de favoritos
+   */
+  show() {
+    if (this.isVisible) return;
+    this.isVisible = true;
+    this.updateVisibility();
+    this.updateAriaAttributes();
     updateFavoritesList();
+  }
+
+  /**
+   * Oculta la lista de favoritos
+   */
+  hide() {
+    if (!this.isVisible) return;
+    this.isVisible = false;
+    this.updateVisibility();
+    this.updateAriaAttributes();
+  }
+
+  /**
+   * Actualiza la visibilidad de los elementos
+   */
+  updateVisibility() {
+    if (this.isVisible) {
+      this.listElement?.classList.add('active');
+      this.element?.classList.add('active');
+    } else {
+      this.listElement?.classList.remove('active');
+      this.element?.classList.remove('active');
+    }
+  }
+
+  /**
+   * Actualiza los atributos ARIA para accesibilidad
+   */
+  updateAriaAttributes() {
+    if (!this.element) return;
+
+    const isExpanded = this.isVisible ? 'true' : 'false';
+    this.element.setAttribute('aria-expanded', isExpanded);
+    this.element.setAttribute('aria-label',
+      `Lista de favoritos ${this.isVisible ? 'visible' : 'oculta'}`
+    );
+  }
+
+  /**
+   * Deshabilita el toggle
+   */
+  disable() {
+    this.isDisabled = true;
+    this.element?.classList.add('disabled');
+    this.element?.setAttribute('aria-disabled', 'true');
+  }
+
+  /**
+   * Habilita el toggle
+   */
+  enable() {
+    this.isDisabled = false;
+    this.element?.classList.remove('disabled');
+    this.element?.removeAttribute('aria-disabled');
+  }
+
+  /**
+   * Obtiene el estado actual
+   */
+  getState() {
+    return {
+      isVisible: this.isVisible,
+      isDisabled: this.isDisabled
+    };
+  }
+}
+
+// Instancia global del componente
+let favoritesToggleInstance = null;
+
+/**
+ * Función legacy para compatibilidad hacia atrás
+ * @deprecated Usar la instancia de FavoritesToggle directamente
+ */
+function toggleFavoritesList() {
+  if (favoritesToggleInstance) {
+    favoritesToggleInstance.toggle();
   } else {
-    elements.favoritesList.classList.remove('active');
-  elements.favoritesToggle.classList.remove('active');
+    console.warn('FavoritesToggle instance not initialized');
   }
 }
 
@@ -1410,9 +1559,15 @@ function updateFavoritesCount() {
 }
 
 function hideFavoritesList() {
-  state.favoritesVisible = false;
-  elements.favoritesList.classList.remove('active');
-  elements.favoritesToggle.textContent = '▼ ❤️';
+  if (favoritesToggleInstance) {
+    favoritesToggleInstance.hide();
+  } else {
+    // Fallback si la instancia no está disponible
+    state.favoritesVisible = false;
+    elements.favoritesList?.classList.remove('active');
+    elements.favoritesToggle?.classList.remove('active');
+    elements.favoritesToggle?.setAttribute('aria-expanded', 'false');
+  }
 }
 
 function startApp() {
