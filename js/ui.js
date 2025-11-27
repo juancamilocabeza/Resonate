@@ -317,7 +317,7 @@ function toggleFavorite(track) {
   saveFavorites();
   updateFavoriteButton();
   updateFavoritesList();
-  updatePlayButtonState();
+  updateFavoritesCount();
 }
 
 // FUNCIÓN: Agregar todas las pistas de un álbum a favoritos
@@ -354,6 +354,7 @@ function addAlbumToFavorites(albumId, files) {
     saveFavorites();
     updateFavoriteButton();
     updateFavoritesList();
+    updateFavoritesCount();
     updatePlayButtonState();
     showStatus(`Álbum agregado a favoritos (${addedCount} pistas)`, 'info');
   } else {
@@ -381,6 +382,7 @@ function removeAlbumFromFavorites(albumId) {
   saveFavorites();
   updateFavoriteButton();
   updateFavoritesList();
+  updateFavoritesCount();
   updatePlayButtonState();
 
   if (removedCount > 0) {
@@ -469,6 +471,7 @@ function formatTime(seconds) {
 function hideSearchResults() {
   elements.searchResults.classList.remove('active');
   state.searchActive = false;
+  hideFavoritesList();
 }
 
 function updateMediaPositionState() {
@@ -1270,6 +1273,9 @@ function updateFavoritesList() {
   // Actualizar estado del botón de reproducción
   updatePlayButtonState();
 
+  // Actualizar contador visual
+  updateFavoritesCount();
+
   if (state.favorites.length === 0) {
     favoritesList.innerHTML = '<div class="no-results" style="padding: 12px; text-align: center;">No hay favoritos</div>';
     return;
@@ -1391,15 +1397,7 @@ function toggleFavoritesList() {
     updateFavoritesList();
   } else {
     elements.favoritesList.classList.remove('active');
-    elements.favoritesToggle.classList.remove('active');
-  }
-}
-
-function updateFavoritesCount() {
-  const countElement = document.getElementById('favorites-count');
-  if (countElement) {
-    const count = state.favorites ? state.favorites.length : 0;
-    countElement.textContent = `(${count})`;
+  elements.favoritesToggle.classList.remove('active');
   }
 }
 

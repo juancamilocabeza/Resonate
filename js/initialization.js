@@ -14,7 +14,7 @@ async function initializeApp() {
   }
 
 
-  loadFavorites();
+  window.loadFavorites();
   // Preparar el CTA (se mostrará si hay favoritos precargados)
   //createStartFavoritesCTA();
   if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.setupLoadingSafety === 'function') {
