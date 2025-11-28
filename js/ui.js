@@ -43,6 +43,97 @@ const SEARCH_CONFIG = {
   enableLazyLoading: true
 };
 
+// Loader Manager - Centralized loader state management
+class LoaderManager {
+  constructor() {
+    this.activeLoaders = new Set();
+  }
+
+  /**
+   * Show loader on play button
+   * @param {string} context - Context identifier for tracking
+   */
+  showPlayButtonLoader(context = 'default') {
+    if (this.activeLoaders.has(`play-${context}`)) return;
+
+    this.activeLoaders.add(`play-${context}`);
+    elements.playBtn.disabled = true;
+    elements.playBtn.innerHTML = '<span class="loader" aria-label="Cargando" role="status"></span>';
+    state.isLoading = true;
+  }
+
+  /**
+   * Hide loader on play button
+   * @param {string} context - Context identifier for tracking
+   */
+  hidePlayButtonLoader(context = 'default') {
+    this.activeLoaders.delete(`play-${context}`);
+
+    // Only restore if no other loaders are active
+    if (this.activeLoaders.size === 0 || !this.activeLoaders.has('play-default')) {
+      elements.playBtn.disabled = false;
+      elements.playBtn.textContent = elements.audio.paused ? '▶' : '| |';
+      state.isLoading = false;
+    }
+  }
+
+  /**
+   * Show search loader
+   */
+  showSearchLoader() {
+    if (elements.searchLoader) {
+      elements.searchLoader.style.display = 'flex';
+      elements.searchLoader.setAttribute('aria-live', 'polite');
+      elements.searchLoader.setAttribute('aria-label', 'Buscando pistas...');
+    }
+  }
+
+  /**
+   * Hide search loader
+   */
+  hideSearchLoader() {
+    if (elements.searchLoader) {
+      elements.searchLoader.style.display = 'none';
+      elements.searchLoader.removeAttribute('aria-live');
+    }
+  }
+
+  /**
+   * Create a loading overlay for containers
+   * @param {HTMLElement} container - Container element
+   * @param {string} message - Loading message
+   * @returns {HTMLElement} - The loading element
+   */
+  createContainerLoader(container, message = 'Cargando...') {
+    const loaderEl = document.createElement('div');
+    loaderEl.className = 'container-loader';
+    loaderEl.innerHTML = `
+      <div class="loader-overlay">
+        <span class="loader" aria-label="${message}" role="status"></span>
+        <span class="loader-text">${message}</span>
+      </div>
+    `;
+
+    container.innerHTML = '';
+    container.appendChild(loaderEl);
+    return loaderEl;
+  }
+
+  /**
+   * Remove loading overlay from container
+   * @param {HTMLElement} container - Container element
+   */
+  removeContainerLoader(container) {
+    const loader = container.querySelector('.container-loader');
+    if (loader) {
+      loader.remove();
+    }
+  }
+}
+
+// Global loader manager instance
+const loaderManager = new LoaderManager();
+
 // Application state
 const state = {
   currentTrack: null,
@@ -513,8 +604,8 @@ function setupSearchOnEnter() {
         state.currentSearchQuery = elements.searchInput.value.trim();
         console.log('Search query:', state.currentSearchQuery);
         if (state.currentSearchQuery) {
-          // Show loader
-          if (elements.searchLoader) elements.searchLoader.style.display = 'block';
+          // Show search loader
+          loaderManager.showSearchLoader();
           elements.searchResults.classList.add('active');
           performOptimizedSearch(state.currentSearchQuery, 0).then(result => {
             displaySearchResults(result);
@@ -524,7 +615,7 @@ function setupSearchOnEnter() {
             console.error('Search error:', error);
             showStatus('Error en la búsqueda', 'error');
             // Hide loader on error
-            if (elements.searchLoader) elements.searchLoader.style.display = 'none';
+            loaderManager.hideSearchLoader();
           });
         } else {
           hideSearchResults();
@@ -564,7 +655,7 @@ function setupSearchFocusBehavior() {
       }
 
       // Otherwise, perform new search with current query
-      if (elements.searchLoader) elements.searchLoader.style.display = 'block';
+      loaderManager.showSearchLoader();
       elements.searchResults.classList.add('active');
       state.searchActive = true;
       performOptimizedSearch(currentQuery, 0).then(result => {
@@ -572,7 +663,7 @@ function setupSearchFocusBehavior() {
       }).catch(error => {
         console.error('Search error:', error);
         showStatus('Error en la búsqueda', 'error');
-        if (elements.searchLoader) elements.searchLoader.style.display = 'none';
+        loaderManager.hideSearchLoader();
       });
     }
   });
@@ -681,8 +772,8 @@ function hideSearchResults() {
 }
 
 function displaySearchResults(searchData, clearExisting = true) {
-  // Hide loader when results arrive
-  if (elements.searchLoader) elements.searchLoader.style.display = 'none';
+  // Hide search loader when results arrive
+  loaderManager.hideSearchLoader();
 
   if (!searchData) return;
   const { results, hasMore, total } = searchData;
@@ -1932,14 +2023,14 @@ function displaySearchHistory() {
         // Trigger search
         state.currentSearchPage = 0;
         state.currentSearchQuery = query;
-        if (elements.searchLoader) elements.searchLoader.style.display = 'block';
+        loaderManager.showSearchLoader();
         elements.searchResults.classList.add('active');
         performOptimizedSearch(query, 0).then(result => {
           displaySearchResults(result);
         }).catch(error => {
           console.error('Search error:', error);
           showStatus('Error en la búsqueda', 'error');
-          if (elements.searchLoader) elements.searchLoader.style.display = 'none';
+          loaderManager.hideSearchLoader();
         });
       }
     });

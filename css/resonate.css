@@ -149,9 +149,6 @@ header {
 }
 
 /* ===== OFFLINE MODE STYLES ===== */
-.offline-mode {
-  /* Subtle visual indicator for offline mode */
-}
 
 .offline-mode .app {
   border-left: 3px solid var(--error);

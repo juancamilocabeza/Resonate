@@ -162,7 +162,7 @@ async function loadAudioWithCache(track) {
     }
 
     // Load from network
-    elements.playBtn.innerHTML = '<span class="loader"></span>';
+    loaderManager.showPlayButtonLoader('network');
 
     const response = await fetchWithTimeout(track.url, { timeout: 15000 });
 
@@ -284,7 +284,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
   updateMediaSessionMetadata(track, identifier);
 
   showStatus(`Cargando: ${track.title}`, 'info', 0);
-  elements.playBtn.innerHTML = '<span class="loader"></span>';
+  loaderManager.showPlayButtonLoader('track');
 
   return new Promise((resolve, reject) => {
     const audio = elements.audio;
@@ -398,16 +398,11 @@ async function playNext() {
   await playNextInContext();
 }
 
-// Resume playback from saved state
 async function resumeSavedPlayback() {
   const savedState = state.savedPlaybackState;
   if (!savedState) return;
 
-  state.isLoading = true;
-  if (elements.playBtn) {
-    elements.playBtn.disabled = true;
-    elements.playBtn.innerHTML = '<span class="loader"></span>';
-  }
+  loaderManager.showPlayButtonLoader('resume');
 
   state.userInteracted = true;
 
@@ -443,11 +438,7 @@ async function resumeSavedPlayback() {
   } catch (error) {
     console.error('Error resuming saved playback:', error);
     showStatus(`Error al reanudar pista guardada: ${error.message}`, 'error');
-    state.isLoading = false;
-    if (elements.playBtn) {
-      elements.playBtn.disabled = false;
-      elements.playBtn.innerHTML = '▶';
-    }
+    loaderManager.hidePlayButtonLoader('resume');
     // Try force play as fallback
     forcePlay();
   }
@@ -587,9 +578,7 @@ function forcePlay() {
 async function playFromFavoritesQueue() {
   if (state.isLoading || state.favorites.length === 0) return;
 
-  state.isLoading = true;
-  elements.playBtn.disabled = true;
-  elements.playBtn.innerHTML = '<span class="loader"></span>';
+  loaderManager.showPlayButtonLoader('favorites');
 
   state.isPlayingFavorites = true;
 
@@ -1243,9 +1232,7 @@ function setupMediaSession() {
 async function playOptimizedFavorite(favoriteIndex = 0) {
   if (state.isLoading || state.favorites.length === 0) return;
 
-  state.isLoading = true;
-  elements.playBtn.disabled = true;
-  elements.playBtn.innerHTML = '<span class="loader"></span>';
+  loaderManager.showPlayButtonLoader('favorite');
 
   state.isPlayingFavorites = true;
 
@@ -1326,9 +1313,7 @@ async function playOptimizedFavorite(favoriteIndex = 0) {
 async function playSpecificTrack(track, albumId, trackIndex, totalTracks) {
   if (state.isLoading) return;
 
-  state.isLoading = true;
-  elements.playBtn.disabled = true;
-  elements.playBtn.innerHTML = '<span class="loader"></span>';
+  loaderManager.showPlayButtonLoader('specific');
 
   try {
     hideSearchResults();
@@ -1351,19 +1336,14 @@ async function playSpecificTrack(track, albumId, trackIndex, totalTracks) {
   } catch (error) {
     console.error('Error in playSpecificTrack:', error);
     showStatus(`Error: ${error.message}`, 'error');
-  } finally {
-    state.isLoading = false;
-    elements.playBtn.disabled = false;
-    elements.playBtn.textContent = '||';
+    loaderManager.hidePlayButtonLoader('specific');
   }
 }
 
 async function playRandomSearchResults() {
   if (state.isLoading || !state.searchResults || state.searchResults.length === 0) return;
 
-  state.isLoading = true;
-  elements.playBtn.disabled = true;
-  elements.playBtn.innerHTML = '<span class="loader"></span>';
+  loaderManager.showPlayButtonLoader('random');
 
   try {
     // Shuffle the search results
@@ -1398,10 +1378,7 @@ async function playRandomSearchResults() {
   } catch (error) {
     console.error('Error in playRandomSearchResults:', error);
     showStatus(`Error: ${error.message}`, 'error');
-  } finally {
-    state.isLoading = false;
-    elements.playBtn.disabled = false;
-    elements.playBtn.textContent = '||';
+    loaderManager.hidePlayButtonLoader('random');
   }
 }
 
