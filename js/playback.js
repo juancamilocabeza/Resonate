@@ -618,7 +618,20 @@ async function playFromFavoritesQueue() {
 
   } catch (error) {
     console.error('Error in playFromFavoritesQueue:', error);
-    showStatus(`Error: ${error.message}`, 'error');
+
+    // Handle offline/cache errors by trying next track
+    if (error.message.includes('Offline and audio not available in cache')) {
+      showStatus('Pista no disponible sin conexión, saltando...', 'error', 2000);
+      // Try next track in queue if available
+      if (state.playbackQueue.length > 0) {
+        setTimeout(() => playFromFavoritesQueue(), 2000);
+        return;
+      } else {
+        showStatus('No hay más pistas disponibles sin conexión', 'error', 3000);
+      }
+    } else {
+      showStatus(`Error: ${error.message}`, 'error');
+    }
   } finally {
     state.isLoading = false;
     elements.playBtn.disabled = false;

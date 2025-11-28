@@ -101,7 +101,7 @@ class AudioCache {
     this.cache = null;
     this.db = null;
     this.dbName = 'ResonateAudioCache';
-    this.dbVersion = 1;
+    this.dbVersion = 7;
     this.favoritesQueue = [];
     this.maxCacheSize = 500 * 1024 * 1024; // 500MB max cache size
     this.isInitialized = false;

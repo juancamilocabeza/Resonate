@@ -1227,7 +1227,7 @@ function createOfflineIndicator() {
   indicator.id = 'offline-indicator';
   indicator.className = 'offline-indicator hidden';
   indicator.innerHTML = `
-    <div class="offline-icon">📶</div>
+    <div class="offline-icon"></div>
     <div class="offline-text">Sin conexión</div>
   `;
 
@@ -1855,5 +1855,7 @@ window.hideStartFavoritesCTA = hideStartFavoritesCTA;
 window.registerServiceWorker = registerServiceWorker;
 window.setupPWAInstall = setupPWAInstall;
 window.displaySearchResults = displaySearchResults;
+window.hideSearchResults = hideSearchResults;
+window.hideFavoritesList = hideFavoritesList;
 window.state = state;
 window.elements = elements;

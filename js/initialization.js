@@ -224,23 +224,38 @@ async function initializeApp() {
   setupPWAInstall();
   setupOfflineFunctionality();
 
-  // Disable back button in PWA to prevent accidental closure
-  if (isRunningAsPWA()) {
-    // Prevent navigation on back button press
-    window.addEventListener('popstate', (e) => {
+  // Handle back button to hide search results and favorites list
+  window.addEventListener('popstate', (e) => {
+    // Check if search results or favorites are visible
+    const searchVisible = window.elements && window.elements.searchResults &&
+      window.elements.searchResults.classList.contains('active');
+    const favoritesVisible = window.favoritesToggleInstance &&
+      window.favoritesToggleInstance.isVisible;
+
+    if (searchVisible || favoritesVisible) {
+      // Hide them and prevent navigation
       e.preventDefault();
-      // Push a new state to prevent going back
+      if (searchVisible) window.hideSearchResults();
+      if (favoritesVisible) window.hideFavoritesList();
+      // Push state again to allow further backs if needed
+      window.history.pushState(null, '', window.location.href);
+    } else if (isRunningAsPWA()) {
+      // PWA behavior: prevent closing the app
+      e.preventDefault();
       window.history.pushState(null, '', window.location.href);
       showStatus('Presiona el botón de acción flotante para cerrar la aplicación', 'info', 3000);
-    });
+    }
+    // If not PWA and no elements visible, allow normal back navigation
+  });
 
-    // Initialize push state to catch back button attempts
-    window.history.pushState(null, '', window.location.href);
+  // Initialize push state to catch back button attempts
+  window.history.pushState(null, '', window.location.href);
 
-    // Additional safeguard: disable back button navigation entirely
+  // Additional safeguard for PWA: disable back button navigation entirely
+  if (isRunningAsPWA()) {
     let lastUrl = window.location.href;
     setInterval(() => {
-      if (window.location.href !== lastUrl && isRunningAsPWA()) {
+      if (window.location.href !== lastUrl) {
         // If URL changed and we're in PWA, prevent it
         window.location.href = lastUrl;
       }
