@@ -518,6 +518,8 @@ function setupSearchOnEnter() {
           elements.searchResults.classList.add('active');
           performOptimizedSearch(state.currentSearchQuery, 0).then(result => {
             displaySearchResults(result);
+            // Add to search history after successful search
+            addToSearchHistory(state.currentSearchQuery);
           }).catch(error => {
             console.error('Search error:', error);
             showStatus('Error en la búsqueda', 'error');
@@ -538,15 +540,40 @@ function setupSearchFocusBehavior() {
   elements.searchInput.addEventListener('focus', () => {
     if (isCleaning) return;
 
-    // Restore search results when refocusing if search term still matches
-    if (state.searchResults.length > 0 &&
-      elements.searchInput.value.trim() === state.currentSearchQuery &&
-      state.currentSearchQuery.length > 0) {
-      elements.searchResults.classList.add('active');
-      state.searchActive = true;
+    const currentQuery = elements.searchInput.value.trim();
 
+    // If input is empty, show search history
+    if (currentQuery === '') {
+      displaySearchHistory();
+      state.searchActive = true;
       // Auto-hide favorites when search is active
       hideFavoritesList();
+      return;
+    }
+
+    // If input has text, show results or perform search
+    if (currentQuery.length > 0) {
+      // Auto-hide favorites when search is active
+      hideFavoritesList();
+
+      // If we have matching results for this query, show them
+      if (state.searchResults.length > 0 && currentQuery === state.currentSearchQuery) {
+        elements.searchResults.classList.add('active');
+        state.searchActive = true;
+        return;
+      }
+
+      // Otherwise, perform new search with current query
+      if (elements.searchLoader) elements.searchLoader.style.display = 'block';
+      elements.searchResults.classList.add('active');
+      state.searchActive = true;
+      performOptimizedSearch(currentQuery, 0).then(result => {
+        displaySearchResults(result);
+      }).catch(error => {
+        console.error('Search error:', error);
+        showStatus('Error en la búsqueda', 'error');
+        if (elements.searchLoader) elements.searchLoader.style.display = 'none';
+      });
     }
   });
 
@@ -1841,6 +1868,125 @@ function isRunningAsPWA() {
          window.navigator.standalone === true;
 }
 
+// Search history management
+function loadSearchHistory() {
+  try {
+    const history = localStorage.getItem('resonate_search_history');
+    return history ? JSON.parse(history) : [];
+  } catch (e) {
+    window.logger?.warn(`Error loading search history: ${e.message}`, 'UI');
+    return [];
+  }
+}
+
+function saveSearchHistory(history) {
+  try {
+    localStorage.setItem('resonate_search_history', JSON.stringify(history));
+  } catch (e) {
+    window.logger?.warn(`Error saving search history: ${e.message}`, 'UI');
+  }
+}
+
+function addToSearchHistory(query) {
+  if (!query || !query.trim()) return;
+
+  const history = loadSearchHistory();
+  const trimmedQuery = query.trim();
+
+  // Remove if already exists (to move to front)
+  const filtered = history.filter(item => item !== trimmedQuery);
+
+  // Add to beginning, limit to 10 items
+  filtered.unshift(trimmedQuery);
+  const limited = filtered.slice(0, 10);
+
+  saveSearchHistory(limited);
+}
+
+function displaySearchHistory() {
+  const history = loadSearchHistory();
+
+  if (history.length === 0) {
+    elements.searchResultsList.innerHTML = '<div class="no-results">No hay búsquedas recientes</div>';
+    elements.searchResults.classList.add('active');
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+
+  history.forEach((query, index) => {
+    const historyItem = document.createElement('div');
+    historyItem.className = 'search-history-item';
+
+    historyItem.innerHTML = `
+      <div class="history-content">
+        <span class="history-query">${query}</span>
+        <button class="history-remove" data-index="${index}" title="Eliminar">✕</button>
+      </div>
+    `;
+
+    // Click on query to search
+    historyItem.addEventListener('click', (e) => {
+      if (!e.target.classList.contains('history-remove')) {
+        elements.searchInput.value = query;
+        // Trigger search
+        state.currentSearchPage = 0;
+        state.currentSearchQuery = query;
+        if (elements.searchLoader) elements.searchLoader.style.display = 'block';
+        elements.searchResults.classList.add('active');
+        performOptimizedSearch(query, 0).then(result => {
+          displaySearchResults(result);
+        }).catch(error => {
+          console.error('Search error:', error);
+          showStatus('Error en la búsqueda', 'error');
+          if (elements.searchLoader) elements.searchLoader.style.display = 'none';
+        });
+      }
+    });
+
+    fragment.appendChild(historyItem);
+  });
+
+  // Add clear all button
+  if (history.length > 0) {
+    const clearAllDiv = document.createElement('div');
+    clearAllDiv.className = 'search-history-clear';
+    clearAllDiv.innerHTML = '<button class="clear-history-btn">Limpiar historial</button>';
+    clearAllDiv.querySelector('.clear-history-btn').addEventListener('click', () => {
+      clearSearchHistory();
+      displaySearchHistory();
+    });
+    fragment.appendChild(clearAllDiv);
+  }
+
+  elements.searchResultsList.innerHTML = '';
+  elements.searchResultsList.appendChild(fragment);
+  elements.searchResults.classList.add('active');
+
+  // Add event listeners for remove buttons
+  document.querySelectorAll('.history-remove').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const index = parseInt(btn.dataset.index);
+      removeFromSearchHistory(index);
+      displaySearchHistory();
+    });
+  });
+}
+
+function clearSearchHistory() {
+  saveSearchHistory([]);
+  showStatus('Historial de búsqueda limpiado', 'info', 2000);
+}
+
+function removeFromSearchHistory(index) {
+  const history = loadSearchHistory();
+  if (index >= 0 && index < history.length) {
+    history.splice(index, 1);
+    saveSearchHistory(history);
+  }
+}
+
 // Expose critical functions globally for cross-module access
 window.loadFavorites = loadFavorites;
 window.saveFavorites = saveFavorites;
@@ -1857,5 +2003,11 @@ window.setupPWAInstall = setupPWAInstall;
 window.displaySearchResults = displaySearchResults;
 window.hideSearchResults = hideSearchResults;
 window.hideFavoritesList = hideFavoritesList;
+window.loadSearchHistory = loadSearchHistory;
+window.saveSearchHistory = saveSearchHistory;
+window.addToSearchHistory = addToSearchHistory;
+window.displaySearchHistory = displaySearchHistory;
+window.clearSearchHistory = clearSearchHistory;
+window.removeFromSearchHistory = removeFromSearchHistory;
 window.state = state;
 window.elements = elements;

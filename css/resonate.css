@@ -1711,3 +1711,99 @@ select:focus {
 .download-qr-btn:active {
   transform: translateY(0);
 }
+
+/* ===== SEARCH HISTORY ===== */
+.search-history-item {
+  padding: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background-color 0.2s;
+  gap: 8px;
+  overflow-x: hidden;
+}
+
+.search-history-item:last-child {
+  border-bottom: none;
+}
+
+.search-history-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.search-history-item:active {
+  background: #111;
+}
+
+.history-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.history-query {
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.history-remove {
+  background: transparent;
+  border: none;
+  color: var(--error);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  height: auto;
+  width: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+}
+
+.history-remove:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.history-remove:active {
+  background: rgba(239, 68, 68, 0.2);
+  transform: scale(0.95);
+}
+
+.search-history-clear {
+  padding: 12px;
+  text-align: center;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.clear-history-btn {
+  background: var(--btn);
+  border: none;
+  color: var(--accent);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.clear-history-btn:hover {
+  background: rgba(110, 231, 183, 0.1);
+}
+
+.clear-history-btn:active {
+  background: var(--card);
+  transform: scale(0.95);
+}
