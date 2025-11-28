@@ -229,23 +229,21 @@ async function initializeApp() {
     // Check if search results or favorites are visible
     const searchVisible = window.elements && window.elements.searchResults &&
       window.elements.searchResults.classList.contains('active');
-    const favoritesVisible = window.favoritesToggleInstance &&
-      window.favoritesToggleInstance.isVisible;
+    const favoritesVisible = window.elements && window.elements.favoritesList &&
+      window.elements.favoritesList.classList.contains('active');
 
     if (searchVisible || favoritesVisible) {
-      // Hide them and prevent navigation
-      e.preventDefault();
+      // Hide them and prevent navigation by pushing state back
       if (searchVisible) window.hideSearchResults();
       if (favoritesVisible) window.hideFavoritesList();
-      // Push state again to allow further backs if needed
+      // Push state again to stay on the page
       window.history.pushState(null, '', window.location.href);
     } else if (isRunningAsPWA()) {
       // PWA behavior: prevent closing the app
-      e.preventDefault();
       window.history.pushState(null, '', window.location.href);
       showStatus('Presiona el botón de acción flotante para cerrar la aplicación', 'info', 3000);
     }
-    // If not PWA and no elements visible, allow normal back navigation
+    // If not PWA and no elements visible, allow normal back navigation (don't push state)
   });
 
   // Initialize push state to catch back button attempts
