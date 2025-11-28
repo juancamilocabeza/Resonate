@@ -492,13 +492,101 @@ function isCompleteAlbumInFavorites(albumId, totalTracks) {
   return albumTracks.length === totalTracks;
 }
 
-// FUNCIÓN: Actualizar el estado de favorito en los resultados de búsqueda
+// ===== REFACTORIZACIÓN: FUNCIONES UNIFICADAS PARA BOTONES FAVORITOS =====
+
+// Función unificada para crear botones favoritos con comportamiento consistente
+function createFavoriteButton(isFavorite, context, itemType = 'track', itemId = null) {
+  const button = document.createElement('button');
+  button.className = `favorite-btn ${isFavorite ? 'active' : ''}`;
+  button.innerHTML = isFavorite ? '❤️' : '🩶';
+  button.title = isFavorite ? 'Quitar de favoritos' : 'Agregar a favoritos';
+  button.setAttribute('data-context', context);
+  button.setAttribute('data-type', itemType);
+
+  if (itemId) {
+    button.setAttribute('data-id', itemId);
+  }
+
+  // Event listener unificado
+  button.addEventListener('click', (e) => {
+    e.stopPropagation();
+    handleFavoriteToggle(button, context, itemType, itemId);
+  });
+
+  return button;
+}
+
+// Función centralizada para manejar la lógica de alternancia de favoritos
+async function handleFavoriteToggle(button, context, itemType, itemId) {
+  try {
+    const isCurrentlyFavorite = button.classList.contains('active');
+    let success = false;
+
+    if (context === 'search-result') {
+      // En resultados de búsqueda
+      if (itemType === 'album') {
+        if (isCurrentlyFavorite) {
+          removeAlbumFromFavorites(itemId);
+          success = true;
+        } else {
+          // Necesitamos obtener los archivos del álbum
+          const files = await fetchOptimizedPlayableFiles(itemId);
+          if (files.length > 0) {
+            addAlbumToFavorites(itemId, files);
+            success = true;
+          }
+        }
+      } else if (itemType === 'track') {
+        // Para pistas individuales en expansión de álbumes
+        const track = state.favorites.find(fav => fav.url === itemId) ||
+                      // Si no está en favoritos, buscar en el contexto actual
+                      (window.currentExpandedAlbum && window.currentExpandedAlbumTracks ?
+                       window.currentExpandedAlbumTracks.find(t => t.url === itemId) : null);
+
+        if (track) {
+          toggleFavorite(track);
+          success = true;
+        }
+      }
+    } else if (context === 'favorites-list') {
+      // En lista de favoritos - solo quitar
+      if (itemType === 'album') {
+        removeAlbumFromFavorites(itemId);
+        success = true;
+      }
+    } else if (context === 'player') {
+      // Botón principal del reproductor
+      if (state.currentTrack) {
+        toggleFavorite(state.currentTrack);
+        success = true;
+      }
+    }
+
+    if (success) {
+      // Actualizar UI
+      const newState = !isCurrentlyFavorite;
+      button.classList.toggle('active', newState);
+      button.innerHTML = newState ? '❤️' : '🩶';
+      button.title = newState ? 'Quitar de favoritos' : 'Agregar a favoritos';
+
+      // Actualizar otros elementos relacionados si es necesario
+      if (context === 'search-result') {
+        updateFavoriteButton();
+      }
+    }
+  } catch (error) {
+    console.error('Error toggling favorite:', error);
+    showStatus('Error al gestionar favorito', 'error');
+  }
+}
+
+// FUNCIÓN: Actualizar el estado de favorito en los resultados de búsqueda (legacy - mantener por compatibilidad)
 function updateSearchResultFavoriteState(albumId, isFavorite) {
   const resultElements = document.querySelectorAll('.search-result');
   resultElements.forEach(resultEl => {
     const resultInfo = resultEl.querySelector('.result-info');
     if (resultInfo && resultInfo.textContent.includes(albumId)) {
-      const favoriteBtn = resultEl.querySelector('.result-favorite');
+      const favoriteBtn = resultEl.querySelector('.favorite-btn');
       if (favoriteBtn) {
         favoriteBtn.classList.toggle('active', isFavorite);
         favoriteBtn.innerHTML = isFavorite ? '❤️' : '🩶';
@@ -893,8 +981,8 @@ async function loadAlbumInfoBackground(identifier, resultEl) {
       }
     }
 
-    // Actualizar el estado del botón de favorito
-    const favoriteBtn = resultEl.querySelector('.result-favorite');
+    // Actualizar el estado del botón de favorito usando la nueva función
+    const favoriteBtn = resultEl.querySelector('.favorite-btn');
     if (favoriteBtn) {
       const isFavorite = isAlbumInFavorites(identifier);
       favoriteBtn.classList.toggle('active', isFavorite);
@@ -944,34 +1032,7 @@ function createResultInfo(result) {
   return infoDiv;
 }
 
-function createResultButtons(result, hasFavoriteTrack) {
-  const buttonsContainer = document.createElement('div');
-  buttonsContainer.className = 'result-buttons';
 
-  // Play button
-  const playBtn = document.createElement('button');
-  playBtn.className = 'result-play-btn';
-  playBtn.title = 'Reproducir';
-  playBtn.innerHTML = '<span class="play-icon">▶</span>';
-
-  // Favorite button
-  const favoriteBtn = document.createElement('button');
-  favoriteBtn.className = `result-favorite ${hasFavoriteTrack ? 'active' : ''}`;
-  favoriteBtn.title = hasFavoriteTrack ? 'Quitar de favoritos' : 'Agregar a favoritos';
-  favoriteBtn.textContent = hasFavoriteTrack ? '❤️' : '🩶';
-
-  // Expand button
-  const expandBtn = document.createElement('button');
-  expandBtn.className = 'result-expand';
-  expandBtn.title = '▼';
-  expandBtn.innerHTML = '<span class="expand-icon">▼</span>';
-
-  buttonsContainer.appendChild(playBtn);
-  buttonsContainer.appendChild(favoriteBtn);
-  buttonsContainer.appendChild(expandBtn);
-
-  return { buttonsContainer, playBtn, favoriteBtn, expandBtn };
-}
 
 // Helper functions for creating favorites-style elements
 function createFavoriteInfo(result) {
@@ -1000,34 +1061,7 @@ function createFavoriteInfo(result) {
   return infoDiv;
 }
 
-function createFavoriteActions(result, hasFavoriteTrack) {
-  const actionsDiv = document.createElement('div');
-  actionsDiv.className = 'favorite-actions';
 
-  // Play button
-  const playBtn = document.createElement('button');
-  playBtn.className = '';
-  playBtn.title = 'Reproducir';
-  playBtn.textContent = '▶';
-
-  // Favorite button
-  const favoriteBtn = document.createElement('button');
-  favoriteBtn.className = ` ${hasFavoriteTrack ? 'active' : ''}`;
-  favoriteBtn.title = hasFavoriteTrack ? 'Quitar de favoritos' : 'Agregar a favoritos';
-  favoriteBtn.textContent = hasFavoriteTrack ? '❤️' : '🩶';
-
-  // Expand button (for albums)
-  const expandBtn = document.createElement('button');
-  expandBtn.className = ''; // Keep existing class for styling
-  expandBtn.title = 'Ver pistas del álbum';
-  expandBtn.textContent = '▼';
-
-  actionsDiv.appendChild(playBtn);
-  actionsDiv.appendChild(favoriteBtn);
-  actionsDiv.appendChild(expandBtn);
-
-  return { actionsDiv, playBtn, favoriteBtn, expandBtn };
-}
 
 function createSearchResultElement(result, globalIndex) {
   // Validate input
@@ -1040,10 +1074,30 @@ function createSearchResultElement(result, globalIndex) {
   resultEl.className = 'search-result favorite-item';
 
   const hasFavoriteTrack = isAlbumInFavorites(result.identifier);
+  const itemType = 'album'; // Search results are treated as albums (single tracks or multi-track albums)
+  const itemId = result.identifier;
 
   // Build structure using helper functions for favorites layout
   const infoDiv = createFavoriteInfo(result);
-  const { actionsDiv, playBtn, favoriteBtn, expandBtn } = createFavoriteActions(result, hasFavoriteTrack);
+  const actionsDiv = document.createElement('div');
+  actionsDiv.className = 'favorite-actions';
+
+  // Create buttons using unified functions
+  const playBtn = document.createElement('button');
+  playBtn.className = '';
+  playBtn.title = 'Reproducir';
+  playBtn.textContent = '▶';
+
+  const favoriteBtn = createFavoriteButton(hasFavoriteTrack, 'search-result', itemType, itemId);
+
+  const expandBtn = document.createElement('button');
+  expandBtn.className = '';
+  expandBtn.title = 'Ver pistas del álbum';
+  expandBtn.textContent = '▼';
+
+  actionsDiv.appendChild(playBtn);
+  actionsDiv.appendChild(favoriteBtn);
+  actionsDiv.appendChild(expandBtn);
 
   // Show expand button immediately for all results
   expandBtn.style.display = 'inline-block';
@@ -1063,45 +1117,10 @@ function createSearchResultElement(result, globalIndex) {
   });
 
   infoDiv.addEventListener('click', async (e) => {
-    if (e.target.closest('.result-buttons')) return;
+    if (e.target.closest('.favorite-actions')) return;
     const title = result.title || 'Sin título';
     showStatus(`Cargando: ${title}`, 'info', 0);
     await playOptimizedSearchResult(result, globalIndex, state.searchResults);
-  });
-
-  favoriteBtn.addEventListener('click', async (e) => {
-    e.stopPropagation();
-
-    try {
-      const files = await fetchOptimizedPlayableFiles(result.identifier);
-      if (files.length > 0) {
-        if (files.length > 1) {
-          // Album handling
-          if (hasFavoriteTrack) {
-            removeAlbumFromFavorites(result.identifier);
-            favoriteBtn.classList.remove('active');
-            favoriteBtn.textContent = '🩶';
-            favoriteBtn.title = 'Agregar a favoritos';
-          } else {
-            addAlbumToFavorites(result.identifier, files);
-            favoriteBtn.classList.add('active');
-            favoriteBtn.textContent = '❤️';
-            favoriteBtn.title = 'Quitar de favoritos';
-          }
-        } else {
-          // Single track handling
-          const track = files[0];
-          toggleFavorite(track);
-          const isNowFavorite = isTrackFavorite(track);
-          favoriteBtn.classList.toggle('active', isNowFavorite);
-          favoriteBtn.textContent = isNowFavorite ? '❤️' : '🩶';
-          favoriteBtn.title = isNowFavorite ? 'Quitar de favoritos' : 'Agregar a favoritos';
-        }
-      }
-    } catch (error) {
-      console.error('Error managing favorite:', error);
-      showStatus('Error al gestionar favorito', 'error');
-    }
   });
 
   expandBtn.addEventListener('click', (e) => {
@@ -1112,7 +1131,10 @@ function createSearchResultElement(result, globalIndex) {
       tracksContainer = document.createElement('div');
       tracksContainer.className = 'tracks-container';
       tracksContainer.style.display = 'none';
-      const parent = resultEl.parentNode;      if (parent) {        parent.insertBefore(tracksContainer, resultEl.nextSibling);      }
+      const parent = resultEl.parentNode;
+      if (parent) {
+        parent.insertBefore(tracksContainer, resultEl.nextSibling);
+      }
     }
 
     toggleAlbumTracks(result.identifier, tracksContainer, expandBtn);
@@ -1160,35 +1182,50 @@ function displayAlbumTracks(albumId, tracksContainer) {
         const isFavorite = isTrackFavorite(track);
         const trackNumber = track.trackNumber || index + 1;
 
-        trackItem.innerHTML = `
-          <div class="track-actions">
-            <span class="track-number">${trackNumber}</span>
-            <button class="track-play" data-url="${track.url}" data-title="${track.title}">▶</button>
-            <button class="track-favorite ${isFavorite ? 'active' : ''}">${isFavorite ? '❤️' : '🩶'}</button>
-          </div>
-          <div class="track-item-info">
-            <div class="track-title">${track.title || 'Sin título'}</div>
-            <div class="track-creator">${track.creator || 'Desconocido'}</div>
-          </div>
-        `;
+        // Crear elementos usando el sistema unificado
+        const trackActions = document.createElement('div');
+        trackActions.className = 'track-actions';
 
-        const playBtn = trackItem.querySelector('.track-play');
+        const trackNumberSpan = document.createElement('span');
+        trackNumberSpan.className = 'track-number';
+        trackNumberSpan.textContent = trackNumber;
+
+        const playBtn = document.createElement('button');
+        playBtn.className = 'track-play';
+        playBtn.textContent = '▶';
+        playBtn.title = 'Reproducir';
+
+        // Usar sistema unificado para botón de favorito
+        const favoriteBtn = createFavoriteButton(isFavorite, 'search-result', 'track', track.url);
+
+        trackActions.appendChild(trackNumberSpan);
+        trackActions.appendChild(playBtn);
+        trackActions.appendChild(favoriteBtn);
+
+        const trackInfo = document.createElement('div');
+        trackInfo.className = 'track-item-info';
+
+        const trackTitle = document.createElement('div');
+        trackTitle.className = 'track-title';
+        trackTitle.textContent = track.title || 'Sin título';
+
+        const trackCreator = document.createElement('div');
+        trackCreator.className = 'track-creator';
+        trackCreator.textContent = track.creator || 'Desconocido';
+
+        trackInfo.appendChild(trackTitle);
+        trackInfo.appendChild(trackCreator);
+
+        trackItem.appendChild(trackActions);
+        trackItem.appendChild(trackInfo);
+
+        // Event listeners
         playBtn.addEventListener('click', (e) => {
           e.stopPropagation(); // Evitar que el clic se propague al resultado principal
           playSpecificTrack(track, albumId, index, files.length);
         });
 
-        const favoriteBtn = trackItem.querySelector('.track-favorite');
-        favoriteBtn.addEventListener('click', (e) => {
-          e.stopPropagation(); // Evitar que el clic se propague al resultado principal
-          toggleFavorite(track);
-          const isNowFavorite = isTrackFavorite(track);
-          favoriteBtn.classList.toggle('active', isNowFavorite);
-          favoriteBtn.textContent = isNowFavorite ? '❤️' : '🩶';
-        });
-
         // Listener para la información de la pista (área de texto)
-        const trackInfo = trackItem.querySelector('.track-item-info');
         trackInfo.addEventListener('click', (e) => {
           e.stopPropagation(); // Evitar que el clic se propague al resultado principal
           playSpecificTrack(track, albumId, index, files.length);
@@ -1537,17 +1574,32 @@ function updateFavoritesList() {
       metaElement.innerHTML = `<span class="album-indicator">${albumData.tracks.length} pistas</span>`;
     }
 
-    // Usar createFavoriteActions para consistencia
-    const { actionsDiv, playBtn, favoriteBtn, expandBtn } = createFavoriteActions(mockResult, true);
+    // Crear actionsDiv usando funciones unificadas
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'favorite-actions';
 
-    // Configurar botones
+    // Crear botones usando funciones unificadas
+    const playBtn = document.createElement('button');
+    playBtn.className = '';
+    playBtn.title = 'Reproducir';
+    playBtn.textContent = '▶';
     playBtn.setAttribute('data-id', albumId);
     playBtn.setAttribute('data-is-album', isAlbum);
-    favoriteBtn.setAttribute('data-id', albumId);
+
+    const favoriteBtn = createFavoriteButton(true, 'favorites-list', 'album', albumId);
+
+    const expandBtn = document.createElement('button');
+    expandBtn.className = '';
+    expandBtn.title = 'Ver pistas del álbum';
+    expandBtn.textContent = '▼';
     expandBtn.setAttribute('data-id', albumId);
 
     // Mostrar botón de expandir solo para álbumes
     expandBtn.style.display = isAlbum ? 'inline-block' : 'none';
+
+    actionsDiv.appendChild(playBtn);
+    actionsDiv.appendChild(favoriteBtn);
+    actionsDiv.appendChild(expandBtn);
 
     albumItem.appendChild(infoDiv);
     albumItem.appendChild(actionsDiv);
@@ -1566,17 +1618,6 @@ function updateFavoritesList() {
           playFromFavoritesQueue();
         }
       }
-    });
-
-    favoriteBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const albumId = favoriteBtn.getAttribute('data-id');
-
-      state.favorites = state.favorites.filter(fav => fav.albumId !== albumId);
-      saveFavorites();
-      updateFavoritesList();
-      updateFavoriteButton();
-      showStatus('Eliminado de favoritos', 'info');
     });
 
     // Agregar funcionalidad de expandir pistas del álbum
