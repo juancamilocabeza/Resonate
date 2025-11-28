@@ -168,46 +168,21 @@ async function initializeApp() {
   }
 
   if (elements.favoriteBtn) {
-    elements.favoriteBtn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-
-      // Si no hay pista actual, intentar usar la primera de la cola de búsqueda o favoritos
-      if (!state.currentTrack) {
-        if (state.searchResults && state.searchResults.length > 0) {
-          // Usar el primer resultado de búsqueda
-          const firstResult = state.searchResults[0];
-          try {
-            const files = await fetchOptimizedPlayableFiles(firstResult.identifier);
-            if (files.length > 0) {
-              state.currentTrack = files[0];
-              updateFavoriteButton();
-              handleFavoriteToggle(elements.favoriteBtn, 'player');
-            }
-          } catch (error) {
-            window.logger.error(`Error fetching track for favorite: ${error.message}`, 'UI');
-            showStatus('Error al gestionar favorito', 'error');
-          }
-        } else {
-          showStatus('Realiza una búsqueda para comenzar', 'info');
-        }
-        return;
-      }
-
-      // Si la pista actual no tiene URL, intentar obtenerla
-      if (!state.currentTrack.url && state.currentTrack.id) {
+    elements.favoriteBtn.addEventListener('click', async () => {
+      if (state.currentTrack && !state.currentTrack.url && state.currentTrack.id) {
         try {
           const files = await fetchOptimizedPlayableFiles(state.currentTrack.id);
           if (files.length > 0) {
             state.currentTrack.url = files[0].url;
+            toggleFavorite(state.currentTrack);
           }
         } catch (error) {
           window.logger.error(`Error fetching URL for favorite: ${error.message}`, 'UI');
-          showStatus('Error al gestionar favorito', 'error');
-          return;
+          showStatus('Error al agregar favorito', 'error');
         }
+      } else {
+        toggleFavorite(state.currentTrack);
       }
-
-      handleFavoriteToggle(elements.favoriteBtn, 'player');
     });
   }
 
