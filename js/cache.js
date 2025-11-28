@@ -94,50 +94,181 @@ setInterval(() => {
   enhancedCache.cleanup();
 }, 5 * 60 * 1000);
 
-// Basic Audio Cache Stub
-// Provides minimal audioCache implementation for compatibility
+// Enhanced Audio Cache using Cache API and IndexedDB
+// Provides real offline caching for audio files
 class AudioCache {
   constructor() {
-    this.cache = new Map();
+    this.cache = null;
+    this.db = null;
+    this.dbName = 'ResonateAudioCache';
+    this.dbVersion = 1;
     this.favoritesQueue = [];
+    this.maxCacheSize = 500 * 1024 * 1024; // 500MB max cache size
+    this.isInitialized = false;
   }
 
   async init() {
-    // No-op for basic implementation
-    return Promise.resolve();
+    try {
+      // Initialize Cache API for audio files
+      this.cache = await caches.open('audio-cache-v1');
+
+      // Initialize IndexedDB for metadata
+      await this.initIndexedDB();
+
+      this.isInitialized = true;
+      window.logger?.info('Audio cache initialized successfully', 'CACHE');
+    } catch (error) {
+      window.logger?.error(`Failed to initialize audio cache: ${error.message}`, 'CACHE');
+      throw error;
+    }
+  }
+
+  async initIndexedDB() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(this.dbName, this.dbVersion);
+
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        this.db = request.result;
+        resolve();
+      };
+
+      request.onupgradeneeded = (event) => {
+        const db = event.target.result;
+        if (!db.objectStoreNames.contains('audioMetadata')) {
+          const store = db.createObjectStore('audioMetadata', { keyPath: 'url' });
+          store.createIndex('lastAccessed', 'lastAccessed', { unique: false });
+          store.createIndex('size', 'size', { unique: false });
+        }
+      };
+    });
   }
 
   async get(url) {
-    return this.cache.get(url) || null;
+    if (!this.isInitialized) await this.init();
+
+    try {
+      // Try Cache API first
+      const cachedResponse = await this.cache.match(url);
+      if (cachedResponse) {
+        // Update access time in IndexedDB
+        await this.updateMetadata(url, { lastAccessed: Date.now() });
+        // Convert Response to blob for playback compatibility
+        const blob = await cachedResponse.blob();
+        return { blob, fromCache: true };
+      }
+
+      // Fallback to fetch if not cached
+      const response = await fetch(url);
+      if (response.ok) {
+        // Cache in background for future use
+        this.put(url, response.clone());
+        // Return blob for immediate playback
+        const blob = await response.blob();
+        return { blob, fromCache: false };
+      }
+      return null;
+    } catch (error) {
+      window.logger?.warn(`Failed to get cached audio: ${error.message}`, 'CACHE');
+      return null;
+    }
   }
 
   async put(url, data, isFavorite = false) {
-    this.cache.set(url, data);
-    return Promise.resolve();
+    if (!this.isInitialized) await this.init();
+
+    try {
+      // Store in Cache API
+      await this.cache.put(url, data.clone());
+
+      // Store metadata in IndexedDB
+      const size = await this.getResponseSize(data);
+      await this.storeMetadata(url, {
+        url,
+        size,
+        lastAccessed: Date.now(),
+        isFavorite,
+        cachedAt: Date.now()
+      });
+
+      // Clean up if cache is too large
+      await this.enforceCacheSize();
+
+      window.logger?.debug(`Cached audio file: ${url} (${this.formatBytes(size)})`, 'CACHE');
+    } catch (error) {
+      window.logger?.warn(`Failed to cache audio: ${error.message}`, 'CACHE');
+    }
   }
 
   async remove(url) {
-    this.cache.delete(url);
-    return Promise.resolve();
+    if (!this.isInitialized) await this.init();
+
+    try {
+      await this.cache.delete(url);
+      await this.deleteMetadata(url);
+      this.removeFromFavoritesQueue(url);
+      window.logger?.info(`Removed from cache: ${url}`, 'CACHE');
+    } catch (error) {
+      window.logger?.warn(`Failed to remove from cache: ${error.message}`, 'CACHE');
+    }
   }
 
   async prefetchAudio(url, priority = false) {
-    // No-op for basic implementation
-    return Promise.resolve();
+    if (!this.isInitialized) await this.init();
+
+    try {
+      const existing = await this.cache.match(url);
+      if (existing) {
+        window.logger?.debug(`Audio already cached: ${url}`, 'CACHE');
+        return; // Already cached
+      }
+
+      window.logger?.info(`Pre-fetching audio: ${url}`, 'CACHE');
+      const response = await fetch(url);
+      if (response.ok) {
+        await this.put(url, response, priority);
+      }
+    } catch (error) {
+      window.logger?.warn(`Failed to prefetch audio: ${error.message}`, 'CACHE');
+    }
   }
 
   async preloadFavorites(favorites) {
-    // No-op for basic implementation
-    return Promise.resolve();
+    if (!this.isInitialized) await this.init();
+    if (!favorites || favorites.length === 0) return;
+
+    window.logger?.info(`Preloading ${favorites.length} favorites for offline playback`, 'CACHE');
+
+    // Load favorites queue
+    this.favoritesQueue = favorites.map(f => f.url);
+
+    // Prefetch favorites in background
+    const prefetchPromises = favorites.map(favorite =>
+      this.prefetchAudio(favorite.url, true).catch(error => {
+        window.logger?.warn(`Failed to preload favorite: ${favorite.title} - ${error.message}`, 'CACHE');
+      })
+    );
+
+    // Wait for all to complete (with timeout)
+    await Promise.allSettled(prefetchPromises);
+    window.logger?.info('Favorites preload completed', 'CACHE');
   }
 
   async preloadTracks(tracks, priority = false) {
-    // No-op for basic implementation
-    return Promise.resolve();
+    if (!this.isInitialized) await this.init();
+    if (!tracks || tracks.length === 0) return;
+
+    const prefetchPromises = tracks.map(track =>
+      this.prefetchAudio(track.url, priority).catch(error => {
+        window.logger?.warn(`Failed to preload track: ${track.title}`, 'CACHE');
+      })
+    );
+
+    await Promise.allSettled(prefetchPromises);
   }
 
   getFavoritesQueue() {
-    return this.favoritesQueue;
+    return [...this.favoritesQueue];
   }
 
   loadFavoritesQueue(favorites, priority = false) {
@@ -152,31 +283,159 @@ class AudioCache {
   }
 
   replaceFavoritesQueueItem(oldUrl, newUrl, favorites) {
-    if (newUrl) {
-      const index = this.favoritesQueue.indexOf(oldUrl);
-      if (index > -1) {
+    const index = this.favoritesQueue.indexOf(oldUrl);
+    if (index > -1) {
+      if (newUrl) {
         this.favoritesQueue[index] = newUrl;
+      } else {
+        this.favoritesQueue.splice(index, 1);
       }
-    } else {
-      this.removeFromFavoritesQueue(oldUrl);
     }
   }
 
   async markAsFullyListened(url) {
-    // No-op for basic implementation
-    return Promise.resolve();
+    // Could be used for cache management strategies
+    await this.updateMetadata(url, { fullyListened: true });
   }
 
   async getUsageStats() {
-    return {
-      usagePercentage: 0,
-      totalSize: 0,
-      availableSpace: 100 * 1024 * 1024 // 100MB dummy
-    };
+    if (!this.isInitialized) await this.init();
+
+    try {
+      const metadata = await this.getAllMetadata();
+      const totalSize = metadata.reduce((sum, item) => sum + (item.size || 0), 0);
+      const usagePercentage = (totalSize / this.maxCacheSize) * 100;
+
+      return {
+        usagePercentage: Math.min(usagePercentage, 100),
+        totalSize,
+        availableSpace: Math.max(0, this.maxCacheSize - totalSize),
+        itemCount: metadata.length
+      };
+    } catch (error) {
+      window.logger?.warn(`Failed to get usage stats: ${error.message}`, 'CACHE');
+      return {
+        usagePercentage: 0,
+        totalSize: 0,
+        availableSpace: this.maxCacheSize,
+        itemCount: 0
+      };
+    }
   }
 
   setupLoadingSafety() {
-    // No-op for basic implementation
+    // Setup safety mechanisms for loading operations
+    state.lastFetchController = new AbortController();
+    state.loadingWatchdogId = setTimeout(() => {
+      if (state.lastFetchController) {
+        state.lastFetchController.abort();
+        window.logger?.warn('Loading operation timed out, aborting', 'CACHE');
+      }
+    }, 30000); // 30 second timeout
+  }
+
+  // Helper methods
+  async getResponseSize(response) {
+    const contentLength = response.headers.get('content-length');
+    if (contentLength) {
+      return parseInt(contentLength, 10);
+    }
+
+    // Fallback: clone and measure
+    const clone = response.clone();
+    const buffer = await clone.arrayBuffer();
+    return buffer.byteLength;
+  }
+
+  async storeMetadata(url, metadata) {
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction(['audioMetadata'], 'readwrite');
+      const store = transaction.objectStore('audioMetadata');
+      const request = store.put(metadata);
+
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async getMetadata(url) {
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction(['audioMetadata'], 'readonly');
+      const store = transaction.objectStore('audioMetadata');
+      const request = store.get(url);
+
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async updateMetadata(url, updates) {
+    try {
+      const existing = await this.getMetadata(url);
+      if (existing) {
+        const updated = { ...existing, ...updates };
+        await this.storeMetadata(url, updated);
+      }
+    } catch (error) {
+      // Silently fail for metadata updates
+    }
+  }
+
+  async deleteMetadata(url) {
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction(['audioMetadata'], 'readwrite');
+      const store = transaction.objectStore('audioMetadata');
+      const request = store.delete(url);
+
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async getAllMetadata() {
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction(['audioMetadata'], 'readonly');
+      const store = transaction.objectStore('audioMetadata');
+      const request = store.getAll();
+
+      request.onsuccess = () => resolve(request.result || []);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async enforceCacheSize() {
+    try {
+      const metadata = await this.getAllMetadata();
+      const totalSize = metadata.reduce((sum, item) => sum + (item.size || 0), 0);
+
+      if (totalSize > this.maxCacheSize) {
+        // Sort by last accessed (oldest first), but keep favorites
+        const sortedItems = metadata
+          .filter(item => !item.isFavorite) // Don't delete favorites automatically
+          .sort((a, b) => (a.lastAccessed || 0) - (b.lastAccessed || 0));
+
+        let freedSpace = 0;
+        const targetSize = totalSize - this.maxCacheSize + (50 * 1024 * 1024); // Leave 50MB buffer
+
+        for (const item of sortedItems) {
+          if (freedSpace >= targetSize) break;
+
+          await this.remove(item.url);
+          freedSpace += item.size || 0;
+          window.logger?.info(`Removed old cached item to free space: ${item.url}`, 'CACHE');
+        }
+      }
+    } catch (error) {
+      window.logger?.warn(`Failed to enforce cache size: ${error.message}`, 'CACHE');
+    }
+  }
+
+  formatBytes(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   }
 }
 

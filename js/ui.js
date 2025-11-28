@@ -1188,23 +1188,116 @@ function setupPageVisibilityHandling() {
   window.addEventListener('pagehide', savePlaybackState);
 }
 
-// Offlunctionality setup
+// Offline functionality setup
 function setupOfflineFunctionality() {
+  // Create offline indicator element
+  createOfflineIndicator();
+
   // Detectar cambios de conectividad
   window.addEventListener('online', () => {
     showStatus('Conexión restaurada', 'info', 2000);
     state.networkOnline = true;
+    updateOfflineIndicator();
+    // Try to sync cached data when back online
+    syncOfflineData();
   });
 
   window.addEventListener('offline', () => {
-    showStatus('Modo offline activado', 'info', 3000);
+    showStatus('Modo offline activado - Reproduciendo desde caché local', 'info', 4000);
     state.networkOnline = false;
+    updateOfflineIndicator();
 
     // Intentar reproducir desde caché si hay una pista actual
     if (state.currentTrack && elements.audio.src) {
       showStatus('Reproduciendo desde caché', 'info', 2000);
     }
+
+    // Show offline-specific UI hints
+    showOfflineHints();
   });
+
+  // Initial check
+  state.networkOnline = navigator.onLine;
+  updateOfflineIndicator();
+}
+
+// Create offline indicator in the UI
+function createOfflineIndicator() {
+  const indicator = document.createElement('div');
+  indicator.id = 'offline-indicator';
+  indicator.className = 'offline-indicator hidden';
+  indicator.innerHTML = `
+    <div class="offline-icon">📶</div>
+    <div class="offline-text">Sin conexión</div>
+  `;
+
+  // Add to header or main container
+  const header = document.querySelector('header');
+  if (header) {
+    header.appendChild(indicator);
+  } else {
+    document.body.insertBefore(indicator, document.body.firstChild);
+  }
+}
+
+// Update offline indicator visibility and state
+function updateOfflineIndicator() {
+  const indicator = document.getElementById('offline-indicator');
+  if (!indicator) return;
+
+  if (!state.networkOnline) {
+    indicator.classList.remove('hidden');
+    indicator.classList.add('active');
+    indicator.querySelector('.offline-text').textContent = 'Sin conexión';
+
+    // Add offline class to body for styling
+    document.body.classList.add('offline-mode');
+  } else {
+    indicator.classList.remove('active');
+    indicator.classList.add('hidden');
+
+    // Remove offline class from body
+    document.body.classList.remove('offline-mode');
+  }
+}
+
+// Show offline-specific hints and information
+function showOfflineHints() {
+  const favoritesCount = state.favorites ? state.favorites.length : 0;
+
+  if (favoritesCount > 0) {
+    showStatus(`${favoritesCount} favoritos disponibles offline`, 'info', 5000);
+  } else {
+    showStatus('Sin conexión - Agrega favoritos para escuchar offline', 'warning', 6000);
+  }
+
+  // Check cache status
+  if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.getUsageStats === 'function') {
+    audioCache.getUsageStats().then(stats => {
+      if (stats.itemCount > 0) {
+        showStatus(`${stats.itemCount} pistas en caché (${audioCache.formatBytes ? audioCache.formatBytes(stats.totalSize) : stats.totalSize + ' bytes'})`, 'info', 4000);
+      }
+    }).catch(error => {
+      console.warn('Failed to get cache stats:', error);
+    });
+  }
+}
+
+// Sync data when back online
+async function syncOfflineData() {
+  try {
+    // Preload any pending favorites that weren't cached while offline
+    if (state.favorites && state.favorites.length > 0) {
+      if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.preloadFavorites === 'function') {
+        await audioCache.preloadFavorites(state.favorites);
+        showStatus('Sincronizando caché offline...', 'info', 2000);
+      }
+    }
+
+    // Could add other sync operations here (analytics, etc.)
+  } catch (error) {
+    window.logger?.warn(`Failed to sync offline data: ${error.message}`, 'SYNC');
+  }
 }
 
 // Save current playback state to localStorage

@@ -110,8 +110,22 @@
     </div>
   </footer>
   
+  <!-- Offline Fallback Page -->
+  <div id="offline-fallback" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; color: #fff; z-index: 9999; justify-content: center; align-items: center; flex-direction: column; font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;">
+    <div style="text-align: center; padding: 20px;">
+      <div style="font-size: 48px; margin-bottom: 20px;">📶</div>
+      <h1 style="color: #c4c4dd; margin-bottom: 10px;">Sin conexión a internet</h1>
+      <p style="color: #94a3b8; margin-bottom: 20px; max-width: 400px; margin-left: auto; margin-right: auto;">
+        Resonate funciona sin conexión cuando tienes pistas guardadas en favoritos. Conecta a internet para buscar nueva música.
+      </p>
+      <button onclick="window.location.reload()" style="background: #c4c4dd; color: #000; border: none; padding: 12px 24px; border-radius: 8px; font-size: 16px; cursor: pointer;">
+        Reintentar conexión
+      </button>
+    </div>
+  </div>
+
   <div id="status-messages"></div>
-  
+
   <audio id="audio" preload="metadata"></audio>
   
   <!-- Logger JS -->
@@ -129,8 +143,59 @@
   <!-- UI JS -->
   <script src="js/ui.js"></script>
 
+  <!-- Offline Fix JS -->
+  <script src="js/offline-fix.js"></script>
+
   <!-- Initialization JS -->
   <script src="js/initialization.js"></script>
+
+  <!-- Offline Detection Script -->
+  <script>
+    // Simple offline detection for fallback page
+    window.addEventListener('load', function() {
+      // Check if we're offline and no favorites are available
+      if (!navigator.onLine) {
+        // Small delay to allow initialization to potentially load favorites
+        setTimeout(function() {
+          const favoritesCount = localStorage.getItem('resonate_favorites');
+          let hasFavorites = false;
+
+          try {
+            if (favoritesCount) {
+              const favorites = JSON.parse(favoritesCount);
+              hasFavorites = favorites && favorites.length > 0;
+            }
+          } catch (e) {
+            hasFavorites = false;
+          }
+
+          // Show offline fallback if no favorites and offline
+          if (!hasFavorites) {
+            const fallback = document.getElementById('offline-fallback');
+            const app = document.getElementById('app');
+
+            if (fallback && app) {
+              app.style.display = 'none';
+              fallback.style.display = 'flex';
+              document.body.style.overflow = 'hidden';
+            }
+          }
+        }, 2000); // Wait 2 seconds for app initialization
+      }
+
+      // Listen for online/offline events to hide/show fallback
+      window.addEventListener('online', function() {
+        const fallback = document.getElementById('offline-fallback');
+        const app = document.getElementById('app');
+
+        if (fallback && app) {
+          fallback.style.display = 'none';
+          app.style.display = 'block';
+          document.body.style.overflow = 'auto';
+        }
+      });
+    });
+  </script>
 
   <!-- Donation Tooltip Functionality -->
   <script>

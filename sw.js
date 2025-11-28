@@ -55,38 +55,39 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Estrategia de actualización: Network First, luego Cache
+// Estrategia de actualización: Network First, luego Cache con mejor manejo offline
 self.addEventListener('fetch', (event) => {
+  // Skip non-GET requests and certain destinations
+  if (event.request.method !== 'GET' ||
+      event.request.url.includes('chrome-extension') ||
+      event.request.url.includes('moz-extension')) {
+    return;
+  }
+
   event.respondWith(
     (async () => {
+      const url = new URL(event.request.url);
+      const isArchiveOrg = url.hostname === 'archive.org';
+      const isAudioRequest = event.request.destination === 'audio' ||
+                           (isArchiveOrg && (url.pathname.toLowerCase().endsWith('.ogg') ||
+                                           url.pathname.toLowerCase().endsWith('.mp3')));
+      const isMetadataRequest = isArchiveOrg && (url.pathname.includes('/metadata/') ||
+                                                url.pathname.includes('/services/img/'));
+
       try {
+        // Try network first
         const networkResponse = await fetch(event.request);
 
-        // Validar que la respuesta sea válida
+        // Validate response
         if (!networkResponse || !networkResponse.ok || networkResponse.type === 'error') {
-          const cachedResponse = await caches.match(event.request);
-          if (cachedResponse) {
-            return cachedResponse;
-          }
-          // Si no hay cache y respuesta inválida, retornar error
-          return new Response('Network error', {
-            status: 408,
-            statusText: 'Request Timeout',
-            headers: { 'Content-Type': 'text/plain' }
-          });
+          console.warn('Invalid network response for:', event.request.url);
+          throw new Error('Invalid network response');
         }
 
-        // Cache exitoso si es audio o metadatos (solo .ogg y .mp3 para audio)
-        const url = new URL(event.request.url);
-        if (url.hostname === 'archive.org' && (
-          (event.request.destination === 'audio' && (url.pathname.toLowerCase().endsWith('.ogg') || url.pathname.toLowerCase().endsWith('.mp3'))) ||
-          url.pathname.includes('/metadata/') ||
-          url.pathname.includes('/services/img/') ||
-          (url.pathname.includes('/download/') && url.pathname.toLowerCase().endsWith('.ogg'))
-        )) {
-          // Clonar la respuesta ANTES de retornarla para evitar que el body sea consumido
+        // Cache successful responses for audio and metadata
+        if (isAudioRequest || isMetadataRequest) {
           const responseClone = networkResponse.clone();
-          // Cache en segundo plano para no bloquear
+          // Cache in background
           caches.open(CACHE_NAME).then((cache) => {
             return cache.put(event.request, responseClone);
           }).catch((err) => {
@@ -97,15 +98,47 @@ self.addEventListener('fetch', (event) => {
         return networkResponse;
       } catch (error) {
         console.warn('Network fetch failed for:', event.request.url, error);
-        // Intentar desde caché
-        const cachedResponse = await caches.match(event.request);
-        if (cachedResponse) {
-          return cachedResponse;
+
+        // Try cache fallback
+        try {
+          const cachedResponse = await caches.match(event.request);
+          if (cachedResponse) {
+            console.log('Serving from cache:', event.request.url);
+            return cachedResponse;
+          }
+        } catch (cacheError) {
+          console.warn('Cache lookup failed:', cacheError);
         }
-        // Si no hay cache disponible
-        return new Response('Network unavailable and not in cache', {
+
+        // Provide meaningful offline fallbacks
+        if (isAudioRequest) {
+          return new Response('Audio not available offline. Please check your connection and try again.', {
+            status: 503,
+            statusText: 'Service Unavailable - Offline',
+            headers: { 'Content-Type': 'text/plain' }
+          });
+        } else if (isMetadataRequest) {
+          // Return cached metadata if available, otherwise generic offline message
+          return new Response(JSON.stringify({
+            error: 'offline',
+            message: 'Metadata not available offline'
+          }), {
+            status: 503,
+            statusText: 'Service Unavailable - Offline',
+            headers: { 'Content-Type': 'application/json' }
+          });
+        } else if (event.request.destination === 'document') {
+          // For main app requests, try to serve app shell from cache
+          const cachedApp = await caches.match('/');
+          if (cachedApp) {
+            return cachedApp;
+          }
+        }
+
+        // Generic offline response
+        return new Response('Content not available offline. Please check your internet connection.', {
           status: 503,
-          statusText: 'Service Unavailable',
+          statusText: 'Service Unavailable - Offline',
           headers: { 'Content-Type': 'text/plain' }
         });
       }

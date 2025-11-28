@@ -17,8 +17,18 @@ async function initializeApp() {
   window.loadFavorites();
   // Preparar el CTA (se mostrará si hay favoritos precargados)
   //createStartFavoritesCTA();
-  if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.setupLoadingSafety === 'function') {
-    audioCache.setupLoadingSafety();
+  // setupLoadingSafety() is called only when actual loading operations are in progress
+
+  // Pre-cargar favoritos para reproducción offline
+  if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.preloadFavorites === 'function') {
+    setTimeout(async () => {
+      try {
+        await audioCache.preloadFavorites(state.favorites);
+        window.logger?.info('Favorites preloaded for offline playback', 'CACHE');
+      } catch (error) {
+        window.logger?.warn(`Failed to preload favorites: ${error.message}`, 'CACHE');
+      }
+    }, 1000); // Delay to avoid blocking initial load
   }
 
   // Inicializar el componente FavoritesToggle
