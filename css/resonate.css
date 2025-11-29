@@ -209,13 +209,11 @@ h3 {
 }
 
 .art {
-  width: 100%;
-  height: 180px;
-  margin: 40px 0 20px 0;
+  width: 70%;
+  height: 70%;
+  margin-bottom: 15px;
   border-radius: 12px;
   overflow: hidden;
-  /*background: var(--card);*/
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -785,6 +783,12 @@ select:focus {
   border-left: 3px solid var(--accent);
 }
 
+.favorite-info {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  width: 100%;
+}
 
 .favorite-title {
   font-weight: 600;
@@ -1453,7 +1457,6 @@ select:focus {
 
 .search-container {
   flex-shrink: 0;
-  margin-bottom: 16px;
 }
 
 .search-results {

@@ -209,30 +209,7 @@ function preloadNextTrack() {
   }
 }
 
-async function setArtwork(track, identifier) {
-  elements.art.innerHTML = '';
 
-  if (!track || !track.id) {
-    elements.art.innerHTML = '<span class="hint">Sin portada</span>';
-    return;
-  }
-
-  const img = new Image();
-  img.alt = 'Portada del álbum';
-
-  const archiveCoverUrl = `https://archive.org/services/img/${identifier}`;
-
-  img.onload = () => {
-    elements.art.appendChild(img);
-  };
-
-  img.onerror = () => {
-    // No genre-specific artwork generation: just show placeholder
-    elements.art.innerHTML = '<span class="hint">Sin portada</span>';
-  };
-
-  img.src = archiveCoverUrl;
-}
 
 // Play audio track with UI updates and state management
 async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalTracks = 1) {

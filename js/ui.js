@@ -543,11 +543,33 @@ function setArtwork(track, identifier) {
   elements.art.innerHTML = '';
 
   // Create artwork element
-  const artworkEl = document.createElement('span');
-  artworkEl.className = 'creator';
-  artworkEl.textContent = 'Portadas desactivadas para optimizar el consumo de energía';
+  const img = new Image();
+  img.alt = 'Portada del álbum';
+  img.style.width = '100%';
+  img.style.height = '100%';
+  img.style.objectFit = 'cover';
+  img.style.borderRadius = '12px';
 
-  elements.art.appendChild(artworkEl);
+  const archiveCoverUrl = `https://archive.org/services/img/${identifier}`;
+
+  // Create load handler function
+  const handleLoad = () => {
+    elements.art.appendChild(img);
+  };
+
+  // Configure event listeners BEFORE setting src
+  img.onload = handleLoad;
+  img.onerror = () => {
+    // Let the image fail naturally - no fallback
+  };
+
+  // Set src AFTER configuring event listeners
+  img.src = archiveCoverUrl;
+
+  // Handle case where image is already complete (cached)
+  if (img.complete && img.naturalHeight !== 0) {
+    handleLoad();
+  }
 }
 
 function formatTime(seconds) {
@@ -1041,6 +1063,32 @@ function createSearchResultElement(result, globalIndex) {
 
   const hasFavoriteTrack = isAlbumInFavorites(result.identifier);
 
+  // Create cover container
+  const coverContainer = document.createElement('div');
+  coverContainer.className = 'result-cover';
+
+  // Load cover image
+  const img = new Image();
+  img.alt = 'Portada del álbum';
+  img.style.width = '100%';
+  img.style.height = '100%';
+  img.style.objectFit = 'cover';
+  img.style.borderRadius = '6px';
+
+  const archiveCoverUrl = `https://archive.org/services/img/${result.identifier}`;
+
+  // Configure event listeners BEFORE setting src
+  img.onload = () => {
+    coverContainer.appendChild(img);
+  };
+
+  img.onerror = () => {
+    // Let the image fail naturally - no fallback
+  };
+
+  // Set src AFTER configuring event listeners
+  img.src = archiveCoverUrl;
+
   // Build structure using helper functions for favorites layout
   const infoDiv = createFavoriteInfo(result);
   const { actionsDiv, playBtn, favoriteBtn, expandBtn } = createFavoriteActions(result, hasFavoriteTrack);
@@ -1048,6 +1096,8 @@ function createSearchResultElement(result, globalIndex) {
   // Show expand button immediately for all results
   expandBtn.style.display = 'inline-block';
 
+  // Add cover to the left, then info and actions
+  resultEl.appendChild(coverContainer);
   resultEl.appendChild(infoDiv);
   resultEl.appendChild(actionsDiv);
 
@@ -1535,6 +1585,46 @@ function updateFavoritesList() {
       albumItem.classList.add('now-playing');
     }
 
+    // Create cover container
+    const coverContainer = document.createElement('div');
+    coverContainer.className = 'result-cover';
+
+    // Load cover image with lazy loading
+    const img = new Image();
+    img.alt = 'Portada del álbum';
+    img.style.width = '100%';
+    img.style.height = '100%';
+    img.style.objectFit = 'cover';
+    img.style.borderRadius = '6px';
+
+    const archiveCoverUrl = `https://archive.org/services/img/${albumId}`;
+
+    // Configure event listeners BEFORE setting src
+    img.onload = () => {
+      coverContainer.appendChild(img);
+    };
+
+    img.onerror = () => {
+      // Let the image fail naturally - no fallback
+    };
+
+    // Lazy loading: create intersection observer to load image when visible
+    const lazyLoadCover = (entries, observer) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          // Load the image when it becomes visible
+          img.src = archiveCoverUrl;
+          observer.unobserve(entry.target);
+        }
+      });
+    };
+
+    const observer = new IntersectionObserver(lazyLoadCover, {
+      rootMargin: '50px' // Load 50px before the image comes into view
+    });
+
+    observer.observe(coverContainer);
+
     // Crear objeto mock para usar createFavoriteInfo
     const mockResult = {
       title: albumData.albumTitle || 'Sin título',
@@ -1563,6 +1653,7 @@ function updateFavoritesList() {
     // Mostrar botón de expandir solo para álbumes
     expandBtn.style.display = isAlbum ? 'inline-block' : 'none';
 
+    albumItem.appendChild(coverContainer);
     albumItem.appendChild(infoDiv);
     albumItem.appendChild(actionsDiv);
 

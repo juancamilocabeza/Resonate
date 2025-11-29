@@ -64,15 +64,21 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  const url = new URL(event.request.url);
+  const isArchiveOrg = url.hostname === 'archive.org';
+  const isImageRequest = isArchiveOrg && url.pathname.includes('/services/img/');
+
+  // Skip service worker handling for Archive.org images - let them fail naturally
+  if (isImageRequest) {
+    return;
+  }
+
   event.respondWith(
     (async () => {
-      const url = new URL(event.request.url);
-      const isArchiveOrg = url.hostname === 'archive.org';
       const isAudioRequest = event.request.destination === 'audio' ||
                            (isArchiveOrg && (url.pathname.toLowerCase().endsWith('.ogg') ||
                                            url.pathname.toLowerCase().endsWith('.mp3')));
-      const isMetadataRequest = isArchiveOrg && (url.pathname.includes('/metadata/') ||
-                                                url.pathname.includes('/services/img/'));
+      const isMetadataRequest = isArchiveOrg && url.pathname.includes('/metadata/');
 
       try {
         // Try network first
