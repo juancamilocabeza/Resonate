@@ -152,7 +152,7 @@ self.addEventListener('fetch', (event) => {
         }
 
         // Return no-content response to prevent error messages
-        return new Response('', {
+        return new Response(null, {
           status: 204, // No Content
           statusText: 'Offline Mode',
           headers: { 'Content-Type': 'text/plain' }
