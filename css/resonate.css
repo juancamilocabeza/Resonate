@@ -803,14 +803,16 @@ select:focus {
   white-space: normal;
   overflow-wrap: break-word;
   word-wrap: break-word;
+  word-break: break-all;
 }
 
 .favorite-creator {
   color: var(--muted);
   font-size: 11px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  word-break: break-all;
 }
 
 .favorite-actions {
@@ -995,6 +997,7 @@ select:focus {
   white-space: normal;
   overflow-wrap: break-word;
   word-wrap: break-word;
+  word-break: break-all;
 }
 
 .result-creator {
@@ -1003,6 +1006,7 @@ select:focus {
   white-space: normal;
   overflow-wrap: break-word;
   word-wrap: break-word;
+  word-break: break-all;
 }
 
 .result-meta {
