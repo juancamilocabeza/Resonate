@@ -1139,7 +1139,9 @@ function toggleAlbumTracks(albumId, tracksContainer, expandButton) {
 
 // Display tracks for an album
 function displayAlbumTracks(albumId, tracksContainer) {
-  tracksContainer.innerHTML = '<div class="search-loading"><span class="loader"></span></div>';
+  const isInSearchResult = tracksContainer.closest('.search-result') !== null;
+  const message = isInSearchResult ? 'Buscando...' : 'Cargando...';
+  tracksContainer.innerHTML = `<div class="search-loading"><div class="loader"></div><span class="loader-text">${message}</span></div>`;
 
   fetchOptimizedPlayableFiles(albumId)
     .then(files => {
