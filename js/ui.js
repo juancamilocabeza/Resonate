@@ -1642,6 +1642,11 @@ class FavoritesToggle {
 
     if (this.isDisabled) return;
 
+    // Ocultar resultados de búsqueda si están activos
+    if (state.searchActive) {
+      hideSearchResults();
+    }
+
     this.toggle();
 
     // Log para debugging
