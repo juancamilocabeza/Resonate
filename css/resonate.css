@@ -25,16 +25,16 @@
   --btn-active: #111;
   --neutral: #e2e8f0;
 
-  /* Spacing & Sizing */
+  /* Spacing & Sizing - Mobile First */
   --border-radius: 8px;
-  --border-radius-large: 10px;
+  --border-radius-large: 12px;
   --border-radius-small: 6px;
   --spacing-xs: 4px;
   --spacing-sm: 8px;
   --spacing-md: 12px;
   --spacing-lg: 16px;
   --spacing-xl: 20px;
-  --spacing-xxl: 30px;
+  --spacing-xxl: 24px;
 
   /* Shadows & Effects */
   --shadow-light: 0 2px 8px rgba(0, 0, 0, 0.15);
@@ -46,16 +46,25 @@
   --transition-slow: 0.3s ease;
 
   /* Loader Properties */
-  --loader-size: 22px;
+  --loader-size: 24px;
   --loader-border-width: 2px;
   --loader-duration: 0.8s;
 
-  /* Component Sizes */
-  --art-size: 180px;
-  --btn-size: 40px;
-  --btn-large: 50px;
-  --search-height: 40px;
-  --progress-height: 6px;
+  /* Component Sizes - Mobile Optimized */
+  --art-size-mobile: 280px;
+  --art-size-tablet: 320px;
+  --art-size-desktop: 360px;
+  --btn-size-mobile: 48px;
+  --btn-size-tablet: 44px;
+  --btn-size-desktop: 40px;
+  --btn-large-mobile: 56px;
+  --btn-large-tablet: 52px;
+  --btn-large-desktop: 50px;
+  --search-height-mobile: 48px;
+  --search-height-tablet: 44px;
+  --search-height-desktop: 40px;
+  --progress-height: 8px;
+  --progress-height-desktop: 6px;
 }
 
 /* ===== GLOBAL RESET & BASE STYLES ===== */
@@ -80,7 +89,10 @@ body {
   display: flex;
   flex-direction: column;
   position: relative;
-  overflow: hidden;
+  min-height: 100vh;
+  max-height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .main-player-section {
@@ -94,6 +106,8 @@ body {
   display: flex;
   flex-direction: column;
   padding-bottom: env(safe-area-inset-bottom, 0);
+  min-height: 0; /* Allow flex item to shrink below content size */
+  overflow-y: auto; /* Allow scroll within discovery section if needed */
 }
 
 /* ===== HEADER & NAVIGATION ===== */
@@ -155,10 +169,10 @@ header {
 }
 
 /* ===== TYPOGRAPHY HIERARCHY ===== */
+/* Mobile-first approach: base styles for mobile, then scale up */
 /* Consistent hierarchy: h1 > h2 > h3 */
-/* Desktop sizes */
 h1 {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 700;
   letter-spacing: -0.5px;
   color: var(--accent);
@@ -168,15 +182,15 @@ h1 {
   margin: 0;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 15px 0px;
+  gap: 8px;
+  padding: var(--spacing-lg) var(--spacing-md);
 }
 
 h2 {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
   color: var(--accent);
-  margin: 0 0 12px 0;
+  margin: 0 0 var(--spacing-md) 0;
   text-align: center;
 }
 
@@ -184,8 +198,8 @@ h3 {
   font-size: 16px;
   font-weight: 600;
   color: var(--accent);
-  /*margin: 0 0 16px 0;*/
   text-align: center;
+  margin: 0 0 var(--spacing-md) 0;
 }
 
 /* ===== PLAYER SECTION ===== */
@@ -205,18 +219,20 @@ h3 {
   flex-direction: column;
   align-items: center;
   width: 100%;
-  padding: 0 15px;
+  padding: 0 var(--spacing-md);
 }
 
 .art {
-  width: 70%;
-  height: 70%;
-  margin-bottom: 15px;
-  border-radius: 12px;
+  width: var(--art-size-mobile);
+  height: var(--art-size-mobile);
+  max-width: 90vw;
+  margin-bottom: var(--spacing-lg);
+  border-radius: var(--border-radius-large);
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: var(--shadow-light);
 }
 
 .art img {
@@ -228,14 +244,14 @@ h3 {
 .current-track-info {
   width: 100%;
   text-align: center;
-  padding: 20px 0;
+  padding: var(--spacing-xl) 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-sm);
 }
 
 .title {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
   color: var(--fg);
   line-height: 1.3;
@@ -246,7 +262,7 @@ h3 {
 }
 
 .creator {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 400;
   color: var(--muted);
   line-height: 1.2;
@@ -313,9 +329,9 @@ h3 {
 
 .progress-bar {
   width: 100%;
-  height: 6px;
+  height: var(--progress-height);
   background: var(--card);
-  border-radius: 3px;
+  border-radius: 4px;
   overflow: visible;
   cursor: pointer;
   position: relative;
@@ -327,7 +343,7 @@ h3 {
 }
 
 .progress-bar:hover {
-  height: 10px;
+  height: 12px;
 }
 
 .progress {
@@ -382,25 +398,27 @@ h3 {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 10px;
-  margin: 7% 2px;
+  gap: var(--spacing-lg);
+  margin: var(--spacing-xxl) var(--spacing-sm);
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
 button {
-  height: 40px;
+  height: var(--btn-size-mobile);
   border: none;
-  border-radius: 10px;
+  border-radius: var(--border-radius-large);
   background: var(--btn);
   color: var(--fg);
-  font-size: 20px;
+  font-size: 18px;
   cursor: pointer;
-  padding: 0 14px;
+  padding: 0 var(--spacing-md);
   transition: transform 0.1s, background-color 0.2s;
   touch-action: manipulation;
   display: flex;
   align-items: center;
   justify-content: center;
+  min-height: 44px; /* iOS touch target minimum */
 }
 
 /* Button states */
@@ -410,34 +428,36 @@ button:disabled {
 }
 
 button:active:not(:disabled) {
-  transform: scale(0.96);
+  transform: scale(0.95);
   border: none;
 }
 
 /* Specific control buttons */
 .play-btn,
 .play-btn-favorite {
-  width: 50px;
-  height: 50px;
+  width: var(--btn-large-mobile);
+  height: var(--btn-large-mobile);
   border-radius: 50%;
   background: var(--accent);
   color: #000;
   font-weight: bold;
-  font-size: 20px;
+  font-size: 18px;
+  min-width: 56px;
+  min-height: 56px;
 }
 
 .prev-btn,
 .next-btn {
-  min-width: 68px;
-  min-height: 40px;
+  min-width: 80px;
+  min-height: var(--btn-size-mobile);
 }
 
 .favorite-btn {
   background: var(--btn);
   color: var(--muted);
-  font-size: 19px;
-  width: 68px;
-  height: 40px;
+  font-size: 17px;
+  width: 80px;
+  height: var(--btn-size-mobile);
   padding: 0;
 }
 
@@ -448,10 +468,10 @@ button:active:not(:disabled) {
 .shuffle-favorites-btn {
   background: var(--btn);
   color: var(--fg);
-  font-size: 20px;
+  font-size: 18px;
   font-weight: bold;
-  width: 68px;
-  height: 40px;
+  width: 80px;
+  height: var(--btn-size-mobile);
   padding: 0;
   position: relative;
 }
@@ -866,13 +886,13 @@ select:focus {
 
 .search-input {
   flex: 1;
-  height: 40px;
+  height: var(--search-height-mobile);
   background: var(--btn);
   border: none;
-  border-radius: 10px;
+  border-radius: var(--border-radius-large);
   color: var(--fg);
-  font-size: 15px;
-  padding: 0 8px;
+  font-size: 16px;
+  padding: 0 var(--spacing-md);
 }
 
 .search-input:focus {
@@ -1493,22 +1513,147 @@ select:focus {
 }
 
 /* ===== MEDIA QUERIES ===== */
-/* Tablet and large mobile */
-@media (max-width: 768px) {
+/* Mobile First - Progressive Enhancement */
+
+/* Tablet (768px and up) */
+@media (min-width: 768px) {
+  :root {
+    --art-size-mobile: var(--art-size-tablet);
+    --btn-size-mobile: var(--btn-size-tablet);
+    --btn-large-mobile: var(--btn-large-tablet);
+    --search-height-mobile: var(--search-height-tablet);
+  }
+
   h1 {
-    font-size: 22px;
+    font-size: 24px;
   }
 
   h2 {
-    font-size: 18px;
+    font-size: 20px;
   }
 
   h3 {
+    font-size: 18px;
+  }
+
+  .art {
+    width: var(--art-size-tablet);
+    height: var(--art-size-tablet);
+  }
+
+  .title {
+    font-size: 20px;
+  }
+
+  .creator {
     font-size: 16px;
+  }
+
+  button {
+    height: var(--btn-size-tablet);
+    font-size: 16px;
+  }
+
+  .play-btn,
+  .play-btn-favorite {
+    width: var(--btn-large-tablet);
+    height: var(--btn-large-tablet);
+    font-size: 16px;
+  }
+
+  .search-input {
+    height: var(--search-height-tablet);
+    font-size: 15px;
   }
 }
 
-/* Small mobile */
+/* Desktop (1024px and up) */
+@media (min-width: 1024px) {
+  :root {
+    --art-size-mobile: var(--art-size-desktop);
+    --btn-size-mobile: var(--btn-size-desktop);
+    --btn-large-mobile: var(--btn-large-desktop);
+    --search-height-mobile: var(--search-height-desktop);
+    --progress-height: var(--progress-height-desktop);
+  }
+
+  h1 {
+    font-size: 28px;
+  }
+
+  h2 {
+    font-size: 24px;
+  }
+
+  h3 {
+    font-size: 20px;
+  }
+
+  .art {
+    width: var(--art-size-desktop);
+    height: var(--art-size-desktop);
+    max-width: none; /* Remove viewport width constraint on desktop */
+  }
+
+  .player-content {
+    padding: 0 var(--spacing-xl); /* More padding on desktop */
+  }
+
+  .title {
+    font-size: 24px;
+  }
+
+  .creator {
+    font-size: 18px;
+  }
+
+  button {
+    height: var(--btn-size-desktop);
+    font-size: 18px;
+  }
+
+  .play-btn,
+  .play-btn-favorite {
+    width: var(--btn-large-desktop);
+    height: var(--btn-large-desktop);
+    font-size: 18px;
+  }
+
+  .search-input {
+    height: var(--search-height-desktop);
+    font-size: 16px;
+  }
+
+  .progress-bar {
+    height: var(--progress-height-desktop);
+  }
+
+  .progress-bar:hover {
+    height: 8px;
+  }
+
+  /* Ensure no horizontal scroll on desktop */
+  .app {
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+
+  .player-container {
+    max-width: 1200px; /* Reasonable max width for desktop */
+    margin: 0 auto;
+  }
+
+  .controls {
+    max-width: 600px; /* Prevent controls from spreading too wide */
+    margin: var(--spacing-xxl) auto;
+  }
+}
+
+/* Legacy max-width queries for specific overrides */
+@media (max-width: 768px) {
+  /* Keep existing tablet adjustments */
+}
+
 @media (max-width: 480px) {
   h1 {
     font-size: 18px;
