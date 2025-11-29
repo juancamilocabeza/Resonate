@@ -1282,12 +1282,24 @@ function setupConnectivityMonitoring() {
 
   window.addEventListener('online', () => {
     state.networkOnline = true;
-    showStatus('Connection restored', 'info', 2000);
+    showStatus('Conexión restaurada', 'info', 2000);
+    // Re-enable search input when back online
+    if (elements.searchInput) {
+      elements.searchInput.disabled = false;
+      elements.searchInput.placeholder = "Buscar pistas";
+    }
   });
 
   window.addEventListener('offline', () => {
     state.networkOnline = false;
-    showStatus('Offline - Playing from cache', 'error', 3000);
+    showStatus('Sin conexión - Solo reproducción offline disponible', 'warning', 4000);
+    // Disable search functionality when offline
+    if (elements.searchInput) {
+      elements.searchInput.disabled = true;
+      elements.searchInput.placeholder = "Búsqueda no disponible sin conexión";
+    }
+    // Hide any active search results
+    hideSearchResults();
   });
 }
 

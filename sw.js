@@ -135,10 +135,20 @@ self.addEventListener('fetch', (event) => {
           }
         }
 
-        // Generic offline response
-        return new Response('Content not available offline. Please check your internet connection.', {
-          status: 503,
-          statusText: 'Service Unavailable - Offline',
+        // Generic offline response - return empty response instead of error message
+        // This prevents showing confusing error messages to users
+        if (event.request.destination === 'document') {
+          // For document requests, try to serve cached app shell
+          const appShell = await caches.match('/');
+          if (appShell) {
+            return appShell;
+          }
+        }
+
+        // Return no-content response to prevent error messages
+        return new Response('', {
+          status: 204, // No Content
+          statusText: 'Offline Mode',
           headers: { 'Content-Type': 'text/plain' }
         });
       }
