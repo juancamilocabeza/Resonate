@@ -51,9 +51,9 @@
   --loader-duration: 0.8s;
 
   /* Component Sizes - Mobile Optimized */
-  --art-size-mobile: 280px;
-  --art-size-tablet: 320px;
-  --art-size-desktop: 220px; /* Further reduced for desktop to show full footer */
+  --art-size-mobile: 220px;
+  --art-size-tablet: 280px;
+  --art-size-desktop: 320px; /* Further reduced for desktop to show full footer */
   --btn-size-mobile: 48px;
   --btn-size-tablet: 44px;
   --btn-size-desktop: 40px;
@@ -80,7 +80,8 @@ body {
   background: var(--bg);
   color: var(--fg);
   font: 15px/1.4 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  overflow: hidden; /* Prevent all scrolling */
+  overflow-x: hidden; /* Prevent horizontal scrolling */
+  overflow-y: auto; /* Allow vertical scrolling */
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -90,8 +91,6 @@ body {
   flex-direction: column;
   position: relative;
   min-height: 100vh;
-  max-height: 100vh;
-  overflow-y: auto;
   overflow-x: hidden;
 }
 
@@ -103,12 +102,10 @@ body {
 
 .discovery-section {
   flex: 0 0 auto; /* Don't grow, size based on content */
-  max-height: 40vh; /* Limit height to 40% of viewport */
   display: flex;
   flex-direction: column;
   padding-bottom: env(safe-area-inset-bottom, 0);
   min-height: 0;
-  overflow-y: auto; /* Allow scroll within discovery section if needed */
 }
 
 /* ===== HEADER & NAVIGATION ===== */
@@ -1576,6 +1573,12 @@ select:focus {
     --progress-height: var(--progress-height-desktop);
   }
 
+  /* Desktop layout - Fixed viewport */
+  html,
+  body {
+    overflow: hidden; /* Keep fixed layout for desktop */
+  }
+
   /* Desktop layout - Flexbox dynamic */
   .app {
     display: flex;
@@ -1603,7 +1606,7 @@ select:focus {
 
   /* Discovery section - grows dynamically */
   .discovery-section {
-    flex: 1; /* Takes available space */
+    flex: 0 0 auto; /* Don't grow, size based on content */
     overflow-y: auto;
     overflow-x: hidden;
     padding: var(--spacing-sm) 0;
@@ -1711,9 +1714,10 @@ select:focus {
     height: 100%;
   }
 
-  /* Search results - dynamic height */
+  /* Search results - with scroll for desktop */
   .search-results {
     overflow-y: auto;
+    max-height: 60vh; /* Limit height to allow scrolling */
   }
 }
 
@@ -2013,4 +2017,125 @@ select:focus {
 .clear-history-btn:active {
   background: var(--card);
   transform: scale(0.95);
+}
+
+/* ===== PWA INSTALL BANNER ===== */
+.pwa-install-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: var(--card);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: var(--shadow-light);
+  z-index: 10000;
+  opacity: 0;
+  transform: translateY(-100%);
+  transition: all 0.3s ease;
+  padding: var(--spacing-md) var(--spacing-lg);
+}
+
+.pwa-install-banner.active {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.pwa-banner-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 1200px;
+  margin: 0 auto;
+  gap: var(--spacing-md);
+}
+
+.pwa-banner-text {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: 14px;
+  color: var(--fg);
+  flex: 1;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.pwa-icon {
+  font-size: 18px;
+}
+
+.pwa-banner-buttons {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+}
+
+.pwa-install-btn {
+  background: var(--accent);
+  color: #000;
+  border: none;
+  border-radius: var(--border-radius);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.pwa-install-btn:hover {
+  background: var(--accent-alt);
+  transform: translateY(-1px);
+}
+
+.pwa-install-btn:active {
+  transform: translateY(0);
+  background: var(--accent);
+}
+
+.pwa-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.pwa-close-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--fg);
+}
+
+.pwa-close-btn:active {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(0.95);
+}
+
+/* Responsive adjustments for PWA banner */
+@media (max-width: 768px) {
+  .pwa-install-banner {
+    padding: var(--spacing-sm) var(--spacing-md);
+  }
+
+  .pwa-banner-content {
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-sm);
+  }
+
+  .pwa-banner-text {
+    font-size: 12px;
+    text-align: center;
+  }
+
+  .pwa-banner-buttons {
+    width: 100%;
+    justify-content: center;
+  }
 }

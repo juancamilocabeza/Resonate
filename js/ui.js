@@ -2032,16 +2032,15 @@ function registerServiceWorker() {
 
 // PWA installation prompt setup
 function setupPWAInstall() {
+  if (isRunningAsPWA()) return; // Don't show if already installed
+
+  // Check if user previously dismissed the banner
+  const dismissed = localStorage.getItem('resonate_pwa_banner_dismissed') === 'true';
+  if (dismissed) return;
+
   let deferredPrompt;
-  window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    deferredPrompt = e;
-    setTimeout(() => {
-      if (deferredPrompt) {
-        showStatus('¿Quieres instalar Resonate para una mejor experiencia?', 'info', 5000);
-      }
-    }, 30000);
-  });
+
+  // Define installPWA function first to ensure it's available
   window.installPWA = async () => {
     if (deferredPrompt) {
       deferredPrompt.prompt();
@@ -2049,9 +2048,75 @@ function setupPWAInstall() {
       if (outcome === 'accepted') {
         showStatus('Resonate se está instalando...', 'info', 3000);
       }
+      hidePWAInstallBanner();
       deferredPrompt = null;
     }
   };
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    showPWAInstallBanner();
+  });
+}
+
+// Show PWA install banner
+function showPWAInstallBanner() {
+  // Check if banner already exists
+  if (document.getElementById('pwa-install-banner')) return;
+
+  const banner = document.createElement('div');
+  banner.id = 'pwa-install-banner';
+  banner.className = 'pwa-install-banner';
+  banner.innerHTML = `
+    <div class="pwa-banner-content">
+      <div class="pwa-banner-text">
+        <div class="pwa-banner-buttons">Instala Resonate para una mejor experiencia
+          <button class="pwa-install-btn">Instalar</button>
+          <button class="pwa-close-btn" aria-label="Cerrar">✕</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Add event listeners
+  const installBtn = banner.querySelector('.pwa-install-btn');
+  const closeBtn = banner.querySelector('.pwa-close-btn');
+
+  installBtn.addEventListener('click', () => {
+    window.installPWA();
+  });
+
+  closeBtn.addEventListener('click', () => {
+    hidePWAInstallBanner();
+    // Save preference to not show again
+    try {
+      localStorage.setItem('resonate_pwa_banner_dismissed', 'true');
+    } catch (e) {
+      console.warn('Could not save PWA banner preference');
+    }
+  });
+
+  // Add to body
+  document.body.appendChild(banner);
+
+  // Show with animation
+  setTimeout(() => {
+    banner.classList.add('active');
+  }, 100);
+}
+
+// Hide PWA install banner
+function hidePWAInstallBanner() {
+  const banner = document.getElementById('pwa-install-banner');
+  if (banner) {
+    banner.classList.remove('active');
+    setTimeout(() => {
+      if (banner.parentNode) {
+        banner.parentNode.removeChild(banner);
+      }
+    }, 300); // Match transition duration
+  }
 }
 
 // Push notifications setup
