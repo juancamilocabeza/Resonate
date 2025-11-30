@@ -1,5 +1,54 @@
 // Application initialization
 
+// Function to update meta tags for shared link previews
+async function updateMetaTagsForSharedLink(identifier) {
+  try {
+    // Fetch basic metadata from archive.org
+    const response = await fetch(`https://archive.org/metadata/${identifier}`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch metadata');
+    }
+
+    const metadata = await response.json();
+    const title = metadata.metadata?.title || 'Contenido compartido';
+    const creator = metadata.metadata?.creator || 'Resonate Player';
+
+    // Update meta tags for social media sharing
+    const baseUrl = window.location.origin;
+    const shareUrl = `${baseUrl}${window.location.pathname}?play=${encodeURIComponent(identifier)}`;
+    const imageUrl = `https://archive.org/services/img/${identifier}`;
+
+    // Update page title
+    document.title = `${title} - ${creator} | Resonate Player`;
+
+    // Update Open Graph tags
+    updateMetaTag('property', 'og:title', `${title} - ${creator}`);
+    updateMetaTag('property', 'og:description', `Escucha "${title}" de ${creator} en Resonate Player. Música libre desde archive.org.`);
+    updateMetaTag('property', 'og:image', imageUrl);
+    updateMetaTag('property', 'og:url', shareUrl);
+    updateMetaTag('property', 'og:type', 'music.song');
+
+    // Update Twitter Card tags
+    updateMetaTag('property', 'twitter:card', 'summary_large_image');
+    updateMetaTag('property', 'twitter:title', `${title} - ${creator}`);
+    updateMetaTag('property', 'twitter:description', `Escucha "${title}" de ${creator} en Resonate Player. Música libre desde archive.org.`);
+    updateMetaTag('property', 'twitter:image', imageUrl);
+    updateMetaTag('property', 'twitter:url', shareUrl);
+
+    // Update basic meta description
+    updateMetaTag('name', 'description', `Escucha "${title}" de ${creator} en Resonate Player. Música libre desde archive.org.`);
+
+    console.log('Meta tags updated for shared link:', { title, creator, imageUrl, shareUrl });
+
+  } catch (error) {
+    console.warn('Error updating meta tags for shared link:', error);
+    // Fallback: update with generic content but correct image
+    const imageUrl = `https://archive.org/services/img/${identifier}`;
+    updateMetaTag('property', 'og:image', imageUrl);
+    updateMetaTag('property', 'twitter:image', imageUrl);
+  }
+}
+
 // Function to handle shared links (play parameter)
 async function handleSharedLink() {
   try {
@@ -9,6 +58,13 @@ async function handleSharedLink() {
     if (playIdentifier) {
       console.log('Shared link detected, playing:', playIdentifier);
       showStatus('Cargando contenido compartido...', 'info', 0);
+
+      // Update meta tags for social media previews immediately
+      try {
+        await updateMetaTagsForSharedLink(playIdentifier);
+      } catch (error) {
+        console.warn('Error updating meta tags for shared link:', error);
+      }
 
       // Clear the URL parameter to avoid re-triggering
       const url = new URL(window.location);
