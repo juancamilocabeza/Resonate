@@ -2455,17 +2455,39 @@ async function shareTrack(identifier, title = 'Pista', creator = 'Desconocido') 
 
   console.log('Intentando compartir:', { shareUrl, shareTitle, shareText });
 
+  // Update Open Graph meta tags for rich previews
+  updateMetaTagsForSharing(identifier, title, creator);
+
+  // Try to get cover image for sharing
+  let coverFile = null;
+  try {
+    coverFile = await getCoverImageForSharing(identifier);
+    console.log('Imagen de portada obtenida para compartir');
+  } catch (error) {
+    console.warn('No se pudo obtener imagen de portada:', error.message);
+    // Continue without image
+  }
+
   // Try Web Share API first (for mobile and supported browsers)
   if (navigator.share) {
     try {
       console.log('Usando Web Share API con mensaje enriquecido');
-      await navigator.share({
+
+      const shareData = {
         title: shareTitle,
         text: shareText,
         url: shareUrl
-      });
+      };
+
+      // Add image if available and supported
+      if (coverFile && navigator.canShare && navigator.canShare({ files: [coverFile] })) {
+        shareData.files = [coverFile];
+        console.log('Incluyendo imagen de portada en el compartir');
+      }
+
+      await navigator.share(shareData);
       console.log('Web Share API exitoso');
-      showStatus('Enlace compartido exitosamente', 'info', 6000, 'info');
+      showStatus('Contenido compartido exitosamente', 'info', 6000, 'info');
       return;
     } catch (error) {
       console.log('Web Share API falló:', error.message);
@@ -2495,6 +2517,60 @@ async function shareTrack(identifier, title = 'Pista', creator = 'Desconocido') 
       showStatus(`Enlace para compartir: ${shareUrl}`, 'warning', 10000, 'warning');
     }
   }
+}
+
+// Get cover image as File for sharing
+async function getCoverImageForSharing(identifier) {
+  const coverUrl = `https://archive.org/services/img/${identifier}`;
+
+  try {
+    const response = await fetch(coverUrl);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const blob = await response.blob();
+
+    // Create File from Blob
+    const filename = `cover-${identifier}.jpg`;
+    return new File([blob], filename, { type: blob.type });
+  } catch (error) {
+    console.error('Error obteniendo imagen de portada:', error);
+    throw error;
+  }
+}
+
+// Update meta tags for rich sharing (Open Graph, Twitter Cards)
+function updateMetaTagsForSharing(identifier, title, creator) {
+  const baseUrl = window.location.origin;
+  const shareUrl = `${baseUrl}${window.location.pathname}?play=${encodeURIComponent(identifier)}`;
+  const imageUrl = `https://archive.org/services/img/${identifier}`;
+
+  // Update page title
+  document.title = `${title} - ${creator} | Resonate Player`;
+
+  // Update Open Graph tags
+  updateMetaTag('property', 'og:title', `${title} - ${creator}`);
+  updateMetaTag('property', 'og:description', `Escucha "${title}" de ${creator} en Resonate Player. Música libre desde archive.org.`);
+  updateMetaTag('property', 'og:image', imageUrl);
+  updateMetaTag('property', 'og:url', shareUrl);
+  updateMetaTag('property', 'og:type', 'music.song');
+
+  // Update Twitter Card tags
+  updateMetaTag('property', 'twitter:card', 'summary_large_image');
+  updateMetaTag('property', 'twitter:title', `${title} - ${creator}`);
+  updateMetaTag('property', 'twitter:description', `Escucha "${title}" de ${creator} en Resonate Player. Música libre desde archive.org.`);
+  updateMetaTag('property', 'twitter:image', imageUrl);
+  updateMetaTag('property', 'twitter:url', shareUrl);
+
+  // Update basic meta description
+  updateMetaTag('name', 'description', `Escucha "${title}" de ${creator} en Resonate Player. Música libre desde archive.org.`);
+
+  console.log('Meta tags actualizados para compartir con portada:', {
+    title: `${title} - ${creator}`,
+    imageUrl,
+    shareUrl
+  });
 }
 
 // Expose critical functions globally for cross-module access
