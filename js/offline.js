@@ -1,63 +1,22 @@
-// Simple offline detection for fallback page
-window.addEventListener('load', function() {
-  // Check if we're offline and no cached music is available
-  if (!navigator.onLine) {
-    // Small delay to allow initialization to potentially load favorites and cache
-    setTimeout(async function() {
-      const favoritesCount = localStorage.getItem('resonate_favorites');
-      let hasFavorites = false;
+// Simple offline detection - only handles online/offline events
+// Main offline logic is now handled in initialization.js after audioCache is ready
 
-      try {
-        if (favoritesCount) {
-          const favorites = JSON.parse(favoritesCount);
-          hasFavorites = favorites && favorites.length > 0;
-        }
-      } catch (e) {
-        hasFavorites = false;
-      }
+// Listen for online/offline events to hide/show fallback
+window.addEventListener('online', function() {
+  const fallback = document.getElementById('offline-fallback');
+  const app = document.getElementById('app');
 
-      // Check if there's any cached music available
-      let hasCachedMusic = false;
-      try {
-        if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.getAllMetadata === 'function') {
-          const cachedMetadata = await audioCache.getAllMetadata();
-          hasCachedMusic = cachedMetadata && cachedMetadata.length > 0;
-        }
-      } catch (e) {
-        console.warn('Error checking cached music:', e);
-        hasCachedMusic = false;
-      }
-
-      // Show offline fallback only if no favorites AND no cached music
-      if (!hasFavorites && !hasCachedMusic) {
-        const fallback = document.getElementById('offline-fallback');
-        const app = document.getElementById('app');
-
-        if (fallback && app) {
-          app.style.display = 'none';
-          fallback.style.display = 'flex';
-          document.body.style.overflow = 'hidden';
-        }
-      } else if (hasCachedMusic && !hasFavorites) {
-        // If we have cached music but no favorites, show offline indicator
-        setTimeout(() => {
-          showOfflineMusicSection();
-        }, 1000);
-      }
-    }, 2000); // Wait 2 seconds for app initialization
+  if (fallback && app) {
+    fallback.style.display = 'none';
+    app.style.display = 'block';
+    document.body.style.overflow = 'auto';
   }
 
-  // Listen for online/offline events to hide/show fallback
-  window.addEventListener('online', function() {
-    const fallback = document.getElementById('offline-fallback');
-    const app = document.getElementById('app');
-
-    if (fallback && app) {
-      fallback.style.display = 'none';
-      app.style.display = 'block';
-      document.body.style.overflow = 'auto';
-    }
-  });
+  // Hide offline music section when coming back online
+  const offlineSection = document.getElementById('offline-music-section');
+  if (offlineSection) {
+    offlineSection.style.display = 'none';
+  }
 });
 
 // offline indicator initialization

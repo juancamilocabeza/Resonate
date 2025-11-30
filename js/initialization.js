@@ -302,6 +302,76 @@ async function initializeApp() {
   window.playFromFavoritesQueue = playFromFavoritesQueue;
   window.dispatchEvent(new Event('resonate:results-rendered'));
 
+  // Handle offline mode after everything is initialized
+  handleOfflineMode();
+
+}
+
+// Function to handle offline mode detection after initialization is complete
+async function handleOfflineMode() {
+  // Only check offline status if we're actually offline
+  if (!navigator.onLine) {
+    try {
+      // Check favorites first
+      const favoritesCount = localStorage.getItem('resonate_favorites');
+      let hasFavorites = false;
+
+      try {
+        if (favoritesCount) {
+          const favorites = JSON.parse(favoritesCount);
+          hasFavorites = favorites && favorites.length > 0;
+        }
+      } catch (e) {
+        hasFavorites = false;
+      }
+
+      // Check if there's any cached music available
+      let hasCachedMusic = false;
+      try {
+        if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.getAllMetadata === 'function') {
+          const cachedMetadata = await audioCache.getAllMetadata();
+          hasCachedMusic = cachedMetadata && cachedMetadata.length > 0;
+        }
+      } catch (e) {
+        console.warn('Error checking cached music:', e);
+        hasCachedMusic = false;
+      }
+
+      // Show offline fallback only if no favorites AND no cached music
+      if (!hasFavorites && !hasCachedMusic) {
+        const fallback = document.getElementById('offline-fallback');
+        const app = document.getElementById('app');
+
+        if (fallback && app) {
+          app.style.display = 'none';
+          fallback.style.display = 'flex';
+          document.body.style.overflow = 'hidden';
+        }
+        window.logger.info('Showing offline fallback - no cached music available', 'SYSTEM');
+      } else {
+        // We have either favorites or cached music, show the app
+        window.logger.info(`App ready for offline use - Favorites: ${hasFavorites}, Cached music: ${hasCachedMusic}`, 'SYSTEM');
+
+        // If we have cached music but no favorites, show offline music section
+        if (hasCachedMusic && !hasFavorites) {
+          setTimeout(() => {
+            if (typeof showOfflineMusicSection === 'function') {
+              showOfflineMusicSection();
+            }
+          }, 500); // Small delay to ensure UI is ready
+        }
+      }
+    } catch (error) {
+      window.logger.error(`Error in handleOfflineMode: ${error.message}`, 'SYSTEM');
+      // Fallback: show the app anyway to avoid black screen
+      const fallback = document.getElementById('offline-fallback');
+      const app = document.getElementById('app');
+      if (fallback && app) {
+        fallback.style.display = 'none';
+        app.style.display = 'block';
+      }
+    }
+  }
 }
 
 // Esperar a que los scripts críticos estén disponibles
