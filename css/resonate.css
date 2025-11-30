@@ -396,7 +396,8 @@ h3 {
   justify-content: center;
   align-items: center;
   gap: var(--spacing-lg);
-  margin: var(--spacing-xxl) var(--spacing-sm);
+  /*margin: var(--spacing-xxl) var(--spacing-sm);*/
+  margin: 6px;
   flex-shrink: 0;
   flex-wrap: wrap;
 }
@@ -459,6 +460,19 @@ button:active:not(:disabled) {
 }
 
 .favorite-btn.active {
+  color: #ff6b6b;
+}
+
+.additional-btn {
+  background: var(--btn);
+  color: var(--muted);
+  font-size: 17px;
+  width: 80px;
+  height: var(--btn-size-mobile);
+  padding: 0;
+}
+
+.additional-btn.active {
   color: #ff6b6b;
 }
 
@@ -1515,7 +1529,7 @@ select:focus {
   gap: 8px;
   flex-wrap: wrap;
   justify-content: center;
-  margin: 30px 0;
+  /*margin: 30px 0;*/
 }
 
 .volume-slider {
@@ -1706,9 +1720,9 @@ select:focus {
   }
 
   .controls {
-    margin: var(--spacing-lg) var(--spacing-sm); /* Reduced margins */
+    /*margin: var(--spacing-lg) var(--spacing-sm); /* Reduced margins */
     max-width: 600px;
-    margin: var(--spacing-lg) auto;
+    /*margin: var(--spacing-lg) auto;*/
   }
 
   button {
