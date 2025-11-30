@@ -53,7 +53,7 @@
   /* Component Sizes - Mobile Optimized */
   --art-size-mobile: 280px;
   --art-size-tablet: 320px;
-  --art-size-desktop: 360px;
+  --art-size-desktop: 220px; /* Further reduced for desktop to show full footer */
   --btn-size-mobile: 48px;
   --btn-size-tablet: 44px;
   --btn-size-desktop: 40px;
@@ -80,7 +80,7 @@ body {
   background: var(--bg);
   color: var(--fg);
   font: 15px/1.4 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  overflow-x: hidden;
+  overflow: hidden; /* Prevent all scrolling */
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -102,11 +102,12 @@ body {
 }
 
 .discovery-section {
-  flex: 1;
+  flex: 0 0 auto; /* Don't grow, size based on content */
+  max-height: 40vh; /* Limit height to 40% of viewport */
   display: flex;
   flex-direction: column;
   padding-bottom: env(safe-area-inset-bottom, 0);
-  min-height: 0; /* Allow flex item to shrink below content size */
+  min-height: 0;
   overflow-y: auto; /* Allow scroll within discovery section if needed */
 }
 
@@ -752,13 +753,12 @@ select:focus {
 }
 
 .favorites-list {
-  overflow-y: auto;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
   margin-top: 6px;
   display: none;
   background: var(--card);
-  flex: 1;
+  height: auto; /* Dynamic height, no scroll */
 }
 
 .favorites-list.active {
@@ -913,10 +913,9 @@ select:focus {
 .search-results {
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
-  overflow-y: auto;
   overflow-x: hidden;
   display: none;
-  flex: 1;
+  height: auto; /* Dynamic height, no scroll */
 }
 
 .search-results.active {
@@ -958,8 +957,8 @@ select:focus {
 }
 
 .search-results-list {
-  overflow-y: auto;
   overflow-x: hidden;
+  height: auto; /* Allow natural expansion */
 }
 
 .search-result {
@@ -1567,7 +1566,7 @@ select:focus {
   }
 }
 
-/* Desktop (1024px and up) */
+/* Desktop (1024px and up) - Complete fixed layout */
 @media (min-width: 1024px) {
   :root {
     --art-size-mobile: var(--art-size-desktop);
@@ -1577,8 +1576,62 @@ select:focus {
     --progress-height: var(--progress-height-desktop);
   }
 
+  /* Desktop layout - Flexbox dynamic */
+  .app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+    max-width: 100vw;
+    overflow-x: hidden;
+    padding-top: 70px; /* Space for fixed header */
+    padding-bottom: 50px; /* Space for fixed footer */
+  }
+
+  /* Fixed header */
+  header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 70px;
+    background: var(--bg);
+    z-index: 1000;
+    padding: var(--spacing-md) var(--spacing-xl);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  /* Discovery section - grows dynamically */
+  .discovery-section {
+    flex: 1; /* Takes available space */
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: var(--spacing-sm) 0;
+    min-height: 0; /* Allow shrinking */
+  }
+
+  /* Main player section - maintains size */
+  .main-player-section {
+    flex-shrink: 0; /* Doesn't shrink */
+    padding: var(--spacing-lg) 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  /* Fixed footer - always visible */
+  .footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--bg);
+    z-index: 10000; /* High z-index to ensure visibility */
+    padding: var(--spacing-sm) var(--spacing-xl);
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
   h1 {
     font-size: 28px;
+    padding: var(--spacing-sm) 0; /* Reduced padding */
   }
 
   h2 {
@@ -1592,31 +1645,51 @@ select:focus {
   .art {
     width: var(--art-size-desktop);
     height: var(--art-size-desktop);
-    max-width: none; /* Remove viewport width constraint on desktop */
+    max-width: none;
+    margin-bottom: var(--spacing-md); /* Reduced margin */
   }
 
   .player-content {
-    padding: 0 var(--spacing-xl); /* More padding on desktop */
+    padding: 0 var(--spacing-lg); /* Reduced padding */
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 0;
+  }
+
+  .current-track-info {
+    padding: var(--spacing-lg) 0; /* Reduced padding */
   }
 
   .title {
-    font-size: 24px;
+    font-size: 22px; /* Slightly smaller for fit */
   }
 
   .creator {
-    font-size: 18px;
+    font-size: 16px;
+  }
+
+  .progress-section {
+    margin: var(--spacing-md) 0; /* Reduced margins */
+  }
+
+  .controls {
+    margin: var(--spacing-lg) var(--spacing-sm); /* Reduced margins */
+    max-width: 600px;
+    margin: var(--spacing-lg) auto;
   }
 
   button {
     height: var(--btn-size-desktop);
-    font-size: 18px;
+    font-size: 16px; /* Slightly smaller */
   }
 
   .play-btn,
   .play-btn-favorite {
     width: var(--btn-large-desktop);
     height: var(--btn-large-desktop);
-    font-size: 18px;
+    font-size: 16px;
   }
 
   .search-input {
@@ -1632,20 +1705,15 @@ select:focus {
     height: 8px;
   }
 
-  /* Ensure no horizontal scroll on desktop */
-  .app {
-    max-width: 100vw;
-    overflow-x: hidden;
-  }
-
   .player-container {
-    max-width: 1200px; /* Reasonable max width for desktop */
+    max-width: 1200px;
     margin: 0 auto;
+    height: 100%;
   }
 
-  .controls {
-    max-width: 600px; /* Prevent controls from spreading too wide */
-    margin: var(--spacing-xxl) auto;
+  /* Search results - dynamic height */
+  .search-results {
+    overflow-y: auto;
   }
 }
 
