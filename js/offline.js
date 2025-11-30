@@ -1,21 +1,21 @@
-// Simple offline detection - only handles online/offline events
-// Main offline logic is now handled in initialization.js after audioCache is ready
+// Simple offline detection - handles connectivity indicators only
+// Main offline logic is handled in initialization.js to ensure app always shows
 
-// Listen for online/offline events to hide/show fallback
+// Listen for online/offline events for indicators only
 window.addEventListener('online', function() {
-  const fallback = document.getElementById('offline-fallback');
-  const app = document.getElementById('app');
+  console.log('Network: Online event detected');
 
-  if (fallback && app) {
-    fallback.style.display = 'none';
-    app.style.display = 'block';
-    document.body.style.overflow = 'auto';
+  // Show online indicator but don't change app visibility
+  if (typeof showStatus === 'function') {
+    showStatus('Conexión restaurada', 'info', 2000);
   }
 
-  // Hide offline music section when coming back online
-  const offlineSection = document.getElementById('offline-music-section');
-  if (offlineSection) {
-    offlineSection.style.display = 'none';
+  // Update offline indicator
+  const indicator = document.getElementById('offline-indicator');
+  if (indicator) {
+    indicator.classList.remove('active');
+    indicator.classList.add('hidden');
+    document.body.classList.remove('offline-mode');
   }
 });
 

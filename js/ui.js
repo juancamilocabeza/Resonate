@@ -519,17 +519,31 @@ function updateFavoriteButton() {
   }
 }
 
-function showStatus(message, type = 'info', duration = 5000) {
-  console.log('showStatus called with:', message, type, duration);
+function showStatus(message, type = 'info', duration = 5000, priority = 'normal') {
+  console.log('showStatus called with:', message, type, duration, priority);
   if (!elements.statusMessages) {
     console.error('statusMessages element not found');
     return;
   }
+
+  const currentMessage = elements.statusMessages.querySelector('.status-message');
+  const currentPriority = currentMessage ? currentMessage.dataset.priority || 'normal' : 'none';
+
+  // Priority levels: offline > error > warning > info > normal
+  const priorityLevels = { 'offline': 5, 'error': 4, 'warning': 3, 'info': 2, 'normal': 1, 'none': 0 };
+
+  // Don't overwrite higher or equal priority messages
+  if (priorityLevels[currentPriority] >= priorityLevels[priority]) {
+    console.log('Not showing message due to priority:', currentPriority, '>=', priority);
+    return;
+  }
+
   elements.statusMessages.innerHTML = '';
 
   const messageEl = document.createElement('div');
   messageEl.className = `status-message status-${type}`;
   messageEl.textContent = message;
+  messageEl.dataset.priority = priority;
   elements.statusMessages.appendChild(messageEl);
 
   console.log('Message element added:', messageEl);

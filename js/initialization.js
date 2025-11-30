@@ -1,15 +1,21 @@
 // Application initialization
 
 async function initializeApp() {
+  console.log('Starting app initialization...');
+
   // Inicializar caché de audio primero
   try {
+    console.log('Initializing audio cache...');
     if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.init === 'function') {
       await audioCache.init();
       window.logger?.info('Audio cache initialized successfully', 'CACHE');
+      console.log('Audio cache initialized');
     } else {
+      console.warn('audioCache not available, continuing without cache');
       window.logger?.warn('audioCache not available, continuing without cache', 'CACHE');
     }
   } catch (error) {
+    console.error('Error initializing cache:', error);
     window.logger?.error(`Error initializing cache: ${error.message}`, 'CACHE');
   }
 
@@ -298,7 +304,7 @@ async function initializeApp() {
   // Hide favorites list when playing a favorite
   addHideFavoritesOnPlay();
 
-  // EXPONER FUNCIONES GLOBALES CRÍTICAS
+// EXPONER FUNCIONES GLOBALES CRÍTICAS
   window.onplay = onplay;
   window.state = state;
   window.elements = elements;
@@ -321,6 +327,21 @@ async function initializeApp() {
   window.loadPlaybackQueue = loadPlaybackQueue;
   window.playFromFavoritesQueue = playFromFavoritesQueue;
   window.dispatchEvent(new Event('resonate:results-rendered'));
+
+  // Debug functions for offline testing
+  window.forceShowApp = () => {
+    console.log('Forcing app to show...');
+    const fallback = document.getElementById('offline-fallback');
+    const app = document.getElementById('app');
+    if (fallback) fallback.style.display = 'none';
+    if (app) app.style.display = 'block';
+    console.log('App forced to show');
+  };
+
+  window.testOfflineMode = () => {
+    console.log('Testing offline mode...');
+    handleOfflineMode();
+  };
 
   // Handle offline mode after everything is initialized
   setTimeout(() => {
@@ -434,76 +455,44 @@ function formatBytes(bytes) {
 
 // Function to handle offline mode detection after initialization is complete
 function handleOfflineMode() {
-  // EMERGENCY FALLBACK: Always ensure app is visible first
+  // CRITICAL FIX: Always show the full app interface regardless of connection status
+  // The app should work the same online and offline - users just get connectivity indicators
   try {
     const fallback = document.getElementById('offline-fallback');
     const app = document.getElementById('app');
 
     if (fallback && app) {
-      // Start with app visible by default
+      // Always show the main app, never the fallback
       fallback.style.display = 'none';
       app.style.display = 'block';
+      document.body.style.overflow = 'auto'; // Ensure scrolling works
     }
-  } catch (emergencyError) {
-    console.error('Emergency fallback failed:', emergencyError);
-  }
 
-  // Only check offline status if we're actually offline
-  if (!navigator.onLine) {
+    if (window.logger) window.logger.info('App interface ensured visible', 'SYSTEM');
+
+    // Check offline status for indicators only
+    const isOffline = !navigator.onLine;
+    if (window.logger) window.logger.info(`Network status: ${isOffline ? 'offline' : 'online'}`, 'SYSTEM');
+
+    // Show connectivity indicators but don't hide the app
+    if (isOffline) {
+      showStatus('Sin conexión - puedes reproducir favoritos haciendo clic en el botón ▶', 'warning', 5000, 'offline');
+      if (window.logger) window.logger.info('Offline mode indicators activated', 'SYSTEM');
+    }
+    // Note: Offline music section is completely disabled as requested
+
+  } catch (error) {
+    // Emergency fallback - ensure app is always visible
     try {
-      // Check favorites first
-      const favoritesCount = localStorage.getItem('resonate_favorites');
-      let hasFavorites = false;
-
-      try {
-        if (favoritesCount) {
-          const favorites = JSON.parse(favoritesCount);
-          hasFavorites = favorites && favorites.length > 0;
-        }
-      } catch (e) {
-        hasFavorites = false;
-      }
-
-      // Check if there's any cached music available (synchronous check first)
-      let hasCachedMusic = false;
-      try {
-        if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.getAllMetadata === 'function') {
-          hasCachedMusic = true;
-        }
-      } catch (e) {
-        hasCachedMusic = false;
-      }
-
-      // Show offline fallback only if no favorites AND no cached music
-      if (!hasFavorites && !hasCachedMusic) {
-        const fallback = document.getElementById('offline-fallback');
-        const app = document.getElementById('app');
-
-        if (fallback && app) {
-          app.style.display = 'none';
-          fallback.style.display = 'flex';
-          document.body.style.overflow = 'hidden';
-        }
-        if (window.logger) window.logger.info('Showing offline fallback - no cached music available', 'SYSTEM');
-      } else {
-        // We have either favorites or cached music, ensure app is visible
-        if (window.logger) window.logger.info(`App ready for offline use - Favorites: ${hasFavorites}, Cached music: ${hasCachedMusic}`, 'SYSTEM');
-
-        // If we have cached music but no favorites, show offline music section asynchronously
-        if (hasCachedMusic && !hasFavorites) {
-          setTimeout(async () => {
-            try {
-              await showOfflineMusicSection();
-            } catch (asyncError) {
-              console.error('Error in showOfflineMusicSection:', asyncError);
-            }
-          }, 500); // Small delay to ensure UI is ready
-        }
-      }
-    } catch (error) {
-      if (window.logger) window.logger.error(`Error in handleOfflineMode: ${error.message}`, 'SYSTEM');
-      // Fallback: ensure app is visible (already done at top)
+      const fallback = document.getElementById('offline-fallback');
+      const app = document.getElementById('app');
+      if (fallback) fallback.style.display = 'none';
+      if (app) app.style.display = 'block';
+    } catch (emergencyError) {
+      console.error('Critical emergency fallback failed:', emergencyError);
     }
+
+    if (window.logger) window.logger.error(`Error in handleOfflineMode: ${error.message}`, 'SYSTEM');
   }
 }
 

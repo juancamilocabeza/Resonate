@@ -31,9 +31,15 @@ const CACHE_STRATEGIES = {
 
 // Instalación del Service Worker
 self.addEventListener('install', (event) => {
+  console.log('SW: Installing service worker');
   event.waitUntil(
     caches.open(STATIC_CACHE).then((cache) => {
-      return cache.addAll(STATIC_FILES);
+      console.log('SW: Caching static files:', STATIC_FILES);
+      return cache.addAll(STATIC_FILES).catch((error) => {
+        console.error('SW: Failed to cache static files:', error);
+        // Continue even if some files fail to cache
+        return Promise.resolve();
+      });
     })
   );
   self.skipWaiting(); // Activar inmediatamente
@@ -41,18 +47,23 @@ self.addEventListener('install', (event) => {
 
 // Activación y limpieza de cachés antiguos
 self.addEventListener('activate', (event) => {
+  console.log('SW: Activating service worker');
   event.waitUntil(
     caches.keys().then((cacheNames) => {
+      console.log('SW: Current caches:', cacheNames);
       return Promise.all(
         cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
+          if (cacheName !== CACHE_NAME && cacheName !== STATIC_CACHE && cacheName !== METADATA_CACHE) {
+            console.log('SW: Deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
       );
+    }).then(() => {
+      console.log('SW: Claiming clients');
+      return self.clients.claim();
     })
   );
-  self.clients.claim();
 });
 
 // Estrategia de actualización: Network First, luego Cache con mejor manejo offline
