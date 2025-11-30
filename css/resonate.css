@@ -1265,6 +1265,7 @@ select:focus {
   position: relative;
   z-index: 10;
   padding: 0 16px;
+  display: none;
 }
 
 /* Ensure status messages are visible when they contain messages */
@@ -1279,8 +1280,7 @@ select:focus {
   padding: 8px 10px;
   margin: 3px 0;
   display: flex;
-  /*display: none;*/
-
+  display: none;
 }
 
 .status-info {
@@ -2281,4 +2281,30 @@ select:focus {
     width: 100%;
     justify-content: center;
   }
+}
+
+/* ===== CURRENT TRACK SHARE BUTTON ===== */
+.current-track-share {
+  background: var(--btn);
+  border: none;
+  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.current-track-share:hover {
+  background: rgba(110, 231, 183, 0.1);
+}
+
+.current-track-share:active {
+  background: var(--card);
+  transform: scale(0.95);
 }

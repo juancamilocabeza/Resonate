@@ -33,7 +33,8 @@ const elements = {
   startButton: document.getElementById('start-button'),
   app: document.getElementById('app'),
   playerContent: document.getElementById('player-content'),
-  repeatBtn: document.getElementById('repeat-btn')
+  repeatBtn: document.getElementById('repeat-btn'),
+  currentTrackShare: document.getElementById('current-track-share')
 };
 
 // Search configuration
@@ -1349,7 +1350,7 @@ function displayAlbumTracks(albumId, tracksContainer) {
             <span class="track-number">${trackNumber}</span>
             <button class="track-play" data-url="${track.url}" data-title="${track.title}">▶</button>
             <button class="track-favorite ${isFavorite ? 'active' : ''}">${isFavorite ? '❤️' : '🩶'}</button>
-            <button class="track-share" title="Compartir">📤</button>
+            <button class="track-share" title="Compartir">🔗</button>
           </div>
           <div class="track-item-info">
             <div class="track-title">${track.title || 'Sin título'}</div>
@@ -2448,9 +2449,9 @@ function updateMetaTag(attrName, attrValue, content) {
 // Share functionality
 async function shareTrack(identifier, title = 'Pista', creator = 'Desconocido') {
   const shareUrl = `${window.location.origin}${window.location.pathname}?play=${encodeURIComponent(identifier)}`;
-  const shortTitle = `"${title}" de ${creator}`;
-  const shareTitle = `¡Esto te puede interesar! ${shortTitle}`;
-  const shareText = `${shareTitle}\n\nEscúchalo gratis en Resonate Player:\n${shareUrl}`;
+  const shortTitle = `"${title}"`;
+  const shareTitle = `¡Esto te puede interesar!\n${shortTitle}`;
+  const shareText = `${shareTitle}\n\nDisfrútalo libremente en Resonate Player:\n${shareUrl}`;
 
   console.log('Intentando compartir:', { shareUrl, shareTitle, shareText });
 

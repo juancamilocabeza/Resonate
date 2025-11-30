@@ -40,18 +40,54 @@ async function playSharedContent(identifier) {
       throw new Error('No se encontraron pistas reproducibles');
     }
 
-    // If it's an album (multiple tracks), play the first track
-    const track = files[0];
+    // Determine if this is an album (multiple tracks) or single track
+    const isAlbum = files.length > 1;
 
-    // Update meta tags for rich previews when sharing
-    if (typeof updateMetaTags === 'function') {
-      updateMetaTags(track, identifier);
+    if (isAlbum) {
+      // Handle album sharing - load all tracks into playlist
+      console.log(`Shared album detected: ${files.length} tracks`);
+
+      // Create album metadata
+      const albumData = {
+        id: identifier,
+        title: files[0].title || 'Álbum compartido',
+        creator: files[0].creator || 'Desconocido',
+        tracks: files.length
+      };
+
+      // Add album metadata to each track
+      const tracksWithMetadata = files.map((track, index) => ({
+        ...track,
+        albumId: identifier,
+        albumTitle: albumData.title,
+        trackIndex: index,
+        totalTracks: files.length
+      }));
+
+      // Load album tracks into playback queue
+      await loadPlaybackQueue('shared-album', tracksWithMetadata, 0);
+
+      showStatus(`Álbum compartido cargado: ${albumData.title} (${files.length} pistas)`, 'info', 3000);
+
+      // Start playing the first track
+      if (tracksWithMetadata.length > 0) {
+        await playAudioTrackOptimized(tracksWithMetadata[0], identifier);
+      }
+
+    } else {
+      // Handle single track sharing
+      const track = files[0];
+
+      // Update meta tags for rich previews when sharing
+      if (typeof updateMetaTags === 'function') {
+        updateMetaTags(track, identifier);
+      }
+
+      showStatus(`Reproduciendo pista compartida: ${track.title}`, 'info', 3000);
+
+      // Use existing playback function
+      await playAudioTrackOptimized(track, identifier);
     }
-
-    showStatus(`Reproduciendo contenido compartido: ${track.title}`, 'info', 0);
-
-    // Use existing playback function
-    await playAudioTrackOptimized(track, identifier);
 
   } catch (error) {
     console.error('Error in playSharedContent:', error);
@@ -270,6 +306,16 @@ async function initializeApp() {
         }
       } else {
         toggleFavorite(state.currentTrack);
+      }
+    });
+  }
+
+  if (elements.currentTrackShare) {
+    elements.currentTrackShare.addEventListener('click', async () => {
+      if (state.currentTrack && state.currentTrack.id) {
+        await shareTrack(state.currentTrack.id, state.currentTrack.title, state.currentTrack.creator);
+      } else {
+        showStatus('No hay pista actual para compartir', 'warning');
       }
     });
   }
