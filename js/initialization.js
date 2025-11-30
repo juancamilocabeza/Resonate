@@ -42,9 +42,18 @@ async function initializeApp() {
   // Cargar estado de reproducción guardado (última sesión)
   loadSavedPlaybackState();
 
-  setupConnectivityMonitoring();
-  setupPageVisibilityHandling();
-  setupListenTracking();
+  // Setup functions - verificar existencia antes de llamar
+  if (typeof setupConnectivityMonitoring === 'function') {
+    setupConnectivityMonitoring();
+  }
+
+  if (typeof setupPageVisibilityHandling === 'function') {
+    setupPageVisibilityHandling();
+  }
+
+  if (typeof setupListenTracking === 'function') {
+    setupListenTracking();
+  }
 
   // Preparar reproducción de favoritos (sin autoplay por restricciones del navegador)
   // Solo preparar la cola sin hacer peticiones de red automáticas
@@ -64,11 +73,22 @@ async function initializeApp() {
     }, 500);
   }
 
-  // Configurar Media Session API
-  setupMediaSession();
-  setupSearchOnEnter();
-  setupSearchFocusBehavior();
-  setupProgressBarInteraction();
+  // Configurar funciones de UI - verificar existencia antes de llamar
+  if (typeof setupMediaSession === 'function') {
+    setupMediaSession();
+  }
+
+  if (typeof setupSearchOnEnter === 'function') {
+    setupSearchOnEnter();
+  }
+
+  if (typeof setupSearchFocusBehavior === 'function') {
+    setupSearchFocusBehavior();
+  }
+
+  if (typeof setupProgressBarInteraction === 'function') {
+    setupProgressBarInteraction();
+  }
 
   // Configurar elementos opcionales - SOLO SI EXISTEN
   if (elements.playAllFavoritesBtn) {
@@ -296,7 +316,7 @@ async function initializeApp() {
   window.isAlbumInFavorites = isAlbumInFavorites;
   window.playRandomSearchResults = playRandomSearchResults;
   window.audioCache = typeof audioCache !== 'undefined' ? audioCache : null;
-  window.installPWA = typeof installPWA !== 'undefined' ? installPWA : null;
+  window.installPWA = typeof window.installPWA !== 'undefined' ? window.installPWA : null;
   window.preloadNextTrack = preloadNextTrack;
   window.loadPlaybackQueue = loadPlaybackQueue;
   window.playFromFavoritesQueue = playFromFavoritesQueue;

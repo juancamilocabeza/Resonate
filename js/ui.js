@@ -2084,7 +2084,9 @@ function showPWAInstallBanner() {
   const closeBtn = banner.querySelector('.pwa-close-btn');
 
   installBtn.addEventListener('click', () => {
-    window.installPWA();
+    if (typeof window.installPWA === 'function') {
+      window.installPWA();
+    }
   });
 
   closeBtn.addEventListener('click', () => {
