@@ -32,7 +32,6 @@
       <!-- Search and Discovery Section -->
       <div class="stage">&nbsp;&nbsp;Early stage</div>
     </header>
-
     <!-- Search and Discovery Section -->
     <div class="discovery-section">
       <div class="search-section">
@@ -58,7 +57,6 @@
       </div>
     </div>
     <div id="favorites-list" class="favorites-list"></div>
-
     <!-- Main Player Section -->
     <div class="main-player-section">
       <div class="player-container">
@@ -69,7 +67,8 @@
           <div class="current-track-info">
             <div class="title" id="title"></div>
             <div class="creator" id="creator"></div>
-            <div class="creator" id="quality-text" style="display: none;">auto</div>
+            <div id="status-messages"></div>
+
           </div>
           <div class="progress-section">
             <div class="progress-bar" id="progress-bar">
@@ -124,8 +123,6 @@
       </button>
     </div>
   </div>
-
-  <div id="status-messages"></div>
 
   <audio id="audio" preload="metadata"></audio>
   

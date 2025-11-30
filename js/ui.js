@@ -519,7 +519,12 @@ function updateFavoriteButton() {
   }
 }
 
-function showStatus(message, type = 'info', duration = 3000) {
+function showStatus(message, type = 'info', duration = 5000) {
+  console.log('showStatus called with:', message, type, duration);
+  if (!elements.statusMessages) {
+    console.error('statusMessages element not found');
+    return;
+  }
   elements.statusMessages.innerHTML = '';
 
   const messageEl = document.createElement('div');
@@ -527,13 +532,21 @@ function showStatus(message, type = 'info', duration = 3000) {
   messageEl.textContent = message;
   elements.statusMessages.appendChild(messageEl);
 
+  console.log('Message element added:', messageEl);
+
   if (duration > 0) {
     setTimeout(() => {
       if (messageEl.parentNode) {
         messageEl.remove();
+        console.log('Message removed after timeout');
       }
     }, duration);
   }
+}
+
+// Test function to show a permanent message for debugging
+function showTestStatus() {
+  showStatus('Mensaje de prueba - visible permanentemente', 'info', 0);
 }
 
 function setArtwork(track, identifier) {

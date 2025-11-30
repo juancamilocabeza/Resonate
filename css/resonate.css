@@ -1240,6 +1240,14 @@ select:focus {
   margin: 0;
   min-height: 5px;
   text-align: left;
+  position: relative;
+  z-index: 10;
+  padding: 0 16px;
+}
+
+/* Ensure status messages are visible when they contain messages */
+.status-messages:not(:empty) {
+  padding-bottom: 8px;
 }
 
 .status-message {
@@ -1249,7 +1257,7 @@ select:focus {
   padding: 8px 10px;
   margin: 3px 0;
   display: flex;
-  display: none;
+  /*display: none;*/
 
 }
 
