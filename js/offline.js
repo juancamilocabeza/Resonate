@@ -1,9 +1,9 @@
 // Simple offline detection for fallback page
 window.addEventListener('load', function() {
-  // Check if we're offline and no favorites are available
+  // Check if we're offline and no cached music is available
   if (!navigator.onLine) {
-    // Small delay to allow initialization to potentially load favorites
-    setTimeout(function() {
+    // Small delay to allow initialization to potentially load favorites and cache
+    setTimeout(async function() {
       const favoritesCount = localStorage.getItem('resonate_favorites');
       let hasFavorites = false;
 
@@ -16,8 +16,20 @@ window.addEventListener('load', function() {
         hasFavorites = false;
       }
 
-      // Show offline fallback if no favorites and offline
-      if (!hasFavorites) {
+      // Check if there's any cached music available
+      let hasCachedMusic = false;
+      try {
+        if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.getAllMetadata === 'function') {
+          const cachedMetadata = await audioCache.getAllMetadata();
+          hasCachedMusic = cachedMetadata && cachedMetadata.length > 0;
+        }
+      } catch (e) {
+        console.warn('Error checking cached music:', e);
+        hasCachedMusic = false;
+      }
+
+      // Show offline fallback only if no favorites AND no cached music
+      if (!hasFavorites && !hasCachedMusic) {
         const fallback = document.getElementById('offline-fallback');
         const app = document.getElementById('app');
 
@@ -26,6 +38,11 @@ window.addEventListener('load', function() {
           fallback.style.display = 'flex';
           document.body.style.overflow = 'hidden';
         }
+      } else if (hasCachedMusic && !hasFavorites) {
+        // If we have cached music but no favorites, show offline indicator
+        setTimeout(() => {
+          showOfflineMusicSection();
+        }, 1000);
       }
     }, 2000); // Wait 2 seconds for app initialization
   }
@@ -79,5 +96,106 @@ window.addEventListener('online', function() {
     document.body.classList.remove('offline-mode');
   }
 });
+
+// Function to show offline music section when we have cached music but no favorites
+async function showOfflineMusicSection() {
+  try {
+    if (typeof audioCache === 'undefined' || !audioCache || typeof audioCache.getAllMetadata !== 'function') {
+      return;
+    }
+
+    const cachedMetadata = await audioCache.getAllMetadata();
+    if (!cachedMetadata || cachedMetadata.length === 0) {
+      return;
+    }
+
+    // Create offline music section if it doesn't exist
+    let offlineSection = document.getElementById('offline-music-section');
+    if (!offlineSection) {
+      offlineSection = document.createElement('div');
+      offlineSection.id = 'offline-music-section';
+      offlineSection.className = 'offline-music-section';
+      offlineSection.innerHTML = `
+        <div class="offline-music-header">
+          <h3>🎵 Música Offline</h3>
+          <p>Tienes ${cachedMetadata.length} pista(s) disponible(s) sin conexión</p>
+        </div>
+        <div id="offline-music-list" class="offline-music-list"></div>
+      `;
+
+      // Insert after search section
+      const searchSection = document.querySelector('.discovery-section');
+      if (searchSection) {
+        searchSection.appendChild(offlineSection);
+      }
+    }
+
+    // Populate the list
+    const listContainer = document.getElementById('offline-music-list');
+    if (listContainer) {
+      listContainer.innerHTML = '';
+
+      cachedMetadata.forEach((metadata, index) => {
+        const item = document.createElement('div');
+        item.className = 'offline-music-item';
+        item.innerHTML = `
+          <div class="offline-music-info">
+            <div class="offline-music-title">${metadata.title || 'Sin título'}</div>
+            <div class="offline-music-creator">${metadata.creator || 'Desconocido'}</div>
+            <div class="offline-music-size">${formatBytes(metadata.size || 0)}</div>
+          </div>
+          <button class="offline-play-btn" data-url="${metadata.url}" data-index="${index}">
+            ▶
+          </button>
+        `;
+
+        // Add click handler
+        const playBtn = item.querySelector('.offline-play-btn');
+        playBtn.addEventListener('click', () => {
+          playOfflineTrack(metadata);
+        });
+
+        listContainer.appendChild(item);
+      });
+    }
+
+    // Show the section
+    offlineSection.style.display = 'block';
+
+  } catch (error) {
+    console.warn('Error showing offline music section:', error);
+  }
+}
+
+// Function to play an offline track
+async function playOfflineTrack(metadata) {
+  try {
+    const track = {
+      url: metadata.url,
+      title: metadata.title || 'Sin título',
+      creator: metadata.creator || 'Desconocido',
+      id: metadata.url, // Use URL as ID for offline tracks
+      isOffline: true
+    };
+
+    // Use existing playback function
+    if (typeof playAudioTrackOptimized === 'function') {
+      await playAudioTrackOptimized(track, track.id);
+    }
+
+  } catch (error) {
+    console.error('Error playing offline track:', error);
+    showStatus('Error reproduciendo pista offline', 'error');
+  }
+}
+
+// Helper function to format bytes
+function formatBytes(bytes) {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
 
 console.log('Offline fix loaded');

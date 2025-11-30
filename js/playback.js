@@ -175,7 +175,11 @@ async function loadAudioWithCache(track) {
     // Save to cache for future use (background)
     const isFavorite = isTrackFavorite(track);
     if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.put === 'function') {
-      audioCache.put(track.url, blob, true, isFavorite).catch(error => {
+      audioCache.put(track.url, response.clone(), isFavorite, {
+        title: track.title || 'Sin título',
+        creator: track.creator || 'Desconocido',
+        url: track.url
+      }).catch(error => {
         console.error('Error saving to cache:', error);
       });
     }

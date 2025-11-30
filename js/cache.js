@@ -174,7 +174,7 @@ class AudioCache {
     }
   }
 
-  async put(url, data, isFavorite = false) {
+  async put(url, data, isFavorite = false, metadata = {}) {
     if (!this.isInitialized) await this.init();
 
     try {
@@ -188,7 +188,9 @@ class AudioCache {
         size,
         lastAccessed: Date.now(),
         isFavorite,
-        cachedAt: Date.now()
+        cachedAt: Date.now(),
+        title: metadata.title,
+        creator: metadata.creator
       });
 
       // Clean up if cache is too large
