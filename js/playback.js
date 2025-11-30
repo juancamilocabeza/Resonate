@@ -1,5 +1,164 @@
-// Playback management classes and functions
+// Enhanced Playback Management System
 
+// Constants for repeat modes
+const RepeatMode = {
+  ALL: 'all',           // Repeat current context
+  ONE: 'one',           // Repeat current track
+  CONTEXT: 'context',   // Repeat context infinitely
+  INFINITE: 'infinite', // Mix contexts infinitely
+  OFF: 'off'            // No repeat
+};
+
+// Retry strategies
+const RetryStrategy = {
+  NETWORK: { maxRetries: 5, backoff: 'exponential', baseDelay: 1000 },
+  CACHE: { maxRetries: 2, backoff: 'linear', baseDelay: 500 },
+  DECODE: { maxRetries: 1, backoff: 'none', baseDelay: 0 }
+};
+
+// Playback state manager
+class PlaybackStateManager {
+  constructor() {
+    this.state = {
+      current: { track: null, context: null, contextId: null },
+      queue: { items: [], position: 0 },
+      modes: { repeat: RepeatMode.ALL, shuffle: false },
+      history: { played: [], skipped: [] },
+      stats: { consecutiveFailures: 0, totalFailures: 0 }
+    };
+    this.contexts = new Map();
+  }
+
+  setCurrentTrack(track, context, contextId = null) {
+    this.state.current = { track, context, contextId };
+  }
+
+  setRepeatMode(mode) {
+    if (Object.values(RepeatMode).includes(mode)) {
+      this.state.modes.repeat = mode;
+    }
+  }
+
+  setShuffleMode(enabled) {
+    this.state.modes.shuffle = enabled;
+  }
+
+  addToHistory(track, action = 'played') {
+    if (action === 'played') {
+      this.state.history.played.unshift(track);
+      // Keep only last 50 tracks
+      this.state.history.played = this.state.history.played.slice(0, 50);
+    } else if (action === 'skipped') {
+      this.state.history.skipped.unshift(track);
+      this.state.history.skipped = this.state.history.skipped.slice(0, 20);
+    }
+  }
+
+  recordFailure() {
+    this.state.stats.consecutiveFailures++;
+    this.state.stats.totalFailures++;
+  }
+
+  recordSuccess() {
+    this.state.stats.consecutiveFailures = 0;
+  }
+
+  shouldEnterSafeMode() {
+    return this.state.stats.consecutiveFailures >= 10;
+  }
+
+  getCurrentContext() {
+    return this.state.current.context;
+  }
+
+  getCurrentContextId() {
+    return this.state.current.contextId;
+  }
+
+  getRepeatMode() {
+    return this.state.modes.repeat;
+  }
+
+  getShuffleMode() {
+    return this.state.modes.shuffle;
+  }
+}
+
+// Base context handler
+class BaseContextHandler {
+  constructor(playbackStateManager) {
+    this.stateManager = playbackStateManager;
+    this.retryManager = new RetryManager();
+  }
+
+  async handleTrackEnd() {
+    throw new Error('handleTrackEnd must be implemented by subclass');
+  }
+
+  async getNextTrack() {
+    throw new Error('getNextTrack must be implemented by subclass');
+  }
+
+  getContextType() {
+    throw new Error('getContextType must be implemented by subclass');
+  }
+
+  shouldContinuePlayback() {
+    const repeatMode = this.stateManager.getRepeatMode();
+    return repeatMode !== RepeatMode.OFF;
+  }
+}
+
+// Retry manager for handling failures
+class RetryManager {
+  constructor() {
+    this.attempts = new Map();
+  }
+
+  async executeWithRetry(operation, strategy = RetryStrategy.NETWORK) {
+    const key = operation.name || 'anonymous';
+    const currentAttempts = this.attempts.get(key) || 0;
+
+    if (currentAttempts >= strategy.maxRetries) {
+      throw new Error(`Max retries exceeded for ${key}`);
+    }
+
+    try {
+      this.attempts.set(key, currentAttempts + 1);
+      const result = await operation();
+      this.attempts.delete(key); // Success, reset counter
+      return result;
+    } catch (error) {
+      if (currentAttempts + 1 >= strategy.maxRetries) {
+        this.attempts.delete(key);
+        throw error;
+      }
+
+      // Calculate delay based on strategy
+      const delay = this.calculateDelay(strategy, currentAttempts + 1);
+      await new Promise(resolve => setTimeout(resolve, delay));
+
+      // Retry
+      return this.executeWithRetry(operation, strategy);
+    }
+  }
+
+  calculateDelay(strategy, attempt) {
+    const { backoff, baseDelay } = strategy;
+
+    switch (backoff) {
+      case 'exponential':
+        return baseDelay * Math.pow(2, attempt - 1);
+      case 'linear':
+        return baseDelay * attempt;
+      case 'none':
+      default:
+        return 0;
+    }
+  }
+}
+
+// Legacy ContinuousPlaybackManager for backward compatibility
 class ContinuousPlaybackManager {
   constructor() {
     this.currentContext = null;
@@ -79,6 +238,373 @@ class ContinuousPlaybackManager {
 }
 
 const playbackManager = new ContinuousPlaybackManager();
+
+// Initialize new playback system
+const playbackStateManager = new PlaybackStateManager();
+
+// Context-specific handlers
+class AlbumContextHandler extends BaseContextHandler {
+  constructor(playbackStateManager) {
+    super(playbackStateManager);
+  }
+
+  getContextType() {
+    return 'album';
+  }
+
+  async handleTrackEnd() {
+    const repeatMode = this.stateManager.getRepeatMode();
+    const currentAlbumId = this.stateManager.getCurrentContextId();
+
+    if (repeatMode === RepeatMode.ONE) {
+      // Replay current track
+      elements.audio.currentTime = 0;
+      elements.audio.play();
+      return;
+    }
+
+    if (repeatMode === RepeatMode.OFF) {
+      showStatus('Fin del álbum', 'info', 2000);
+      return;
+    }
+
+    // Try to get next track in album
+    const nextTrack = await this.getNextTrack();
+    if (nextTrack) {
+      await this.retryManager.executeWithRetry(async () => {
+        await playAudioTrackOptimized(nextTrack, currentAlbumId, nextTrack.trackIndex, nextTrack.totalTracks);
+        this.stateManager.recordSuccess();
+      }, RetryStrategy.NETWORK);
+    } else {
+      // Album finished
+      if (repeatMode === RepeatMode.CONTEXT) {
+        // Replay album from beginning
+        const firstTrack = await this.getFirstTrack();
+        if (firstTrack) {
+          await this.retryManager.executeWithRetry(async () => {
+            await playAudioTrackOptimized(firstTrack, currentAlbumId, 0, firstTrack.totalTracks);
+          }, RetryStrategy.NETWORK);
+        }
+      } else if (repeatMode === RepeatMode.ALL) {
+        // Continue with next context (e.g., next search result)
+        this.continueToNextContext();
+      } else {
+        showStatus('Fin del álbum', 'info', 2000);
+      }
+    }
+  }
+
+  async getNextTrack() {
+    const context = playbackManager.contextData.album;
+    if (!context || !context.items || context.items.length === 0) return null;
+
+    const isShuffle = this.stateManager.getShuffleMode();
+    if (isShuffle) {
+      context.currentIndex = Math.floor(Math.random() * context.items.length);
+    } else {
+      context.currentIndex = (context.currentIndex + 1) % context.items.length;
+    }
+
+    return context.items[context.currentIndex];
+  }
+
+  async getFirstTrack() {
+    const context = playbackManager.contextData.album;
+    if (!context || !context.items || context.items.length === 0) return null;
+    return context.items[0];
+  }
+
+  continueToNextContext() {
+    // If album came from search, continue with next search result
+    if (state.albumOrigin === 'search') {
+      const currentAlbumId = playbackManager.getCurrentAlbumId();
+      const currentIndex = state.searchResults.findIndex(item => item.identifier === currentAlbumId);
+
+      if (currentIndex !== -1 && currentIndex < state.searchResults.length - 1) {
+        const nextResult = state.searchResults[currentIndex + 1];
+        showStatus('Continuando con siguiente resultado de búsqueda...', 'info', 2000);
+
+        playbackManager.setContext('search', state.searchResults, currentIndex + 1);
+        playOptimizedSearchResult(nextResult, currentIndex + 1, state.searchResults);
+      }
+    }
+  }
+}
+
+class FavoritesContextHandler extends BaseContextHandler {
+  constructor(playbackStateManager) {
+    super(playbackStateManager);
+  }
+
+  getContextType() {
+    return 'favorites';
+  }
+
+  async handleTrackEnd() {
+    const repeatMode = this.stateManager.getRepeatMode();
+
+    if (repeatMode === RepeatMode.ONE) {
+      elements.audio.currentTime = 0;
+      elements.audio.play();
+      return;
+    }
+
+    if (repeatMode === RepeatMode.OFF) {
+      showStatus('Fin de los favoritos. Realiza una búsqueda para continuar', 'info', 2000);
+      return;
+    }
+
+    // Try to get next track from queue or context
+    const nextTrack = await this.getNextTrack();
+    if (nextTrack) {
+      await this.retryManager.executeWithRetry(async () => {
+        await playAudioTrackOptimized(nextTrack, nextTrack.id, nextTrack.trackIndex, nextTrack.totalTracks);
+        this.stateManager.recordSuccess();
+      }, RetryStrategy.CACHE);
+    } else {
+      // No more tracks
+      if (repeatMode === RepeatMode.CONTEXT || repeatMode === RepeatMode.INFINITE) {
+        // Restart favorites
+        loadPlaybackQueue('favorites', state.favorites, 0);
+        const firstTrack = state.playbackQueue.shift();
+        if (firstTrack) {
+          await this.retryManager.executeWithRetry(async () => {
+            await playAudioTrackOptimized(firstTrack, firstTrack.id, firstTrack.trackIndex, firstTrack.totalTracks);
+          }, RetryStrategy.CACHE);
+        }
+      } else {
+        showStatus('Fin de los favoritos. Realiza una búsqueda para continuar', 'info', 2000);
+      }
+    }
+  }
+
+  async getNextTrack() {
+    // First try from queue
+    if (state.playbackQueue.length > 0) {
+      const nextTrack = state.playbackQueue.shift();
+      if (nextTrack && nextTrack.url) {
+        // Check if available offline
+        const cached = typeof audioCache !== 'undefined' && audioCache && typeof audioCache.get === 'function'
+          ? await audioCache.get(nextTrack.url) : null;
+        if (cached || state.networkOnline) {
+          return nextTrack;
+        }
+      }
+    }
+
+    // Fallback to context navigation
+    const context = playbackManager.contextData.favorites;
+    if (!context || !context.items || context.items.length === 0) return null;
+
+    const isShuffle = this.stateManager.getShuffleMode();
+    if (isShuffle) {
+      context.currentIndex = Math.floor(Math.random() * context.items.length);
+    } else {
+      context.currentIndex = (context.currentIndex + 1) % context.items.length;
+    }
+
+    const track = context.items[context.currentIndex];
+    if (track && track.url) {
+      const cached = typeof audioCache !== 'undefined' && audioCache && typeof audioCache.get === 'function'
+        ? await audioCache.get(track.url) : null;
+      if (cached || state.networkOnline) {
+        return track;
+      }
+    }
+
+    return null;
+  }
+}
+
+class SearchContextHandler extends BaseContextHandler {
+  constructor(playbackStateManager) {
+    super(playbackStateManager);
+  }
+
+  getContextType() {
+    return 'search';
+  }
+
+  async handleTrackEnd() {
+    const repeatMode = this.stateManager.getRepeatMode();
+
+    if (repeatMode === RepeatMode.ONE) {
+      elements.audio.currentTime = 0;
+      elements.audio.play();
+      return;
+    }
+
+    if (repeatMode === RepeatMode.OFF) {
+      showStatus('Fin de la búsqueda actual', 'info', 2000);
+      return;
+    }
+
+    const nextTrack = await this.getNextTrack();
+    if (nextTrack) {
+      await this.retryManager.executeWithRetry(async () => {
+        const files = await fetchOptimizedPlayableFiles(nextTrack.identifier);
+        if (files && files.length > 0) {
+          await playAudioTrackOptimized(files[0], nextTrack.identifier);
+          this.stateManager.recordSuccess();
+        }
+      }, RetryStrategy.NETWORK);
+    } else {
+      if (repeatMode === RepeatMode.CONTEXT) {
+        // Restart search results
+        const context = playbackManager.contextData.search;
+        if (context && context.items && context.items.length > 0) {
+          context.currentIndex = 0;
+          const firstItem = context.items[0];
+          const files = await fetchOptimizedPlayableFiles(firstItem.identifier);
+          if (files && files.length > 0) {
+            await playAudioTrackOptimized(files[0], firstItem.identifier);
+          }
+        }
+      } else {
+        showStatus('Fin de la búsqueda actual', 'info', 2000);
+      }
+    }
+  }
+
+  async getNextTrack() {
+    const context = playbackManager.contextData.search;
+    if (!context || !context.items || context.items.length === 0) return null;
+
+    const isShuffle = this.stateManager.getShuffleMode();
+    if (isShuffle) {
+      context.currentIndex = Math.floor(Math.random() * context.items.length);
+    } else {
+      context.currentIndex = (context.currentIndex + 1) % context.items.length;
+    }
+
+    return context.items[context.currentIndex];
+  }
+}
+
+class SearchPlaylistContextHandler extends BaseContextHandler {
+  constructor(playbackStateManager) {
+    super(playbackStateManager);
+  }
+
+  getContextType() {
+    return 'searchPlaylist';
+  }
+
+  async handleTrackEnd() {
+    const repeatMode = this.stateManager.getRepeatMode();
+
+    if (repeatMode === RepeatMode.ONE) {
+      elements.audio.currentTime = 0;
+      elements.audio.play();
+      return;
+    }
+
+    if (repeatMode === RepeatMode.OFF) {
+      showStatus('Fin de la lista de reproducción', 'info', 2000);
+      return;
+    }
+
+    const nextTrack = await this.getNextTrack();
+    if (nextTrack) {
+      await this.retryManager.executeWithRetry(async () => {
+        await playAudioTrackOptimized(nextTrack, nextTrack.id, 0, 1);
+        this.stateManager.recordSuccess();
+      }, RetryStrategy.NETWORK);
+    } else {
+      if (repeatMode === RepeatMode.CONTEXT) {
+        // Restart playlist
+        const context = playbackManager.contextData.searchPlaylist;
+        if (context && context.items && context.items.length > 0) {
+          context.currentIndex = 0;
+          const firstTrack = context.items[0];
+          await playAudioTrackOptimized(firstTrack, firstTrack.id, 0, 1);
+        }
+      } else {
+        showStatus('Fin de la lista de reproducción', 'info', 2000);
+      }
+    }
+  }
+
+  async getNextTrack() {
+    const context = playbackManager.contextData.searchPlaylist;
+    if (!context || !context.items || context.items.length === 0) return null;
+
+    if (!playbackManager.hasNextTrack()) {
+      return null;
+    }
+
+    const isShuffle = this.stateManager.getShuffleMode();
+    if (isShuffle) {
+      context.currentIndex = Math.floor(Math.random() * context.items.length);
+    } else {
+      context.currentIndex = (context.currentIndex + 1) % context.items.length;
+    }
+
+    return context.items[context.currentIndex];
+  }
+}
+
+// Context handler factory
+class ContextHandlerFactory {
+  static createHandler(contextType, playbackStateManager) {
+    switch (contextType) {
+      case 'album':
+        return new AlbumContextHandler(playbackStateManager);
+      case 'favorites':
+        return new FavoritesContextHandler(playbackStateManager);
+      case 'search':
+        return new SearchContextHandler(playbackStateManager);
+      case 'searchPlaylist':
+        return new SearchPlaylistContextHandler(playbackStateManager);
+      default:
+        return new FavoritesContextHandler(playbackStateManager); // fallback
+    }
+  }
+}
+
+// Enhanced playback controller
+class EnhancedPlaybackController {
+  constructor() {
+    this.stateManager = playbackStateManager;
+    this.currentHandler = null;
+  }
+
+  setContext(contextType, contextId = null) {
+    this.stateManager.setCurrentTrack(null, contextType, contextId);
+    this.currentHandler = ContextHandlerFactory.createHandler(contextType, this.stateManager);
+  }
+
+  async handleTrackEnd() {
+    if (!this.currentHandler) return;
+
+    try {
+      await this.currentHandler.handleTrackEnd();
+    } catch (error) {
+      console.error('Error in track end handling:', error);
+      this.stateManager.recordFailure();
+
+      if (this.stateManager.shouldEnterSafeMode()) {
+        showStatus('Múltiples errores - activando modo seguro', 'error', 3000);
+        showStatus('Reproducción detenida por seguridad', 'warning', 5000);
+        return;
+      }
+
+      // Try fallback: skip to next track
+      setTimeout(() => {
+        if (this.currentHandler) {
+          this.currentHandler.handleTrackEnd();
+        }
+      }, 2000);
+    }
+  }
+
+  getCurrentHandler() {
+    return this.currentHandler;
+  }
+}
+
+// Global enhanced controller instance
+const enhancedPlaybackController = new EnhancedPlaybackController();
 
 // Fetch with timeout for network operations
 async function fetchWithTimeout(resource, options = {}) {
@@ -905,33 +1431,52 @@ async function playPreviousInContext() {
   }
 }
 
-// Repeat mode functions
+// Enhanced repeat mode functions
 function toggleRepeatMode() {
-  const modes = ['all', 'one', 'off'];
+  const modes = ['all', 'context', 'one', 'infinite', 'off'];
   const currentIndex = modes.indexOf(state.repeatMode);
   state.repeatMode = modes[(currentIndex + 1) % modes.length];
   saveRepeatMode(state.repeatMode);
+
+  // Update playback state manager
+  if (playbackStateManager) {
+    playbackStateManager.setRepeatMode(state.repeatMode);
+  }
+
   updateRepeatBtn();
-  showStatus(`Modo de repetición: ${state.repeatMode === 'all' ? 'Todas' : state.repeatMode === 'one' ? 'Una' : 'Apagado'}`, 'info', 2000);
+  showStatus(`Modo de repetición: ${getRepeatModeDisplayName(state.repeatMode)}`, 'info', 2000);
+}
+
+function getRepeatModeDisplayName(mode) {
+  const names = {
+    all: 'Repetir contexto',
+    context: 'Repetir contexto infinito',
+    one: 'Repetir pista',
+    infinite: 'Mezcla infinita',
+    off: 'Sin repetición'
+  };
+  return names[mode] || 'Repetir contexto';
 }
 
 function updateRepeatBtn() {
   if (!elements.repeatBtn) return;
 
   const icons = {
-    all: '🔁', // Repeat all
-    one: '🔂', // Repeat one
-    off: '➡️'   // No repeat
+    all: '🔁',      // Repeat context
+    context: '🔄',  // Repeat context infinitely
+    one: '🔂',      // Repeat one
+    infinite: '🔀', // Mix infinitely
+    off: '➡️'       // No repeat
   };
 
   elements.repeatBtn.textContent = icons[state.repeatMode] || '🔁';
-  elements.repeatBtn.title = `Modo de repetición: ${state.repeatMode === 'all' ? 'Todas' : state.repeatMode === 'one' ? 'Una' : 'Apagado'}`;
+  elements.repeatBtn.title = `Modo de repetición: ${getRepeatModeDisplayName(state.repeatMode)}`;
 }
 
 function loadRepeatMode() {
   try {
     const saved = localStorage.getItem('resonate_repeat_mode');
-    if (saved && ['all', 'one', 'off'].includes(saved)) {
+    if (saved && ['all', 'context', 'one', 'infinite', 'off'].includes(saved)) {
       state.repeatMode = saved;
     }
   } catch (e) {
@@ -959,7 +1504,7 @@ function updateProgressBar() {
   }
 }
 
-// Track listening statistics
+// Enhanced track listening statistics and playback control
 function setupListenTracking() {
   let endedHandlerExecuted = false;
 
@@ -977,6 +1522,7 @@ function setupListenTracking() {
     }
     endedHandlerExecuted = true;
 
+    // Track listening statistics
     if (state.currentTrack) {
       const listenDuration = Date.now() - state.currentTrackListenStart;
       const trackDuration = elements.audio.duration * 1000; // Convertir a ms
@@ -1004,19 +1550,24 @@ function setupListenTracking() {
       state.currentTrackListenStart = 0;
     }
 
-    // Apply repeat mode
-    if (state.repeatMode === 'one') {
-      // Replay current track
-      elements.audio.currentTime = 0;
-      elements.audio.play();
-      endedHandlerExecuted = false; // Allow loop
-      return;
-    } else if (state.repeatMode === 'all') {
-      // Play next in context
-      playNextInContext();
+    // Use enhanced playback controller for track end handling
+    const currentContext = playbackManager.getCurrentContext();
+    if (currentContext) {
+      enhancedPlaybackController.setContext(currentContext);
+      await enhancedPlaybackController.handleTrackEnd();
     } else {
-      // 'off': Do nothing, stop playback
-      showStatus('Reproducción finalizada', 'info', 2000);
+      // Fallback to legacy behavior
+      const repeatMode = state.repeatMode;
+      if (repeatMode === 'one') {
+        elements.audio.currentTime = 0;
+        elements.audio.play();
+        endedHandlerExecuted = false; // Allow loop
+        return;
+      } else if (repeatMode === 'all') {
+        playNextInContext();
+      } else {
+        showStatus('Reproducción finalizada', 'info', 2000);
+      }
     }
   });
 
