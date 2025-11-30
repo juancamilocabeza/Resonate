@@ -1,22 +1,15 @@
 // Application initialization
 
 async function initializeApp() {
-  console.log('DEBUG: Starting initializeApp()');
-
   // Inicializar caché de audio primero
   try {
-    console.log('DEBUG: About to initialize audioCache');
     if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.init === 'function') {
-      console.log('DEBUG: audioCache available, calling init()');
       await audioCache.init();
-      console.log('DEBUG: audioCache.init() completed successfully');
       window.logger?.info('Audio cache initialized successfully', 'CACHE');
     } else {
-      console.log('DEBUG: audioCache not available or missing init method');
       window.logger?.warn('audioCache not available, continuing without cache', 'CACHE');
     }
   } catch (error) {
-    console.error('DEBUG: Error in audioCache.init():', error);
     window.logger?.error(`Error initializing cache: ${error.message}`, 'CACHE');
   }
 
@@ -231,7 +224,7 @@ async function initializeApp() {
   setupPWAInstall();
   setupOfflineFunctionality();
 
-  // Handle back button to hide search results and favorites list
+  // EXPONER FUNCIONES GLOBALES CRÍTICAS (después de setupPWAInstall)
   window.addEventListener('popstate', (e) => {
     // Check if search results or favorites are visible
     const searchVisible = window.elements && window.elements.searchResults &&
@@ -310,13 +303,9 @@ async function initializeApp() {
   window.dispatchEvent(new Event('resonate:results-rendered'));
 
   // Handle offline mode after everything is initialized
-  console.log('DEBUG: About to call handleOfflineMode');
   setTimeout(() => {
-    console.log('DEBUG: Calling handleOfflineMode now');
     handleOfflineMode();
   }, 100); // Small delay to ensure everything is ready
-
-  console.log('DEBUG: initializeApp completed successfully');
 
 }
 
@@ -425,29 +414,22 @@ function formatBytes(bytes) {
 
 // Function to handle offline mode detection after initialization is complete
 function handleOfflineMode() {
-  console.log('DEBUG: handleOfflineMode called');
-  console.log('DEBUG: navigator.onLine =', navigator.onLine);
-
   // EMERGENCY FALLBACK: Always ensure app is visible first
   try {
     const fallback = document.getElementById('offline-fallback');
     const app = document.getElementById('app');
-    console.log('DEBUG: Elements found - fallback:', !!fallback, 'app:', !!app);
 
     if (fallback && app) {
       // Start with app visible by default
       fallback.style.display = 'none';
       app.style.display = 'block';
-      console.log('DEBUG: App set to visible by default');
     }
   } catch (emergencyError) {
-    console.error('DEBUG: Emergency fallback failed:', emergencyError);
+    console.error('Emergency fallback failed:', emergencyError);
   }
 
   // Only check offline status if we're actually offline
   if (!navigator.onLine) {
-    console.log('DEBUG: Device is offline, checking content...');
-
     try {
       // Check favorites first
       const favoritesCount = localStorage.getItem('resonate_favorites');
@@ -459,37 +441,21 @@ function handleOfflineMode() {
           hasFavorites = favorites && favorites.length > 0;
         }
       } catch (e) {
-        console.warn('DEBUG: Error parsing favorites:', e);
         hasFavorites = false;
       }
-
-      console.log('DEBUG: hasFavorites =', hasFavorites);
 
       // Check if there's any cached music available (synchronous check first)
       let hasCachedMusic = false;
       try {
-        if (typeof audioCache !== 'undefined' && audioCache) {
-          console.log('DEBUG: audioCache available, checking getAllMetadata...');
-          // Try synchronous check first, then async if needed
-          if (typeof audioCache.getAllMetadata === 'function') {
-            // For now, assume we have cached music if audioCache is available
-            // We'll do the real check asynchronously later
-            hasCachedMusic = true;
-            console.log('DEBUG: Assuming cached music available initially');
-          }
-        } else {
-          console.log('DEBUG: audioCache not available');
+        if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.getAllMetadata === 'function') {
+          hasCachedMusic = true;
         }
       } catch (e) {
-        console.warn('DEBUG: Error checking cached music:', e);
         hasCachedMusic = false;
       }
 
-      console.log('DEBUG: hasCachedMusic =', hasCachedMusic);
-
       // Show offline fallback only if no favorites AND no cached music
       if (!hasFavorites && !hasCachedMusic) {
-        console.log('DEBUG: Showing offline fallback');
         const fallback = document.getElementById('offline-fallback');
         const app = document.getElementById('app');
 
@@ -501,32 +467,24 @@ function handleOfflineMode() {
         if (window.logger) window.logger.info('Showing offline fallback - no cached music available', 'SYSTEM');
       } else {
         // We have either favorites or cached music, ensure app is visible
-        console.log('DEBUG: App should be visible - has content');
         if (window.logger) window.logger.info(`App ready for offline use - Favorites: ${hasFavorites}, Cached music: ${hasCachedMusic}`, 'SYSTEM');
 
         // If we have cached music but no favorites, show offline music section asynchronously
         if (hasCachedMusic && !hasFavorites) {
-          console.log('DEBUG: Scheduling offline music section display');
           setTimeout(async () => {
             try {
-              console.log('DEBUG: Calling showOfflineMusicSection');
               await showOfflineMusicSection();
             } catch (asyncError) {
-              console.error('DEBUG: Error in showOfflineMusicSection:', asyncError);
+              console.error('Error in showOfflineMusicSection:', asyncError);
             }
           }, 500); // Small delay to ensure UI is ready
         }
       }
     } catch (error) {
-      console.error('DEBUG: Error in handleOfflineMode:', error);
       if (window.logger) window.logger.error(`Error in handleOfflineMode: ${error.message}`, 'SYSTEM');
       // Fallback: ensure app is visible (already done at top)
     }
-  } else {
-    console.log('DEBUG: Device is online, no offline handling needed');
   }
-
-  console.log('DEBUG: handleOfflineMode completed');
 }
 
 // Esperar a que los scripts críticos estén disponibles
