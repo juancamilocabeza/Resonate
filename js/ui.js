@@ -408,6 +408,11 @@ function toggleFavorite(track) {
   updateFavoriteButton();
   updateFavoritesList();
   updateFavoritesCount();
+
+  // Si la pista pertenece a un álbum, verificar si necesitamos actualizar el botón del álbum
+  if (track.albumId && track.albumId !== track.id) {
+    updateAlbumButtonForTrack(track.albumId);
+  }
 }
 
 // FUNCIÓN: Agregar todas las pistas de un álbum a favoritos
@@ -446,6 +451,7 @@ function addAlbumToFavorites(albumId, files) {
     updateFavoritesList();
     updateFavoritesCount();
     updatePlayButtonState();
+    updateTrackFavoriteStatesInContainer(albumId);
     showStatus(`Álbum agregado a favoritos (${addedCount} pistas)`, 'info');
   } else {
     showStatus('Todas las pistas del álbum ya están en favoritos', 'info');
@@ -474,6 +480,7 @@ function removeAlbumFromFavorites(albumId) {
   updateFavoritesList();
   updateFavoritesCount();
   updatePlayButtonState();
+  updateTrackFavoriteStatesInContainer(albumId);
 
   if (removedCount > 0) {
     showStatus(`Álbum removido de favoritos (${removedCount} pistas)`, 'info');
@@ -492,6 +499,59 @@ function isCompleteAlbumInFavorites(albumId, totalTracks) {
   return albumTracks.length === totalTracks;
 }
 
+// FUNCIÓN: Obtener el estado correcto del botón de álbum (incluyendo estado mixto)
+function getAlbumButtonState(albumId, trackCount) {
+  const albumTracks = state.favorites.filter(fav => fav.albumId === albumId);
+  const favoritedCount = albumTracks.length;
+
+  if (favoritedCount === trackCount) {
+    // Todas las pistas están en favoritos
+    return { action: 'remove', label: 'Quitar de favoritos', isActive: true };
+  } else if (favoritedCount === 0) {
+    // Ninguna pista está en favoritos
+    return { action: 'add', label: 'Agregar a favoritos', isActive: false };
+  } else {
+    // Estado mixto: algunas pistas favoritas, otras no
+    return { action: 'complete', label: 'Completar álbum', isActive: false };
+  }
+}
+
+// FUNCIÓN: Actualizar el estado de favoritos de las pistas individuales en contenedores abiertos
+function updateTrackFavoriteStatesInContainer(albumId) {
+  // Buscar contenedores de pistas abiertos para este álbum
+  const tracksContainers = document.querySelectorAll('.tracks-container');
+
+  tracksContainers.forEach(container => {
+    // Verificar si este contenedor pertenece al álbum especificado
+    // (el contenedor anterior debería ser el elemento del álbum)
+    const previousElement = container.previousElementSibling;
+    if (previousElement && previousElement.classList.contains('search-result')) {
+      // Para elementos de búsqueda, verificar si el identifier coincide
+      const resultEl = previousElement;
+      // No podemos acceder fácilmente al identifier desde aquí, así que verificamos todas las pistas
+
+      const trackItems = container.querySelectorAll('.track-item');
+      trackItems.forEach(trackItem => {
+        const favoriteBtn = trackItem.querySelector('.track-favorite');
+        if (favoriteBtn) {
+          // Extraer información de la pista del botón (asumiendo que tenemos data attributes o podemos inferir)
+          // Como alternativa, podemos buscar la pista por URL o recrear la lógica
+
+          // Buscar el botón play que tiene data-url
+          const playBtn = trackItem.querySelector('.track-play');
+          if (playBtn && playBtn.dataset.url) {
+            const trackUrl = playBtn.dataset.url;
+            const isFavorite = isTrackFavorite({ url: trackUrl });
+
+            favoriteBtn.classList.toggle('active', isFavorite);
+            favoriteBtn.textContent = isFavorite ? '❤️' : '🩶';
+          }
+        }
+      });
+    }
+  });
+}
+
 // FUNCIÓN: Actualizar el estado de favorito en los resultados de búsqueda
 function updateSearchResultFavoriteState(albumId, isFavorite) {
   const resultElements = document.querySelectorAll('.search-result');
@@ -503,6 +563,33 @@ function updateSearchResultFavoriteState(albumId, isFavorite) {
         favoriteBtn.classList.toggle('active', isFavorite);
         favoriteBtn.innerHTML = isFavorite ? '❤️' : '🩶';
         favoriteBtn.title = isFavorite ? 'Quitar de favoritos' : 'Agregar a favoritos';
+      }
+    }
+  });
+}
+
+// FUNCIÓN: Actualizar el botón de álbum cuando cambia el estado de una pista individual
+function updateAlbumButtonForTrack(albumId) {
+  // Buscar todos los botones de álbum que correspondan a este albumId
+  const albumButtons = document.querySelectorAll('.result-favorite');
+
+  albumButtons.forEach(button => {
+    // Encontrar el elemento padre que contiene la información del álbum
+    const resultEl = button.closest('.search-result');
+    if (resultEl) {
+      // Obtener el número de pistas del álbum desde el metadata
+      const metaElement = resultEl.querySelector('.result-meta');
+      if (metaElement) {
+        const metaText = metaElement.textContent;
+        const trackMatch = metaText.match(/(\d+)\s+pistas?/);
+        if (trackMatch) {
+          const trackCount = parseInt(trackMatch[1]);
+          const buttonState = getAlbumButtonState(albumId, trackCount);
+
+          button.classList.toggle('active', buttonState.isActive);
+          button.textContent = buttonState.isActive ? '❤️' : '🩶';
+          button.title = buttonState.label;
+        }
       }
     }
   });
@@ -945,10 +1032,10 @@ async function loadAlbumInfoBackground(identifier, resultEl) {
     // Actualizar el estado del botón de favorito
     const favoriteBtn = resultEl.querySelector('.result-favorite');
     if (favoriteBtn) {
-      const isFavorite = isAlbumInFavorites(identifier);
-      favoriteBtn.classList.toggle('active', isFavorite);
-      favoriteBtn.innerHTML = isFavorite ? '❤️' : '🩶';
-      favoriteBtn.title = isFavorite ? 'Quitar de favoritos' : 'Agregar a favoritos';
+      const buttonState = isAlbum ? getAlbumButtonState(identifier, trackCount) : getAlbumButtonState(identifier, 1);
+      favoriteBtn.classList.toggle('active', buttonState.isActive);
+      favoriteBtn.innerHTML = buttonState.isActive ? '❤️' : '🩶';
+      favoriteBtn.title = buttonState.label;
     }
 
     // Mostrar/ocultar el botón de expandir basado en si es un álbum
@@ -1154,12 +1241,18 @@ function createSearchResultElement(result, globalIndex) {
       if (files.length > 0) {
         if (files.length > 1) {
           // Album handling
-          if (hasFavoriteTrack) {
+          const buttonState = getAlbumButtonState(result.identifier, files.length);
+          if (buttonState.action === 'remove') {
             removeAlbumFromFavorites(result.identifier);
             favoriteBtn.classList.remove('active');
             favoriteBtn.textContent = '🩶';
             favoriteBtn.title = 'Agregar a favoritos';
-          } else {
+          } else if (buttonState.action === 'complete') {
+            addAlbumToFavorites(result.identifier, files);
+            favoriteBtn.classList.add('active');
+            favoriteBtn.textContent = '❤️';
+            favoriteBtn.title = 'Quitar de favoritos';
+          } else if (buttonState.action === 'add') {
             addAlbumToFavorites(result.identifier, files);
             favoriteBtn.classList.add('active');
             favoriteBtn.textContent = '❤️';
