@@ -2451,7 +2451,7 @@ async function shareTrack(identifier, title = 'Pista', creator = 'Desconocido') 
   const shareUrl = `${window.location.origin}${window.location.pathname}?play=${encodeURIComponent(identifier)}`;
   const shortTitle = `"${title}"`;
   const shareTitle = `¡Esto te puede interesar!\n${shortTitle}`;
-  const shareText = `${shareTitle}\n\nDisfrútalo libremente en Resonate Player:\n${shareUrl}`;
+  const shareText = `\n\nDisfrútalo libremente en Resonate Player\n${shareUrl}`;
 
   console.log('Intentando compartir:', { shareUrl, shareTitle, shareText });
 
