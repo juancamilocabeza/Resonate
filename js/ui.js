@@ -71,7 +71,7 @@ class LoaderManager {
     this.activeLoaders.delete(`play-${context}`);
 
     // Only restore if no other loaders are active
-    if (this.activeLoaders.size === 0 || !this.activeLoaders.has('play-default')) {
+    if (this.activeLoaders.size === 0) {
       elements.playBtn.disabled = false;
       elements.playBtn.textContent = elements.audio.paused ? '▶' : '| |';
       state.isLoading = false;
