@@ -303,15 +303,120 @@ async function initializeApp() {
   window.dispatchEvent(new Event('resonate:results-rendered'));
 
   // Handle offline mode after everything is initialized
-  handleOfflineMode();
+  setTimeout(() => {
+    handleOfflineMode();
+  }, 100); // Small delay to ensure everything is ready
 
+}
+
+// Function to show offline music section when we have cached music but no favorites
+async function showOfflineMusicSection() {
+  try {
+    if (typeof audioCache === 'undefined' || !audioCache || typeof audioCache.getAllMetadata !== 'function') {
+      return;
+    }
+
+    const cachedMetadata = await audioCache.getAllMetadata();
+    if (!cachedMetadata || cachedMetadata.length === 0) {
+      return;
+    }
+
+    // Create offline music section if it doesn't exist
+    let offlineSection = document.getElementById('offline-music-section');
+    if (!offlineSection) {
+      offlineSection = document.createElement('div');
+      offlineSection.id = 'offline-music-section';
+      offlineSection.className = 'offline-music-section';
+      offlineSection.innerHTML = `
+        <div class="offline-music-header">
+          <h3>🎵 Música Offline</h3>
+          <p>Tienes ${cachedMetadata.length} pista(s) disponible(s) sin conexión</p>
+        </div>
+        <div id="offline-music-list" class="offline-music-list"></div>
+      `;
+
+      // Insert after search section
+      const searchSection = document.querySelector('.discovery-section');
+      if (searchSection) {
+        searchSection.appendChild(offlineSection);
+      }
+    }
+
+    // Populate the list
+    const listContainer = document.getElementById('offline-music-list');
+    if (listContainer) {
+      listContainer.innerHTML = '';
+
+      cachedMetadata.forEach((metadata, index) => {
+        const item = document.createElement('div');
+        item.className = 'offline-music-item';
+        item.innerHTML = `
+          <div class="offline-music-info">
+            <div class="offline-music-title">${metadata.title || 'Sin título'}</div>
+            <div class="offline-music-creator">${metadata.creator || 'Desconocido'}</div>
+            <div class="offline-music-size">${formatBytes(metadata.size || 0)}</div>
+          </div>
+          <button class="offline-play-btn" data-url="${metadata.url}" data-index="${index}">
+            ▶
+          </button>
+        `;
+
+        // Add click handler
+        const playBtn = item.querySelector('.offline-play-btn');
+        playBtn.addEventListener('click', () => {
+          playOfflineTrack(metadata);
+        });
+
+        listContainer.appendChild(item);
+      });
+    }
+
+    // Show the section
+    offlineSection.style.display = 'block';
+
+  } catch (error) {
+    console.warn('Error showing offline music section:', error);
+  }
+}
+
+// Function to play an offline track
+async function playOfflineTrack(metadata) {
+  try {
+    const track = {
+      url: metadata.url,
+      title: metadata.title || 'Sin título',
+      creator: metadata.creator || 'Desconocido',
+      id: metadata.url, // Use URL as ID for offline tracks
+      isOffline: true
+    };
+
+    // Use existing playback function
+    if (typeof playAudioTrackOptimized === 'function') {
+      await playAudioTrackOptimized(track, track.id);
+    }
+
+  } catch (error) {
+    console.error('Error playing offline track:', error);
+    if (typeof showStatus === 'function') {
+      showStatus('Error reproduciendo pista offline', 'error');
+    }
+  }
+}
+
+// Helper function to format bytes
+function formatBytes(bytes) {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
 // Function to handle offline mode detection after initialization is complete
 async function handleOfflineMode() {
-  // Only check offline status if we're actually offline
-  if (!navigator.onLine) {
-    try {
+  try {
+    // Only check offline status if we're actually offline
+    if (!navigator.onLine) {
       // Check favorites first
       const favoritesCount = localStorage.getItem('resonate_favorites');
       let hasFavorites = false;
@@ -347,29 +452,27 @@ async function handleOfflineMode() {
           fallback.style.display = 'flex';
           document.body.style.overflow = 'hidden';
         }
-        window.logger.info('Showing offline fallback - no cached music available', 'SYSTEM');
+        if (window.logger) window.logger.info('Showing offline fallback - no cached music available', 'SYSTEM');
       } else {
         // We have either favorites or cached music, show the app
-        window.logger.info(`App ready for offline use - Favorites: ${hasFavorites}, Cached music: ${hasCachedMusic}`, 'SYSTEM');
+        if (window.logger) window.logger.info(`App ready for offline use - Favorites: ${hasFavorites}, Cached music: ${hasCachedMusic}`, 'SYSTEM');
 
         // If we have cached music but no favorites, show offline music section
         if (hasCachedMusic && !hasFavorites) {
           setTimeout(() => {
-            if (typeof showOfflineMusicSection === 'function') {
-              showOfflineMusicSection();
-            }
+            showOfflineMusicSection();
           }, 500); // Small delay to ensure UI is ready
         }
       }
-    } catch (error) {
-      window.logger.error(`Error in handleOfflineMode: ${error.message}`, 'SYSTEM');
-      // Fallback: show the app anyway to avoid black screen
-      const fallback = document.getElementById('offline-fallback');
-      const app = document.getElementById('app');
-      if (fallback && app) {
-        fallback.style.display = 'none';
-        app.style.display = 'block';
-      }
+    }
+  } catch (error) {
+    if (window.logger) window.logger.error(`Error in handleOfflineMode: ${error.message}`, 'SYSTEM');
+    // Fallback: ensure app is visible
+    const fallback = document.getElementById('offline-fallback');
+    const app = document.getElementById('app');
+    if (fallback && app) {
+      fallback.style.display = 'none';
+      app.style.display = 'block';
     }
   }
 }
