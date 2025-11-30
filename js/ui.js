@@ -1152,6 +1152,12 @@ function createFavoriteActions(result, hasFavoriteTrack) {
   favoriteBtn.title = hasFavoriteTrack ? 'Quitar de favoritos' : 'Agregar a favoritos';
   favoriteBtn.textContent = hasFavoriteTrack ? '❤️' : '🩶';
 
+  // Share button
+  const shareBtn = document.createElement('button');
+  shareBtn.className = 'result-share';
+  shareBtn.title = 'Compartir';
+  shareBtn.textContent = '🔗';
+
   // Expand button (for albums)
   const expandBtn = document.createElement('button');
   expandBtn.className = ''; // Keep existing class for styling
@@ -1160,9 +1166,10 @@ function createFavoriteActions(result, hasFavoriteTrack) {
 
   actionsDiv.appendChild(playBtn);
   actionsDiv.appendChild(favoriteBtn);
+  actionsDiv.appendChild(shareBtn);
   actionsDiv.appendChild(expandBtn);
 
-  return { actionsDiv, playBtn, favoriteBtn, expandBtn };
+  return { actionsDiv, playBtn, favoriteBtn, shareBtn, expandBtn };
 }
 
 function createSearchResultElement(result, globalIndex) {
@@ -1205,7 +1212,7 @@ function createSearchResultElement(result, globalIndex) {
 
   // Build structure using helper functions for favorites layout
   const infoDiv = createFavoriteInfo(result);
-  const { actionsDiv, playBtn, favoriteBtn, expandBtn } = createFavoriteActions(result, hasFavoriteTrack);
+  const { actionsDiv, playBtn, favoriteBtn, shareBtn, expandBtn } = createFavoriteActions(result, hasFavoriteTrack);
 
   // Show expand button immediately for all results
   expandBtn.style.display = 'inline-block';
@@ -1224,6 +1231,11 @@ function createSearchResultElement(result, globalIndex) {
     const title = result.title || 'Sin título';
     showStatus(`Cargando: ${title}`, 'info', 0);
     await playOptimizedSearchResult(result, globalIndex, state.searchResults);
+  });
+
+  shareBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    await shareTrack(result.identifier, result.title, result.creator);
   });
 
   infoDiv.addEventListener('click', async (e) => {
@@ -1337,6 +1349,7 @@ function displayAlbumTracks(albumId, tracksContainer) {
             <span class="track-number">${trackNumber}</span>
             <button class="track-play" data-url="${track.url}" data-title="${track.title}">▶</button>
             <button class="track-favorite ${isFavorite ? 'active' : ''}">${isFavorite ? '❤️' : '🩶'}</button>
+            <button class="track-share" title="Compartir">📤</button>
           </div>
           <div class="track-item-info">
             <div class="track-title">${track.title || 'Sin título'}</div>
@@ -1365,6 +1378,15 @@ function displayAlbumTracks(albumId, tracksContainer) {
           e.stopPropagation(); // Evitar que el clic se propague al resultado principal
           playSpecificTrack(track, albumId, index, files.length);
         });
+
+        // Share button listener
+        const shareBtn = trackItem.querySelector('.track-share');
+        if (shareBtn) {
+          shareBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); // Evitar que el clic se propague al resultado principal
+            shareTrack(track.id || albumId, track.title, track.creator);
+          });
+        }
 
         tracksList.appendChild(trackItem);
       });
@@ -1762,7 +1784,7 @@ function updateFavoritesList() {
     }
 
     // Usar createFavoriteActions para consistencia
-    const { actionsDiv, playBtn, favoriteBtn, expandBtn } = createFavoriteActions(mockResult, true);
+    const { actionsDiv, playBtn, favoriteBtn, shareBtn, expandBtn } = createFavoriteActions(mockResult, true);
 
     // Configurar botones
     playBtn.setAttribute('data-id', albumId);
@@ -1791,6 +1813,11 @@ function updateFavoritesList() {
           playFromFavoritesQueue();
         }
       }
+    });
+
+    shareBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      shareTrack(albumId, albumData.albumTitle, albumData.albumCreator);
     });
 
     favoriteBtn.addEventListener('click', (e) => {
@@ -2372,6 +2399,100 @@ function removeFromSearchHistory(index) {
   if (index >= 0 && index < history.length) {
     history.splice(index, 1);
     saveSearchHistory(history);
+  }
+}
+
+// Update Open Graph meta tags for rich previews
+function updateMetaTags(track, identifier) {
+  if (!track || !identifier) return;
+
+  const baseUrl = window.location.origin;
+  const shareUrl = `${baseUrl}${window.location.pathname}?play=${encodeURIComponent(identifier)}`;
+  const imageUrl = `https://archive.org/services/img/${identifier}`;
+
+  // Update title and description
+  document.title = `${track.title} - ${track.creator} | Resonate Player`;
+
+  // Update Open Graph tags
+  updateMetaTag('property', 'og:title', `${track.title} - ${track.creator}`);
+  updateMetaTag('property', 'og:description', `Escucha "${track.title}" de ${track.creator} en Resonate Player. Música libre desde archive.org.`);
+  updateMetaTag('property', 'og:image', imageUrl);
+  updateMetaTag('property', 'og:url', shareUrl);
+
+  // Update Twitter tags
+  updateMetaTag('property', 'twitter:title', `${track.title} - ${track.creator}`);
+  updateMetaTag('property', 'twitter:description', `Escucha "${track.title}" de ${track.creator} en Resonate Player. Música libre desde archive.org.`);
+  updateMetaTag('property', 'twitter:image', imageUrl);
+  updateMetaTag('property', 'twitter:url', shareUrl);
+
+  // Update basic meta description
+  updateMetaTag('name', 'description', `Escucha "${track.title}" de ${track.creator} en Resonate Player. Música libre desde archive.org.`);
+
+  console.log('Meta tags updated for sharing:', { title: track.title, creator: track.creator, imageUrl, shareUrl });
+}
+
+// Helper function to update or create meta tags
+function updateMetaTag(attrName, attrValue, content) {
+  let metaTag = document.querySelector(`meta[${attrName}="${attrValue}"]`);
+
+  if (metaTag) {
+    metaTag.setAttribute('content', content);
+  } else {
+    metaTag = document.createElement('meta');
+    metaTag.setAttribute(attrName, attrValue);
+    metaTag.setAttribute('content', content);
+    document.head.appendChild(metaTag);
+  }
+}
+
+// Share functionality
+async function shareTrack(identifier, title = 'Pista', creator = 'Desconocido') {
+  const shareUrl = `${window.location.origin}${window.location.pathname}?play=${encodeURIComponent(identifier)}`;
+  const shortTitle = `"${title}" de ${creator}`;
+  const shareTitle = `¡Esto te puede interesar! ${shortTitle}`;
+  const shareText = `${shareTitle}\n\nEscúchalo gratis en Resonate Player:\n${shareUrl}`;
+
+  console.log('Intentando compartir:', { shareUrl, shareTitle, shareText });
+
+  // Try Web Share API first (for mobile and supported browsers)
+  if (navigator.share) {
+    try {
+      console.log('Usando Web Share API con mensaje enriquecido');
+      await navigator.share({
+        title: shareTitle,
+        text: shareText,
+        url: shareUrl
+      });
+      console.log('Web Share API exitoso');
+      showStatus('Enlace compartido exitosamente', 'info', 6000, 'info');
+      return;
+    } catch (error) {
+      console.log('Web Share API falló:', error.message);
+      // User cancelled or error - fallback to clipboard
+      // Continue to fallback, don't show error message yet
+    }
+  } else {
+    console.log('Web Share API no disponible');
+  }
+
+  // Fallback: Copy to clipboard
+  try {
+    console.log('Intentando copiar al portapapeles');
+    await navigator.clipboard.writeText(shareText);
+    console.log('Portapapeles exitoso');
+    showStatus('Enlace copiado al portapapeles', 'info', 6000, 'info');
+  } catch (clipboardError) {
+    console.error('Clipboard API falló:', clipboardError.message);
+    // Last resort: show URL for manual copying
+    try {
+      // Try to show a simple alert with the URL
+      alert(`Copiar este enlace para compartir:\n\n${shareUrl}`);
+      showStatus('Enlace mostrado en ventana emergente', 'info', 6000, 'info');
+    } catch (alertError) {
+      // If alert also fails, show in status
+      console.error('Alert también falló:', alertError.message);
+      showStatus(`Enlace para compartir: ${shareUrl}`, 'warning', 10000, 'warning');
+    }
   }
 }
 

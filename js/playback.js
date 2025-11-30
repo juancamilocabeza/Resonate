@@ -790,6 +790,11 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
   updateFavoriteButton();
   updateMediaSessionMetadata(track, identifier);
 
+  // Update meta tags for rich previews
+  if (typeof updateMetaTags === 'function') {
+    updateMetaTags(track, identifier);
+  }
+
   showStatus(`Cargando: ${track.title}`, 'info', 0);
   loaderManager.showPlayButtonLoader('track');
 

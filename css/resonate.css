@@ -1080,6 +1080,28 @@ select:focus {
   transform: rotate(180deg);
 }
 
+/* ===== SHARE COMPONENTS ===== */
+.result-share,
+.track-share {
+  background: var(--btn);
+  border: none;
+  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s;
+  color: var(--accent);
+}
+
+.result-share:active,
+.track-share:active {
+  background: var(--card);
+}
+
 /* ===== TRACK COMPONENTS ===== */
 .tracks-list {
   margin-top: 8px;

@@ -1,5 +1,64 @@
 // Application initialization
 
+// Function to handle shared links (play parameter)
+async function handleSharedLink() {
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    const playIdentifier = urlParams.get('play');
+
+    if (playIdentifier) {
+      console.log('Shared link detected, playing:', playIdentifier);
+      showStatus('Cargando contenido compartido...', 'info', 0);
+
+      // Clear the URL parameter to avoid re-triggering
+      const url = new URL(window.location);
+      url.searchParams.delete('play');
+      window.history.replaceState({}, '', url);
+
+      // Wait a bit for the app to be fully initialized
+      setTimeout(async () => {
+        try {
+          await playSharedContent(playIdentifier);
+        } catch (error) {
+          console.error('Error playing shared content:', error);
+          showStatus('Error al cargar contenido compartido', 'error');
+        }
+      }, 1000);
+    }
+  } catch (error) {
+    console.error('Error handling shared link:', error);
+  }
+}
+
+// Function to play content from shared link
+async function playSharedContent(identifier) {
+  try {
+    // Fetch the playable files for this identifier
+    const files = await fetchOptimizedPlayableFiles(identifier);
+
+    if (!files || files.length === 0) {
+      throw new Error('No se encontraron pistas reproducibles');
+    }
+
+    // If it's an album (multiple tracks), play the first track
+    const track = files[0];
+
+    // Update meta tags for rich previews when sharing
+    if (typeof updateMetaTags === 'function') {
+      updateMetaTags(track, identifier);
+    }
+
+    showStatus(`Reproduciendo contenido compartido: ${track.title}`, 'info', 0);
+
+    // Use existing playback function
+    await playAudioTrackOptimized(track, identifier);
+
+  } catch (error) {
+    console.error('Error in playSharedContent:', error);
+    throw error;
+  }
+}
+
 async function initializeApp() {
   console.log('Starting app initialization...');
 
@@ -47,6 +106,9 @@ async function initializeApp() {
 
   // Cargar estado de reproducción guardado (última sesión)
   loadSavedPlaybackState();
+
+  // Handle shared links (play parameter)
+  await handleSharedLink();
 
   // Setup functions - verificar existencia antes de llamar
   if (typeof setupConnectivityMonitoring === 'function') {
