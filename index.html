@@ -1,6 +1,5 @@
 <!doctype html>
 <html lang="es">
-
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -11,20 +10,16 @@
   <meta name="robots" content="index, follow">
   <meta name="author" content="Juan Cabeza">
   <meta name="copyright" content="2025 Resonate Player">
-
-  <!-- Open Graph / Facebook -->
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://www.resonateplayer.com">
   <meta property="og:title" content="Resonate Player">
   <meta property="og:description" content="Disfruta contenido libremente desde https://archive.org">
-  <!--<meta property="og:image" content="https://www.resonateplayer.com/icons/maskable_icon_x512.png">-->
-
-  <!-- Twitter -->
+  <meta property="og:image" content="https://www.resonateplayer.com/icons/maskable_icon_x512.png">
   <meta property="twitter:card" content="summary_large_image">
   <meta property="twitter:url" content="https://www.resonateplayer.com">
   <meta property="twitter:title" content="Resonate Player">
   <meta property="twitter:description" content="Disfruta contenido libremente desde https://archive.org">
-  <!--<meta property="twitter:image" content="https://www.resonateplayer.com/icons/maskable_icon_x512.png">-->
+  <meta property="twitter:image" content="https://www.resonateplayer.com/icons/maskable_icon_x512.png">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#000000">
   <link rel="icon" type="image/svg+xml" href="icons/favicon.svg" />
@@ -32,25 +27,21 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Resonate Player">
-
   <link rel="manifest" href="manifest.json" />
   <link rel="stylesheet" href="css/resonate.css" />
-
 </head>
-
 <body>
   <div class="app" id="app">
     <header>
-      <h1><a href="https://www.resonateplayer.com" style="text-decoration: none; color: inherit;">&nbsp;Resonate</a></h1>
-      <!-- Search and Discovery Section -->
+      <h1>
+        <a href="https://www.resonateplayer.com" style="text-decoration: none; color: inherit;">&nbsp;Resonate</a>
+      </h1>
       <div class="stage">&nbsp;&nbsp;Early stage</div>
     </header>
-    <!-- Search and Discovery Section -->
     <div class="discovery-section">
       <div class="search-section">
         <div class="search-container">
           <input type="text" id="search-input" class="search-input" placeholder="Buscar pistas">
-          <!-- Favorites Section -->
           <div class="favorites-section">
             <div class="favorites-header">
               <button id="favorites-toggle" class="favorites-toggle" aria-label="Ver lista de favoritos">
@@ -70,7 +61,6 @@
       </div>
     </div>
     <div id="favorites-list" class="favorites-list"></div>
-    <!-- Main Player Section -->
     <div class="main-player-section">
       <div class="player-container">
         <div class="player-content" id="player-content">
@@ -81,7 +71,6 @@
             <div class="title" id="title"></div>
             <div class="creator" id="creator"></div>
             <div id="status-messages"></div>
-
           </div>
           <div class="progress-section">
             <div class="progress-bar" id="progress-bar">
@@ -103,19 +92,14 @@
         </div>
       </div>
     </div>
-
     <footer class="footer">
       <div class="contact-section">
         <a href="https://wa.me/573126907942" target="_blank" aria-label="WhatsApp" style="color: #25d366; text-decoration: none;">&nbspWhatsApp</a><a href="#" aria-label="Donar" style="color: var(--accent-alt); text-decoration: none;">&nbspDonar</a>
       </div>
       <div style="font-weight: bold;">&copy; 2025 Resonate Player - Early Stage</div>
-      <div>Todos los derechos reservados. Prohibida la reproducción total o parcial sin
-        autorización.
-      </div>
+      <div>Todos los derechos reservados.</div>
     </footer>
   </div>
-
-  <!-- Donation QR Tooltip -->
   <div id="donation-tooltip" class="donation-tooltip">
     <div class="tooltip-content">
       <button class="tooltip-close" aria-label="Cerrar">×</button>
@@ -124,57 +108,23 @@
       <img src="utils/nequi-qr.jpeg" alt="QR para donar desde Nequi" class="qr-code">
       <button class="download-qr-btn"><a href="utils/nequi-qr.jpeg" style="text-decoration: none;">Descargar QR</a></button>
     </div>
-  </div>
-  
-  <!-- Offline Fallback Page -->
-  <div id="offline-fallback" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; color: #fff; z-index: 9999; justify-content: center; align-items: center; flex-direction: column; font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;">
-    <div style="text-align: center; padding: 20px;">
-      <div style="font-size: 48px; margin-bottom: 20px;">📶</div>
-      <h1 style="color: #c4c4dd; margin-bottom: 10px;">Sin conexión a internet</h1>
-      <p style="color: #94a3b8; margin-bottom: 20px; max-width: 400px; margin-left: auto; margin-right: auto;">
-        Resonate funciona sin conexión cuando tienes pistas en caché. Podrás reproducir música que hayas escuchado anteriormente. Conecta a internet para buscar nueva música.
-      </p>
-      <button onclick="window.location.reload()" style="background: #c4c4dd; color: #000; border: none; padding: 12px 24px; border-radius: 8px; font-size: 16px; cursor: pointer;">
-        Reintentar conexión
-      </button>
-    </div>
-  </div>
-
-  <audio id="audio" preload="metadata"></audio>
-  
-  <!-- Logger JS -->
+  </div> 
+  <audio id="audio" preload="metadata"></audio>  
   <script src="js/logger.js"></script>
-
-  <!-- Cache JS -->
   <script src="js/cache.js"></script>
-
-  <!-- Playback JS -->
   <script src="js/playback.js"></script>
-
-  <!-- Search JS -->
   <script src="js/search.js"></script>
-
-  <!-- UI JS -->
   <script src="js/ui.js"></script>
-
-  <!-- Offline Fix JS -->
   <script src="js/offline.js"></script>
-
-  <!-- Initialization JS -->
   <script src="js/initialization.js"></script>
-
-  <!-- Donation Tooltip JS -->
   <script src="js/donation-tooltip.js" defer></script>
-
-  <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-BM0DX9WY1D"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
     function gtag() { dataLayer.push(arguments); }
     gtag('js', new Date());
     gtag('config', 'G-BM0DX9WY1D');
-    </script>
-    
+    </script>    
   </body>
 </html>
-<!--2025 Resonate Player. Todos los derechos reservados. Prohibida la reproducción total o parcial sin autorización.-->
+<!--2025 Resonate Player. Todos los derechos reservados.-->
