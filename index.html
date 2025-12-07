@@ -1,24 +1,24 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Resonate Player</title>
   <meta name="application-name" content="Resonate Player">
-  <meta name="description"content="Disfruta contenido libremente desde https://archive.org">
-  <meta name="keywords" content="Resonate, player, reproductor, multimedia, música, gratis, online, offline, PWA">
+  <meta name="description"content="Enjoy content freely from https://archive.org">
+  <meta name="keywords" content="Resonate, player, music, free, online, offline, PWA">
   <meta name="robots" content="index, follow">
   <meta name="author" content="Juan Cabeza">
   <meta name="copyright" content="2025 Resonate Player">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://www.resonateplayer.com">
   <meta property="og:title" content="Resonate Player">
-  <meta property="og:description" content="Disfruta contenido libremente desde https://archive.org">
+  <meta property="og:description" content="Enjoy content freely from https://archive.org">
   <meta property="og:image" content="https://www.resonateplayer.com/icons/maskable_icon_x512.png">
   <meta property="twitter:card" content="summary_large_image">
   <meta property="twitter:url" content="https://www.resonateplayer.com">
   <meta property="twitter:title" content="Resonate Player">
-  <meta property="twitter:description" content="Disfruta contenido libremente desde https://archive.org">
+  <meta property="twitter:description" content="Enjoy content freely from https://archive.org">
   <meta property="twitter:image" content="https://www.resonateplayer.com/icons/maskable_icon_x512.png">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#000000">
@@ -36,25 +36,20 @@
       <h1>
         <a href="https://www.resonateplayer.com" style="text-decoration: none; color: inherit;">&nbsp;Resonate</a>
       </h1>
-      <div class="stage">&nbsp;&nbsp;Early stage</div>
+      <div id="favorites-toggle" aria-label="See your favorites list">
+        <span class="favorites-icon">❤️</span>
+        <span class="favorites-count" id="favorites-count">(0)</span>
+      </div>
     </header>
     <div class="discovery-section">
       <div class="search-section">
         <div class="search-container">
-          <input type="text" id="search-input" class="search-input" placeholder="Buscar pistas">
-          <div class="favorites-section">
-            <div class="favorites-header">
-              <button id="favorites-toggle" class="favorites-toggle" aria-label="Ver lista de favoritos">
-                <span class="favorites-icon">❤️</span>
-                <span class="favorites-count" id="favorites-count">(0)</span>
-              </button>
-            </div>
-          </div>
+          <input type="text" id="search-input" class="search-input" placeholder="Search">
         </div>
         <div id="search-results" class="search-results">
           <div id="search-loader" class="search-loader" style="display: none;">
             <div class="loader"></div>
-            <span class="loader-text">Buscando...</span>
+            <span class="loader-text">Searching...</span>
           </div>
           <div id="search-results-list" class="search-results-list"></div>
         </div>
@@ -70,6 +65,7 @@
           <div class="current-track-info">
             <div class="title" id="title"></div>
             <div class="creator" id="creator"></div>
+            <span id="current-track-share" title="Share">🔗</span>
             <div id="status-messages"></div>
           </div>
           <div class="progress-section">
@@ -81,33 +77,20 @@
           </div>
           <div class="controls">
             <button id="shuffle-favorites-btn" class="shuffle-favorites-btn">⇄</button>
-            <button id="prev-btn" class="prev-btn" aria-label="Anterior">⏮</button>
-            <button id="play-btn" class="play-btn" aria-label="Reproducir/Pausar">▶</button>
-            <button id="next-btn" class="next-btn" aria-label="Siguiente">⏭</button>
-          </div>
-          <div class="controls">
-            <button id="current-track-share" class="additional-btn" title="Compartir pista actual">🔗</button>
-            <button id="favorite-btn" class="additional-btn" aria-label="Favorito">🩶</button>
+            <button id="favorite-btn" class="additional-btn" aria-label="Favorite">🩶</button>
+            <button id="play-btn" class="play-btn" aria-label="Play/Pause">▶</button>
+            <button id="next-btn" class="next-btn" aria-label="Next">⏭</button>
           </div>
         </div>
       </div>
     </div>
     <footer class="footer">
+      <div>&copy; 2025 Resonate Player - Early Stage - All rights reserved.</div>
       <div class="contact-section">
-        <a href="https://wa.me/573126907942" target="_blank" aria-label="WhatsApp" style="color: #25d366; text-decoration: none;">&nbspWhatsApp</a><a href="#" aria-label="Donar" style="color: var(--accent-alt); text-decoration: none;">&nbspDonar</a>
+        <a href="https://wa.me/573126907942" target="_blank" aria-label="Contact" style="color: #25d366; text-decoration: none;">&nbspWhatsApp</a>
       </div>
-      <div style="font-weight: bold;">&copy; 2025 Resonate Player - Early Stage - Todos los derechos reservados.</div>
     </footer>
   </div>
-  <div id="donation-tooltip" class="donation-tooltip">
-    <div class="tooltip-content">
-      <button class="tooltip-close" aria-label="Cerrar">×</button>
-      <h3>Apoya donando a Resonate</h3>
-      <p>Escanea el código QR para donar desde Nequi (solo Colombia)</p>
-      <img src="utils/nequi-qr.jpeg" alt="QR para donar desde Nequi" class="qr-code">
-      <button class="download-qr-btn"><a href="utils/nequi-qr.jpeg" style="text-decoration: none;">Descargar QR</a></button>
-    </div>
-  </div> 
   <audio id="audio" preload="metadata"></audio>  
   <script src="js/logger.js"></script>
   <script src="js/cache.js"></script>
@@ -126,4 +109,4 @@
     </script>    
   </body>
 </html>
-<!--2025 Resonate Player. Todos los derechos reservados.-->
+<!--2025 Resonate Player - All rights reserved-->
