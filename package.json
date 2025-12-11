@@ -1,0 +1,24 @@
+{
+  "name": "resonate-player",
+  "version": "1.0.0",
+  "description": "A free music player for Archive.org content with social media sharing support",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "build:wasm": "cd wasm && npm run build"
+  },
+  "keywords": [
+    "music",
+    "player",
+    "archive.org",
+    "pwa",
+    "offline"
+  ],
+  "author": "Juan Cabeza",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

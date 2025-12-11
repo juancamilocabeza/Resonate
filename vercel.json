@@ -1,0 +1,9 @@
+{
+  "buildCommand": "",
+  "outputDirectory": ".",
+  "framework": "other",
+  "serverlessFunctionRegion": "fra",
+  "env": {
+    "BASE_URL": "@base_url"
+  }
+}
