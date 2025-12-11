@@ -1,9 +1,9 @@
-// sw.js - Service Worker mejorado para caché de audio y metadatos
+// sw.js - Enhanced Service Worker for audio and metadata caching
 const CACHE_NAME = 'resonate-v1';
 const STATIC_CACHE = 'static-v1';
 const METADATA_CACHE = 'metadata-v1';
 
-// Archivos críticos para caché
+// Critical files for caching
 const STATIC_FILES = [
   '/',
   '/index.html',
@@ -29,7 +29,7 @@ const CACHE_STRATEGIES = {
   API: 'network-first'
 };
 
-// Instalación del Service Worker
+// Service Worker installation
 self.addEventListener('install', (event) => {
   console.log('SW: Installing service worker');
   event.waitUntil(
@@ -42,10 +42,10 @@ self.addEventListener('install', (event) => {
       });
     })
   );
-  self.skipWaiting(); // Activar inmediatamente
+  self.skipWaiting(); // Activate immediately
 });
 
-// Activación y limpieza de cachés antiguos
+// Activation and cleanup of old caches
 self.addEventListener('activate', (event) => {
   console.log('SW: Activating service worker');
   event.waitUntil(
@@ -66,7 +66,7 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Estrategia de actualización: Network First, luego Cache con mejor manejo offline
+// Update strategy: Network First, then Cache with better offline handling
 self.addEventListener('fetch', (event) => {
   // Skip non-GET requests and certain destinations
   if (event.request.method !== 'GET' ||
@@ -182,9 +182,9 @@ self.addEventListener('message', (event) => {
     });
   }
 
-  // Soporta activación inmediata desde la página (skipWaiting)
+  // Support immediate activation from the page (skipWaiting)
   if (event.data && event.data.type === 'SKIP_WAITING') {
-    console.log('SW: recibir SKIP_WAITING desde cliente, ejecutando skipWaiting()');
+    console.log('SW: receiving SKIP_WAITING from client, executing skipWaiting()');
     self.skipWaiting();
   }
 });
@@ -193,14 +193,14 @@ async function handleAudioRequest(request) {
   const cache = await caches.open(CACHE_NAME);
   const cachedResponse = await cache.match(request);
 
-  // Devolver desde caché si está disponible
+  // Return from cache if available
   if (cachedResponse) {
-    // Actualizar caché en segundo plano
+    // Update cache in background
     fetchAndCache(request, cache);
     return cachedResponse;
   }
 
-  // Si no está en caché, buscar en red y cachear
+  // If not in cache, fetch from network and cache
   try {
     const networkResponse = await fetch(request);
     if (networkResponse.status === 200) {
@@ -208,7 +208,7 @@ async function handleAudioRequest(request) {
     }
     return networkResponse;
   } catch (error) {
-    // Si falla la red, devolver error
+    // If network fails, return error
     return new Response('Network error', {
       status: 408,
       headers: { 'Content-Type': 'text/plain' }
@@ -220,7 +220,7 @@ async function handleMetadataRequest(request) {
   const cache = await caches.open(METADATA_CACHE);
   const cachedResponse = await cache.match(request);
 
-  // Siempre intentar obtener datos frescos
+  // Always try to get fresh data
   try {
     const networkResponse = await fetch(request);
     if (networkResponse.status === 200) {
@@ -228,7 +228,7 @@ async function handleMetadataRequest(request) {
     }
     return networkResponse;
   } catch (error) {
-    // Si falla la red, usar caché si está disponible
+    // If network fails, use cache if available
     if (cachedResponse) {
       return cachedResponse;
     }
@@ -256,6 +256,6 @@ async function fetchAndCache(request, cache) {
       await cache.put(request, networkResponse);
     }
   } catch (error) {
-    console.log('Error actualizando caché en segundo plano:', error);
+    console.log('Error updating cache in background:', error);
   }
 }

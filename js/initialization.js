@@ -10,7 +10,7 @@ async function updateMetaTagsForSharedLink(identifier) {
     }
 
     const metadata = await response.json();
-    const title = metadata.metadata?.title || 'Contenido compartido';
+    const title = metadata.metadata?.title || 'Shared content';
     const creator = metadata.metadata?.creator || 'Resonate Player';
 
     // Update meta tags for social media sharing
@@ -23,7 +23,7 @@ async function updateMetaTagsForSharedLink(identifier) {
 
     // Update Open Graph tags
     updateMetaTag('property', 'og:title', `${title} - ${creator}`);
-    updateMetaTag('property', 'og:description', `Escucha "${title}" de ${creator} en Resonate Player. Música libre desde archive.org.`);
+    updateMetaTag('property', 'og:description', `Listen to "${title}" by ${creator} on Resonate Player. Free music from archive.org.`);
     updateMetaTag('property', 'og:image', imageUrl);
     updateMetaTag('property', 'og:url', shareUrl);
     updateMetaTag('property', 'og:type', 'music.song');
@@ -31,12 +31,12 @@ async function updateMetaTagsForSharedLink(identifier) {
     // Update Twitter Card tags
     updateMetaTag('property', 'twitter:card', 'summary_large_image');
     updateMetaTag('property', 'twitter:title', `${title} - ${creator}`);
-    updateMetaTag('property', 'twitter:description', `Escucha "${title}" de ${creator} en Resonate Player. Música libre desde archive.org.`);
+    updateMetaTag('property', 'twitter:description', `Listen to "${title}" by ${creator} on Resonate Player. Free music from archive.org.`);
     updateMetaTag('property', 'twitter:image', imageUrl);
     updateMetaTag('property', 'twitter:url', shareUrl);
 
     // Update basic meta description
-    updateMetaTag('name', 'description', `Escucha "${title}" de ${creator} en Resonate Player. Música libre desde archive.org.`);
+    updateMetaTag('name', 'description', `Listen to "${title}" by ${creator} on Resonate Player. Free music from archive.org.`);
 
     console.log('Meta tags updated for shared link:', { title, creator, imageUrl, shareUrl });
 
@@ -57,7 +57,7 @@ async function handleSharedLink() {
 
     if (playIdentifier) {
       console.log('Shared link detected, playing:', playIdentifier);
-      showStatus('Cargando contenido compartido...', 'info', 0);
+      showStatus('Loading shared content...', 'info', 0);
 
       // Update meta tags for social media previews immediately
       try {
@@ -77,7 +77,7 @@ async function handleSharedLink() {
           await playSharedContent(playIdentifier);
         } catch (error) {
           console.error('Error playing shared content:', error);
-          showStatus('Error al cargar contenido compartido', 'error');
+          showStatus('Error loading shared content', 'error');
         }
       }, 1000);
     }
@@ -93,7 +93,7 @@ async function playSharedContent(identifier) {
     const files = await fetchOptimizedPlayableFiles(identifier);
 
     if (!files || files.length === 0) {
-      throw new Error('No se encontraron pistas reproducibles');
+      throw new Error('No playable tracks found');
     }
 
     // Determine if this is an album (multiple tracks) or single track
@@ -106,8 +106,8 @@ async function playSharedContent(identifier) {
       // Create album metadata
       const albumData = {
         id: identifier,
-        title: files[0].title || 'Álbum compartido',
-        creator: files[0].creator || 'Desconocido',
+        title: files[0].title || 'Shared album',
+        creator: files[0].creator || 'Unknown',
         tracks: files.length
       };
 
@@ -123,7 +123,7 @@ async function playSharedContent(identifier) {
       // Load album tracks into playback queue
       await loadPlaybackQueue('shared-album', tracksWithMetadata, 0);
 
-      showStatus(`Álbum compartido cargado: ${albumData.title} (${files.length} pistas)`, 'info', 3000);
+      showStatus(`Shared album loaded: ${albumData.title} (${files.length} tracks)`, 'info', 3000);
 
       // Start playing the first track
       if (tracksWithMetadata.length > 0) {
@@ -139,7 +139,7 @@ async function playSharedContent(identifier) {
         updateMetaTags(track, identifier);
       }
 
-      showStatus(`Reproduciendo pista compartida: ${track.title}`, 'info', 3000);
+      showStatus(`Playing shared track: ${track.title}`, 'info', 3000);
 
       // Use existing playback function
       await playAudioTrackOptimized(track, identifier);
@@ -225,7 +225,7 @@ async function initializeApp() {
         await loadPlaybackQueue('favorites', state.favorites, 0);
         if (state.playbackQueue.length > 0) {
           const firstTrack = state.playbackQueue[0];
-          showStatus(`Listo para reproducir: ${firstTrack.title}. Haz clic en el botón de reproducción.`, 'info', 3000);
+          showStatus(`Ready to play: ${firstTrack.title}. Click the play button.`, 'info', 3000);
         }
       } catch (error) {
         window.logger.error(`Error preparing favorites queue: ${error.message}`, 'PLAYBACK');
@@ -254,12 +254,12 @@ async function initializeApp() {
   if (elements.playAllFavoritesBtn) {
     elements.playAllFavoritesBtn.addEventListener('click', async () => {
       if (state.favorites.length === 0) {
-        showStatus('No hay favoritos para reproducir', 'info');
+        showStatus('No favorites to play', 'info');
         return;
       }
 
       state.userInteracted = true;
-      showStatus('Reproduciendo todos los favoritos', 'info');
+      showStatus('Playing all favorites', 'info');
       await playFromFavoritesQueue();
     });
   }
@@ -358,7 +358,7 @@ async function initializeApp() {
           }
         } catch (error) {
           window.logger.error(`Error fetching URL for favorite: ${error.message}`, 'UI');
-          showStatus('Error al agregar favorito', 'error');
+          showStatus('Error adding favorite', 'error');
         }
       } else {
         toggleFavorite(state.currentTrack);
@@ -371,7 +371,7 @@ async function initializeApp() {
       if (state.currentTrack && state.currentTrack.id) {
         await shareTrack(state.currentTrack.id, state.currentTrack.title, state.currentTrack.creator);
       } else {
-        showStatus('No hay pista actual para compartir', 'warning');
+        showStatus('No current track to share', 'warning');
       }
     });
   }
@@ -431,7 +431,7 @@ async function initializeApp() {
     } else if (isRunningAsPWA()) {
       // PWA behavior: prevent closing the app
       window.history.pushState(null, '', window.location.href);
-      showStatus('Presiona el botón de acción flotante para cerrar la aplicación', 'info', 3000);
+      showStatus('Press the floating action button to close the app', 'info', 3000);
     }
     // If not PWA and no elements visible, allow normal back navigation (don't push state)
   });
@@ -512,6 +512,14 @@ async function initializeApp() {
     handleOfflineMode();
   }, 100); // Small delay to ensure everything is ready
 
+  // Initialize onboarding for first-time users
+  if (typeof onboardingManager !== 'undefined' && onboardingManager) {
+    setTimeout(() => {
+      onboardingManager.initialize();
+      window.logger.info('Onboarding system initialized', 'UI');
+    }, 500); // Delay to let UI render first
+  }
+
 }
 
 // Function to show offline music section when we have cached music but no favorites
@@ -534,8 +542,8 @@ async function showOfflineMusicSection() {
       offlineSection.className = 'offline-music-section';
       offlineSection.innerHTML = `
         <div class="offline-music-header">
-          <h3>🎵 Música Offline</h3>
-          <p>Tienes ${cachedMetadata.length} pista(s) disponible(s) sin conexión</p>
+          <h3>🎵 Offline Music</h3>
+          <p>You have ${cachedMetadata.length} track(s) available offline</p>
         </div>
         <div id="offline-music-list" class="offline-music-list"></div>
       `;
@@ -557,8 +565,8 @@ async function showOfflineMusicSection() {
         item.className = 'offline-music-item';
         item.innerHTML = `
           <div class="offline-music-info">
-            <div class="offline-music-title">${metadata.title || 'Sin título'}</div>
-            <div class="offline-music-creator">${metadata.creator || 'Desconocido'}</div>
+            <div class="offline-music-title">${metadata.title || 'Untitled'}</div>
+            <div class="offline-music-creator">${metadata.creator || 'Unknown'}</div>
             <div class="offline-music-size">${formatBytes(metadata.size || 0)}</div>
           </div>
           <button class="offline-play-btn" data-url="${metadata.url}" data-index="${index}">
@@ -589,8 +597,8 @@ async function playOfflineTrack(metadata) {
   try {
     const track = {
       url: metadata.url,
-      title: metadata.title || 'Sin título',
-      creator: metadata.creator || 'Desconocido',
+      title: metadata.title || 'Untitled',
+      creator: metadata.creator || 'Unknown',
       id: metadata.url, // Use URL as ID for offline tracks
       isOffline: true
     };
@@ -603,7 +611,7 @@ async function playOfflineTrack(metadata) {
   } catch (error) {
     console.error('Error playing offline track:', error);
     if (typeof showStatus === 'function') {
-      showStatus('Error reproduciendo pista offline', 'error');
+      showStatus('Error playing offline track', 'error');
     }
   }
 }
@@ -640,7 +648,7 @@ function handleOfflineMode() {
 
     // Show connectivity indicators but don't hide the app
     if (isOffline) {
-      showStatus('Sin conexión - puedes reproducir favoritos haciendo clic en el botón ▶', 'warning', 5000, 'offline');
+      showStatus('No connection - you can play favorites by clicking the play button ▶', 'warning', 5000, 'offline');
       if (window.logger) window.logger.info('Offline mode indicators activated', 'SYSTEM');
     }
     // Note: Offline music section is completely disabled as requested

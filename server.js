@@ -51,9 +51,9 @@ function injectMetaTags(html, identifier, metadata) {
     return html;
   }
 
-  const title = metadata.metadata.title || 'Contenido compartido';
-  const creator = metadata.metadata.creator || 'Desconocido';
-  const description = `Escucha "${title}" de ${creator} en Resonate Player. Música libre desde archive.org.`;
+  const title = metadata.metadata.title || 'Shared content';
+  const creator = metadata.metadata.creator || 'Unknown';
+  const description = `Listen to "${title}" by ${creator} on Resonate Player. Free music from archive.org.`;
   const imageUrl = `https://archive.org/services/img/${identifier}`;
   const canonicalUrl = `${getBaseUrl()}/?play=${encodeURIComponent(identifier)}`;
 

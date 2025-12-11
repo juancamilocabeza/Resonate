@@ -1279,7 +1279,6 @@ select:focus {
   position: relative;
   z-index: 10;
   padding: 0 16px;
-  display: none;
 }
 
 /* Ensure status messages are visible when they contain messages */
@@ -1294,7 +1293,6 @@ select:focus {
   padding: 8px 10px;
   margin: 3px 0;
   display: flex;
-  display: none;
 }
 
 .status-info {
@@ -2321,4 +2319,442 @@ select:focus {
 .current-track-share:active {
   background: var(--card);
   transform: scale(0.95);
+}
+
+/* ===== ONBOARDING SYSTEM ===== */
+
+.onboarding-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.onboarding-modal.fade-out {
+  animation: fadeOut 0.3s ease;
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.onboarding-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(2px);
+}
+
+.onboarding-content {
+  position: relative;
+  z-index: 10001;
+  background: var(--card);
+  border-radius: 16px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-heavy);
+  padding: 24px;
+  animation: slideUp 0.4s ease;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(30px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Close button */
+.onboarding-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 24px;
+  cursor: pointer;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+  z-index: 10002;
+}
+
+.onboarding-close:hover {
+  color: var(--fg);
+}
+
+/* Step container */
+.onboarding-steps {
+  position: relative;
+  min-height: 400px;
+}
+
+.onboarding-step {
+  display: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.onboarding-step.active {
+  display: block;
+  opacity: 1;
+}
+
+/* Header */
+.onboarding-header {
+  margin-bottom: 20px;
+}
+
+.onboarding-header h2 {
+  margin: 0;
+  font-size: 24px;
+  color: var(--fg);
+  font-weight: 600;
+  outline: none;
+}
+
+.onboarding-header h2:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Body content */
+.onboarding-body {
+  margin-bottom: 24px;
+  color: var(--accent);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.onboarding-subtitle {
+  font-size: 14px;
+  color: var(--muted);
+  margin: 8px 0 16px 0;
+  font-weight: 500;
+}
+
+/* Features list */
+.onboarding-features {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.onboarding-features li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px;
+  background: rgba(110, 231, 183, 0.05);
+  border-radius: 8px;
+  border-left: 3px solid var(--accent-alt);
+  color: var(--fg);
+  font-size: 13px;
+}
+
+.onboarding-features li strong {
+  color: var(--accent-alt);
+  font-weight: 600;
+}
+
+/* Highlight box */
+.onboarding-highlight-box {
+  background: linear-gradient(135deg, rgba(196, 196, 221, 0.1) 0%, rgba(56, 189, 248, 0.05) 100%);
+  border: 1px solid rgba(110, 231, 183, 0.3);
+  border-radius: 12px;
+  padding: 16px;
+  margin: 12px 0;
+  text-align: center;
+}
+
+.onboarding-icon {
+  font-size: 40px;
+  margin-bottom: 12px;
+}
+
+.onboarding-highlight-box p {
+  margin: 0;
+  color: var(--fg);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* Info box */
+.onboarding-info-box {
+  background: rgba(181, 158, 24, 0.1);
+  border-left: 3px solid var(--secondary);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 12px 0;
+  font-size: 13px;
+}
+
+.onboarding-info-box p {
+  margin: 0;
+  color: var(--fg);
+}
+
+/* Features list (Act III) */
+.onboarding-features-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.feature-item {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px;
+  background: rgba(110, 231, 183, 0.05);
+  border-radius: 8px;
+  border-left: 3px solid var(--accent-alt);
+}
+
+.feature-emoji {
+  font-size: 28px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.feature-text {
+  flex: 1;
+}
+
+.feature-text strong {
+  display: block;
+  color: var(--accent-alt);
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.feature-text p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--accent);
+  line-height: 1.5;
+}
+
+/* Footer / Actions */
+.onboarding-footer {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(110, 231, 183, 0.2);
+}
+
+/* Buttons */
+.onboarding-btn-skip,
+.onboarding-btn-prev,
+.onboarding-btn-next,
+.onboarding-btn-complete {
+  border: none;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.onboarding-btn-skip,
+.onboarding-btn-prev {
+  background: var(--btn);
+  color: var(--muted);
+  border: 1px solid rgba(110, 231, 183, 0.2);
+}
+
+.onboarding-btn-skip:hover,
+.onboarding-btn-prev:hover {
+  background: rgba(110, 231, 183, 0.1);
+  color: var(--accent);
+}
+
+.onboarding-btn-skip:active,
+.onboarding-btn-prev:active {
+  transform: scale(0.95);
+  background: rgba(110, 231, 183, 0.15);
+}
+
+.onboarding-btn-next,
+.onboarding-btn-complete {
+  background: var(--accent-alt);
+  color: var(--bg);
+}
+
+.onboarding-btn-next:hover,
+.onboarding-btn-complete:hover {
+  background: #22d3ee;
+  box-shadow: 0 4px 12px rgba(56, 189, 248, 0.3);
+}
+
+.onboarding-btn-next:active,
+.onboarding-btn-complete:active {
+  transform: scale(0.95);
+  background: #06b6d4;
+}
+
+/* Step indicators / Dots */
+.onboarding-indicators {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(110, 231, 183, 0.3);
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+}
+
+.indicator:hover {
+  background: rgba(110, 231, 183, 0.5);
+  transform: scale(1.1);
+}
+
+.indicator.active {
+  background: var(--accent-alt);
+  width: 24px;
+  border-radius: 4px;
+}
+
+/* Tooltips (optional) */
+.onboarding-tooltip {
+  position: absolute;
+  background: var(--secondary);
+  color: var(--bg);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  z-index: 10003;
+  white-space: nowrap;
+  animation: tooltipPop 0.3s ease;
+  pointer-events: none;
+  box-shadow: var(--shadow-light);
+}
+
+@keyframes tooltipPop {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.onboarding-tooltip.tooltip-top {
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-8px);
+}
+
+.onboarding-tooltip.tooltip-bottom {
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(8px);
+}
+
+/* Responsive Design */
+@media (max-width: 480px) {
+  .onboarding-content {
+    width: 95%;
+    max-height: 95vh;
+    padding: 16px;
+    border-radius: 12px;
+  }
+
+  .onboarding-header h2 {
+    font-size: 20px;
+  }
+
+  .onboarding-footer {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .onboarding-btn-skip,
+  .onboarding-btn-prev,
+  .onboarding-btn-next,
+  .onboarding-btn-complete {
+    width: 100%;
+    padding: 12px 14px;
+    font-size: 12px;
+  }
+
+  .onboarding-highlight-box {
+    padding: 12px;
+  }
+
+  .onboarding-icon {
+    font-size: 32px;
+  }
+
+  .feature-emoji {
+    font-size: 24px;
+  }
+}
+
+/* Accessibility improvements */
+.onboarding-btn-skip:focus,
+.onboarding-btn-prev:focus,
+.onboarding-btn-next:focus,
+.onboarding-btn-complete:focus,
+.indicator:focus {
+  outline: 2px solid var(--accent-alt);
+  outline-offset: 2px;
+}
+
+/* Print styles - hide onboarding when printing */
+@media print {
+  .onboarding-modal {
+    display: none !important;
+  }
 }

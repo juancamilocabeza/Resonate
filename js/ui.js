@@ -59,7 +59,7 @@ class LoaderManager {
 
     this.activeLoaders.add(`play-${context}`);
     elements.playBtn.disabled = true;
-    elements.playBtn.innerHTML = '<span class="loader" aria-label="Cargando" role="status"></span>';
+    elements.playBtn.innerHTML = '<span class="loader" aria-label="Loading" role="status"></span>';
     state.isLoading = true;
   }
 
@@ -85,7 +85,7 @@ class LoaderManager {
     if (elements.searchLoader) {
       elements.searchLoader.style.display = 'flex';
       elements.searchLoader.setAttribute('aria-live', 'polite');
-      elements.searchLoader.setAttribute('aria-label', 'Buscando pistas...');
+      elements.searchLoader.setAttribute('aria-label', 'Searching tracks...');
     }
   }
 
@@ -105,7 +105,7 @@ class LoaderManager {
    * @param {string} message - Loading message
    * @returns {HTMLElement} - The loading element
    */
-  createContainerLoader(container, message = 'Cargando...') {
+  createContainerLoader(container, message = 'Loading...') {
     const loaderEl = document.createElement('div');
     loaderEl.className = 'container-loader';
     loaderEl.innerHTML = `
@@ -333,7 +333,7 @@ function toggleMute() {
   }
 
   updateVolumeIcon();
-  showStatus(isMuted ? 'Silenciado' : 'Volumen activado', 'info', 1000);
+  showStatus(isMuted ? 'Muted' : 'Volume on', 'info', 1000);
 }
 
 function isTrackFavorite(track) {
@@ -347,7 +347,7 @@ function toggleFavorite(track) {
   // Only allow .ogg and .mp3 files to be favorited
   const urlLower = track.url.toLowerCase();
   if (!urlLower.endsWith('.ogg') && !urlLower.endsWith('.mp3')) {
-    showStatus('Solo se pueden agregar pistas en formato .ogg y .mp3 a favoritos', 'error');
+    showStatus('Only .ogg and .mp3 formats can be added to favorites', 'error');
     return;
   }
 
@@ -402,7 +402,7 @@ function toggleFavorite(track) {
       audioCache.prefetchAudio(track.url, true);
     }
 
-    showStatus('Agregado a favoritos', 'info');
+    showStatus('Added to favorites', 'info');
   }
 
   saveFavorites();
@@ -427,14 +427,14 @@ function addAlbumToFavorites(albumId, files) {
     if (!state.favorites.some(fav => fav.url === track.url)) {
       const favoriteTrack = {
         id: track.id,
-        title: track.title || 'Sin título',
-        creator: track.creator || 'Desconocido',
+        title: track.title || 'Untitled',
+        creator: track.creator || 'Unknown',
         url: track.url,
         isAlbumTrack: true,
         albumId: albumId,
         trackIndex: index,
         totalTracks: files.length,
-        albumTitle: track.album || files[0]?.album || 'Álbum'
+        albumTitle: track.album || files[0]?.album || 'Album'
       };
       state.favorites.push(favoriteTrack);
       addedCount++;
@@ -453,9 +453,9 @@ function addAlbumToFavorites(albumId, files) {
     updateFavoritesCount();
     updatePlayButtonState();
     updateTrackFavoriteStatesInContainer(albumId);
-    showStatus(`Álbum agregado a favoritos (${addedCount} pistas)`, 'info');
+    showStatus(`Album added to favorites (${addedCount} tracks)`, 'info');
   } else {
-    showStatus('Todas las pistas del álbum ya están en favoritos', 'info');
+    showStatus('All album tracks are already in favorites', 'info');
   }
 }
 
@@ -484,7 +484,7 @@ function removeAlbumFromFavorites(albumId) {
   updateTrackFavoriteStatesInContainer(albumId);
 
   if (removedCount > 0) {
-    showStatus(`Álbum removido de favoritos (${removedCount} pistas)`, 'info');
+    showStatus(`Album removed from favorites (${removedCount} tracks)`, 'info');
   }
 }
 
@@ -507,10 +507,10 @@ function getAlbumButtonState(albumId, trackCount) {
 
   if (favoritedCount === trackCount) {
     // Todas las pistas están en favoritos
-    return { action: 'remove', label: 'Quitar de favoritos', isActive: true };
+    return { action: 'remove', label: 'Remove from favorites', isActive: true };
   } else if (favoritedCount === 0) {
     // Ninguna pista está en favoritos
-    return { action: 'add', label: 'Agregar a favoritos', isActive: false };
+    return { action: 'add', label: 'Add to favorites', isActive: false };
   } else {
     // Estado mixto: algunas pistas favoritas, otras no
     return { action: 'complete', label: 'Completar álbum', isActive: false };
@@ -563,7 +563,7 @@ function updateSearchResultFavoriteState(albumId, isFavorite) {
       if (favoriteBtn) {
         favoriteBtn.classList.toggle('active', isFavorite);
         favoriteBtn.innerHTML = isFavorite ? '❤️' : '🩶';
-        favoriteBtn.title = isFavorite ? 'Quitar de favoritos' : 'Agregar a favoritos';
+        favoriteBtn.title = isFavorite ? 'Remove from favorites' : 'Add to favorites';
       }
     }
   });
@@ -659,7 +659,7 @@ function setArtwork(track, identifier) {
 
   // Create artwork element
   const img = new Image();
-  img.alt = 'Portada del álbum';
+  img.alt = 'Album cover';
   img.style.width = '100%';
   img.style.height = '100%';
   img.style.objectFit = 'cover';
@@ -750,7 +750,7 @@ function setupSearchOnEnter() {
             addToSearchHistory(state.currentSearchQuery);
           }).catch(error => {
             console.error('Search error:', error);
-            showStatus('Error en la búsqueda', 'error');
+            showStatus('Search error', 'error');
             // Hide loader on error
             loaderManager.hideSearchLoader();
           });
@@ -799,7 +799,7 @@ function setupSearchFocusBehavior() {
         displaySearchResults(result);
       }).catch(error => {
         console.error('Search error:', error);
-        showStatus('Error en la búsqueda', 'error');
+        showStatus('Search error', 'error');
         loaderManager.hideSearchLoader();
       });
     }
@@ -927,7 +927,7 @@ function displaySearchResults(searchData, clearExisting = true) {
   }
 
   if (results.length === 0 && clearExisting) {
-    elements.searchResultsList.innerHTML = '<div class="no-results">No se encontraron resultados</div>';
+    elements.searchResultsList.innerHTML = '<div class="no-results">No results found</div>';
     elements.searchResults.classList.add('active');
     // Volver a deshabilitar los controles si no hay resultados
     if (state.favorites.length === 0) {
@@ -1022,11 +1022,11 @@ async function loadAlbumInfoBackground(identifier, resultEl) {
     const metaElement = resultEl.querySelector('.result-meta');
     if (metaElement) {
       if (trackCount === 0) {
-        metaElement.innerHTML = '<span style="color: var(--muted); font-size: 10px;">No hay pistas reproducibles</span>';
+        metaElement.innerHTML = '<span style="color: var(--muted); font-size: 10px;">No playable tracks</span>';
       } else {
         metaElement.innerHTML = isAlbum ?
-          `<span class="album-indicator">${trackCount} pistas</span>` :
-          `<span class="album-indicator">Pista individual</span>`;
+          `<span class="album-indicator">${trackCount} tracks</span>` :
+          `<span class="album-indicator">Single track</span>`;
       }
     }
 
@@ -1050,7 +1050,7 @@ async function loadAlbumInfoBackground(identifier, resultEl) {
 
     const metaElement = resultEl.querySelector('.result-meta');
     if (metaElement) {
-      metaElement.innerHTML = `<span style="color: var(--muted); font-size: 10px;">Error: ${error.message.includes('Timeout') ? 'Timeout' : 'Error desconocido'}</span>`;
+      metaElement.innerHTML = `<span style="color: var(--muted); font-size: 10px;">Error: ${error.message.includes('Timeout') ? 'Timeout' : 'Unknown error'}</span>`;
     }
   }
 }
@@ -1062,11 +1062,11 @@ function createResultInfo(result) {
 
   const titleDiv = document.createElement('div');
   titleDiv.className = 'result-title';
-  titleDiv.textContent = result.title || 'Sin título';
+  titleDiv.textContent = result.title || 'Untitled';
 
   const creatorDiv = document.createElement('div');
   creatorDiv.className = 'result-creator';
-  creatorDiv.textContent = result.creator || 'Desconocido';
+  creatorDiv.textContent = result.creator || 'Unknown';
 
   const metaDiv = document.createElement('div');
   metaDiv.className = 'result-meta';
@@ -1088,13 +1088,13 @@ function createResultButtons(result, hasFavoriteTrack) {
   // Play button
   const playBtn = document.createElement('button');
   playBtn.className = 'result-play-btn';
-  playBtn.title = 'Reproducir';
+  playBtn.title = 'Play';
   playBtn.innerHTML = '<span class="play-icon">▶</span>';
 
   // Favorite button
   const favoriteBtn = document.createElement('button');
   favoriteBtn.className = `result-favorite ${hasFavoriteTrack ? 'active' : ''}`;
-  favoriteBtn.title = hasFavoriteTrack ? 'Quitar de favoritos' : 'Agregar a favoritos';
+  favoriteBtn.title = hasFavoriteTrack ? 'Remove from favorites' : 'Add to favorites';
   favoriteBtn.textContent = hasFavoriteTrack ? '❤️' : '🩶';
 
   // Expand button
@@ -1117,11 +1117,11 @@ function createFavoriteInfo(result) {
 
   const titleDiv = document.createElement('div');
   titleDiv.className = 'favorite-title';
-  titleDiv.textContent = result.title || 'Sin título';
+  titleDiv.textContent = result.title || 'Untitled';
 
   const creatorDiv = document.createElement('div');
   creatorDiv.className = 'favorite-creator';
-  creatorDiv.textContent = result.creator || 'Desconocido';
+  creatorDiv.textContent = result.creator || 'Unknown';
 
   // Album indicator will be added by loadAlbumInfoBackground
   const metaDiv = document.createElement('div');
@@ -1144,25 +1144,25 @@ function createFavoriteActions(result, hasFavoriteTrack) {
   // Play button
   const playBtn = document.createElement('button');
   playBtn.className = '';
-  playBtn.title = 'Reproducir';
+  playBtn.title = 'Play';
   playBtn.textContent = '▶';
 
   // Favorite button
   const favoriteBtn = document.createElement('button');
   favoriteBtn.className = ` ${hasFavoriteTrack ? 'active' : ''}`;
-  favoriteBtn.title = hasFavoriteTrack ? 'Quitar de favoritos' : 'Agregar a favoritos';
+  favoriteBtn.title = hasFavoriteTrack ? 'Remove from favorites' : 'Add to favorites';
   favoriteBtn.textContent = hasFavoriteTrack ? '❤️' : '🩶';
 
   // Share button
   const shareBtn = document.createElement('button');
   shareBtn.className = 'result-share';
-  shareBtn.title = 'Compartir';
+  shareBtn.title = 'Share';
   shareBtn.textContent = '🔗';
 
   // Expand button (for albums)
   const expandBtn = document.createElement('button');
   expandBtn.className = ''; // Keep existing class for styling
-  expandBtn.title = 'Ver pistas del álbum';
+  expandBtn.title = 'View album tracks';
   expandBtn.textContent = '▼';
 
   actionsDiv.appendChild(playBtn);
@@ -1191,7 +1191,7 @@ function createSearchResultElement(result, globalIndex) {
 
   // Load cover image
   const img = new Image();
-  img.alt = 'Portada del álbum';
+  img.alt = 'Album cover';
   img.style.width = '100%';
   img.style.height = '100%';
   img.style.objectFit = 'cover';
@@ -1229,8 +1229,8 @@ function createSearchResultElement(result, globalIndex) {
   // Event listeners
   playBtn.addEventListener('click', async (e) => {
     e.stopPropagation();
-    const title = result.title || 'Sin título';
-    showStatus(`Cargando: ${title}`, 'info', 0);
+    const title = result.title || 'Untitled';
+    showStatus(`Loading: ${title}`, 'info', 0);
     await playOptimizedSearchResult(result, globalIndex, state.searchResults);
   });
 
@@ -1241,8 +1241,8 @@ function createSearchResultElement(result, globalIndex) {
 
   infoDiv.addEventListener('click', async (e) => {
     if (e.target.closest('.result-buttons')) return;
-    const title = result.title || 'Sin título';
-    showStatus(`Cargando: ${title}`, 'info', 0);
+    const title = result.title || 'Untitled';
+    showStatus(`Loading: ${title}`, 'info', 0);
     await playOptimizedSearchResult(result, globalIndex, state.searchResults);
   });
 
@@ -1259,17 +1259,17 @@ function createSearchResultElement(result, globalIndex) {
             removeAlbumFromFavorites(result.identifier);
             favoriteBtn.classList.remove('active');
             favoriteBtn.textContent = '🩶';
-            favoriteBtn.title = 'Agregar a favoritos';
+            favoriteBtn.title = 'Add to favorites';
           } else if (buttonState.action === 'complete') {
             addAlbumToFavorites(result.identifier, files);
             favoriteBtn.classList.add('active');
             favoriteBtn.textContent = '❤️';
-            favoriteBtn.title = 'Quitar de favoritos';
+            favoriteBtn.title = 'Remove from favorites';
           } else if (buttonState.action === 'add') {
             addAlbumToFavorites(result.identifier, files);
             favoriteBtn.classList.add('active');
             favoriteBtn.textContent = '❤️';
-            favoriteBtn.title = 'Quitar de favoritos';
+            favoriteBtn.title = 'Remove from favorites';
           }
         } else {
           // Single track handling
@@ -1278,12 +1278,12 @@ function createSearchResultElement(result, globalIndex) {
           const isNowFavorite = isTrackFavorite(track);
           favoriteBtn.classList.toggle('active', isNowFavorite);
           favoriteBtn.textContent = isNowFavorite ? '❤️' : '🩶';
-          favoriteBtn.title = isNowFavorite ? 'Quitar de favoritos' : 'Agregar a favoritos';
+          favoriteBtn.title = isNowFavorite ? 'Remove from favorites' : 'Add to favorites';
         }
       }
     } catch (error) {
       console.error('Error managing favorite:', error);
-      showStatus('Error al gestionar favorito', 'error');
+      showStatus('Error managing favorite', 'error');
     }
   });
 
@@ -1323,7 +1323,7 @@ function toggleAlbumTracks(albumId, tracksContainer, expandButton) {
 // Display tracks for an album
 function displayAlbumTracks(albumId, tracksContainer) {
   const isInSearchResult = tracksContainer.closest('.search-result') !== null;
-  const message = isInSearchResult ? 'Buscando...' : 'Cargando...';
+  const message = isInSearchResult ? 'Searching...' : 'Loading...';
   tracksContainer.innerHTML = `<div class="search-loading"><div class="loader"></div><span class="loader-text">${message}</span></div>`;
 
   fetchOptimizedPlayableFiles(albumId)
@@ -1331,7 +1331,7 @@ function displayAlbumTracks(albumId, tracksContainer) {
       tracksContainer.innerHTML = '';
 
       if (files.length === 0) {
-        tracksContainer.innerHTML = '<div class="no-results">No se encontraron pistas</div>';
+        tracksContainer.innerHTML = '<div class="no-results">No tracks found</div>';
         return;
       }
 
@@ -1350,11 +1350,11 @@ function displayAlbumTracks(albumId, tracksContainer) {
             <span class="track-number">${trackNumber}</span>
             <button class="track-play" data-url="${track.url}" data-title="${track.title}">▶</button>
             <button class="track-favorite ${isFavorite ? 'active' : ''}">${isFavorite ? '❤️' : '🩶'}</button>
-            <button class="track-share" title="Compartir">🔗</button>
+            <button class="track-share" title="Share">🔗</button>
           </div>
           <div class="track-item-info">
-            <div class="track-title">${track.title || 'Sin título'}</div>
-            <div class="track-creator">${track.creator || 'Desconocido'}</div>
+            <div class="track-title">${track.title || 'Untitled'}</div>
+            <div class="track-creator">${track.creator || 'Unknown'}</div>
           </div>
         `;
 
@@ -1396,7 +1396,7 @@ function displayAlbumTracks(albumId, tracksContainer) {
     })
     .catch(error => {
       console.error('Error cargando pistas del álbum:', error);
-      tracksContainer.innerHTML = '<div class="no-results">Error al cargar las pistas</div>';
+      tracksContainer.innerHTML = '<div class="no-results">Error loading tracks</div>';
     });
 }
 
@@ -1419,11 +1419,11 @@ function updatePlayButtonState() {
     if (elements.favoriteBtn) elements.favoriteBtn.disabled = true;
     if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.disabled = true;
     if (elements.playAllFavoritesBtn) elements.playAllFavoritesBtn.disabled = true;
-    if (elements.playBtn) elements.playBtn.title = 'Realiza una búsqueda para comenzar';
-    if (elements.prevBtn) elements.prevBtn.title = 'Realiza una búsqueda para comenzar';
-    if (elements.nextBtn) elements.nextBtn.title = 'Realiza una búsqueda para comenzar';
-    if (elements.favoriteBtn) elements.favoriteBtn.title = 'Realiza una búsqueda para comenzar';
-    if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.title = 'Realiza una búsqueda para comenzar';
+    if (elements.playBtn) elements.playBtn.title = 'Search to get started';
+    if (elements.prevBtn) elements.prevBtn.title = 'Search to get started';
+    if (elements.nextBtn) elements.nextBtn.title = 'Search to get started';
+    if (elements.favoriteBtn) elements.favoriteBtn.title = 'Search to get started';
+    if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.title = 'Search to get started';
 
     // Disable favorites controls
     if (elements.favoritesToggle) elements.favoritesToggle.classList.add('disabled');
@@ -1436,11 +1436,11 @@ function updatePlayButtonState() {
     if (elements.favoriteBtn) elements.favoriteBtn.disabled = false;
     if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.disabled = false;
 
-    if (elements.playBtn) elements.playBtn.title = 'Reproducir favoritos';
-    if (elements.prevBtn) elements.prevBtn.title = 'Pista anterior';
-    if (elements.nextBtn) elements.nextBtn.title = 'Siguiente pista';
-    if (elements.favoriteBtn) elements.favoriteBtn.title = 'Quitar favorito';
-    if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.title = 'Mezclar favoritos';
+    if (elements.playBtn) elements.playBtn.title = 'Play favorites';
+    if (elements.prevBtn) elements.prevBtn.title = 'Previous track';
+    if (elements.nextBtn) elements.nextBtn.title = 'Next track';
+    if (elements.favoriteBtn) elements.favoriteBtn.title = 'Remove favorite';
+    if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.title = 'Shuffle favorites';
 
     // Enable favorites controls
     if (elements.favoritesToggle) elements.favoritesToggle.classList.remove('disabled');
@@ -1452,20 +1452,20 @@ function enableControlsForSearchResults() {
   // Si no hay favoritos pero hay resultados de búsqueda, habilitar los controles
   if (state.favorites.length === 0 && state.searchResults && state.searchResults.length > 0) {
     if (elements.playBtn) elements.playBtn.disabled = false;
-    if (elements.playBtn) elements.playBtn.title = 'Reproducir resultado de búsqueda';
+    if (elements.playBtn) elements.playBtn.title = 'Play search result';
 
     if (elements.favoriteBtn) elements.favoriteBtn.disabled = false;
-    if (elements.favoriteBtn) elements.favoriteBtn.title = 'Agregar a favoritos';
+    if (elements.favoriteBtn) elements.favoriteBtn.title = 'Add to favorites';
 
-    // Los botones prev/next funcionan dentro del contexto de búsqueda
+    // The prev/next buttons work within search context
     if (elements.prevBtn) elements.prevBtn.disabled = false;
     if (elements.nextBtn) elements.nextBtn.disabled = false;
-    if (elements.prevBtn) elements.prevBtn.title = 'Pista anterior (búsqueda)';
-    if (elements.nextBtn) elements.nextBtn.title = 'Siguiente pista (búsqueda)';
+    if (elements.prevBtn) elements.prevBtn.title = 'Previous track (search)';
+    if (elements.nextBtn) elements.nextBtn.title = 'Next track (search)';
 
-    // El botón shuffle funciona con los resultados actuales
+    // The shuffle button works with current results
     if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.disabled = false;
-    if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.title = 'Mezclar resultados';
+    if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.title = 'Shuffle results';
   }
 }
 
@@ -1475,21 +1475,21 @@ function setupConnectivityMonitoring() {
 
   window.addEventListener('online', () => {
     state.networkOnline = true;
-    showStatus('Conexión restaurada', 'info', 2000);
+    showStatus('Connection restored', 'info', 2000);
     // Re-enable search input when back online
     if (elements.searchInput) {
       elements.searchInput.disabled = false;
-      elements.searchInput.placeholder = "Buscar pistas";
+      elements.searchInput.placeholder = "Search tracks";
     }
   });
 
   window.addEventListener('offline', () => {
     state.networkOnline = false;
-    showStatus('Sin conexión - Solo reproducción offline disponible', 'warning', 4000);
+    showStatus('No connection - Offline playback only available', 'warning', 4000);
     // Disable search functionality when offline
     if (elements.searchInput) {
       elements.searchInput.disabled = true;
-      elements.searchInput.placeholder = "Búsqueda no disponible sin conexión";
+      elements.searchInput.placeholder = "Search unavailable offline";
     }
     // Hide any active search results
     hideSearchResults();
@@ -1520,7 +1520,7 @@ function setupOfflineFunctionality() {
 
   // Detectar cambios de conectividad
   window.addEventListener('online', () => {
-    showStatus('Conexión restaurada', 'info', 2000);
+    showStatus('Connection restored', 'info', 2000);
     state.networkOnline = true;
     updateOfflineIndicator();
     // Try to sync cached data when back online
@@ -1528,13 +1528,13 @@ function setupOfflineFunctionality() {
   });
 
   window.addEventListener('offline', () => {
-    showStatus('Modo offline activado - Reproduciendo desde caché local', 'info', 4000);
+    showStatus('Offline mode activated - Playing from local cache', 'info', 4000);
     state.networkOnline = false;
     updateOfflineIndicator();
 
     // Intentar reproducir desde caché si hay una pista actual
     if (state.currentTrack && elements.audio.src) {
-      showStatus('Reproduciendo desde caché', 'info', 2000);
+      showStatus('Playing from cache', 'info', 2000);
     }
 
     // Show offline-specific UI hints
@@ -1553,7 +1553,7 @@ function createOfflineIndicator() {
   indicator.className = 'offline-indicator hidden';
   indicator.innerHTML = `
     <div class="offline-icon"></div>
-    <div class="offline-text">Sin conexión</div>
+    <div class="offline-text">No connection</div>
   `;
 
   // Add to header or main container
@@ -1573,7 +1573,7 @@ function updateOfflineIndicator() {
   if (!state.networkOnline) {
     indicator.classList.remove('hidden');
     indicator.classList.add('active');
-    indicator.querySelector('.offline-text').textContent = 'Sin conexión';
+    indicator.querySelector('.offline-text').textContent = 'No connection';
 
     // Add offline class to body for styling
     document.body.classList.add('offline-mode');
@@ -1591,16 +1591,16 @@ function showOfflineHints() {
   const favoritesCount = state.favorites ? state.favorites.length : 0;
 
   if (favoritesCount > 0) {
-    showStatus(`${favoritesCount} favoritos disponibles offline`, 'info', 5000);
+    showStatus(`${favoritesCount} favorites available offline`, 'info', 5000);
   } else {
-    showStatus('Sin conexión - Agrega favoritos para escuchar offline', 'warning', 6000);
+    showStatus('No connection - Add favorites to listen offline', 'warning', 6000);
   }
 
   // Check cache status
   if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.getUsageStats === 'function') {
     audioCache.getUsageStats().then(stats => {
       if (stats.itemCount > 0) {
-        showStatus(`${stats.itemCount} pistas en caché (${audioCache.formatBytes ? audioCache.formatBytes(stats.totalSize) : stats.totalSize + ' bytes'})`, 'info', 4000);
+        showStatus(`${stats.itemCount} tracks in cache (${audioCache.formatBytes ? audioCache.formatBytes(stats.totalSize) : stats.totalSize + ' bytes'})`, 'info', 4000);
       }
     }).catch(error => {
       console.warn('Failed to get cache stats:', error);
@@ -1615,7 +1615,7 @@ async function syncOfflineData() {
     if (state.favorites && state.favorites.length > 0) {
       if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.preloadFavorites === 'function') {
         await audioCache.preloadFavorites(state.favorites);
-        showStatus('Sincronizando caché offline...', 'info', 2000);
+        showStatus('Syncing offline cache...', 'info', 2000);
       }
     }
 
@@ -1664,12 +1664,12 @@ function loadSavedPlaybackState() {
       state.currentTrack = savedState.track;
       elements.title.textContent = state.currentTrack.title;
       elements.creator.textContent = state.currentTrack.totalTracks > 1 ?
-        `${state.currentTrack.creator || 'Desconocido'} (${state.currentTrack.trackIndex + 1}/${state.currentTrack.totalTracks})` :
-        `${state.currentTrack.creator || 'Desconocido'}`;
+        `${state.currentTrack.creator || 'Unknown'} (${state.currentTrack.trackIndex + 1}/${state.currentTrack.totalTracks})` :
+        `${state.currentTrack.creator || 'Unknown'}`;
       setArtwork(state.currentTrack, state.currentTrack.id);
       updateFavoriteButton();
 
-      showStatus(`Última pista: ${savedState.track.title} en ${formatTime(savedState.currentTime)}`, 'info', 5000);
+      showStatus(`Last track: ${savedState.track.title} at ${formatTime(savedState.currentTime)}`, 'info', 5000);
       return savedState;
     } else {
       // Expired, remove it
@@ -1694,7 +1694,7 @@ function updateFavoritesList() {
   updateFavoritesCount();
 
   if (state.favorites.length === 0) {
-    favoritesList.innerHTML = '<div class="no-results" style="padding: 12px; text-align: center;">No hay favoritos</div>';
+    favoritesList.innerHTML = '<div class="no-results" style="padding: 12px; text-align: center;">No favorites</div>';
     return;
   }
 
@@ -1734,7 +1734,7 @@ function updateFavoritesList() {
 
     // Load cover image with lazy loading
     const img = new Image();
-    img.alt = 'Portada del álbum';
+    img.alt = 'Album cover';
     img.style.width = '100%';
     img.style.height = '100%';
     img.style.objectFit = 'cover';
@@ -1770,8 +1770,8 @@ function updateFavoritesList() {
 
     // Crear objeto mock para usar createFavoriteInfo
     const mockResult = {
-      title: albumData.albumTitle || 'Sin título',
-      creator: albumData.albumCreator || 'Desconocido',
+      title: albumData.albumTitle || 'Untitled',
+      creator: albumData.albumCreator || 'Unknown',
       identifier: albumId
     };
 
@@ -1781,7 +1781,7 @@ function updateFavoritesList() {
     // Agregar indicador de álbum manualmente
     const metaElement = infoDiv.querySelector('.result-meta');
     if (metaElement && isAlbum) {
-      metaElement.innerHTML = `<span class="album-indicator">${albumData.tracks.length} pistas</span>`;
+      metaElement.innerHTML = `<span class="album-indicator">${albumData.tracks.length} tracks</span>`;
     }
 
     // Usar createFavoriteActions para consistencia
@@ -1829,7 +1829,7 @@ function updateFavoritesList() {
       saveFavorites();
       updateFavoritesList();
       updateFavoriteButton();
-      showStatus('Eliminado de favoritos', 'info');
+      showStatus('Removed from favorites', 'info');
     });
 
     // Agregar funcionalidad de expandir pistas del álbum
@@ -1971,7 +1971,7 @@ class FavoritesToggle {
     const isExpanded = this.isVisible ? 'true' : 'false';
     this.element.setAttribute('aria-expanded', isExpanded);
     this.element.setAttribute('aria-label',
-      `Lista de favoritos ${this.isVisible ? 'visible' : 'oculta'}`
+      `Favorites list ${this.isVisible ? 'visible' : 'hidden'}`
     );
   }
 
@@ -2064,8 +2064,8 @@ function createStartFavoritesCTA() {
 
   container.innerHTML = `
     <div>
-      <button id="start-favorites-btn" style="background:#6ee7b7; color:#000; border:none; padding:8px 12px; font-size:14px; border-radius:12px; cursor:pointer;">Reproducir favoritos</button>
-      <button id="start-favorites-close" aria-label="Cerrar" style="background:transparent; border:none; color:#666; font-size:16px; cursor:pointer;">✕</button>
+      <button id="start-favorites-btn" style="background:#6ee7b7; color:#000; border:none; padding:8px 12px; font-size:14px; border-radius:12px; cursor:pointer;">Play favorites</button>
+      <button id="start-favorites-close" aria-label="Close" style="background:transparent; border:none; color:#666; font-size:16px; cursor:pointer;">✕</button>
     </div>
   `;
 
@@ -2139,7 +2139,7 @@ function registerServiceWorker() {
           if (registration.waiting) {
             try {
               registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-              showStatus('Actualizando aplicación...', 'info', 3000);
+              showStatus('Updating app...', 'info', 3000);
             } catch (e) {
               if (typeof registration.waiting.skipWaiting === 'function') {
                 registration.waiting.skipWaiting();
@@ -2153,12 +2153,12 @@ function registerServiceWorker() {
                 if (isRunningAsPWA()) {
                   try {
                     newWorker.postMessage({ type: 'SKIP_WAITING' });
-                    showStatus('Actualización disponible — aplicando ahora...', 'info', 3000);
+                    showStatus('Update available — applying now...', 'info', 3000);
                   } catch (err) {
                     console.warn('SKIP_WAITING error:', err);
                   }
                 } else {
-                  showStatus('Nueva versión disponible. Recarga la aplicación.', 'info', 5000);
+                  showStatus('New version available. Reload the app.', 'info', 5000);
                 }
               }
             });
@@ -2194,7 +2194,7 @@ function setupPWAInstall() {
       deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
       if (outcome === 'accepted') {
-        showStatus('Resonate se está instalando...', 'info', 3000);
+        showStatus('Resonate is installing...', 'info', 3000);
       }
       hidePWAInstallBanner();
       deferredPrompt = null;
@@ -2219,9 +2219,9 @@ function showPWAInstallBanner() {
   banner.innerHTML = `
     <div class="pwa-banner-content">
       <div class="pwa-banner-text">
-        <div class="pwa-banner-buttons">Instala Resonate para una mejor experiencia
-          <button class="pwa-install-btn">Instalar</button>
-          <button class="pwa-close-btn" aria-label="Cerrar">✕</button>
+        <div class="pwa-banner-buttons">Install Resonate for a better experience
+          <button class="pwa-install-btn">Install</button>
+          <button class="pwa-close-btn" aria-label="Close">✕</button>
         </div>
       </div>
     </div>
@@ -2323,7 +2323,7 @@ function displaySearchHistory() {
   const history = loadSearchHistory();
 
   if (history.length === 0) {
-    elements.searchResultsList.innerHTML = '<div class="no-results">No hay búsquedas recientes</div>';
+    elements.searchResultsList.innerHTML = '<div class="no-results">No recent searches</div>';
     elements.searchResults.classList.add('active');
     return;
   }
@@ -2337,7 +2337,7 @@ function displaySearchHistory() {
     historyItem.innerHTML = `
       <div class="history-content">
         <span class="history-query">${query}</span>
-        <button class="history-remove" data-index="${index}" title="Eliminar">✕</button>
+        <button class="history-remove" data-index="${index}" title="Remove">✕</button>
       </div>
     `;
 
@@ -2354,7 +2354,7 @@ function displaySearchHistory() {
           displaySearchResults(result);
         }).catch(error => {
           console.error('Search error:', error);
-          showStatus('Error en la búsqueda', 'error');
+          showStatus('Search error', 'error');
           loaderManager.hideSearchLoader();
         });
       }
@@ -2367,7 +2367,7 @@ function displaySearchHistory() {
   if (history.length > 0) {
     const clearAllDiv = document.createElement('div');
     clearAllDiv.className = 'search-history-clear';
-    clearAllDiv.innerHTML = '<button class="clear-history-btn">Limpiar historial</button>';
+    clearAllDiv.innerHTML = '<button class="clear-history-btn">Clear history</button>';
     clearAllDiv.querySelector('.clear-history-btn').addEventListener('click', () => {
       clearSearchHistory();
       displaySearchHistory();
@@ -2392,7 +2392,7 @@ function displaySearchHistory() {
 
 function clearSearchHistory() {
   saveSearchHistory([]);
-  showStatus('Historial de búsqueda limpiado', 'info', 2000);
+  showStatus('Search history cleared', 'info', 2000);
 }
 
 function removeFromSearchHistory(index) {
@@ -2416,18 +2416,18 @@ function updateMetaTags(track, identifier) {
 
   // Update Open Graph tags
   updateMetaTag('property', 'og:title', `${track.title} - ${track.creator}`);
-  updateMetaTag('property', 'og:description', `Escucha "${track.title}" de ${track.creator} en Resonate Player. Música libre desde archive.org.`);
+  updateMetaTag('property', 'og:description', `Listen to "${track.title}" by ${track.creator} on Resonate Player. Free music from archive.org.`);
   updateMetaTag('property', 'og:image', imageUrl);
   updateMetaTag('property', 'og:url', shareUrl);
 
   // Update Twitter tags
   updateMetaTag('property', 'twitter:title', `${track.title} - ${track.creator}`);
-  updateMetaTag('property', 'twitter:description', `Escucha "${track.title}" de ${track.creator} en Resonate Player. Música libre desde archive.org.`);
+  updateMetaTag('property', 'twitter:description', `Listen to "${track.title}" by ${track.creator} on Resonate Player. Free music from archive.org.`);
   updateMetaTag('property', 'twitter:image', imageUrl);
   updateMetaTag('property', 'twitter:url', shareUrl);
 
   // Update basic meta description
-  updateMetaTag('name', 'description', `Escucha "${track.title}" de ${track.creator} en Resonate Player. Música libre desde archive.org.`);
+  updateMetaTag('name', 'description', `Listen to "${track.title}" by ${track.creator} on Resonate Player. Free music from archive.org.`);
 
   console.log('Meta tags updated for sharing:', { title: track.title, creator: track.creator, imageUrl, shareUrl });
 }
@@ -2447,13 +2447,13 @@ function updateMetaTag(attrName, attrValue, content) {
 }
 
 // Share functionality
-async function shareTrack(identifier, title = 'Pista', creator = 'Desconocido') {
+async function shareTrack(identifier, title = 'Track', creator = 'Unknown') {
   const shareUrl = `${window.location.origin}${window.location.pathname}?play=${encodeURIComponent(identifier)}`;
   const shortTitle = `"${title}"`;
-  const shareTitle = `¡Esto te puede interesar!\n${shortTitle}`;
-  const shareText = `${shareTitle}\n\nDisfrútalo libremente en Resonate Player`;
+  const shareTitle = `You might like this!\n${shortTitle}`;
+  const shareText = `${shareTitle}\n\nEnjoy it freely on Resonate Player`;
 
-  console.log('Intentando compartir:', { shareUrl, shareTitle, shareText });
+  console.log('Attempting to share:', { shareUrl, shareTitle, shareText });
 
   // Update Open Graph meta tags for rich previews
   updateMetaTagsForSharing(identifier, title, creator);
@@ -2462,9 +2462,9 @@ async function shareTrack(identifier, title = 'Pista', creator = 'Desconocido') 
   let coverFile = null;
   try {
     coverFile = await getCoverImageForSharing(identifier);
-    console.log('Imagen de portada obtenida para compartir');
+    console.log('Cover image obtained for sharing');
   } catch (error) {
-    console.warn('No se pudo obtener imagen de portada:', error.message);
+    console.warn('Could not get cover image:', error.message);
     // Continue without image
   }
 
@@ -2487,7 +2487,7 @@ async function shareTrack(identifier, title = 'Pista', creator = 'Desconocido') 
 
       await navigator.share(shareData);
       console.log('Web Share API exitoso');
-      showStatus('Contenido compartido exitosamente', 'info', 6000, 'info');
+      showStatus('Content shared successfully', 'info', 6000, 'info');
       return;
     } catch (error) {
       console.log('Web Share API falló:', error.message);
@@ -2503,18 +2503,18 @@ async function shareTrack(identifier, title = 'Pista', creator = 'Desconocido') 
     console.log('Intentando copiar al portapapeles');
     await navigator.clipboard.writeText(shareText);
     console.log('Portapapeles exitoso');
-    showStatus('Enlace copiado al portapapeles', 'info', 6000, 'info');
+    showStatus('Link copied to clipboard', 'info', 6000, 'info');
   } catch (clipboardError) {
     console.error('Clipboard API falló:', clipboardError.message);
     // Last resort: show URL for manual copying
     try {
       // Try to show a simple alert with the URL
-      alert(`Copiar este enlace para compartir:\n\n${shareUrl}`);
-      showStatus('Enlace mostrado en ventana emergente', 'info', 6000, 'info');
+      alert(`Copy this link to share:\n\n${shareUrl}`);
+      showStatus('Link shown in popup', 'info', 6000, 'info');
     } catch (alertError) {
       // If alert also fails, show in status
       console.error('Alert también falló:', alertError.message);
-      showStatus(`Enlace para compartir: ${shareUrl}`, 'warning', 10000, 'warning');
+      showStatus(`Share link: ${shareUrl}`, 'warning', 10000, 'warning');
     }
   }
 }
@@ -2551,7 +2551,7 @@ function updateMetaTagsForSharing(identifier, title, creator) {
 
   // Update Open Graph tags
   updateMetaTag('property', 'og:title', `${title} - ${creator}`);
-  updateMetaTag('property', 'og:description', `Escucha "${title}" de ${creator} en Resonate Player. Música libre desde archive.org.`);
+  updateMetaTag('property', 'og:description', `Listen to "${title}" by ${creator} on Resonate Player. Free music from archive.org.`);
   updateMetaTag('property', 'og:image', imageUrl);
   updateMetaTag('property', 'og:url', shareUrl);
   updateMetaTag('property', 'og:type', 'music.song');
@@ -2559,14 +2559,14 @@ function updateMetaTagsForSharing(identifier, title, creator) {
   // Update Twitter Card tags
   updateMetaTag('property', 'twitter:card', 'summary_large_image');
   updateMetaTag('property', 'twitter:title', `${title} - ${creator}`);
-  updateMetaTag('property', 'twitter:description', `Escucha "${title}" de ${creator} en Resonate Player. Música libre desde archive.org.`);
+  updateMetaTag('property', 'twitter:description', `Listen to "${title}" by ${creator} on Resonate Player. Free music from archive.org.`);
   updateMetaTag('property', 'twitter:image', imageUrl);
   updateMetaTag('property', 'twitter:url', shareUrl);
 
   // Update basic meta description
-  updateMetaTag('name', 'description', `Escucha "${title}" de ${creator} en Resonate Player. Música libre desde archive.org.`);
+  updateMetaTag('name', 'description', `Listen to "${title}" by ${creator} on Resonate Player. Free music from archive.org.`);
 
-  console.log('Meta tags actualizados para compartir con portada:', {
+  console.log('Meta tags updated for sharing with cover:', {
     title: `${title} - ${creator}`,
     imageUrl,
     shareUrl

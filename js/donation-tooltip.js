@@ -44,13 +44,13 @@
       // Create download link
       const link = document.createElement('a');
       link.href = imgSrc;
-      link.download = 'qr-donar-a-resonate-por-nequi.jpg';
+      link.download = 'qr-donate-to-resonate-via-nequi.jpg';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
 
       // Show success message
-      showStatus('QR descargado exitosamente', 'info', 2000);
+      showStatus('QR downloaded successfully', 'info', 2000);
     }
 
     // Add event listeners when DOM is loaded

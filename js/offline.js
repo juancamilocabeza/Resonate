@@ -7,7 +7,7 @@ window.addEventListener('online', function() {
 
   // Show online indicator but don't change app visibility
   if (typeof showStatus === 'function') {
-    showStatus('Conexión restaurada', 'info', 2000);
+    showStatus('Connection restored', 'info', 2000);
   }
 
   // Update offline indicator
@@ -42,7 +42,7 @@ window.addEventListener('offline', function() {
   if (indicator) {
     indicator.classList.remove('hidden');
     indicator.classList.add('active');
-    indicator.querySelector('.offline-text').textContent = 'Sin conexión';
+    indicator.querySelector('.offline-text').textContent = 'No connection';
     document.body.classList.add('offline-mode');
   }
 });
