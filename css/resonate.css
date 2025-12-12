@@ -469,30 +469,34 @@ button:active:not(:disabled) {
   width: var(--btn-large-mobile);
   height: var(--btn-large-mobile);
   border-radius: 50%;
+  background: transparent;
+  border: 2px solid #fff;
   color: #fff;
   font-weight: bold;
   font-size: 18px;
   min-width: 56px;
   min-height: 56px;
-  box-shadow: 0 4px 16px rgba(196, 196, 221, 0.3);
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 .play-btn:hover,
 .play-btn-favorite:hover {
   transform: scale(1.05);
-  box-shadow: 0 6px 20px rgba(196, 196, 221, 0.5);
+  background: transparent;
+  box-shadow: none !important;
 }
 
 .play-btn:focus,
 .play-btn-favorite:focus {
-  outline: 2px solid #fff;
-  outline-offset: 3px;
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 .play-btn:active,
 .play-btn-favorite:active {
   transform: scale(0.98);
-  box-shadow: 0 2px 12px rgba(196, 196, 221, 0.3);
+  box-shadow: none !important;
 }
 
 .prev-btn,
