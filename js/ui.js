@@ -73,7 +73,13 @@ class LoaderManager {
     // Only restore if no other loaders are active
     if (this.activeLoaders.size === 0) {
       elements.playBtn.disabled = false;
-      elements.playBtn.textContent = elements.audio.paused ? '▶' : '| |';
+      const isPlaying = !elements.audio.paused;
+      elements.playBtn.textContent = isPlaying ? '| |' : '▶';
+      if (isPlaying) {
+        elements.playBtn.classList.add('playing');
+      } else {
+        elements.playBtn.classList.remove('playing');
+      }
       state.isLoading = false;
     }
   }

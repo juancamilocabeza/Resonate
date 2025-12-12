@@ -845,6 +845,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
         state.isLoading = false;
         elements.playBtn.disabled = false;
         elements.playBtn.textContent = '| |';
+        elements.playBtn.classList.add('playing');
 
 
 

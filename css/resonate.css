@@ -496,6 +496,12 @@ button:active:not(:disabled) {
   box-shadow: 0 2px 12px rgba(196, 196, 221, 0.3);
 }
 
+/* Playing state - improved icon contrast */
+.play-btn.playing,
+.play-btn-favorite.playing {
+  color: #1a1a2e;
+}
+
 .prev-btn,
 .next-btn {
   min-width: 80px;
