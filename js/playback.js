@@ -882,12 +882,12 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
 
         // Hide loaders
         cleanup();
-        loaderManager.hidePlayButtonLoader('track');
-        loaderManager.hidePlayButtonLoader('network');
         resolve(true);
       }).catch(error => {
         // Handle playback error
         cleanup();
+        loaderManager.hidePlayButtonLoader('track');
+        loaderManager.hidePlayButtonLoader('network');
         state.isLoading = false;
         elements.playBtn.disabled = false;
         elements.playBtn.textContent = '▶';
