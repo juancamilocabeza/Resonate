@@ -7,7 +7,7 @@ window.addEventListener('online', function() {
 
   // Show online indicator but don't change app visibility
   if (typeof showStatus === 'function') {
-    showStatus('Connection restored', 'info', 2000);
+    showStatus('Your connection is back online', 'info', 2000);
   }
 
   // Update offline indicator

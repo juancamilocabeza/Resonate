@@ -50,7 +50,7 @@
       document.body.removeChild(link);
 
       // Show success message
-      showStatus('QR downloaded successfully', 'info', 2000);
+      showStatus('QR code downloaded successfully', 'info', 2000);
     }
 
     // Add event listeners when DOM is loaded

@@ -333,7 +333,7 @@ function toggleMute() {
   }
 
   updateVolumeIcon();
-  showStatus(isMuted ? 'Muted' : 'Volume on', 'info', 1000);
+  showStatus(isMuted ? 'Volume control toggled' : 'Volume control toggled', 'info', 1000);
 }
 
 function isTrackFavorite(track) {
@@ -347,7 +347,7 @@ function toggleFavorite(track) {
   // Only allow .ogg and .mp3 files to be favorited
   const urlLower = track.url.toLowerCase();
   if (!urlLower.endsWith('.ogg') && !urlLower.endsWith('.mp3')) {
-    showStatus('Only .ogg and .mp3 formats can be added to favorites', 'error');
+    showStatus('Only .ogg and .mp3 are supported', 'error');
     return;
   }
 
@@ -382,7 +382,7 @@ function toggleFavorite(track) {
     if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.remove === 'function') {
       audioCache.remove(track.url);
     }
-    showStatus('Removed from favorites', 'info');
+    showStatus('Track removed from favorites', 'info');
   } else {
     const favoriteTrack = {
       id: track.id,
@@ -402,7 +402,7 @@ function toggleFavorite(track) {
       audioCache.prefetchAudio(track.url, true);
     }
 
-    showStatus('Added to favorites', 'info');
+    showStatus('Track added to your favorites', 'info');
   }
 
   saveFavorites();
@@ -453,9 +453,9 @@ function addAlbumToFavorites(albumId, files) {
     updateFavoritesCount();
     updatePlayButtonState();
     updateTrackFavoriteStatesInContainer(albumId);
-    showStatus(`Album added to favorites (${addedCount} tracks)`, 'info');
+    showStatus(`Album and all tracks saved`, 'info');
   } else {
-    showStatus('All album tracks are already in favorites', 'info');
+    showStatus('All tracks already favorited', 'info');
   }
 }
 
@@ -484,7 +484,7 @@ function removeAlbumFromFavorites(albumId) {
   updateTrackFavoriteStatesInContainer(albumId);
 
   if (removedCount > 0) {
-    showStatus(`Album removed from favorites (${removedCount} tracks)`, 'info');
+    showStatus(`Album removed completely`, 'info');
   }
 }
 
@@ -607,7 +607,7 @@ function updateFavoriteButton() {
   }
 }
 
-function showStatus(message, type = 'info', duration = 5000, priority = 'normal') {
+function showStatus(message, type = 'info', duration = null, priority = 'normal') {
   console.log('showStatus called with:', message, type, duration, priority);
   if (!elements.statusMessages) {
     console.error('statusMessages element not found');
@@ -632,17 +632,34 @@ function showStatus(message, type = 'info', duration = 5000, priority = 'normal'
   messageEl.className = `status-message status-${type}`;
   messageEl.textContent = message;
   messageEl.dataset.priority = priority;
+  messageEl.setAttribute('aria-live', 'polite');
+  messageEl.setAttribute('aria-atomic', 'true');
   elements.statusMessages.appendChild(messageEl);
 
   console.log('Message element added:', messageEl);
 
-  if (duration > 0) {
+  // Auto-determine duration if not explicitly set
+  let finalDuration = duration;
+  if (finalDuration === null) {
+    // Default durations by type and priority
+    if (type === 'error' || type === 'offline') {
+      finalDuration = 5000; // Errors and offline: 5 seconds
+    } else if (type === 'warning') {
+      finalDuration = 4000; // Warnings: 4 seconds
+    } else if (type === 'info') {
+      finalDuration = 3000; // Info: 3 seconds
+    } else {
+      finalDuration = 3000; // Default: 3 seconds
+    }
+  }
+
+  if (finalDuration > 0) {
     setTimeout(() => {
       if (messageEl.parentNode) {
         messageEl.remove();
         console.log('Message removed after timeout');
       }
-    }, duration);
+    }, finalDuration);
   }
 }
 
@@ -750,7 +767,7 @@ function setupSearchOnEnter() {
             addToSearchHistory(state.currentSearchQuery);
           }).catch(error => {
             console.error('Search error:', error);
-            showStatus('Search error', 'error');
+            showStatus('Search encountered an error', 'error');
             // Hide loader on error
             loaderManager.hideSearchLoader();
           });
@@ -799,7 +816,7 @@ function setupSearchFocusBehavior() {
         displaySearchResults(result);
       }).catch(error => {
         console.error('Search error:', error);
-        showStatus('Search error', 'error');
+        showStatus('Search problem occurred', 'error');
         loaderManager.hideSearchLoader();
       });
     }
@@ -1230,7 +1247,7 @@ function createSearchResultElement(result, globalIndex) {
   playBtn.addEventListener('click', async (e) => {
     e.stopPropagation();
     const title = result.title || 'Untitled';
-    showStatus(`Loading: ${title}`, 'info', 0);
+    showStatus(`Loading your track`, 'info', 0);
     await playOptimizedSearchResult(result, globalIndex, state.searchResults);
   });
 
@@ -1242,7 +1259,7 @@ function createSearchResultElement(result, globalIndex) {
   infoDiv.addEventListener('click', async (e) => {
     if (e.target.closest('.result-buttons')) return;
     const title = result.title || 'Untitled';
-    showStatus(`Loading: ${title}`, 'info', 0);
+    showStatus(`Getting track ready`, 'info', 0);
     await playOptimizedSearchResult(result, globalIndex, state.searchResults);
   });
 
@@ -1283,7 +1300,7 @@ function createSearchResultElement(result, globalIndex) {
       }
     } catch (error) {
       console.error('Error managing favorite:', error);
-      showStatus('Error managing favorite', 'error');
+      showStatus('Couldn\'t manage favorite', 'error');
     }
   });
 
@@ -1475,7 +1492,7 @@ function setupConnectivityMonitoring() {
 
   window.addEventListener('online', () => {
     state.networkOnline = true;
-    showStatus('Connection restored', 'info', 2000);
+    showStatus('Internet is back online', 'info', 2000);
     // Re-enable search input when back online
     if (elements.searchInput) {
       elements.searchInput.disabled = false;
@@ -1485,7 +1502,7 @@ function setupConnectivityMonitoring() {
 
   window.addEventListener('offline', () => {
     state.networkOnline = false;
-    showStatus('No connection - Offline playback only available', 'warning', 4000);
+    showStatus('Offline only. No internet access', 'warning', 4000);
     // Disable search functionality when offline
     if (elements.searchInput) {
       elements.searchInput.disabled = true;
@@ -1520,7 +1537,7 @@ function setupOfflineFunctionality() {
 
   // Detectar cambios de conectividad
   window.addEventListener('online', () => {
-    showStatus('Connection restored', 'info', 2000);
+    showStatus('Connection is restored', 'info', 2000);
     state.networkOnline = true;
     updateOfflineIndicator();
     // Try to sync cached data when back online
@@ -1528,13 +1545,13 @@ function setupOfflineFunctionality() {
   });
 
   window.addEventListener('offline', () => {
-    showStatus('Offline mode activated - Playing from local cache', 'info', 4000);
+    showStatus('Switched to offline playback', 'info', 4000);
     state.networkOnline = false;
     updateOfflineIndicator();
 
     // Intentar reproducir desde caché si hay una pista actual
     if (state.currentTrack && elements.audio.src) {
-      showStatus('Playing from cache', 'info', 2000);
+      showStatus('Using cached version of track', 'info', 2000);
     }
 
     // Show offline-specific UI hints
@@ -1591,16 +1608,16 @@ function showOfflineHints() {
   const favoritesCount = state.favorites ? state.favorites.length : 0;
 
   if (favoritesCount > 0) {
-    showStatus(`${favoritesCount} favorites available offline`, 'info', 5000);
+    showStatus('You have offline favorites', 'info', 5000);
   } else {
-    showStatus('No connection - Add favorites to listen offline', 'warning', 6000);
+    showStatus('Save favorites to listen offline', 'warning', 6000);
   }
 
   // Check cache status
   if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.getUsageStats === 'function') {
     audioCache.getUsageStats().then(stats => {
       if (stats.itemCount > 0) {
-        showStatus(`${stats.itemCount} tracks in cache (${audioCache.formatBytes ? audioCache.formatBytes(stats.totalSize) : stats.totalSize + ' bytes'})`, 'info', 4000);
+        showStatus('Cache has saved many tracks', 'info', 4000);
       }
     }).catch(error => {
       console.warn('Failed to get cache stats:', error);
@@ -1615,7 +1632,7 @@ async function syncOfflineData() {
     if (state.favorites && state.favorites.length > 0) {
       if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.preloadFavorites === 'function') {
         await audioCache.preloadFavorites(state.favorites);
-        showStatus('Syncing offline cache...', 'info', 2000);
+        showStatus('Syncing your offline library', 'info', 2000);
       }
     }
 
@@ -1669,7 +1686,7 @@ function loadSavedPlaybackState() {
       setArtwork(state.currentTrack, state.currentTrack.id);
       updateFavoriteButton();
 
-      showStatus(`Last track: ${savedState.track.title} at ${formatTime(savedState.currentTime)}`, 'info', 5000);
+      showStatus('Resuming your last track', 'info', 5000);
       return savedState;
     } else {
       // Expired, remove it
@@ -1829,7 +1846,7 @@ function updateFavoritesList() {
       saveFavorites();
       updateFavoritesList();
       updateFavoriteButton();
-      showStatus('Removed from favorites', 'info');
+      showStatus('Favorite was removed', 'info');
     });
 
     // Agregar funcionalidad de expandir pistas del álbum
@@ -2139,7 +2156,7 @@ function registerServiceWorker() {
           if (registration.waiting) {
             try {
               registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-              showStatus('Updating app...', 'info', 3000);
+              showStatus('App is updating right now', 'info', 3000);
             } catch (e) {
               if (typeof registration.waiting.skipWaiting === 'function') {
                 registration.waiting.skipWaiting();
@@ -2153,12 +2170,12 @@ function registerServiceWorker() {
                 if (isRunningAsPWA()) {
                   try {
                     newWorker.postMessage({ type: 'SKIP_WAITING' });
-                    showStatus('Update available — applying now...', 'info', 3000);
+                    showStatus('App update is installing', 'info', 3000);
                   } catch (err) {
                     console.warn('SKIP_WAITING error:', err);
                   }
                 } else {
-                  showStatus('New version available. Reload the app.', 'info', 5000);
+                  showStatus('New version available for you', 'info', 5000);
                 }
               }
             });
@@ -2194,7 +2211,7 @@ function setupPWAInstall() {
       deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
       if (outcome === 'accepted') {
-        showStatus('Resonate is installing...', 'info', 3000);
+        showStatus('Resonate is installing', 'info', 3000);
       }
       hidePWAInstallBanner();
       deferredPrompt = null;
@@ -2392,7 +2409,7 @@ function displaySearchHistory() {
 
 function clearSearchHistory() {
   saveSearchHistory([]);
-  showStatus('Search history cleared', 'info', 2000);
+  showStatus('Your search history cleared', 'info', 2000);
 }
 
 function removeFromSearchHistory(index) {
@@ -2487,7 +2504,7 @@ async function shareTrack(identifier, title = 'Track', creator = 'Unknown') {
 
       await navigator.share(shareData);
       console.log('Web Share API exitoso');
-      showStatus('Content shared successfully', 'info', 6000, 'info');
+      showStatus('Track shared successfully', 'info', 6000);
       return;
     } catch (error) {
       console.log('Web Share API falló:', error.message);
@@ -2503,18 +2520,18 @@ async function shareTrack(identifier, title = 'Track', creator = 'Unknown') {
     console.log('Intentando copiar al portapapeles');
     await navigator.clipboard.writeText(shareText);
     console.log('Portapapeles exitoso');
-    showStatus('Link copied to clipboard', 'info', 6000, 'info');
+    showStatus('Share link copied', 'info', 6000);
   } catch (clipboardError) {
     console.error('Clipboard API falló:', clipboardError.message);
     // Last resort: show URL for manual copying
     try {
       // Try to show a simple alert with the URL
       alert(`Copy this link to share:\n\n${shareUrl}`);
-      showStatus('Link shown in popup', 'info', 6000, 'info');
+      showStatus('Share link in popup', 'info', 6000);
     } catch (alertError) {
       // If alert also fails, show in status
       console.error('Alert también falló:', alertError.message);
-      showStatus(`Share link: ${shareUrl}`, 'warning', 10000, 'warning');
+      showStatus('Here is your share link', 'warning', 10000);
     }
   }
 }
