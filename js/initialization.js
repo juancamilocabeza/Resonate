@@ -697,11 +697,29 @@ function waitForAllScripts() {
 
 
 // Inicialización segura que espera a todos los scripts
+// Register Service Worker for offline functionality
+function registerServiceWorker() {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js')
+      .then((registration) => {
+        window.logger.info('Service Worker registered successfully', 'SYSTEM');
+      })
+      .catch((error) => {
+        window.logger.warn(`Service Worker registration failed: ${error.message}`, 'SYSTEM');
+      });
+  } else {
+    window.logger.warn('Service Worker not supported in this browser', 'SYSTEM');
+  }
+}
+
 async function safeInitialize() {
   try {
     window.logger.info('Waiting for all scripts to be available...', 'SYSTEM');
     await waitForAllScripts();
     window.logger.info('All scripts loaded, initializing application...', 'SYSTEM');
+    
+    // Register Service Worker immediately for offline support
+    registerServiceWorker();
 
     await initializeApp();
   } catch (error) {
