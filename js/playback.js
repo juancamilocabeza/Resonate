@@ -728,6 +728,38 @@ async function loadAudioWithCache(track) {
   }
 }
 
+// Intelligent prefetch of next 5 tracks in parallel (non-blocking)
+async function intelligentPrefetchNextTracks(allItems, currentIndex) {
+  if (!allItems || !state.networkOnline) return;
+
+  // Precarga las próximas 5 pistas en paralelo (sin bloquear)
+  const nextIndices = [1, 2, 3, 4, 5];
+  const prefetchPromises = [];
+
+  for (const offset of nextIndices) {
+    const nextIdx = (currentIndex + offset) % allItems.length;
+    const track = allItems[nextIdx];
+
+    if (track && track.url && typeof audioCache !== 'undefined' && audioCache) {
+      // Non-blocking prefetch - don't await
+      prefetchPromises.push(
+        audioCache.prefetchAudio(track.url, false)
+          .catch(error => {
+            console.debug(`Failed to prefetch track ${offset}:`, error.message);
+          })
+      );
+    }
+  }
+
+  // Execute all prefetches in parallel with timeout
+  if (prefetchPromises.length > 0) {
+    Promise.race([
+      Promise.allSettled(prefetchPromises),
+      new Promise(resolve => setTimeout(resolve, 8000)) // 8s timeout
+    ]).catch(console.error);
+  }
+}
+
 function preloadNextTrack() {
   if (state.playbackQueue.length > 0) {
     const nextTrack = state.playbackQueue[0];
@@ -833,8 +865,16 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
           }
         }
 
-        // Preload next track
+        // Preload next track and intelligent prefetch
         preloadNextTrack();
+        
+        // Trigger intelligent prefetch if we have album context
+        if (state.currentTrack && state.currentTrack.isAlbumTrack) {
+          const albumContext = playbackManager?.contextData?.album;
+          if (albumContext && albumContext.items) {
+            intelligentPrefetchNextTracks(albumContext.items, state.currentTrack.trackIndex);
+          }
+        }
 
         resolve(true);
       }).catch(error => {
@@ -1020,7 +1060,7 @@ function loadPlaybackQueue(context, items, startIndex = 0) {
     return;
   }
 
-  const queueSize = 10;
+  const queueSize = 20; // Increased from 10 to 20 for better buffering
   // Queue behavior by context and shuffle mode
   if (context === 'favorites') {
     if (state.shuffleFavorites) {
@@ -1060,6 +1100,9 @@ function loadPlaybackQueue(context, items, startIndex = 0) {
       audioCache.preloadTracks(state.playbackQueue, true);
     }
   }
+
+  // Trigger intelligent prefetch of future tracks in parallel
+  intelligentPrefetchNextTracks(items, startIndex);
 }
 
 // Force playback by determining context and playing
