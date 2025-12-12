@@ -827,7 +827,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
     updateMetaTags(track, identifier);
   }
 
-  showStatus(`Getting your track ready to play`, 'info', 0);
+  showStatus(`Getting your track ready to play`, 'info');
   loaderManager.showPlayButtonLoader('track');
 
   return new Promise((resolve, reject) => {
@@ -837,7 +837,11 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
     const onCanPlay = () => {
       cleanup();
       audio.play().then(async () => {
-        // Restore button state when playback starts
+        // Hide loader when playback actually starts
+        loaderManager.hidePlayButtonLoader('track');
+        loaderManager.hidePlayButtonLoader('network');
+        
+        // Update button state
         state.isLoading = false;
         elements.playBtn.disabled = false;
         elements.playBtn.textContent = '| |';
@@ -874,8 +878,10 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
           if (albumContext && albumContext.items) {
             intelligentPrefetchNextTracks(albumContext.items, state.currentTrack.trackIndex);
           }
-        }
-
+        } - hide loaders
+        cleanup();
+        loaderManager.hidePlayButtonLoader('track');
+        loaderManager.hidePlayButtonLoader('network'
         resolve(true);
       }).catch(error => {
         // Handle playback error
@@ -887,7 +893,9 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
       });
     };
 
-    const onError = (e) => {
+    coloaderManager.hidePlayButtonLoader('track');
+      loaderManager.hidePlayButtonLoader('network');
+      nst onError = (e) => {
       cleanup();
       state.isLoading = false;
       elements.playBtn.disabled = false;
@@ -913,7 +921,9 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
         audio.src = blobUrl;
         audio.load();
         audio.preload = 'auto';
-
+loaderManager.hidePlayButtonLoader('track');
+            loaderManager.hidePlayButtonLoader('network');
+            
         timeoutId = setTimeout(() => {
           if (audio.readyState < 2) {
             cleanup();
@@ -925,6 +935,8 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
         }, 20000);
 
         audio.addEventListener('canplay', onCanPlay, { once: true });
+        loaderManager.hidePlayButtonLoader('track');
+        loaderManager.hidePlayButtonLoader('network');
         audio.addEventListener('error', onError, { once: true });
       })
       .catch(error => {
@@ -972,7 +984,7 @@ async function resumeSavedPlayback() {
       updateVolumeIcon();
     }
 
-    showStatus(`Resuming from where you left off`, 'info', 0);
+    showStatus(`Resuming from where you left off`, 'info');
 
     // Play the track
     await playAudioTrackOptimized(savedState.track, savedState.track.id, savedState.track.trackIndex, savedState.track.totalTracks);
@@ -1151,7 +1163,7 @@ async function playFromFavoritesQueue() {
       throw new Error('Audio URL not available in favorite');
     }
 
-    showStatus(`Getting next track from queue`, 'info', 0);
+    showStatus(`Getting next track from queue`, 'info');
 
     // Remove track from queue before playing
     state.playbackQueue.shift();
@@ -1162,6 +1174,7 @@ async function playFromFavoritesQueue() {
 
   } catch (error) {
     console.error('Error in playFromFavoritesQueue:', error);
+    loaderManager.hidePlayButtonLoader('favorites');
 
     // Handle offline/cache errors by trying next track
     if (error.message.includes('Offline and audio not available in cache')) {
@@ -1177,6 +1190,7 @@ async function playFromFavoritesQueue() {
       showStatus(`Something went wrong with playback`, 'error');
     }
   } finally {
+    loaderManager.hidePlayButtonLoader('favorites');
     state.isLoading = false;
     elements.playBtn.disabled = false;
     elements.playBtn.textContent = '| |';
@@ -1838,7 +1852,7 @@ async function playOptimizedFavorite(favoriteIndex = 0) {
       return playOptimizedFavorite(nextIndex);
     }
 
-    showStatus(`Getting your favorite ready`, 'info', 0);
+    showStatus(`Getting your favorite ready`, 'info');
 
     const track = {
       url: favorite.url,
@@ -1878,6 +1892,7 @@ async function playOptimizedFavorite(favoriteIndex = 0) {
 
   } catch (error) {
     console.error('Error in playOptimizedFavorite:', error);
+    loaderManager.hidePlayButtonLoader('favorite');
     showStatus(`Something went wrong with favorite`, 'error');
 
     if (state.favorites.length > 1) {
@@ -1885,6 +1900,7 @@ async function playOptimizedFavorite(favoriteIndex = 0) {
       setTimeout(() => playOptimizedFavorite(nextIndex), 1000);
     }
   } finally {
+    loaderManager.hidePlayButtonLoader('favorite');
     state.isLoading = false;
     elements.playBtn.disabled = false;
     elements.playBtn.textContent = '| |';
@@ -1898,7 +1914,7 @@ async function playSpecificTrack(track, albumId, trackIndex, totalTracks) {
 
   try {
     hideSearchResults();
-    showStatus(`Loading your selected track`, 'info', 0);
+    showStatus(`Loading your selected track`, 'info');
 
     if (totalTracks > 1) {
       const files = await fetchOptimizedPlayableFiles(albumId);
@@ -1916,9 +1932,13 @@ async function playSpecificTrack(track, albumId, trackIndex, totalTracks) {
 
   } catch (error) {
     console.error('Error in playSpecificTrack:', error);
-    showStatus(`Error: ${error.message}`, 'error');
     loaderManager.hidePlayButtonLoader('specific');
-  }
+    showStatus(`Error: ${error.message}`, 'error');
+  } finally {
+    loaderManager.hidePlayButtonLoader('specific');
+    state.isLoading = false;
+    elements.playBtn.disabled = false;
+    elements.playBtn.textContent = '| |';
 }
 
 async function playRandomSearchResults() {
@@ -1947,7 +1967,7 @@ async function playRandomSearchResults() {
       throw new Error('First track has no URL');
     }
 
-    showStatus(`Playing shuffled search results`, 'info', 0);
+    showStatus(`Playing shuffled search results`, 'info');
 
     // Remove from queue before playing
     state.playbackQueue.shift();
@@ -1958,9 +1978,13 @@ async function playRandomSearchResults() {
 
   } catch (error) {
     console.error('Error in playRandomSearchResults:', error);
-    showStatus(`Error with random playback`, 'error');
     loaderManager.hidePlayButtonLoader('random');
-  }
+    showStatus(`Error with random playback`, 'error');
+  } finally {
+    loaderManager.hidePlayButtonLoader('random');
+    state.isLoading = false;
+    elements.playBtn.disabled = false;
+    elements.playBtn.textContent = '| |';
 }
 
 window.playPrevious = playPrevious;

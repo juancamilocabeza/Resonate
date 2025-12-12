@@ -638,10 +638,12 @@ function showStatus(message, type = 'info', duration = null, priority = 'normal'
 
   console.log('Message element added:', messageEl);
 
-  // Auto-determine duration if not explicitly set
+  // Auto-determine duration - TODOS los mensajes se ocultan automáticamente
   let finalDuration = duration;
-  if (finalDuration === null) {
+  
+  if (finalDuration === null || finalDuration === 0) {
     // Default durations by type and priority
+    // Garantizar que TODOS los mensajes tengan auto-ocultamiento
     if (type === 'error' || type === 'offline') {
       finalDuration = 5000; // Errors and offline: 5 seconds
     } else if (type === 'warning') {
@@ -653,19 +655,18 @@ function showStatus(message, type = 'info', duration = null, priority = 'normal'
     }
   }
 
-  if (finalDuration > 0) {
-    setTimeout(() => {
-      if (messageEl.parentNode) {
-        messageEl.remove();
-        console.log('Message removed after timeout');
-      }
-    }, finalDuration);
-  }
+  // GARANTÍA: Todos los mensajes SIEMPRE se ocultan después de su duración
+  setTimeout(() => {
+    if (messageEl.parentNode) {
+      messageEl.remove();
+      console.log('Message removed after timeout');
+    }
+  }, finalDuration);
 }
 
-// Test function to show a permanent message for debugging
+// Test function to show a message that auto-hides
 function showTestStatus() {
-  showStatus('Mensaje de prueba - visible permanentemente', 'info', 0);
+  showStatus('Test message - auto-hides in 3 seconds', 'info');
 }
 
 function setArtwork(track, identifier) {
@@ -1247,7 +1248,7 @@ function createSearchResultElement(result, globalIndex) {
   playBtn.addEventListener('click', async (e) => {
     e.stopPropagation();
     const title = result.title || 'Untitled';
-    showStatus(`Loading your track`, 'info', 0);
+    showStatus(`Loading your track`, 'info');
     await playOptimizedSearchResult(result, globalIndex, state.searchResults);
   });
 
@@ -1259,7 +1260,7 @@ function createSearchResultElement(result, globalIndex) {
   infoDiv.addEventListener('click', async (e) => {
     if (e.target.closest('.result-buttons')) return;
     const title = result.title || 'Untitled';
-    showStatus(`Getting track ready`, 'info', 0);
+    showStatus(`Getting track ready`, 'info');
     await playOptimizedSearchResult(result, globalIndex, state.searchResults);
   });
 

@@ -57,7 +57,7 @@ async function handleSharedLink() {
 
     if (playIdentifier) {
       console.log('Shared link detected, playing:', playIdentifier);
-      showStatus('Preparing to load your shared track', 'info', 0);
+      showStatus('Preparing to load your shared track', 'info');
 
       // Update meta tags for social media previews immediately
       try {
