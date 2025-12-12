@@ -469,8 +469,7 @@ button:active:not(:disabled) {
   width: var(--btn-large-mobile);
   height: var(--btn-large-mobile);
   border-radius: 50%;
-  background: var(--accent);
-  color: #000;
+  color: #fff;
   font-weight: bold;
   font-size: 18px;
   min-width: 56px;
@@ -494,12 +493,6 @@ button:active:not(:disabled) {
 .play-btn-favorite:active {
   transform: scale(0.98);
   box-shadow: 0 2px 12px rgba(196, 196, 221, 0.3);
-}
-
-/* Playing state - improved icon contrast */
-.play-btn.playing,
-.play-btn-favorite.playing {
-  color: #1a1a2e;
 }
 
 .prev-btn,
@@ -949,9 +942,6 @@ select:focus {
 .favorite-actions .button:active {
   transform: scale(0.95);
 }
-  font-size: 14px;
-  min-width: 32px;
-}
 
 .favorite-play {
   background: var(--accent);
@@ -1197,7 +1187,6 @@ select:focus {
 
 .result-favorite.active:hover {
   background: rgba(255, 107, 107, 0.25);
-}
 }
 
 .result-expand {

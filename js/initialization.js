@@ -291,7 +291,6 @@ async function initializeApp() {
     elements.audio.addEventListener('loadedmetadata', updateProgressBar);
     elements.audio.addEventListener('play', () => {
       elements.playBtn.textContent = '| |';
-      elements.playBtn.classList.add('playing');
       // Actualizar Media Session
       if ('mediaSession' in navigator) {
         navigator.mediaSession.playbackState = 'playing';
@@ -300,7 +299,6 @@ async function initializeApp() {
 
     elements.audio.addEventListener('pause', () => {
       elements.playBtn.textContent = '▶';
-      elements.playBtn.classList.remove('playing');
       // Actualizar Media Session
       if ('mediaSession' in navigator) {
         navigator.mediaSession.playbackState = 'paused';
@@ -316,7 +314,6 @@ async function initializeApp() {
       state.isLoading = false;
       elements.playBtn.disabled = false;
       elements.playBtn.textContent = '▶';
-      elements.playBtn.classList.remove('playing');
     });
   }
 
