@@ -878,10 +878,12 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
           if (albumContext && albumContext.items) {
             intelligentPrefetchNextTracks(albumContext.items, state.currentTrack.trackIndex);
           }
-        } - hide loaders
+        }
+
+        // Hide loaders
         cleanup();
         loaderManager.hidePlayButtonLoader('track');
-        loaderManager.hidePlayButtonLoader('network'
+        loaderManager.hidePlayButtonLoader('network');
         resolve(true);
       }).catch(error => {
         // Handle playback error
@@ -893,9 +895,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
       });
     };
 
-    coloaderManager.hidePlayButtonLoader('track');
-      loaderManager.hidePlayButtonLoader('network');
-      nst onError = (e) => {
+    const onError = (e) => {
       cleanup();
       state.isLoading = false;
       elements.playBtn.disabled = false;
@@ -921,9 +921,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
         audio.src = blobUrl;
         audio.load();
         audio.preload = 'auto';
-loaderManager.hidePlayButtonLoader('track');
-            loaderManager.hidePlayButtonLoader('network');
-            
+
         timeoutId = setTimeout(() => {
           if (audio.readyState < 2) {
             cleanup();
@@ -935,8 +933,6 @@ loaderManager.hidePlayButtonLoader('track');
         }, 20000);
 
         audio.addEventListener('canplay', onCanPlay, { once: true });
-        loaderManager.hidePlayButtonLoader('track');
-        loaderManager.hidePlayButtonLoader('network');
         audio.addEventListener('error', onError, { once: true });
       })
       .catch(error => {
@@ -1939,6 +1935,7 @@ async function playSpecificTrack(track, albumId, trackIndex, totalTracks) {
     state.isLoading = false;
     elements.playBtn.disabled = false;
     elements.playBtn.textContent = '| |';
+  }
 }
 
 async function playRandomSearchResults() {
@@ -1985,6 +1982,7 @@ async function playRandomSearchResults() {
     state.isLoading = false;
     elements.playBtn.disabled = false;
     elements.playBtn.textContent = '| |';
+  }
 }
 
 window.playPrevious = playPrevious;
