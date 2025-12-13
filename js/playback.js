@@ -1,5 +1,9 @@
 // Enhanced Playback Management System
 
+// Note: elements object is defined in ui.js
+// We access it via window.elements to avoid scope conflicts
+// This file will use window.elements which gets populated when ui.js loads
+
 // Constants for repeat modes
 const RepeatMode = {
   ALL: 'all',           // Repeat current context
@@ -258,8 +262,8 @@ class AlbumContextHandler extends BaseContextHandler {
 
     if (repeatMode === RepeatMode.ONE) {
       // Replay current track
-      elements.audio.currentTime = 0;
-      elements.audio.play();
+      window.elements.audio.currentTime = 0;
+      window.elements.audio.play();
       return;
     }
 
@@ -344,8 +348,8 @@ class FavoritesContextHandler extends BaseContextHandler {
     const repeatMode = this.stateManager.getRepeatMode();
 
     if (repeatMode === RepeatMode.ONE) {
-      elements.audio.currentTime = 0;
-      elements.audio.play();
+      window.elements.audio.currentTime = 0;
+      window.elements.audio.play();
       return;
     }
 
@@ -429,8 +433,8 @@ class SearchContextHandler extends BaseContextHandler {
     const repeatMode = this.stateManager.getRepeatMode();
 
     if (repeatMode === RepeatMode.ONE) {
-      elements.audio.currentTime = 0;
-      elements.audio.play();
+      window.elements.audio.currentTime = 0;
+      window.elements.audio.play();
       return;
     }
 
@@ -494,8 +498,8 @@ class SearchPlaylistContextHandler extends BaseContextHandler {
     const repeatMode = this.stateManager.getRepeatMode();
 
     if (repeatMode === RepeatMode.ONE) {
-      elements.audio.currentTime = 0;
-      elements.audio.play();
+      window.elements.audio.currentTime = 0;
+      window.elements.audio.play();
       return;
     }
 
@@ -779,30 +783,30 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
     throw new Error('Track not available');
   }
   hideSearchResults();
-  elements.audio.pause();
-  elements.audio.currentTime = 0;
+  window.elements.audio.pause();
+  window.elements.audio.currentTime = 0;
 
   if (totalTracks > 1) {
-    elements.title.textContent = `${track.title || 'Untitled'}`;
-    elements.creator.textContent = `${track.creator || 'Unknown'} (${trackIndex + 1}/${totalTracks})`;
+    window.elements.title.textContent = `${track.title || 'Untitled'}`;
+    window.elements.creator.textContent = `${track.creator || 'Unknown'} (${trackIndex + 1}/${totalTracks})`;
   } else {
-    elements.title.textContent = track.title;
-    elements.creator.textContent = track.creator;
+    window.elements.title.textContent = track.title;
+    window.elements.creator.textContent = track.creator;
   }
 
   // ACTUALIZACIÓN: Mostrar descripción si está disponible de forma segura
-  if (elements.description) {
+  if (window.elements.description) {
     if (track.description && track.description.trim() !== '') {
-      elements.description.textContent = track.description;
+      window.elements.description.textContent = track.description;
       // Asegurar que el contenedor padre esté visible
-      if (elements.description.parentElement) {
-        elements.description.parentElement.style.display = 'block';
+      if (window.elements.description.parentElement) {
+        window.elements.description.parentElement.style.display = 'block';
       }
     } else {
-      elements.description.textContent = '';
+      window.elements.description.textContent = '';
       // Ocultar el contenedor si no hay descripción
-      if (elements.description.parentElement) {
-        elements.description.parentElement.style.display = 'none';
+      if (window.elements.description.parentElement) {
+        window.elements.description.parentElement.style.display = 'none';
       }
     }
   }
@@ -831,7 +835,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
   loaderManager.showPlayButtonLoader('track');
 
   return new Promise((resolve, reject) => {
-    const audio = elements.audio;
+    const audio = window.elements.audio;
     let timeoutId;
 
     const onCanPlay = () => {
@@ -843,9 +847,9 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
         
         // Update button state
         state.isLoading = false;
-        elements.playBtn.disabled = false;
-        elements.playBtn.textContent = '| |';
-        elements.playBtn.classList.add('playing');
+        window.elements.playBtn.disabled = false;
+        window.elements.playBtn.textContent = '| |';
+        window.elements.playBtn.classList.add('playing');
 
 
 
@@ -890,8 +894,8 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
         loaderManager.hidePlayButtonLoader('track');
         loaderManager.hidePlayButtonLoader('network');
         state.isLoading = false;
-        elements.playBtn.disabled = false;
-        elements.playBtn.textContent = '▶';
+        window.elements.playBtn.disabled = false;
+        window.elements.playBtn.textContent = '▶';
         reject(error);
       });
     };
@@ -899,8 +903,8 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
     const onError = (e) => {
       cleanup();
       state.isLoading = false;
-      elements.playBtn.disabled = false;
-      elements.playBtn.textContent = '▶';
+      window.elements.playBtn.disabled = false;
+      window.elements.playBtn.textContent = '▶';
       reject(new Error(`Audio error: ${e.target.error?.message || 'Source not supported'}`));
     };
 
@@ -927,8 +931,8 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
           if (audio.readyState < 2) {
             cleanup();
             state.isLoading = false;
-            elements.playBtn.disabled = false;
-            elements.playBtn.textContent = '▶';
+            window.elements.playBtn.disabled = false;
+            window.elements.playBtn.textContent = '▶';
             reject(new Error('Timeout while loading audio'));
           }
         }, 20000);
@@ -939,8 +943,8 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
       .catch(error => {
         cleanup();
         state.isLoading = false;
-        elements.playBtn.disabled = false;
-        elements.playBtn.textContent = '▶';
+        window.elements.playBtn.disabled = false;
+        window.elements.playBtn.textContent = '▶';
         reject(error);
       });
   });
@@ -969,15 +973,15 @@ async function resumeSavedPlayback() {
 
   try {
     // Restore volume and mute settings
-    if (savedState.volume !== undefined && elements.audio) {
-      elements.audio.volume = savedState.volume;
-      if (elements.volumeSlider) {
-        elements.volumeSlider.value = savedState.volume;
+    if (savedState.volume !== undefined && window.elements.audio) {
+      window.elements.audio.volume = savedState.volume;
+      if (window.elements.volumeSlider) {
+        window.elements.volumeSlider.value = savedState.volume;
       }
       state.currentVolume = savedState.volume;
     }
-    if (savedState.muted !== undefined && elements.audio) {
-      elements.audio.muted = savedState.muted;
+    if (savedState.muted !== undefined && window.elements.audio) {
+      window.elements.audio.muted = savedState.muted;
       updateVolumeIcon();
     }
 
@@ -987,8 +991,8 @@ async function resumeSavedPlayback() {
     await playAudioTrackOptimized(savedState.track, savedState.track.id, savedState.track.trackIndex, savedState.track.totalTracks);
 
     // Set the saved position
-    if (savedState.currentTime && elements.audio && elements.audio.duration) {
-      elements.audio.currentTime = savedState.currentTime;
+    if (savedState.currentTime && window.elements.audio && window.elements.audio.duration) {
+      window.elements.audio.currentTime = savedState.currentTime;
       updateProgressBar();
     }
 
@@ -1009,13 +1013,13 @@ function togglePlay() {
   if (state.isLoading) return;
 
   // Check if there's a saved playback state to resume
-  if (elements.audio.paused && !elements.audio.src && state.savedPlaybackState) {
+  if (window.elements.audio.paused && !window.elements.audio.src && state.savedPlaybackState) {
     resumeSavedPlayback();
     return;
   }
 
   // Check if there's a saved track to resume (legacy)
-  if (elements.audio.paused && !elements.audio.src && state.currentTrack && state.currentTrack.url) {
+  if (window.elements.audio.paused && !window.elements.audio.src && state.currentTrack && state.currentTrack.url) {
     // Resume last track
     playAudioTrackOptimized(state.currentTrack, state.currentTrack.id, state.currentTrack.trackIndex, state.currentTrack.totalTracks).catch(error => {
       console.error('Error resuming track:', error);
@@ -1025,21 +1029,21 @@ function togglePlay() {
   }
 
   // Prevenir reproducción si no hay favoritos y no hay audio cargado
-  if (elements.audio.paused && !elements.audio.src && state.favorites.length === 0) {
+  if (window.elements.audio.paused && !window.elements.audio.src && state.favorites.length === 0) {
     showStatus('Add tracks to favorites to begin', 'info');
     return;
   }
 
   state.userInteracted = true;
 
-  if (elements.audio.paused) {
-    if (!elements.audio.src) {
+  if (window.elements.audio.paused) {
+    if (!window.elements.audio.src) {
       forcePlay();
       return;
     }
 
-    elements.audio.play().then(() => {
-      elements.playBtn.textContent = '| |';
+    window.elements.audio.play().then(() => {
+      window.elements.playBtn.textContent = '| |';
       showStatus('Music is playing now', 'info');
 
       // Actualizar Media Session
@@ -1050,8 +1054,8 @@ function togglePlay() {
       showStatus(`Playback encountered an error`, 'error');
     });
   } else {
-    elements.audio.pause();
-    elements.playBtn.textContent = '▶';
+    window.elements.audio.pause();
+    window.elements.playBtn.textContent = '▶';
     showStatus('Music is now paused', 'info');
 
     // Actualizar Media Session
@@ -1119,8 +1123,8 @@ function forcePlay() {
   if (!state.isInitialized) {
     state.isInitialized = true;
     showStatus('Resonate is waking up', 'info');
-    elements.title.textContent = '';
-    elements.creator.textContent = '';
+    window.elements.title.textContent = '';
+    window.elements.creator.textContent = '';
   }
 
   state.userInteracted = true;
@@ -1189,8 +1193,8 @@ async function playFromFavoritesQueue() {
   } finally {
     loaderManager.hidePlayButtonLoader('favorites');
     state.isLoading = false;
-    elements.playBtn.disabled = false;
-    elements.playBtn.textContent = '| |';
+    window.elements.playBtn.disabled = false;
+    window.elements.playBtn.textContent = '| |';
   }
 }
 
@@ -1519,7 +1523,7 @@ function getRepeatModeDisplayName(mode) {
 }
 
 function updateRepeatBtn() {
-  if (!elements.repeatBtn) return;
+  if (!window.elements.repeatBtn) return;
 
   const icons = {
     all: '🔁',      // Repeat context
@@ -1529,8 +1533,8 @@ function updateRepeatBtn() {
     off: '➡️'       // No repeat
   };
 
-  elements.repeatBtn.textContent = icons[state.repeatMode] || '🔁';
-  elements.repeatBtn.title = `Repeat mode: ${getRepeatModeDisplayName(state.repeatMode)}`;
+  window.elements.repeatBtn.textContent = icons[state.repeatMode] || '🔁';
+  window.elements.repeatBtn.title = `Repeat mode: ${getRepeatModeDisplayName(state.repeatMode)}`;
 }
 
 function loadRepeatMode() {
@@ -1553,11 +1557,11 @@ function saveRepeatMode(mode) {
 }
 
 function updateProgressBar() {
-  if (!state.isSeeking && elements.audio.duration && isFinite(elements.audio.duration)) {
-    const progressPercent = (elements.audio.currentTime / elements.audio.duration) * 100;
-    elements.progress.style.width = `${progressPercent}%`;
-    elements.currentTime.textContent = formatTime(elements.audio.currentTime);
-    elements.totalTime.textContent = formatTime(elements.audio.duration);
+  if (!state.isSeeking && window.elements.audio && window.elements.audio.duration && isFinite(window.elements.audio.duration)) {
+    const progressPercent = (window.elements.audio.currentTime / window.elements.audio.duration) * 100;
+    if (window.elements.progress) window.elements.progress.style.width = `${progressPercent}%`;
+    if (window.elements.currentTime) window.elements.currentTime.textContent = formatTime(window.elements.audio.currentTime);
+    if (window.elements.totalTime) window.elements.totalTime.textContent = formatTime(window.elements.audio.duration);
 
     // Actualizar Media Session
     updateMediaPositionState();
@@ -1566,16 +1570,18 @@ function updateProgressBar() {
 
 // Enhanced track listening statistics and playback control
 function setupListenTracking() {
+  if (!window.elements.audio) return;
+  
   let endedHandlerExecuted = false;
 
-  elements.audio.addEventListener('play', () => {
+  window.elements.audio.addEventListener('play', () => {
     endedHandlerExecuted = false;
     if (state.currentTrack) {
       state.currentTrackListenStart = Date.now();
     }
   });
 
-  elements.audio.addEventListener('ended', async () => {
+  window.elements.audio.addEventListener('ended', async () => {
     // PREVENIR EJECUCIÓN MÚLTIPLE
     if (endedHandlerExecuted) {
       return;
@@ -1585,7 +1591,7 @@ function setupListenTracking() {
     // Track listening statistics
     if (state.currentTrack) {
       const listenDuration = Date.now() - state.currentTrackListenStart;
-      const trackDuration = elements.audio.duration * 1000; // Convertir a ms
+      const trackDuration = window.elements.audio.duration * 1000; // Convertir a ms
 
       // Si se escuchó al menos el 90% de la pista, marcarla como escuchada completamente
       if (listenDuration >= trackDuration * 0.9) {
@@ -1619,8 +1625,8 @@ function setupListenTracking() {
       // Fallback to legacy behavior
       const repeatMode = state.repeatMode;
       if (repeatMode === 'one') {
-        elements.audio.currentTime = 0;
-        elements.audio.play();
+        window.elements.audio.currentTime = 0;
+        window.elements.audio.play();
         endedHandlerExecuted = false; // Allow loop
         return;
       } else if (repeatMode === 'all') {
@@ -1631,7 +1637,7 @@ function setupListenTracking() {
     }
   });
 
-  elements.audio.addEventListener('seeked', () => {
+  window.elements.audio.addEventListener('seeked', () => {
     // Si el usuario busca hacia atrás, reiniciar el contador de escucha
     if (state.currentTrackListenStart > 0) {
       state.currentTrackListenStart = Date.now();
@@ -1641,15 +1647,29 @@ function setupListenTracking() {
 
 // Enhanced progress bar interaction
 function setupProgressBarInteraction() {
+  if (!window.elements.progressBar || !window.elements.progress || !window.elements.currentTime) {
+    window.logger?.warn('Progress bar elements not fully initialized', 'PLAYBACK');
+    return;
+  }
+
   let isDragging = false;
 
   const startDrag = (e) => {
-    if (!elements.audio.duration || !isFinite(elements.audio.duration)) return;
+    if (!window.elements.audio || !window.elements.audio.duration || !isFinite(window.elements.audio.duration)) return;
+    if (!window.elements.progressBar || !window.elements.progressSection) {
+      window.logger?.warn('Missing progress elements in startDrag', 'PLAYBACK');
+      return;
+    }
 
     isDragging = true;
     state.isSeeking = true;
-    elements.progressBar.classList.add('dragging');
-    elements.progressSection.classList.add('dragging');
+    
+    try {
+      window.elements.progressBar.classList.add('dragging');
+      window.elements.progressSection.classList.add('dragging');
+    } catch (err) {
+      window.logger?.error(`Error adding dragging class: ${err.message}`, 'PLAYBACK');
+    }
 
     // Actualizar inmediatamente al comenzar el arrastre
     updateProgressOnDrag(e);
@@ -1669,11 +1689,15 @@ function setupProgressBarInteraction() {
 
     isDragging = false;
     state.isSeeking = false;
-    elements.progressBar.classList.remove('dragging');
+    if (window.elements.progressBar) {
+      window.elements.progressBar.classList.remove('dragging');
+    }
   };
 
   const updateProgressOnDrag = (e) => {
-    const progressBarRect = elements.progressBar.getBoundingClientRect();
+    if (!window.elements.progressBar || !window.elements.progress || !window.elements.currentTime || !window.elements.audio) return;
+    
+    const progressBarRect = window.elements.progressBar.getBoundingClientRect();
     let clientX;
 
     if (e.type.includes('touch')) {
@@ -1689,31 +1713,34 @@ function setupProgressBarInteraction() {
     const effectiveWidth = progressBarRect.width - offsetLeft - offsetRight;
 
     const clickPosition = Math.max(0, Math.min(1, (clientX - (progressBarRect.left + offsetLeft)) / effectiveWidth));
-    const seekTime = clickPosition * elements.audio.duration;
+    const seekTime = clickPosition * window.elements.audio.duration;
 
     // Update display
-    elements.progress.style.width = `${clickPosition * 100}%`;
-    elements.currentTime.textContent = formatTime(seekTime);
+    window.elements.progress.style.width = `${clickPosition * 100}%`;
+    window.elements.currentTime.textContent = formatTime(seekTime);
 
     // Update audio on both drag and click
-    elements.audio.currentTime = seekTime;
+    window.elements.audio.currentTime = seekTime;
   };
 
   // Configure events - remove duplicates
-  elements.progressBar.addEventListener('mousedown', startDrag);
+  if (window.elements.progressBar) {
+    window.elements.progressBar.addEventListener('mousedown', startDrag);
+    window.elements.progressBar.addEventListener('touchstart', startDrag, { passive: false });
+  }
+  
   document.addEventListener('mousemove', drag);
   document.addEventListener('mouseup', endDrag);
-
-  elements.progressBar.addEventListener('touchstart', startDrag, { passive: false });
   document.addEventListener('touchmove', drag, { passive: false });
   document.addEventListener('touchend', endDrag, { passive: false });
-
   // SOLO UN event listener para click
-  elements.progressBar.addEventListener('click', (e) => {
-    if (!isDragging) { // Solo procesar clicks que no sean parte de un arrastre
-      updateProgressOnDrag(e);
-    }
-  });
+  if (window.elements.progressBar) {
+    window.elements.progressBar.addEventListener('click', (e) => {
+      if (!isDragging) { // Solo procesar clicks que no sean parte de un arrastre
+        updateProgressOnDrag(e);
+      }
+    });
+  }
 }
 
 function updateShuffleButton() {
@@ -1721,14 +1748,14 @@ function updateShuffleButton() {
   let noun = ctx === 'search' ? 'search results' : ctx === 'album' ? 'album' : 'favorites';
 
   // Shuffle button is always enabled for all contexts
-  elements.shuffleFavoritesBtn.enable = false;
+  window.elements.shuffleFavoritesBtn.enable = false;
 
   if (state.shuffleFavorites) {
-    elements.shuffleFavoritesBtn.classList.add('active');
-    elements.shuffleFavoritesBtn.setAttribute('aria-label', `Disable shuffle playback of ${noun}`);
+    window.elements.shuffleFavoritesBtn.classList.add('active');
+    window.elements.shuffleFavoritesBtn.setAttribute('aria-label', `Disable shuffle playback of ${noun}`);
   } else {
-    elements.shuffleFavoritesBtn.classList.remove('active');
-    elements.shuffleFavoritesBtn.setAttribute('aria-label', `Enable shuffle playback of ${noun}`);
+    window.elements.shuffleFavoritesBtn.classList.remove('active');
+    window.elements.shuffleFavoritesBtn.setAttribute('aria-label', `Enable shuffle playback of ${noun}`);
   }
 }
 
@@ -1801,19 +1828,19 @@ function setupMediaSession() {
 
     navigator.mediaSession.setActionHandler('seekbackward', (details) => {
       const skipTime = details.seekOffset || 10;
-      elements.audio.currentTime = Math.max(0, elements.audio.currentTime - skipTime);
+      window.elements.audio.currentTime = Math.max(0, window.elements.audio.currentTime - skipTime);
     });
 
     navigator.mediaSession.setActionHandler('seekforward', (details) => {
       const skipTime = details.seekOffset || 10;
-      elements.audio.currentTime = Math.min(elements.audio.duration, elements.audio.currentTime + skipTime);
+      window.elements.audio.currentTime = Math.min(window.elements.audio.duration, window.elements.audio.currentTime + skipTime);
     });
 
     navigator.mediaSession.setActionHandler('seekto', (details) => {
-      if (details.fastSeek && 'fastSeek' in elements.audio) {
-        elements.audio.fastSeek(details.seekTime);
+      if (details.fastSeek && 'fastSeek' in window.elements.audio) {
+        window.elements.audio.fastSeek(details.seekTime);
       } else {
-        elements.audio.currentTime = details.seekTime;
+        window.elements.audio.currentTime = details.seekTime;
       }
     });
   } catch (error) {
@@ -1899,8 +1926,8 @@ async function playOptimizedFavorite(favoriteIndex = 0) {
   } finally {
     loaderManager.hidePlayButtonLoader('favorite');
     state.isLoading = false;
-    elements.playBtn.disabled = false;
-    elements.playBtn.textContent = '| |';
+    window.elements.playBtn.disabled = false;
+    window.elements.playBtn.textContent = '| |';
   }
 }
 
@@ -1934,8 +1961,8 @@ async function playSpecificTrack(track, albumId, trackIndex, totalTracks) {
   } finally {
     loaderManager.hidePlayButtonLoader('specific');
     state.isLoading = false;
-    elements.playBtn.disabled = false;
-    elements.playBtn.textContent = '| |';
+    window.elements.playBtn.disabled = false;
+    window.elements.playBtn.textContent = '| |';
   }
 }
 
@@ -1981,8 +2008,8 @@ async function playRandomSearchResults() {
   } finally {
     loaderManager.hidePlayButtonLoader('random');
     state.isLoading = false;
-    elements.playBtn.disabled = false;
-    elements.playBtn.textContent = '| |';
+    window.elements.playBtn.disabled = false;
+    window.elements.playBtn.textContent = '| |';
   }
 }
 

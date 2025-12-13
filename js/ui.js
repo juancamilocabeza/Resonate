@@ -1,5 +1,5 @@
 // Search configuration
-const elements = {
+const appElements = {
   audio: document.getElementById('audio'),
   art: document.getElementById('art'),
   title: document.getElementById('title'),
@@ -7,6 +7,7 @@ const elements = {
   description: document.getElementById('description'),
   statusMessages: document.getElementById('status-messages'),
   progressBar: document.getElementById('progress-bar'),
+  progressSection: document.querySelector('.progress-section'),
   progress: document.getElementById('progress'),
   currentTime: document.getElementById('current-time'),
   totalTime: document.getElementById('total-time'),
@@ -58,8 +59,8 @@ class LoaderManager {
     if (this.activeLoaders.has(`play-${context}`)) return;
 
     this.activeLoaders.add(`play-${context}`);
-    elements.playBtn.disabled = true;
-    elements.playBtn.innerHTML = '<span class="loader" aria-label="Loading" role="status"></span>';
+    appElements.playBtn.disabled = true;
+    appElements.playBtn.innerHTML = '<span class="loader" aria-label="Loading" role="status"></span>';
     state.isLoading = true;
   }
 
@@ -72,12 +73,12 @@ class LoaderManager {
 
     // Only restore if no other loaders are active
     if (this.activeLoaders.size === 0) {
-      elements.playBtn.disabled = false;
-      elements.playBtn.textContent = elements.audio.paused ? '▶' : '| |';
-      if (elements.audio.paused) {
-        elements.playBtn.classList.remove('playing');
+      appElements.playBtn.disabled = false;
+      appElements.playBtn.textContent = appElements.audio.paused ? '▶' : '||';
+      if (appElements.audio.paused) {
+        appElements.playBtn.classList.remove('playing');
       } else {
-        elements.playBtn.classList.add('playing');
+        appElements.playBtn.classList.add('playing');
       }
       state.isLoading = false;
     }
@@ -87,10 +88,10 @@ class LoaderManager {
    * Show search loader
    */
   showSearchLoader() {
-    if (elements.searchLoader) {
-      elements.searchLoader.style.display = 'flex';
-      elements.searchLoader.setAttribute('aria-live', 'polite');
-      elements.searchLoader.setAttribute('aria-label', 'Searching tracks...');
+    if (appElements.searchLoader) {
+      appElements.searchLoader.style.display = 'flex';
+      appElements.searchLoader.setAttribute('aria-live', 'polite');
+      appElements.searchLoader.setAttribute('aria-label', 'Searching tracks...');
     }
   }
 
@@ -98,9 +99,9 @@ class LoaderManager {
    * Hide search loader
    */
   hideSearchLoader() {
-    if (elements.searchLoader) {
-      elements.searchLoader.style.display = 'none';
-      elements.searchLoader.removeAttribute('aria-live');
+    if (appElements.searchLoader) {
+      appElements.searchLoader.style.display = 'none';
+      appElements.searchLoader.removeAttribute('aria-live');
     }
   }
 
@@ -262,27 +263,27 @@ function loadVolume() {
       const volume = parseFloat(savedVolume);
       if (!isNaN(volume) && volume >= 0 && volume <= 1) {
         state.currentVolume = volume;
-        elements.audio.volume = volume;
-        if (elements.volumeSlider) {
-          elements.volumeSlider.value = volume;
+        appElements.audio.volume = volume;
+        if (appElements.volumeSlider) {
+          appElements.volumeSlider.value = volume;
         }
       }
     }
 
     if (savedMuted === 'true') {
-      elements.audio.muted = true;
+      appElements.audio.muted = true;
       updateVolumeIcon();
     } else {
-      elements.audio.muted = false;
+      appElements.audio.muted = false;
     }
 
     updateVolumeIcon();
   } catch (e) {
     window.logger.warn(`Error loading volume settings: ${e.message}`, 'UI');
     // Set default volume
-    elements.audio.volume = 0.7;
-    if (elements.volumeSlider) {
-      elements.volumeSlider.value = 0.7;
+    appElements.audio.volume = 0.7;
+    if (appElements.volumeSlider) {
+      appElements.volumeSlider.value = 0.7;
     }
     state.currentVolume = 0.7;
   }
@@ -306,34 +307,34 @@ function saveMutedState(muted) {
 }
 
 function updateVolumeIcon() {
-  if (!elements.volumeIcon || !elements.volumeSlider) return;
+  if (!appElements.volumeIcon || !appElements.volumeSlider) return;
 
-  const volume = elements.audio.muted ? 0 : elements.volumeSlider.value;
+  const volume = appElements.audio.muted ? 0 : appElements.volumeSlider.value;
   const volumeLevel = parseFloat(volume);
 
-  if (elements.audio.muted || volumeLevel === 0) {
-    elements.volumeIcon.textContent = '🔇'; // Muted
+  if (appElements.audio.muted || volumeLevel === 0) {
+    appElements.volumeIcon.textContent = '🔇'; // Muted
   } else if (volumeLevel < 0.3) {
-    elements.volumeIcon.textContent = '🔈'; // Low volume
+    appElements.volumeIcon.textContent = '🔈'; // Low volume
   } else if (volumeLevel < 0.7) {
-    elements.volumeIcon.textContent = '🔉'; // Medium volume
+    appElements.volumeIcon.textContent = '🔉'; // Medium volume
   } else {
-    elements.volumeIcon.textContent = '🔊'; // High volume
+    appElements.volumeIcon.textContent = '🔊'; // High volume
   }
 }
 
 function toggleMute() {
-  const isMuted = !elements.audio.muted;
-  elements.audio.muted = isMuted;
+  const isMuted = !appElements.audio.muted;
+  appElements.audio.muted = isMuted;
 
   if (isMuted) {
     // When muting, remember the current volume for unmuting
-    state.currentVolume = elements.volumeSlider.value;
+    state.currentVolume = appElements.volumeSlider.value;
     saveMutedState(true);
   } else {
     // When unmuting, restore the previous volume
-    elements.audio.volume = state.currentVolume;
-    elements.volumeSlider.value = state.currentVolume;
+    appElements.audio.volume = state.currentVolume;
+    appElements.volumeSlider.value = state.currentVolume;
     saveMutedState(false);
   }
 
@@ -561,7 +562,7 @@ function updateTrackFavoriteStatesInContainer(albumId) {
 // FUNCIÓN: Actualizar el estado de favorito en los resultados de búsqueda
 function updateSearchResultFavoriteState(albumId, isFavorite) {
   const resultElements = document.querySelectorAll('.search-result');
-  resultElements.forEach(resultEl => {
+  resultappElements.forEach(resultEl => {
     const resultInfo = resultEl.querySelector('.result-info');
     if (resultInfo && resultInfo.textContent.includes(albumId)) {
       const favoriteBtn = resultEl.querySelector('.result-favorite');
@@ -604,22 +605,22 @@ function updateAlbumButtonForTrack(albumId) {
 function updateFavoriteButton() {
   if (state.currentTrack && state.currentTrack.url) {
     const isFavorite = isTrackFavorite(state.currentTrack);
-    elements.favoriteBtn.classList.toggle('active', isFavorite);
-    elements.favoriteBtn.textContent = isFavorite ? '❤️' : '🩶';
+    appElements.favoriteBtn.classList.toggle('active', isFavorite);
+    appElements.favoriteBtn.textContent = isFavorite ? '❤️' : '🩶';
   } else {
-    elements.favoriteBtn.classList.remove('active');
-    elements.favoriteBtn.textContent = '🩶';
+    appElements.favoriteBtn.classList.remove('active');
+    appElements.favoriteBtn.textContent = '🩶';
   }
 }
 
 function showStatus(message, type = 'info', duration = null, priority = 'normal') {
   console.log('showStatus called with:', message, type, duration, priority);
-  if (!elements.statusMessages) {
+  if (!appElements.statusMessages) {
     console.error('statusMessages element not found');
     return;
   }
 
-  const currentMessage = elements.statusMessages.querySelector('.status-message');
+  const currentMessage = appElements.statusMessages.querySelector('.status-message');
   const currentPriority = currentMessage ? currentMessage.dataset.priority || 'normal' : 'none';
 
   // Priority levels: offline > error > warning > info > normal
@@ -631,7 +632,17 @@ function showStatus(message, type = 'info', duration = null, priority = 'normal'
     return;
   }
 
-  elements.statusMessages.innerHTML = '';
+  // Fade out existing message before replacing
+  if (currentMessage) {
+    currentMessage.classList.add('fade-out');
+    setTimeout(() => {
+      if (currentMessage.parentNode) {
+        currentMessage.remove();
+      }
+    }, 300);
+  } else {
+    appElements.statusMessages.innerHTML = '';
+  }
 
   const messageEl = document.createElement('div');
   messageEl.className = `status-message status-${type}`;
@@ -639,32 +650,35 @@ function showStatus(message, type = 'info', duration = null, priority = 'normal'
   messageEl.dataset.priority = priority;
   messageEl.setAttribute('aria-live', 'polite');
   messageEl.setAttribute('aria-atomic', 'true');
-  elements.statusMessages.appendChild(messageEl);
+  messageEl.setAttribute('role', 'alert');
+  appElements.statusMessages.appendChild(messageEl);
 
   console.log('Message element added:', messageEl);
 
-  // Auto-determine duration - TODOS los mensajes se ocultan automáticamente
+  // Auto-determine duration
   let finalDuration = duration;
   
   if (finalDuration === null || finalDuration === 0) {
-    // Default durations by type and priority
-    // Garantizar que TODOS los mensajes tengan auto-ocultamiento
     if (type === 'error' || type === 'offline') {
-      finalDuration = 5000; // Errors and offline: 5 seconds
+      finalDuration = 5000;
     } else if (type === 'warning') {
-      finalDuration = 4000; // Warnings: 4 seconds
+      finalDuration = 4000;
     } else if (type === 'info') {
-      finalDuration = 3000; // Info: 3 seconds
+      finalDuration = 3000;
     } else {
-      finalDuration = 3000; // Default: 3 seconds
+      finalDuration = 3000;
     }
   }
 
-  // GARANTÍA: Todos los mensajes SIEMPRE se ocultan después de su duración
   setTimeout(() => {
     if (messageEl.parentNode) {
-      messageEl.remove();
-      console.log('Message removed after timeout');
+      messageEl.classList.add('fade-out');
+      setTimeout(() => {
+        if (messageEl.parentNode) {
+          messageEl.remove();
+          console.log('Message removed after timeout');
+        }
+      }, 300);
     }
   }, finalDuration);
 }
@@ -675,10 +689,10 @@ function showTestStatus() {
 }
 
 function setArtwork(track, identifier) {
-  if (!track || !elements.art) return;
+  if (!track || !appElements.art) return;
 
   // Clear existing artwork
-  elements.art.innerHTML = '';
+  appElements.art.innerHTML = '';
 
   // Create artwork element
   const img = new Image();
@@ -692,7 +706,7 @@ function setArtwork(track, identifier) {
 
   // Create load handler function
   const handleLoad = () => {
-    elements.art.appendChild(img);
+    appElements.art.appendChild(img);
   };
 
   // Configure event listeners BEFORE setting src
@@ -719,19 +733,19 @@ function formatTime(seconds) {
 }
 
 function hideSearchResults() {
-  elements.searchResults.classList.remove('active');
+  appElements.searchResults.classList.remove('active');
   state.searchActive = false;
   hideFavoritesList();
 }
 
 function updateMediaPositionState() {
-  if (!('mediaSession' in navigator) || !elements.audio.duration) return;
+  if (!('mediaSession' in navigator) || !appElements.audio.duration) return;
 
   try {
     navigator.mediaSession.setPositionState({
-      duration: elements.audio.duration,
-      playbackRate: elements.audio.playbackRate,
-      position: elements.audio.currentTime
+      duration: appElements.audio.duration,
+      playbackRate: appElements.audio.playbackRate,
+      position: appElements.audio.currentTime
     });
   } catch (error) {
     console.error('Error updating Media Session position:', error);
@@ -756,31 +770,65 @@ function updateMediaSessionMetadata(track, identifier) {
 
 function setupSearchOnEnter() {
   console.log('Setting up search event listener...');
-  elements.searchInput.addEventListener('keydown', (e) => {
+  appElements.searchInput.addEventListener('keydown', (e) => {
     console.log('Key pressed:', e.key);
-      if (e.key === 'Enter') {
-        console.log('Enter key pressed, performing search...');
-        state.currentSearchPage = 0;
-        state.currentSearchQuery = elements.searchInput.value.trim();
-        console.log('Search query:', state.currentSearchQuery);
-        if (state.currentSearchQuery) {
-          // Show search loader
-          loaderManager.showSearchLoader();
-          elements.searchResults.classList.add('active');
-          performOptimizedSearch(state.currentSearchQuery, 0).then(result => {
-            displaySearchResults(result);
-            // Add to search history after successful search
-            addToSearchHistory(state.currentSearchQuery);
-          }).catch(error => {
-            console.error('Search error:', error);
-            showStatus('Search encountered an error', 'error');
-            // Hide loader on error
-            loaderManager.hideSearchLoader();
-          });
-        } else {
-          hideSearchResults();
+    
+    // Handle Escape key to close results
+    if (e.key === 'Escape') {
+      console.log('Escape key pressed, closing results...');
+      hideSearchResults();
+      appElements.searchInput.blur();
+      return;
+    }
+    
+    // Handle ArrowDown to navigate results
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      navigateSearchResults('down');
+      return;
+    }
+    
+    // Handle ArrowUp to navigate results
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      navigateSearchResults('up');
+      return;
+    }
+    
+    // Handle Enter to search or activate focused result
+    if (e.key === 'Enter') {
+      console.log('Enter key pressed, performing search...');
+      
+      // If a search result is focused, play it
+      const focusedResult = appElements.searchResultsList.querySelector('.search-result.focused');
+      if (focusedResult) {
+        e.preventDefault();
+        const playBtn = focusedResult.querySelector('[class*="play"]');
+        if (playBtn) {
+          playBtn.click();
+          return;
         }
       }
+      
+      // Otherwise, perform search
+      state.currentSearchPage = 0;
+      state.currentSearchQuery = appElements.searchInput.value.trim();
+      console.log('Search query:', state.currentSearchQuery);
+      if (state.currentSearchQuery) {
+        loaderManager.showSearchLoader();
+        appElements.searchResults.classList.add('active');
+        performOptimizedSearch(state.currentSearchQuery, 0).then(result => {
+          displaySearchResults(result);
+          addToSearchHistory(state.currentSearchQuery);
+        }).catch(error => {
+          console.error('Search error:', error);
+          showStatus('Search encountered an error', 'error');
+          loaderManager.hideSearchLoader();
+        });
+      } else {
+        hideSearchResults();
+      }
+    }
   });
 }
 
@@ -788,10 +836,10 @@ function setupSearchFocusBehavior() {
   let lastSearchQuery = '';
   let isCleaning = false;
 
-  elements.searchInput.addEventListener('focus', () => {
+  appElements.searchInput.addEventListener('focus', () => {
     if (isCleaning) return;
 
-    const currentQuery = elements.searchInput.value.trim();
+    const currentQuery = appElements.searchInput.value.trim();
 
     // If input is empty, show search history
     if (currentQuery === '') {
@@ -809,14 +857,14 @@ function setupSearchFocusBehavior() {
 
       // If we have matching results for this query, show them
       if (state.searchResults.length > 0 && currentQuery === state.currentSearchQuery) {
-        elements.searchResults.classList.add('active');
+        appElements.searchResults.classList.add('active');
         state.searchActive = true;
         return;
       }
 
       // Otherwise, perform new search with current query
       loaderManager.showSearchLoader();
-      elements.searchResults.classList.add('active');
+      appElements.searchResults.classList.add('active');
       state.searchActive = true;
       performOptimizedSearch(currentQuery, 0).then(result => {
         displaySearchResults(result);
@@ -828,7 +876,7 @@ function setupSearchFocusBehavior() {
     }
   });
 
-  elements.searchInput.addEventListener('input', (e) => {
+  appElements.searchInput.addEventListener('input', (e) => {
     const currentQuery = e.target.value.trim();
 
     // Detectar si el usuario está borrando
@@ -852,15 +900,15 @@ function setupSearchFocusBehavior() {
   });
 
   // También limpiar cuando el usuario pegue texto (podría ser una modificación)
-  elements.searchInput.addEventListener('paste', () => {
+  appElements.searchInput.addEventListener('paste', () => {
     setTimeout(() => {
       performCompleteCleanup();
     }, 50);
   });
 
   // Limpiar cuando se use el botón "x" nativo del input en algunos navegadores
-  elements.searchInput.addEventListener('search', () => {
-    if (elements.searchInput.value === '') {
+  appElements.searchInput.addEventListener('search', () => {
+    if (appElements.searchInput.value === '') {
       performCompleteCleanup();
     }
   });
@@ -879,7 +927,7 @@ function performCompleteCleanup() {
   state.searchActive = false;
 
   // Limpiar el DOM
-  elements.searchResultsList.innerHTML = '';
+  appElements.searchResultsList.innerHTML = '';
 
   // Limpiar timeouts
   if (state.searchTimeout) {
@@ -888,7 +936,7 @@ function performCompleteCleanup() {
   }
 
   // Limpiar cualquier observador de lazy loading
-  const lazyObserver = elements.searchResultsList.querySelector('.lazy-load-observer');
+  const lazyObserver = appElements.searchResultsList.querySelector('.lazy-load-observer');
   if (lazyObserver) {
     lazyObserver.remove();
   }
@@ -896,12 +944,46 @@ function performCompleteCleanup() {
   console.log('Cleanup complete: search results hidden and state reset');
 }
 
+// Keyboard navigation for search results
+function navigateSearchResults(direction) {
+  if (!appElements.searchResults.classList.contains('active')) {
+    return;
+  }
+  
+  const results = Array.from(appElements.searchResultsList.querySelectorAll('.search-result'));
+  if (results.length === 0) return;
+  
+  const currentFocused = appElements.searchResultsList.querySelector('.search-result.focused');
+  let nextResult;
+  
+  if (!currentFocused) {
+    nextResult = direction === 'down' ? results[0] : results[results.length - 1];
+  } else {
+    const currentIndex = results.indexOf(currentFocused);
+    let nextIndex = direction === 'down' ? currentIndex + 1 : currentIndex - 1;
+    
+    if (nextIndex < 0) nextIndex = results.length - 1;
+    if (nextIndex >= results.length) nextIndex = 0;
+    
+    nextResult = results[nextIndex];
+  }
+  
+  // Remove focused class from all results
+  results.forEach(r => r.classList.remove('focused'));
+  
+  // Add focused class to next result
+  if (nextResult) {
+    nextResult.classList.add('focused');
+    nextResult.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+}
+
 function hideSearchResults() {
   // Verificar si había resultados para ocultar antes de limpiar y registrar
-  const hadActiveResults = elements.searchResults && elements.searchResults.classList.contains('active');
+  const hadActiveResults = appElements.searchResults && appElements.searchResults.classList.contains('active');
 
   // Ocultar visualmente los resultados
-  elements.searchResults.classList.remove('active');
+  appElements.searchResults.classList.remove('active');
   state.searchActive = false;
 
   // Limpiar el estado de búsqueda
@@ -911,7 +993,7 @@ function hideSearchResults() {
   state.currentSearchHasMore = false;
 
   // Limpiar el DOM
-  elements.searchResultsList.innerHTML = '';
+  appElements.searchResultsList.innerHTML = '';
 
   // Limpiar cualquier timeout pendiente
   if (state.searchTimeout) {
@@ -920,7 +1002,7 @@ function hideSearchResults() {
   }
 
   // Remover cualquier observador de lazy loading
-  const lazyObserver = elements.searchResultsList.querySelector('.lazy-load-observer');
+  const lazyObserver = appElements.searchResultsList.querySelector('.lazy-load-observer');
   if (lazyObserver) {
     lazyObserver.remove();
   }
@@ -939,19 +1021,25 @@ function displaySearchResults(searchData, clearExisting = true) {
   const { results, hasMore, total } = searchData;
 
   if (clearExisting) {
-    elements.searchResultsList.innerHTML = '';
+    appElements.searchResultsList.innerHTML = '';
     state.searchResults = results;
     state.currentSearchPage = 0;
     state.currentSearchHasMore = hasMore;
-    state.currentSearchQuery = elements.searchInput.value.trim();
+    state.currentSearchQuery = appElements.searchInput.value.trim();
   } else {
     state.searchResults = [...state.searchResults, ...results];
     state.currentSearchHasMore = hasMore;
   }
 
   if (results.length === 0 && clearExisting) {
-    elements.searchResultsList.innerHTML = '<div class="no-results">No results found</div>';
-    elements.searchResults.classList.add('active');
+    appElements.searchResultsList.innerHTML = `
+      <div class="no-results">
+        <div class="no-results-icon">🔍</div>
+        <div class="no-results-title">No Results Found</div>
+        <div class="no-results-hint">Try different keywords or check your spelling</div>
+      </div>
+    `;
+    appElements.searchResults.classList.add('active');
     // Volver a deshabilitar los controles si no hay resultados
     if (state.favorites.length === 0) {
       updatePlayButtonState();
@@ -968,15 +1056,15 @@ function displaySearchResults(searchData, clearExisting = true) {
   });
 
   if (clearExisting) {
-    elements.searchResultsList.appendChild(fragment);
+    appElements.searchResultsList.appendChild(fragment);
   } else {
     // Eliminar el observador anterior si existe
-    const existingObserver = elements.searchResultsList.querySelector('.lazy-load-observer');
+    const existingObserver = appElements.searchResultsList.querySelector('.lazy-load-observer');
     if (existingObserver) {
       existingObserver.remove();
     }
 
-    elements.searchResultsList.appendChild(fragment);
+    appElements.searchResultsList.appendChild(fragment);
   }
 
   // Configurar lazy loading si hay más resultados
@@ -984,7 +1072,7 @@ function displaySearchResults(searchData, clearExisting = true) {
     setupLazyLoadingObserver();
   }
 
-  elements.searchResults.classList.add('active');
+  appElements.searchResults.classList.add('active');
 
   // Habilitar controles si hay resultados de búsqueda
   enableControlsForSearchResults();
@@ -994,7 +1082,7 @@ function setupLazyLoadingObserver() {
   // Crear elemento observador
   const observerElement = document.createElement('div');
   observerElement.className = 'lazy-load-observer';
-  elements.searchResultsList.appendChild(observerElement);
+  appElements.searchResultsList.appendChild(observerElement);
 
   // Configurar Intersection Observer
   const observer = new IntersectionObserver(async (entries) => {
@@ -1205,6 +1293,9 @@ function createSearchResultElement(result, globalIndex) {
 
   const resultEl = document.createElement('div');
   resultEl.className = 'search-result favorite-item';
+  resultEl.setAttribute('role', 'article');
+  resultEl.setAttribute('tabindex', '0');
+  resultEl.setAttribute('aria-label', `${result.title || 'Untitled'} by ${result.creator || 'Unknown'}`);
 
   const hasFavoriteTrack = isAlbumInFavorites(result.identifier);
 
@@ -1214,7 +1305,7 @@ function createSearchResultElement(result, globalIndex) {
 
   // Load cover image
   const img = new Image();
-  img.alt = 'Album cover';
+  img.alt = `Album cover for ${result.title || 'Untitled'}`;
   img.style.width = '100%';
   img.style.height = '100%';
   img.style.objectFit = 'cover';
@@ -1237,6 +1328,12 @@ function createSearchResultElement(result, globalIndex) {
   // Build structure using helper functions for favorites layout
   const infoDiv = createFavoriteInfo(result);
   const { actionsDiv, playBtn, favoriteBtn, shareBtn, expandBtn } = createFavoriteActions(result, hasFavoriteTrack);
+
+  // Add ARIA labels to buttons
+  playBtn.setAttribute('aria-label', `Play ${result.title || 'Untitled'}`);
+  favoriteBtn.setAttribute('aria-label', hasFavoriteTrack ? 'Remove from favorites' : 'Add to favorites');
+  shareBtn.setAttribute('aria-label', `Share ${result.title || 'Untitled'}`);
+  expandBtn.setAttribute('aria-label', 'Show album tracks');
 
   // Show expand button immediately for all results
   expandBtn.style.display = 'inline-block';
@@ -1425,7 +1522,7 @@ function displayAlbumTracks(albumId, tracksContainer) {
 
 function updatePlayButtonState() {
   // Disable/enable all buttons in the player-content div based on favorites count
-  const playerContent = elements.playerContent;
+  const playerContent = appElements.playerContent;
   if (playerContent) {
     const buttons = playerContent.querySelectorAll('button');
     if (buttons) {
@@ -1436,59 +1533,59 @@ function updatePlayButtonState() {
   }
 
   if (!state.favorites || state.favorites.length === 0) {
-    if (elements.prevBtn) elements.prevBtn.disabled = true;
-    if (elements.playBtn) elements.playBtn.disabled = true;
-    if (elements.nextBtn) elements.nextBtn.disabled = true;
-    if (elements.favoriteBtn) elements.favoriteBtn.disabled = true;
-    if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.disabled = true;
-    if (elements.playAllFavoritesBtn) elements.playAllFavoritesBtn.disabled = true;
-    if (elements.playBtn) elements.playBtn.title = 'Search to get started';
-    if (elements.prevBtn) elements.prevBtn.title = 'Search to get started';
-    if (elements.nextBtn) elements.nextBtn.title = 'Search to get started';
-    if (elements.favoriteBtn) elements.favoriteBtn.title = 'Search to get started';
-    if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.title = 'Search to get started';
+    if (appElements.prevBtn) appElements.prevBtn.disabled = true;
+    if (appElements.playBtn) appElements.playBtn.disabled = true;
+    if (appElements.nextBtn) appElements.nextBtn.disabled = true;
+    if (appElements.favoriteBtn) appElements.favoriteBtn.disabled = true;
+    if (appElements.shuffleFavoritesBtn) appElements.shuffleFavoritesBtn.disabled = true;
+    if (appElements.playAllFavoritesBtn) appElements.playAllFavoritesBtn.disabled = true;
+    if (appElements.playBtn) appElements.playBtn.title = 'Search to get started';
+    if (appElements.prevBtn) appElements.prevBtn.title = 'Search to get started';
+    if (appElements.nextBtn) appElements.nextBtn.title = 'Search to get started';
+    if (appElements.favoriteBtn) appElements.favoriteBtn.title = 'Search to get started';
+    if (appElements.shuffleFavoritesBtn) appElements.shuffleFavoritesBtn.title = 'Search to get started';
 
     // Disable favorites controls
-    if (elements.favoritesToggle) elements.favoritesToggle.classList.add('disabled');
-    if (elements.playAllFavoritesBtn) elements.playAllFavoritesBtn.classList.add('disabled');
+    if (appElements.favoritesToggle) appElements.favoritesToggle.classList.add('disabled');
+    if (appElements.playAllFavoritesBtn) appElements.playAllFavoritesBtn.classList.add('disabled');
   } else {
     // Habilitar los controles relevantes cuando haya favoritos
-    if (elements.prevBtn) elements.prevBtn.disabled = false;
-    if (elements.playBtn) elements.playBtn.disabled = false;
-    if (elements.nextBtn) elements.nextBtn.disabled = false;
-    if (elements.favoriteBtn) elements.favoriteBtn.disabled = false;
-    if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.disabled = false;
+    if (appElements.prevBtn) appElements.prevBtn.disabled = false;
+    if (appElements.playBtn) appElements.playBtn.disabled = false;
+    if (appElements.nextBtn) appElements.nextBtn.disabled = false;
+    if (appElements.favoriteBtn) appElements.favoriteBtn.disabled = false;
+    if (appElements.shuffleFavoritesBtn) appElements.shuffleFavoritesBtn.disabled = false;
 
-    if (elements.playBtn) elements.playBtn.title = 'Play favorites';
-    if (elements.prevBtn) elements.prevBtn.title = 'Previous track';
-    if (elements.nextBtn) elements.nextBtn.title = 'Next track';
-    if (elements.favoriteBtn) elements.favoriteBtn.title = 'Remove favorite';
-    if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.title = 'Shuffle favorites';
+    if (appElements.playBtn) appElements.playBtn.title = 'Play favorites';
+    if (appElements.prevBtn) appElements.prevBtn.title = 'Previous track';
+    if (appElements.nextBtn) appElements.nextBtn.title = 'Next track';
+    if (appElements.favoriteBtn) appElements.favoriteBtn.title = 'Remove favorite';
+    if (appElements.shuffleFavoritesBtn) appElements.shuffleFavoritesBtn.title = 'Shuffle favorites';
 
     // Enable favorites controls
-    if (elements.favoritesToggle) elements.favoritesToggle.classList.remove('disabled');
-    if (elements.playAllFavoritesBtn) elements.playAllFavoritesBtn.classList.remove('disabled');
+    if (appElements.favoritesToggle) appElements.favoritesToggle.classList.remove('disabled');
+    if (appElements.playAllFavoritesBtn) appElements.playAllFavoritesBtn.classList.remove('disabled');
   }
 }
 
 function enableControlsForSearchResults() {
   // Si no hay favoritos pero hay resultados de búsqueda, habilitar los controles
   if (state.favorites.length === 0 && state.searchResults && state.searchResults.length > 0) {
-    if (elements.playBtn) elements.playBtn.disabled = false;
-    if (elements.playBtn) elements.playBtn.title = 'Play search result';
+    if (appElements.playBtn) appElements.playBtn.disabled = false;
+    if (appElements.playBtn) appElements.playBtn.title = 'Play search result';
 
-    if (elements.favoriteBtn) elements.favoriteBtn.disabled = false;
-    if (elements.favoriteBtn) elements.favoriteBtn.title = 'Add to favorites';
+    if (appElements.favoriteBtn) appElements.favoriteBtn.disabled = false;
+    if (appElements.favoriteBtn) appElements.favoriteBtn.title = 'Add to favorites';
 
     // The prev/next buttons work within search context
-    if (elements.prevBtn) elements.prevBtn.disabled = false;
-    if (elements.nextBtn) elements.nextBtn.disabled = false;
-    if (elements.prevBtn) elements.prevBtn.title = 'Previous track (search)';
-    if (elements.nextBtn) elements.nextBtn.title = 'Next track (search)';
+    if (appElements.prevBtn) appElements.prevBtn.disabled = false;
+    if (appElements.nextBtn) appElements.nextBtn.disabled = false;
+    if (appElements.prevBtn) appElements.prevBtn.title = 'Previous track (search)';
+    if (appElements.nextBtn) appElements.nextBtn.title = 'Next track (search)';
 
     // The shuffle button works with current results
-    if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.disabled = false;
-    if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.title = 'Shuffle results';
+    if (appElements.shuffleFavoritesBtn) appElements.shuffleFavoritesBtn.disabled = false;
+    if (appElements.shuffleFavoritesBtn) appElements.shuffleFavoritesBtn.title = 'Shuffle results';
   }
 }
 
@@ -1500,9 +1597,9 @@ function setupConnectivityMonitoring() {
     state.networkOnline = true;
     showStatus('Internet is back online', 'info', 2000);
     // Re-enable search input when back online
-    if (elements.searchInput) {
-      elements.searchInput.disabled = false;
-      elements.searchInput.placeholder = "Search tracks";
+    if (appElements.searchInput) {
+      appElements.searchInput.disabled = false;
+      appElements.searchInput.placeholder = "Search tracks";
     }
   });
 
@@ -1510,9 +1607,9 @@ function setupConnectivityMonitoring() {
     state.networkOnline = false;
     showStatus('Offline only. No internet access', 'warning', 4000);
     // Disable search functionality when offline
-    if (elements.searchInput) {
-      elements.searchInput.disabled = true;
-      elements.searchInput.placeholder = "Search unavailable offline";
+    if (appElements.searchInput) {
+      appElements.searchInput.disabled = true;
+      appElements.searchInput.placeholder = "Search unavailable offline";
     }
     // Hide any active search results
     hideSearchResults();
@@ -1556,7 +1653,7 @@ function setupOfflineFunctionality() {
     updateOfflineIndicator();
 
     // Intentar reproducir desde caché si hay una pista actual
-    if (state.currentTrack && elements.audio.src) {
+    if (state.currentTrack && appElements.audio.src) {
       showStatus('Using cached version of track', 'info', 2000);
     }
 
@@ -1650,13 +1747,13 @@ async function syncOfflineData() {
 
 // Save current playback state to localStorage
 function savePlaybackState() {
-  if (state.currentTrack && elements.audio && elements.audio.src) {
+  if (state.currentTrack && appElements.audio && appElements.audio.src) {
     const playbackState = {
       track: state.currentTrack,
-      currentTime: elements.audio.currentTime,
-      volume: elements.audio.volume,
-      muted: elements.audio.muted,
-      wasPlaying: !elements.audio.paused,
+      currentTime: appElements.audio.currentTime,
+      volume: appElements.audio.volume,
+      muted: appElements.audio.muted,
+      wasPlaying: !appElements.audio.paused,
       timestamp: Date.now()
     };
 
@@ -1685,8 +1782,8 @@ function loadSavedPlaybackState() {
 
       // Restore the track information (but don't start playing yet)
       state.currentTrack = savedState.track;
-      elements.title.textContent = state.currentTrack.title;
-      elements.creator.textContent = state.currentTrack.totalTracks > 1 ?
+      appElements.title.textContent = state.currentTrack.title;
+      appElements.creator.textContent = state.currentTrack.totalTracks > 1 ?
         `${state.currentTrack.creator || 'Unknown'} (${state.currentTrack.trackIndex + 1}/${state.currentTrack.totalTracks})` :
         `${state.currentTrack.creator || 'Unknown'}`;
       setArtwork(state.currentTrack, state.currentTrack.id);
@@ -1707,7 +1804,7 @@ function loadSavedPlaybackState() {
 }
 
 function updateFavoritesList() {
-  const favoritesList = elements.favoritesList;
+  const favoritesList = appElements.favoritesList;
   favoritesList.innerHTML = '';
 
   // Actualizar estado del botón de reproducción
@@ -1717,7 +1814,13 @@ function updateFavoritesList() {
   updateFavoritesCount();
 
   if (state.favorites.length === 0) {
-    favoritesList.innerHTML = '<div class="no-results" style="padding: 12px; text-align: center;">No favorites</div>';
+    favoritesList.innerHTML = `
+      <div class="no-results">
+        <div class="no-results-icon">♡</div>
+        <div class="no-results-title">No Favorites Yet</div>
+        <div class="no-results-hint">Search for music and click the heart to save your favorites</div>
+      </div>
+    `;
     return;
   }
 
@@ -1741,6 +1844,8 @@ function updateFavoritesList() {
 
     const albumItem = document.createElement('div');
     albumItem.className = 'favorite-item';
+    albumItem.setAttribute('role', 'listitem');
+    albumItem.setAttribute('aria-label', `${albumData.albumTitle || 'Untitled'} by ${albumData.albumCreator || 'Unknown'}${isAlbum ? ` - ${albumData.tracks.length} tracks` : ''}`);
 
     // Highlight currently playing track
     if (state.currentTrack && (
@@ -1749,6 +1854,7 @@ function updateFavoritesList() {
       (isAlbum && albumData.tracks.some(track => track.url === state.currentTrack.url))
     )) {
       albumItem.classList.add('now-playing');
+      albumItem.setAttribute('aria-current', 'true');
     }
 
     // Create cover container
@@ -1878,8 +1984,8 @@ function updateFavoritesList() {
  */
 class FavoritesToggle {
   constructor() {
-    this.element = elements.favoritesToggle;
-    this.listElement = elements.favoritesList;
+    this.element = appElements.favoritesToggle;
+    this.listElement = appElements.favoritesList;
     this.isVisible = false;
     this.isDisabled = false;
 
@@ -2044,9 +2150,18 @@ function toggleFavoritesList() {
 
 function updateFavoritesCount() {
   const countElement = document.getElementById('favorites-count');
-  if (countElement) {
+  const toggleBtn = appElements.favoritesToggle;
+  
+  if (countElement && toggleBtn) {
     const count = state.favorites ? state.favorites.length : 0;
-    countElement.textContent = `(${count})`;
+    countElement.textContent = count > 0 ? count : '0';
+    
+    // Improve ARIA label for accessibility
+    toggleBtn.setAttribute('aria-label', `View favorites (${count} saved)`);
+    
+    // Update aria-expanded based on visibility
+    const isExpanded = appElements.favoritesList?.classList.contains('active') || false;
+    toggleBtn.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
   }
 }
 
@@ -2056,16 +2171,16 @@ function hideFavoritesList() {
   } else {
     // Fallback si la instancia no está disponible
     state.favoritesVisible = false;
-    elements.favoritesList?.classList.remove('active');
-    elements.favoritesToggle?.classList.remove('active');
-    elements.favoritesToggle?.setAttribute('aria-expanded', 'false');
+    appElements.favoritesList?.classList.remove('active');
+    appElements.favoritesToggle?.classList.remove('active');
+    appElements.favoritesToggle?.setAttribute('aria-expanded', 'false');
   }
 }
 
 function startApp() {
   state.appStarted = true;
-  elements.startView.classList.add('hidden');
-  elements.app.classList.add('active');
+  appElements.startView.classList.add('hidden');
+  appElements.app.classList.add('active');
   forcePlay();
 }
 
@@ -2346,8 +2461,8 @@ function displaySearchHistory() {
   const history = loadSearchHistory();
 
   if (history.length === 0) {
-    elements.searchResultsList.innerHTML = '<div class="no-results">No recent searches</div>';
-    elements.searchResults.classList.add('active');
+    appElements.searchResultsList.innerHTML = '<div class="no-results">No recent searches</div>';
+    appElements.searchResults.classList.add('active');
     return;
   }
 
@@ -2367,12 +2482,12 @@ function displaySearchHistory() {
     // Click on query to search
     historyItem.addEventListener('click', (e) => {
       if (!e.target.classList.contains('history-remove')) {
-        elements.searchInput.value = query;
+        appElements.searchInput.value = query;
         // Trigger search
         state.currentSearchPage = 0;
         state.currentSearchQuery = query;
         loaderManager.showSearchLoader();
-        elements.searchResults.classList.add('active');
+        appElements.searchResults.classList.add('active');
         performOptimizedSearch(query, 0).then(result => {
           displaySearchResults(result);
         }).catch(error => {
@@ -2398,9 +2513,9 @@ function displaySearchHistory() {
     fragment.appendChild(clearAllDiv);
   }
 
-  elements.searchResultsList.innerHTML = '';
-  elements.searchResultsList.appendChild(fragment);
-  elements.searchResults.classList.add('active');
+  appElements.searchResultsList.innerHTML = '';
+  appElements.searchResultsList.appendChild(fragment);
+  appElements.searchResults.classList.add('active');
 
   // Add event listeners for remove buttons
   document.querySelectorAll('.history-remove').forEach(btn => {
@@ -2619,4 +2734,4 @@ window.displaySearchHistory = displaySearchHistory;
 window.clearSearchHistory = clearSearchHistory;
 window.removeFromSearchHistory = removeFromSearchHistory;
 window.state = state;
-window.elements = elements;
+window.elements = appElements;

@@ -171,7 +171,19 @@ async function initializeApp() {
   }
 
 
-  window.loadFavorites();
+  // Load favorites if available, otherwise retry
+  if (typeof window.loadFavorites === 'function') {
+    window.loadFavorites();
+  } else {
+    // Retry after a short delay if ui.js hasn't loaded yet
+    setTimeout(() => {
+      if (typeof window.loadFavorites === 'function') {
+        window.loadFavorites();
+      } else {
+        window.logger?.error('loadFavorites function not available', 'INIT');
+      }
+    }, 100);
+  }
   // Preparar el CTA (se mostrará si hay favoritos precargados)
   //createStartFavoritesCTA();
   // setupLoadingSafety() is called only when actual loading operations are in progress
@@ -471,7 +483,7 @@ async function initializeApp() {
 // EXPONER FUNCIONES GLOBALES CRÍTICAS
   window.onplay = onplay;
   window.state = state;
-  window.elements = elements;
+  // Note: window.elements is exported by ui.js at the end of that file
   window.playPrevious = playPrevious;
   window.playNext = playNext;
   window.playPreviousInContext = playPreviousInContext;

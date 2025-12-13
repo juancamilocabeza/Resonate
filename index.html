@@ -36,26 +36,26 @@
       <h1>
         <a href="https://www.resonateplayer.com" style="text-decoration: none; color: inherit;">&nbsp;Resonate</a>
       </h1>
-      <div id="favorites-toggle" aria-label="See your favorites list">
+      <button id="favorites-toggle" class="additional-btn disable" aria-label="View favorites" aria-expanded="false" aria-controls="favorites-list" title="Click to view your saved favorites">
         <span class="favorites-icon">❤️</span>
-        <span class="favorites-count" id="favorites-count">(0)</span>
-      </div>
+        <span class="favorites-count" id="favorites-count">0</span>
+      </button>
     </header>
     <div class="discovery-section">
       <div class="search-section">
         <div class="search-container">
-          <input type="text" id="search-input" class="search-input" placeholder="Search">
+          <input type="text" id="search-input" class="search-input" placeholder="Search for artists, albums, or tracks..." aria-label="Search music" autocomplete="off">
         </div>
         <div id="search-results" class="search-results">
           <div id="search-loader" class="search-loader" style="display: none;">
             <div class="loader"></div>
             <span class="loader-text">Searching...</span>
           </div>
-          <div id="search-results-list" class="search-results-list"></div>
+          <div id="search-results-list" class="search-results-list" role="list" aria-label="Search results"></div>
         </div>
       </div>
     </div>
-    <div id="favorites-list" class="favorites-list"></div>
+    <div id="favorites-list" class="favorites-list" role="list" aria-label="Favorites"></div>
     <div class="main-player-section">
       <div class="player-container">
         <div class="player-content" id="player-content">
