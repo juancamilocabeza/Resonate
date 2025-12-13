@@ -29,17 +29,30 @@ const CACHE_STRATEGIES = {
   API: 'network-first'
 };
 
-// Service Worker installation
+// Service Worker installation - more aggressive caching
 self.addEventListener('install', (event) => {
   console.log('SW: Installing service worker');
   event.waitUntil(
-    caches.open(STATIC_CACHE).then((cache) => {
+    caches.open(STATIC_CACHE).then(async (cache) => {
       console.log('SW: Caching static files:', STATIC_FILES);
-      return cache.addAll(STATIC_FILES).catch((error) => {
-        console.error('SW: Failed to cache static files:', error);
-        // Continue even if some files fail to cache
-        return Promise.resolve();
+      
+      // Cache files one by one with better error handling
+      const cachePromises = STATIC_FILES.map(async (file) => {
+        try {
+          const response = await fetch(file);
+          if (response.ok) {
+            await cache.put(file, response);
+            console.log('SW: Cached:', file);
+          } else {
+            console.warn('SW: Failed to cache (non-OK response):', file, response.status);
+          }
+        } catch (error) {
+          console.warn('SW: Failed to fetch/cache:', file, error.message);
+        }
       });
+      
+      await Promise.allSettled(cachePromises);
+      console.log('SW: Static files caching complete (some may have failed)');
     })
   );
   self.skipWaiting(); // Activate immediately
@@ -66,7 +79,7 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Update strategy: Network First, then Cache with better offline handling
+// Cache-first for own assets, Network-first for external resources
 self.addEventListener('fetch', (event) => {
   // Skip non-GET requests and certain destinations
   if (event.request.method !== 'GET' ||
@@ -78,6 +91,18 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   const isArchiveOrg = url.hostname === 'archive.org';
   const isImageRequest = isArchiveOrg && url.pathname.includes('/services/img/');
+  const isSameOrigin = url.origin === self.location.origin;
+  
+  // Identify static assets (our own files)
+  const isStaticAsset = isSameOrigin && (
+    url.pathname.endsWith('.js') ||
+    url.pathname.endsWith('.css') ||
+    url.pathname.endsWith('.html') ||
+    url.pathname.endsWith('.json') ||
+    url.pathname.endsWith('.svg') ||
+    url.pathname.endsWith('.png') ||
+    url.pathname === '/'
+  );
 
   // Skip service worker handling for Archive.org images - let them fail naturally
   if (isImageRequest) {
@@ -91,6 +116,47 @@ self.addEventListener('fetch', (event) => {
                                            url.pathname.toLowerCase().endsWith('.mp3')));
       const isMetadataRequest = isArchiveOrg && url.pathname.includes('/metadata/');
 
+      // CACHE-FIRST strategy for our static assets
+      if (isStaticAsset) {
+        try {
+          const cachedResponse = await caches.match(event.request);
+          if (cachedResponse) {
+            console.log('Serving static asset from cache:', event.request.url);
+            // Update cache in background
+            fetch(event.request).then(networkResponse => {
+              if (networkResponse && networkResponse.ok) {
+                caches.open(STATIC_CACHE).then(cache => {
+                  cache.put(event.request, networkResponse);
+                });
+              }
+            }).catch(() => {/* ignore background update failures */});
+            return cachedResponse;
+          }
+        } catch (cacheError) {
+          console.warn('Cache lookup failed for static asset:', cacheError);
+        }
+
+        // If not in cache, try network
+        try {
+          const networkResponse = await fetch(event.request);
+          if (networkResponse && networkResponse.ok) {
+            const responseClone = networkResponse.clone();
+            caches.open(STATIC_CACHE).then(cache => {
+              cache.put(event.request, responseClone);
+            }).catch(() => {});
+            return networkResponse;
+          }
+        } catch (networkError) {
+          console.error('Failed to load static asset:', event.request.url, networkError);
+          // For critical static assets, return error page
+          if (url.pathname.endsWith('.html') || url.pathname === '/') {
+            const html = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Offline</title></head><body><div style="font-family:system-ui;padding:16px;text-align:center;margin-top:48px"><h2>Unable to load app</h2><p>Please check your connection and reload.</p><button onclick="location.reload()" style="margin-top:16px;padding:12px 24px;font-size:16px;cursor:pointer">Reload</button></div></body></html>';
+            return new Response(html, { status: 503, headers: { 'Content-Type': 'text/html' } });
+          }
+        }
+      }
+
+      // NETWORK-FIRST strategy for external resources (archive.org)
       try {
         // Try network first
         const networkResponse = await fetch(event.request);
@@ -134,7 +200,9 @@ self.addEventListener('fetch', (event) => {
             statusText: 'Service Unavailable - Offline',
             headers: { 'Content-Type': 'text/plain' }
           });
-        } else if (isMetadataRequest) {
+        }
+        
+        if (isMetadataRequest) {
           // Return cached metadata if available, otherwise generic offline message
           return new Response(JSON.stringify({
             error: 'offline',
@@ -144,30 +212,25 @@ self.addEventListener('fetch', (event) => {
             statusText: 'Service Unavailable - Offline',
             headers: { 'Content-Type': 'application/json' }
           });
-        } else if (event.request.destination === 'document') {
-          // For main app requests, try to serve app shell from cache
-          const cachedApp = await caches.match('/');
-          if (cachedApp) {
-            return cachedApp;
-          }
         }
-
-        // Generic offline response - return empty response instead of error message
-        // This prevents showing confusing error messages to users
+        
         if (event.request.destination === 'document') {
-          // For document requests, try to serve cached app shell
-          const appShell = await caches.match('/');
-          if (appShell) {
-            return appShell;
+          // Robust app shell fallback: try request, index.html, and root
+          const candidates = [event.request, '/index.html', '/'];
+          for (const candidate of candidates) {
+            try {
+              const resp = await caches.match(candidate);
+              if (resp) return resp;
+            } catch {}
           }
+          
+          // Final fallback: return a minimal offline page
+          const html = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Offline</title></head><body><div style="font-family:system-ui;padding:16px;text-align:center;margin-top:48px"><h2>You are offline</h2><p>Please reconnect and reload.</p><button onclick="location.reload()" style="margin-top:16px;padding:12px 24px;font-size:16px;cursor:pointer">Reload</button></div></body></html>';
+          return new Response(html, { status: 503, headers: { 'Content-Type': 'text/html' } });
         }
 
-        // Return no-content response to prevent error messages
-        return new Response(null, {
-          status: 204, // No Content
-          statusText: 'Offline Mode',
-          headers: { 'Content-Type': 'text/plain' }
-        });
+        // For other external requests, return 503 (not 408)
+        return new Response('Service unavailable', { status: 503, headers: { 'Content-Type': 'text/plain' } });
       }
     })()
   );

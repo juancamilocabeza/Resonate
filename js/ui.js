@@ -74,7 +74,7 @@ class LoaderManager {
     // Only restore if no other loaders are active
     if (this.activeLoaders.size === 0) {
       appElements.playBtn.disabled = false;
-      appElements.playBtn.textContent = appElements.audio.paused ? '▶' : '||';
+          const itemMetadata = (metadata[0] && metadata[0].metadata) ? metadata[0].metadata : undefined;
       if (appElements.audio.paused) {
         appElements.playBtn.classList.remove('playing');
       } else {
@@ -818,7 +818,7 @@ function setupSearchOnEnter() {
       if (state.currentSearchQuery) {
         loaderManager.showSearchLoader();
         appElements.searchResults.classList.add('active');
-        performOptimizedSearch(state.currentSearchQuery, 0).then(result => {
+        (window.performOptimizedSearch || performOptimizedSearch)(state.currentSearchQuery, 0).then(result => {
           displaySearchResults(result);
           addToSearchHistory(state.currentSearchQuery);
         }).catch(error => {
@@ -867,7 +867,7 @@ function setupSearchFocusBehavior() {
       loaderManager.showSearchLoader();
       appElements.searchResults.classList.add('active');
       state.searchActive = true;
-      performOptimizedSearch(currentQuery, 0).then(result => {
+      (window.performOptimizedSearch || performOptimizedSearch)(currentQuery, 0).then(result => {
         displaySearchResults(result);
       }).catch(error => {
         console.error('Search error:', error);
@@ -1095,7 +1095,7 @@ function setupLazyLoadingObserver() {
       state.currentSearchPage++;
 
       try {
-        const result = await performOptimizedSearch(state.currentSearchQuery, state.currentSearchPage);
+        const result = await (window.performOptimizedSearch || performOptimizedSearch)(state.currentSearchQuery, state.currentSearchPage);
         displaySearchResults(result, false);
       } catch (error) {
         console.error('Error en lazy loading:', error);
@@ -2489,7 +2489,7 @@ function displaySearchHistory() {
         state.currentSearchQuery = query;
         loaderManager.showSearchLoader();
         appElements.searchResults.classList.add('active');
-        performOptimizedSearch(query, 0).then(result => {
+        (window.performOptimizedSearch || performOptimizedSearch)(query, 0).then(result => {
           displaySearchResults(result);
         }).catch(error => {
           console.error('Search error:', error);

@@ -711,12 +711,32 @@ function waitForAllScripts() {
         }
         resolve();
       } else if (attempts >= maxAttempts) {
-        console.warn('Timeout waiting for scripts, proceeding with available...', {
+        console.error('CRITICAL: Timeout waiting for scripts. App may not function correctly.', {
           uiScriptLoaded: window.uiScriptLoaded,
           stateAvailable: typeof state !== 'undefined',
           elementsAvailable: typeof elements !== 'undefined',
           showStatusAvailable: typeof showStatus !== 'undefined'
         });
+        
+        // Show error UI if we can
+        try {
+          const app = document.getElementById('app');
+          if (app) {
+            app.innerHTML = `
+              <div style="font-family:system-ui;padding:24px;text-align:center;margin-top:48px">
+                <h2>⚠️ App Loading Error</h2>
+                <p>Some resources failed to load. Please check your connection and reload.</p>
+                <button onclick="location.reload()" style="margin-top:16px;padding:12px 24px;font-size:16px;cursor:pointer;background:#007bff;color:white;border:none;border-radius:4px">
+                  Reload App
+                </button>
+              </div>
+            `;
+            app.style.display = 'block';
+          }
+        } catch (err) {
+          console.error('Failed to show error UI:', err);
+        }
+        
         resolve(); // Continue anyway after timeout
       } else {
         setTimeout(checkScripts, 10);

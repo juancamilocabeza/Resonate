@@ -886,7 +886,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
         
         // Trigger intelligent prefetch if we have album context
         if (state.currentTrack && state.currentTrack.isAlbumTrack) {
-          const albumContext = playbackManager?.contextData?.album;
+          const albumContext = (playbackManager && playbackManager.contextData) ? playbackManager.contextData.album : undefined;
           if (albumContext && albumContext.items) {
             intelligentPrefetchNextTracks(albumContext.items, state.currentTrack.trackIndex);
           }
@@ -914,7 +914,8 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
       state.isLoading = false;
       window.elements.playBtn.disabled = false;
       window.elements.playBtn.textContent = '▶';
-      reject(new Error(`Audio error: ${e.target.error?.message || 'Source not supported'}`));
+      const errMsg = (e && e.target && e.target.error && e.target.error.message) ? e.target.error.message : 'Source not supported';
+      reject(new Error(`Audio error: ${errMsg}`));
     };
 
     const cleanup = () => {
@@ -1235,7 +1236,7 @@ async function playNextInContext(maxRetries = 3) {
   state.isLoading = true;
 
   // Only replace in FIFO queue if song played completely, not on manual next button
-  const currentTrackUrl = state.currentTrack?.url;
+  const currentTrackUrl = (state.currentTrack && state.currentTrack.url) ? state.currentTrack.url : undefined;
 
   try {
     const context = playbackManager.getCurrentContext();
@@ -1662,7 +1663,7 @@ function setupListenTracking() {
 // Enhanced progress bar interaction
 function setupProgressBarInteraction() {
   if (!window.elements.progressBar || !window.elements.progress || !window.elements.currentTime) {
-    window.logger?.warn('Progress bar elements not fully initialized', 'PLAYBACK');
+    if (window.logger && typeof window.logger.warn === 'function') window.logger.warn('Progress bar elements not fully initialized', 'PLAYBACK');
     return;
   }
 
@@ -1671,7 +1672,7 @@ function setupProgressBarInteraction() {
   const startDrag = (e) => {
     if (!window.elements.audio || !window.elements.audio.duration || !isFinite(window.elements.audio.duration)) return;
     if (!window.elements.progressBar || !window.elements.progressSection) {
-      window.logger?.warn('Missing progress elements in startDrag', 'PLAYBACK');
+      if (window.logger && typeof window.logger.warn === 'function') window.logger.warn('Missing progress elements in startDrag', 'PLAYBACK');
       return;
     }
 
@@ -1682,7 +1683,7 @@ function setupProgressBarInteraction() {
       window.elements.progressBar.classList.add('dragging');
       window.elements.progressSection.classList.add('dragging');
     } catch (err) {
-      window.logger?.error(`Error adding dragging class: ${err.message}`, 'PLAYBACK');
+      if (window.logger && typeof window.logger.error === 'function') window.logger.error(`Error adding dragging class: ${err.message}`, 'PLAYBACK');
     }
 
     // Actualizar inmediatamente al comenzar el arrastre
