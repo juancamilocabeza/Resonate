@@ -5,8 +5,7 @@
 // This file will use window.elements which gets populated when ui.js loads
 
 // Loader Manager reference - will be populated when ui.js loads
-let loaderManager = null;
-const getLoaderManager = () => window.loaderManager || loaderManager;
+const getLoaderManager = () => window.loaderManager;
 
 // Constants for repeat modes
 const RepeatMode = {

@@ -2734,5 +2734,6 @@ window.addToSearchHistory = addToSearchHistory;
 window.displaySearchHistory = displaySearchHistory;
 window.clearSearchHistory = clearSearchHistory;
 window.removeFromSearchHistory = removeFromSearchHistory;
+window.loadSavedPlaybackState = loadSavedPlaybackState;
 window.state = state;
 window.elements = appElements;
