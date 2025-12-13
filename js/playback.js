@@ -2046,3 +2046,4 @@ window.playRandomSearchResults = playRandomSearchResults;
 window.setupListenTracking = setupListenTracking;
 window.updateProgressBar = updateProgressBar;
 window.loadPlaybackQueue = loadPlaybackQueue;
+window.playbackManager = playbackManager;
