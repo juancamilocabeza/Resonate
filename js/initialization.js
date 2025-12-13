@@ -154,6 +154,11 @@ async function playSharedContent(identifier) {
 async function initializeApp() {
   console.log('Starting app initialization...');
 
+  // Make loaderManager globally accessible (it's defined in ui.js which loads before)
+  if (typeof window !== 'undefined' && window.loaderManager) {
+    window.loaderManager = window.loaderManager;
+  }
+
   // Inicializar caché de audio primero
   try {
     console.log('Initializing audio cache...');

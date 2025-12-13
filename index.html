@@ -34,7 +34,7 @@
   <div class="app" id="app">
     <header>
       <h1>
-        <a href="https://www.resonateplayer.com" style="text-decoration: none; color: inherit;">&nbsp;Resonate</a>
+        <a href="https://www.resonateplayer.com" style="text-decoration: none; color: inherit;">Resonate</a>
       </h1>
       <button id="favorites-toggle" class="additional-btn disable" aria-label="View favorites" aria-expanded="false" aria-controls="favorites-list" title="Click to view your saved favorites">
         <span class="favorites-icon">❤️</span>
@@ -44,7 +44,7 @@
     <div class="discovery-section">
       <div class="search-section">
         <div class="search-container">
-          <input type="text" id="search-input" class="search-input" placeholder="Search for artists, albums, or tracks..." aria-label="Search music" autocomplete="off">
+          <input type="text" id="search-input" class="search-input" placeholder="Search..." aria-label="Search music" autocomplete="off">
         </div>
         <div id="search-results" class="search-results">
           <div id="search-loader" class="search-loader" style="display: none;">
@@ -66,7 +66,6 @@
             <div class="title" id="title"></div>
             <div class="creator" id="creator"></div>
             <span id="current-track-share" title="Share">🔗</span>
-            <div id="status-messages"></div>
           </div>
           <div class="progress-section">
             <div class="progress-bar" id="progress-bar">
@@ -82,6 +81,7 @@
             <button id="next-btn" class="next-btn" aria-label="Next">⏭</button>
           </div>
         </div>
+        <div id="status-messages"></div>
       </div>
     </div>
     <footer class="footer">

@@ -4,6 +4,10 @@
 // We access it via window.elements to avoid scope conflicts
 // This file will use window.elements which gets populated when ui.js loads
 
+// Loader Manager reference - will be populated when ui.js loads
+let loaderManager = null;
+const getLoaderManager = () => window.loaderManager || loaderManager;
+
 // Constants for repeat modes
 const RepeatMode = {
   ALL: 'all',           // Repeat current context
@@ -692,7 +696,7 @@ async function loadAudioWithCache(track) {
     }
 
     // Load from network
-    loaderManager.showPlayButtonLoader('network');
+    if (window.loaderManager) window.loaderManager.showPlayButtonLoader('network');
 
     const response = await fetchWithTimeout(track.url, { timeout: 15000 });
 
@@ -832,7 +836,8 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
   }
 
   showStatus(`Getting your track ready to play`, 'info');
-  loaderManager.showPlayButtonLoader('track');
+  const lm = getLoaderManager();
+  if (lm) lm.showPlayButtonLoader('track');
 
   return new Promise((resolve, reject) => {
     const audio = window.elements.audio;
@@ -842,8 +847,11 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
       cleanup();
       audio.play().then(async () => {
         // Hide loader when playback actually starts
-        loaderManager.hidePlayButtonLoader('track');
-        loaderManager.hidePlayButtonLoader('network');
+        const lm2 = getLoaderManager();
+        if (lm2) {
+          lm2.hidePlayButtonLoader('track');
+          lm2.hidePlayButtonLoader('network');
+        }
         
         // Update button state
         state.isLoading = false;
@@ -891,8 +899,10 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
       }).catch(error => {
         // Handle playback error
         cleanup();
-        loaderManager.hidePlayButtonLoader('track');
-        loaderManager.hidePlayButtonLoader('network');
+        if (window.loaderManager) {
+          window.loaderManager.hidePlayButtonLoader('track');
+          window.loaderManager.hidePlayButtonLoader('network');
+        }
         state.isLoading = false;
         window.elements.playBtn.disabled = false;
         window.elements.playBtn.textContent = '▶';
@@ -967,7 +977,8 @@ async function resumeSavedPlayback() {
   const savedState = state.savedPlaybackState;
   if (!savedState) return;
 
-  loaderManager.showPlayButtonLoader('resume');
+  const lm = getLoaderManager();
+  if (lm) lm.showPlayButtonLoader('resume');
 
   state.userInteracted = true;
 
@@ -1003,7 +1014,8 @@ async function resumeSavedPlayback() {
   } catch (error) {
     console.error('Error resuming saved playback:', error);
     showStatus(`Couldn't resume your last track`, 'error');
-    loaderManager.hidePlayButtonLoader('resume');
+    const lm2 = getLoaderManager();
+    if (lm2) lm2.hidePlayButtonLoader('resume');
     // Try force play as fallback
     forcePlay();
   }
@@ -1146,7 +1158,8 @@ function forcePlay() {
 async function playFromFavoritesQueue() {
   if (state.isLoading || state.favorites.length === 0) return;
 
-  loaderManager.showPlayButtonLoader('favorites');
+  const lm = getLoaderManager();
+  if (lm) lm.showPlayButtonLoader('favorites');
 
   state.isPlayingFavorites = true;
 
@@ -1175,7 +1188,8 @@ async function playFromFavoritesQueue() {
 
   } catch (error) {
     console.error('Error in playFromFavoritesQueue:', error);
-    loaderManager.hidePlayButtonLoader('favorites');
+    const lm = getLoaderManager();
+    if (lm) lm.hidePlayButtonLoader('favorites');
 
     // Handle offline/cache errors by trying next track
     if (error.message.includes('Offline and audio not available in cache')) {
@@ -1191,7 +1205,8 @@ async function playFromFavoritesQueue() {
       showStatus(`Something went wrong with playback`, 'error');
     }
   } finally {
-    loaderManager.hidePlayButtonLoader('favorites');
+    const lm2 = getLoaderManager();
+    if (lm2) lm2.hidePlayButtonLoader('favorites');
     state.isLoading = false;
     window.elements.playBtn.disabled = false;
     window.elements.playBtn.textContent = '| |';
@@ -1851,7 +1866,8 @@ function setupMediaSession() {
 async function playOptimizedFavorite(favoriteIndex = 0) {
   if (state.isLoading || state.favorites.length === 0) return;
 
-  loaderManager.showPlayButtonLoader('favorite');
+  const lm = getLoaderManager();
+  if (lm) lm.showPlayButtonLoader('favorite');
 
   state.isPlayingFavorites = true;
 
@@ -1916,7 +1932,8 @@ async function playOptimizedFavorite(favoriteIndex = 0) {
 
   } catch (error) {
     console.error('Error in playOptimizedFavorite:', error);
-    loaderManager.hidePlayButtonLoader('favorite');
+    const lm = getLoaderManager();
+    if (lm) lm.hidePlayButtonLoader('favorite');
     showStatus(`Something went wrong with favorite`, 'error');
 
     if (state.favorites.length > 1) {
@@ -1924,7 +1941,8 @@ async function playOptimizedFavorite(favoriteIndex = 0) {
       setTimeout(() => playOptimizedFavorite(nextIndex), 1000);
     }
   } finally {
-    loaderManager.hidePlayButtonLoader('favorite');
+    const lm2 = getLoaderManager();
+    if (lm2) lm2.hidePlayButtonLoader('favorite');
     state.isLoading = false;
     window.elements.playBtn.disabled = false;
     window.elements.playBtn.textContent = '| |';
@@ -1934,7 +1952,8 @@ async function playOptimizedFavorite(favoriteIndex = 0) {
 async function playSpecificTrack(track, albumId, trackIndex, totalTracks) {
   if (state.isLoading) return;
 
-  loaderManager.showPlayButtonLoader('specific');
+  const lm = getLoaderManager();
+  if (lm) lm.showPlayButtonLoader('specific');
 
   try {
     hideSearchResults();
@@ -1956,10 +1975,12 @@ async function playSpecificTrack(track, albumId, trackIndex, totalTracks) {
 
   } catch (error) {
     console.error('Error in playSpecificTrack:', error);
-    loaderManager.hidePlayButtonLoader('specific');
+    const lm = getLoaderManager();
+    if (lm) lm.hidePlayButtonLoader('specific');
     showStatus(`Error: ${error.message}`, 'error');
   } finally {
-    loaderManager.hidePlayButtonLoader('specific');
+    const lm2 = getLoaderManager();
+    if (lm2) lm2.hidePlayButtonLoader('specific');
     state.isLoading = false;
     window.elements.playBtn.disabled = false;
     window.elements.playBtn.textContent = '| |';
@@ -1969,7 +1990,8 @@ async function playSpecificTrack(track, albumId, trackIndex, totalTracks) {
 async function playRandomSearchResults() {
   if (state.isLoading || !state.searchResults || state.searchResults.length === 0) return;
 
-  loaderManager.showPlayButtonLoader('random');
+  const lm = getLoaderManager();
+  if (lm) lm.showPlayButtonLoader('random');
 
   try {
     // Shuffle the search results
@@ -2003,10 +2025,12 @@ async function playRandomSearchResults() {
 
   } catch (error) {
     console.error('Error in playRandomSearchResults:', error);
-    loaderManager.hidePlayButtonLoader('random');
+    const lm = getLoaderManager();
+    if (lm) lm.hidePlayButtonLoader('random');
     showStatus(`Error with random playback`, 'error');
   } finally {
-    loaderManager.hidePlayButtonLoader('random');
+    const lm2 = getLoaderManager();
+    if (lm2) lm2.hidePlayButtonLoader('random');
     state.isLoading = false;
     window.elements.playBtn.disabled = false;
     window.elements.playBtn.textContent = '| |';
@@ -2021,3 +2045,5 @@ window.playOptimizedFavorite = playOptimizedFavorite;
 window.playSpecificTrack = playSpecificTrack;
 window.playRandomSearchResults = playRandomSearchResults;
 window.setupListenTracking = setupListenTracking;
+window.updateProgressBar = updateProgressBar;
+window.loadPlaybackQueue = loadPlaybackQueue;

@@ -138,8 +138,9 @@ class LoaderManager {
   }
 }
 
-// Global loader manager instance
+// Global loader manager instance - expose to window for cross-file access
 const loaderManager = new LoaderManager();
+window.loaderManager = loaderManager;
 
 // Application state
 const state = {
