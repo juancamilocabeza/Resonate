@@ -142,7 +142,7 @@ header {
   top: 0;
   background: linear-gradient(to bottom, var(--bg), rgba(15, 15, 15, 0.95));
   z-index: 100;
-  padding: var(--spacing-md) var(--spacing-lg);
+  padding: 0 var(--spacing-lg);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(8px);
   transition: var(--transition-all-slow);
@@ -193,7 +193,7 @@ header {
 
 /* ===== TYPOGRAPHY HIERARCHY ===== */
 h1 {
-  font-size: 26px;
+  font-size: 24px;
   font-weight: 700;
   letter-spacing: -0.5px;
   color: var(--accent);
@@ -204,7 +204,7 @@ h1 {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: var(--spacing-lg) var(--spacing-md);
+  padding: var(--spacing-lg) 0;
   transition: all var(--transition-normal);
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
@@ -2051,7 +2051,7 @@ select:focus {
   }
 
   h1 {
-    font-size: 30px;
+    font-size: 28px;
   }
 
   h2 {
@@ -2139,10 +2139,10 @@ select:focus {
     top: 0;
     left: 0;
     right: 0;
-    height: 70px;
+    height: auto;
     background: linear-gradient(to bottom, var(--bg), rgba(15, 15, 15, 0.95));
     z-index: 1000;
-    padding: var(--spacing-md) var(--spacing-xl);
+    padding: 0 var(--spacing-xl);
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     backdrop-filter: blur(8px);
   }
@@ -2180,7 +2180,7 @@ select:focus {
   }
 
   h1 {
-    font-size: 36px;
+    font-size: 34px;
     padding: var(--spacing-sm) 0;
     letter-spacing: -1px;
     text-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
@@ -2385,7 +2385,7 @@ select:focus {
 
 @media (max-width: 480px) {
   h1 {
-    font-size: 24px;
+    font-size: 22px;
     gap: 6px;
   }
 
