@@ -293,6 +293,14 @@ h3 {
   gap: var(--spacing-sm);
 }
 
+.title-share-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  width: 100%;
+}
+
 .title {
   font-size: 18px;
   font-weight: 600;
@@ -302,6 +310,7 @@ h3 {
   overflow: hidden;
   text-overflow: ellipsis;
   margin: 0;
+  text-align: center;
 }
 
 .creator {
@@ -313,6 +322,8 @@ h3 {
   overflow: hidden;
   text-overflow: ellipsis;
   margin: 0;
+  text-align: center;
+  width: 100%;
 }
 
 .description {
@@ -343,6 +354,8 @@ h3 {
   position: relative;
   cursor: pointer;
   user-select: none;
+  box-shadow: none;
+  background: transparent;
 }
 
 .progress-section:hover {
@@ -355,6 +368,10 @@ h3 {
 .progress-section.dragging {
   background: rgba(110, 231, 183, 0.15);
   transform: scale(1.01);
+  box-shadow: 0 0 24px rgba(110, 231, 183, 0.35);
+}
+
+.progress-section.dragging {
   box-shadow: 0 0 24px rgba(110, 231, 183, 0.35);
 }
 
@@ -913,26 +930,27 @@ select:focus {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  background: rgba(255, 255, 255, 0.02);
+  gap: 3px;
+  background: transparent;
   color: var(--fg);
   border: none;
-  border-radius: 12px;
-  padding: 6px 12px;
+  border-radius: 0px;
+  padding: 0px 4px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 10px;
   font-weight: 700;
-  transition: all 0.25s ease;
-  min-height: 40px;
+  transition: opacity 0.25s ease;
+  min-height: 18px;
   position: relative;
-  backdrop-filter: blur(2px);
+  backdrop-filter: none;
 }
 
 .favorites-toggle:hover {
-  background: rgba(255, 255, 255, 0.08);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  border: 1.5px solid rgba(255, 255, 255, 0.4);
+  background: transparent;
+  transform: none;
+  box-shadow: none;
+  border: none !important;
+  opacity: 0.7;
 }
 
 .favorites-toggle:active:not(:disabled) {
@@ -2923,28 +2941,39 @@ select:focus {
 
 /* ===== CURRENT TRACK SHARE BUTTON ===== */
 .current-track-share {
-  background: var(--btn);
-  border: none;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 6px;
-  width: 32px;
-  height: 32px;
+  width: 48px;
+  height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  font-size: 14px;
-  transition: background-color 0.2s;
+  font-size: 20px;
+  transition: all 0.2s ease;
   color: var(--accent);
   flex-shrink: 0;
+  padding: 0;
+  min-width: 48px;
+  min-height: 48px;
 }
 
 .current-track-share:hover {
-  background: rgba(110, 231, 183, 0.1);
+  background: rgba(110, 231, 183, 0.15);
+  border-color: rgba(110, 231, 183, 0.4);
+  transform: scale(1.05);
 }
 
 .current-track-share:active {
-  background: var(--card);
+  background: rgba(110, 231, 183, 0.25);
+  border-color: var(--accent);
   transform: scale(0.95);
+}
+
+.current-track-share:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* ===== ONBOARDING SYSTEM ===== */

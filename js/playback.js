@@ -1706,6 +1706,9 @@ function setupProgressBarInteraction() {
     if (window.elements.progressBar) {
       window.elements.progressBar.classList.remove('dragging');
     }
+    if (window.elements.progressSection) {
+      window.elements.progressSection.classList.remove('dragging');
+    }
   };
 
   const updateProgressOnDrag = (e) => {
