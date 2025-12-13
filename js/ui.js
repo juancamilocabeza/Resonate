@@ -2737,3 +2737,10 @@ window.removeFromSearchHistory = removeFromSearchHistory;
 window.loadSavedPlaybackState = loadSavedPlaybackState;
 window.state = state;
 window.elements = appElements;
+window.SEARCH_CONFIG = SEARCH_CONFIG;
+
+// Signal that ui.js has fully loaded
+window.uiScriptLoaded = true;
+if (window.logger) {
+  window.logger.info('UI script fully loaded and exported to window', 'UI');
+}

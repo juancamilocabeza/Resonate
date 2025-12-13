@@ -693,16 +693,30 @@ function waitForAllScripts() {
 
     const checkScripts = () => {
       attempts++;
-      window.logger.debug(`Checking scripts (attempt ${attempts})`, 'SYSTEM');
+      if (window.logger && typeof window.logger.debug === 'function') {
+        window.logger.debug(`Checking scripts (attempt ${attempts})`, 'SYSTEM');
+      } else {
+        console.log(`Checking scripts (attempt ${attempts})`);
+      }
 
-      // Ser menos estricto - solo requerir los scripts más críticos
-      if (typeof state !== 'undefined' &&
+      // Esperar específicamente a que ui.js se haya cargado completamente
+      if (window.uiScriptLoaded === true &&
+          typeof state !== 'undefined' &&
           typeof elements !== 'undefined' &&
           typeof showStatus !== 'undefined') {
-        window.logger.info('Critical scripts loaded, proceeding...', 'SYSTEM');
+        if (window.logger) {
+          window.logger.info('Critical scripts loaded, proceeding...', 'SYSTEM');
+        } else {
+          console.log('Critical scripts loaded, proceeding...');
+        }
         resolve();
       } else if (attempts >= maxAttempts) {
-        window.logger.warn('Timeout waiting for scripts, proceeding with available...', 'SYSTEM');
+        console.warn('Timeout waiting for scripts, proceeding with available...', {
+          uiScriptLoaded: window.uiScriptLoaded,
+          stateAvailable: typeof state !== 'undefined',
+          elementsAvailable: typeof elements !== 'undefined',
+          showStatusAvailable: typeof showStatus !== 'undefined'
+        });
         resolve(); // Continue anyway after timeout
       } else {
         setTimeout(checkScripts, 10);

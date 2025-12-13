@@ -2047,3 +2047,6 @@ window.setupListenTracking = setupListenTracking;
 window.updateProgressBar = updateProgressBar;
 window.loadPlaybackQueue = loadPlaybackQueue;
 window.playbackManager = playbackManager;
+window.fetchWithTimeout = fetchWithTimeout;
+window.playAudioTrackOptimized = playAudioTrackOptimized;
+window.updateShuffleButton = updateShuffleButton;
