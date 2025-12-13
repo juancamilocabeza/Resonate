@@ -159,6 +159,23 @@ async function initializeApp() {
     window.loaderManager = window.loaderManager;
   }
 
+  // One-time: Clear old SW audio cache from previous versions (avoid duplicate audio storage)
+  try {
+    const swAudioCacheCleared = localStorage.getItem('resonate_sw_audio_cache_cleared');
+    if (!swAudioCacheCleared) {
+      // Clear old audio cache from SW on first load after update
+      if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({
+          type: 'CLEAR_AUDIO_CACHE'
+        });
+        window.logger?.info('Requested SW to clear old audio cache', 'INIT');
+        localStorage.setItem('resonate_sw_audio_cache_cleared', 'true');
+      }
+    }
+  } catch (error) {
+    window.logger?.warn(`Failed to clear SW cache: ${error.message}`, 'INIT');
+  }
+
   // Inicializar caché de audio primero
   try {
     console.log('Initializing audio cache...');
@@ -193,12 +210,12 @@ async function initializeApp() {
   //createStartFavoritesCTA();
   // setupLoadingSafety() is called only when actual loading operations are in progress
 
-  // Pre-cargar favoritos para reproducción offline
-  if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.preloadFavorites === 'function') {
+  // Pre-cargar favoritos para reproducción offline (single guarded run)
+  if (state.favoritesPreloadEnabled && typeof audioCache !== 'undefined' && audioCache && typeof audioCache.preloadFavorites === 'function') {
     setTimeout(async () => {
       try {
         await audioCache.preloadFavorites(state.favorites);
-        window.logger?.info('Favorites preloaded for offline playback', 'CACHE');
+        window.logger?.info('Favorites preload attempted once at startup', 'CACHE');
       } catch (error) {
         window.logger?.warn(`Failed to preload favorites: ${error.message}`, 'CACHE');
       }
@@ -211,6 +228,16 @@ async function initializeApp() {
     window.logger.info('FavoritesToggle component initialized', 'UI');
   } else {
     window.logger.warn('FavoritesToggle class not available', 'UI');
+  }
+
+  // Inicializar el listener de event delegation para botones play en favoritos
+  if (typeof window.initializeFavoritesPlayListener === 'function') {
+    console.log('Calling initializeFavoritesPlayListener...');
+    window.initializeFavoritesPlayListener();
+    window.logger.info('Favorites play button listener initialized', 'UI');
+  } else {
+    console.warn('initializeFavoritesPlayListener function not available - window.initializeFavoritesPlayListener:', typeof window.initializeFavoritesPlayListener);
+    window.logger.warn('initializeFavoritesPlayListener function not available', 'UI');
   }
 
   // Cargar estado de reproducción guardado (última sesión)
@@ -395,6 +422,29 @@ async function initializeApp() {
 
 
 
+  // Event listener para el h1 - ocultar resultados de búsqueda o favoritos al hacer clic
+  const appTitle = document.getElementById('app-title');
+  if (appTitle) {
+    appTitle.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Ocultar resultados de búsqueda si están visibles
+      const searchVisible = elements.searchResults && elements.searchResults.classList.contains('active');
+      if (searchVisible) {
+        hideSearchResults();
+      }
+      
+      // Ocultar lista de favoritos si está visible
+      const favoritesVisible = elements.favoritesList && elements.favoritesList.classList.contains('active');
+      if (favoritesVisible) {
+        hideFavoritesList();
+      }
+      
+      window.logger?.info('App title clicked - hiding search results and favorites list', 'UI');
+    });
+  }
+
   document.addEventListener('click', (e) => {
     if (!elements.searchInput.contains(e.target) &&
       !elements.searchResults.contains(e.target)) {
@@ -482,8 +532,8 @@ async function initializeApp() {
     }
   }
 
-  // Hide favorites list when playing a favorite
-  addHideFavoritesOnPlay();
+  // No ocultar automáticamente las listas al reproducir
+  // addHideFavoritesOnPlay(); // Deshabilitado: las listas permanecen visibles durante reproducción
 
 // EXPONER FUNCIONES GLOBALES CRÍTICAS
   window.onplay = onplay;

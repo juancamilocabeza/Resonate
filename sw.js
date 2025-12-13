@@ -167,14 +167,13 @@ self.addEventListener('fetch', (event) => {
           throw new Error('Invalid network response');
         }
 
-        // Cache successful responses for audio and metadata
-        if (isAudioRequest || isMetadataRequest) {
+        // Cache metadata only; avoid duplicating audio already cached by app
+        if (isMetadataRequest) {
           const responseClone = networkResponse.clone();
-          // Cache in background
           caches.open(CACHE_NAME).then((cache) => {
             return cache.put(event.request, responseClone);
           }).catch((err) => {
-            console.warn('Failed to cache response:', err);
+            console.warn('Failed to cache metadata response:', err);
           });
         }
 
@@ -242,6 +241,16 @@ self.addEventListener('message', (event) => {
       if (event.ports && event.ports[0]) {
         event.ports[0].postMessage({ success: true });
       }
+    });
+  }
+
+  // Clear old audio cache to reclaim disk (one-time)
+  if (event.data && event.data.type === 'CLEAR_AUDIO_CACHE') {
+    console.log('SW: Clearing old audio cache (resonate-v1) to reclaim disk space');
+    caches.delete('resonate-v1').then(() => {
+      console.log('SW: Old audio cache deleted successfully');
+    }).catch(err => {
+      console.warn('SW: Failed to delete old audio cache:', err);
     });
   }
 

@@ -89,6 +89,55 @@ class EnhancedCache {
 // Create global enhanced cache instance
 const enhancedCache = new EnhancedCache();
 
+// Priority queue for audio fetches: high-priority playback, low-priority prefetch
+function createPriorityQueue(limit = 3) {
+  let active = 0;
+  let concurrency = Math.max(1, limit);
+  const highQueue = []; // playback requests (user is playing now)
+  const lowQueue = [];  // prefetch requests (background)
+
+  const runNext = () => {
+    if (active >= concurrency) return;
+    
+    // Always prioritize playback (high) over prefetch (low)
+    const next = highQueue.shift() || lowQueue.shift();
+    if (!next) return;
+
+    active++;
+    next()
+      .catch(() => {}) // Swallow; individual tasks handle logging
+      .finally(() => {
+        active--;
+        runNext();
+      });
+  };
+
+  return {
+    setLimit(newLimit) {
+      concurrency = Math.max(1, newLimit);
+      for (let i = 0; i < newLimit; i++) runNext();
+    },
+    enqueuePlayback(taskFactory) {
+      return new Promise((resolve, reject) => {
+        highQueue.unshift(() => taskFactory().then(resolve).catch(reject));
+        runNext();
+      });
+    },
+    enqueuePrefetch(taskFactory) {
+      return new Promise((resolve, reject) => {
+        lowQueue.push(() => taskFactory().then(resolve).catch(reject));
+        runNext();
+      });
+    },
+    stats() {
+      return { active, pendingPlayback: highQueue.length, pendingPrefetch: lowQueue.length, limit: concurrency };
+    }
+  };
+}
+
+// Shared queue for audio fetches: playback has priority over prefetch
+const audioFetchQueue = createPriorityQueue(3);
+
 // Periodic cleanup every 5 minutes
 setInterval(() => {
   enhancedCache.cleanup();
@@ -105,6 +154,7 @@ class AudioCache {
     this.favoritesQueue = [];
     this.maxCacheSize = 500 * 1024 * 1024; // 500MB max cache size
     this.isInitialized = false;
+    this.isPreloadingFavorites = false;
   }
 
   async init() {
@@ -144,11 +194,11 @@ class AudioCache {
     });
   }
 
-  async get(url) {
+  async get(url, isPlayback = false) {
     if (!this.isInitialized) await this.init();
 
     try {
-      // Try Cache API first
+      // Try Cache API first (fastest path)
       const cachedResponse = await this.cache.match(url);
       if (cachedResponse) {
         // Update access time in IndexedDB
@@ -158,9 +208,10 @@ class AudioCache {
         return { blob, fromCache: true };
       }
 
-      // Fallback to fetch if not cached
-      const response = await fetch(url);
-      if (response.ok) {
+      // Fallback to fetch: playback gets priority, prefetch waits
+      const queueFn = isPlayback ? 'enqueuePlayback' : 'enqueuePrefetch';
+      const response = await audioFetchQueue[queueFn](() => fetch(url));
+      if (response && response.ok) {
         // Cache in background for future use
         this.put(url, response.clone());
         // Return blob for immediate playback
@@ -219,17 +270,25 @@ class AudioCache {
     if (!this.isInitialized) await this.init();
 
     try {
-      const existing = await this.cache.match(url);
-      if (existing) {
-        window.logger?.debug(`Audio already cached: ${url}`, 'CACHE');
-        return; // Already cached
+      const shouldFetch = await this.shouldPrefetch(priority);
+      if (!shouldFetch) {
+        window.logger?.info(`Skipping prefetch due to network or quota limits: ${url}`, 'CACHE');
+        return;
       }
 
-      window.logger?.info(`Pre-fetching audio: ${url}`, 'CACHE');
-      const response = await fetch(url);
-      if (response.ok) {
-        await this.put(url, response, priority);
-      }
+      await audioFetchQueue.enqueuePrefetch(async () => {
+        const existing = await this.cache.match(url);
+        if (existing) {
+          window.logger?.debug(`Audio already cached: ${url}`, 'CACHE');
+          return; // Already cached
+        }
+
+        window.logger?.info(`Pre-fetching audio: ${url}`, 'CACHE');
+        const response = await fetch(url);
+        if (response && response.ok) {
+          await this.put(url, response, priority);
+        }
+      });
     } catch (error) {
       window.logger?.warn(`Failed to prefetch audio: ${error.message}`, 'CACHE');
     }
@@ -238,8 +297,20 @@ class AudioCache {
   async preloadFavorites(favorites) {
     if (!this.isInitialized) await this.init();
     if (!favorites || favorites.length === 0) return;
+    if (this.isPreloadingFavorites) {
+      window.logger?.info('Favorites preload already in progress, skipping duplicate run', 'CACHE');
+      return;
+    }
+
+    const shouldFetch = await this.shouldPrefetch(true);
+    if (!shouldFetch) {
+      window.logger?.info('Skipping favorites preload due to network or quota limits', 'CACHE');
+      return;
+    }
 
     window.logger?.info(`Preloading ${favorites.length} favorites for offline playback`, 'CACHE');
+
+    this.isPreloadingFavorites = true;
 
     // Load favorites queue
     this.favoritesQueue = favorites.map(f => f.url);
@@ -254,11 +325,18 @@ class AudioCache {
     // Wait for all to complete (with timeout)
     await Promise.allSettled(prefetchPromises);
     window.logger?.info('Favorites preload completed', 'CACHE');
+    this.isPreloadingFavorites = false;
   }
 
   async preloadTracks(tracks, priority = false) {
     if (!this.isInitialized) await this.init();
     if (!tracks || tracks.length === 0) return;
+
+    const shouldFetch = await this.shouldPrefetch(priority);
+    if (!shouldFetch) {
+      window.logger?.info('Skipping track preload due to network or quota limits', 'CACHE');
+      return;
+    }
 
     const prefetchPromises = tracks.map(track =>
       this.prefetchAudio(track.url, priority).catch(error => {
@@ -334,6 +412,30 @@ class AudioCache {
         window.logger?.warn('Loading operation timed out, aborting', 'CACHE');
       }
     }, 30000); // 30 second timeout
+  }
+
+  async shouldPrefetch(priority = false) {
+    try {
+      // Avoid aggressive downloads on slow or metered networks unless priority
+      const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+      if (connection) {
+        if (connection.saveData && !priority) return false;
+        const slowTypes = ['slow-2g', '2g'];
+        if (slowTypes.includes(connection.effectiveType) && !priority) return false;
+      }
+
+      // Stop if cache is near full
+      const stats = await this.getUsageStats();
+      if (stats.usagePercentage >= 95 && !priority) {
+        window.logger?.info('Cache nearly full, skipping non-priority prefetch', 'CACHE');
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      window.logger?.warn(`Prefetch guard failed: ${error.message}`, 'CACHE');
+      return true; // Fail open to avoid blocking playback paths
+    }
   }
 
   // Helper methods

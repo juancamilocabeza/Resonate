@@ -23,6 +23,7 @@ const appElements = {
   playAllFavoritesBtn: document.getElementById('play-all-favorites-btn'),
   favoritesToggle: document.getElementById('favorites-toggle'),
   favoritesList: document.getElementById('favorites-list'),
+  preloadFavoritesToggle: document.getElementById('preload-favorites-toggle'),
   volumeIcon: document.getElementById('volume-icon'),
   volumeSlider: document.getElementById('volume-slider'),
   // New elements for tab navigation
@@ -74,7 +75,6 @@ class LoaderManager {
     // Only restore if no other loaders are active
     if (this.activeLoaders.size === 0) {
       appElements.playBtn.disabled = false;
-          const itemMetadata = (metadata[0] && metadata[0].metadata) ? metadata[0].metadata : undefined;
       if (appElements.audio.paused) {
         appElements.playBtn.classList.remove('playing');
       } else {
@@ -179,6 +179,7 @@ const state = {
   initialPreloadDone: false,
   playbackHistory: [],
   playbackQueue: [],
+  favoritesPreloadEnabled: true,
 
   currentSearchPage: 0,
   currentSearchHasMore: false,
@@ -186,6 +187,55 @@ const state = {
   isLoadingMore: false,
   savedPlaybackState: null
 };
+
+// Load persisted preference for favorites preload
+function loadFavoritesPreloadPreference() {
+  try {
+    const saved = localStorage.getItem('resonate_preload_favorites_enabled');
+    if (saved === null) {
+      state.favoritesPreloadEnabled = true;
+    } else {
+      state.favoritesPreloadEnabled = saved === 'true';
+    }
+  } catch (e) {
+    state.favoritesPreloadEnabled = true;
+    window.logger?.warn(`Could not load favorites preload preference: ${e.message}`, 'UI');
+  }
+
+  if (appElements.preloadFavoritesToggle) {
+    appElements.preloadFavoritesToggle.checked = state.favoritesPreloadEnabled;
+  }
+}
+
+function setFavoritesPreloadEnabled(enabled) {
+  state.favoritesPreloadEnabled = !!enabled;
+  try {
+    localStorage.setItem('resonate_preload_favorites_enabled', String(enabled));
+  } catch (e) {
+    window.logger?.warn(`Could not save favorites preload preference: ${e.message}`, 'UI');
+  }
+
+  if (appElements.preloadFavoritesToggle) {
+    appElements.preloadFavoritesToggle.checked = state.favoritesPreloadEnabled;
+  }
+
+  const statusMsg = enabled ? 'Favorites preload enabled' : 'Favorites preload disabled';
+  showStatus(statusMsg, 'info', 2000);
+}
+
+function initializePreloadFavoritesToggle() {
+  loadFavoritesPreloadPreference();
+
+  if (!appElements.preloadFavoritesToggle) return;
+
+  appElements.preloadFavoritesToggle.checked = state.favoritesPreloadEnabled;
+  appElements.preloadFavoritesToggle.addEventListener('change', (e) => {
+    setFavoritesPreloadEnabled(e.target.checked);
+  });
+}
+
+// Initialize preload preference on load
+loadFavoritesPreloadPreference();
 
 // Favorites management
 function loadFavorites() {
@@ -216,7 +266,7 @@ function loadFavorites() {
       window.logger.info(`Final favorites loaded: ${state.favorites.length} items`, 'UI');
 
       // Precargar favoritos en cola FIFO
-      if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.preloadFavorites === 'function') {
+      if (state.favoritesPreloadEnabled && typeof audioCache !== 'undefined' && audioCache && typeof audioCache.preloadFavorites === 'function') {
         audioCache.preloadFavorites(state.favorites);
         window.logger.debug('Favorites preload initiated', 'CACHE');
       }
@@ -245,7 +295,7 @@ function saveFavorites() {
     localStorage.setItem('resonate_favorites', payload);
     window.logger.debug('Favorites saved to localStorage', 'UI');
     // Request preload/update of favorites in cache if available
-    if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.preloadFavorites === 'function') {
+    if (state.favoritesPreloadEnabled && typeof audioCache !== 'undefined' && audioCache && typeof audioCache.preloadFavorites === 'function') {
       audioCache.preloadFavorites(state.favorites || []);
       window.logger.debug('Favorites preload requested', 'CACHE');
     }
@@ -1469,7 +1519,7 @@ function displayAlbumTracks(albumId, tracksContainer) {
         trackItem.innerHTML = `
           <div class="track-actions">
             <span class="track-number">${trackNumber}</span>
-            <button class="track-play" data-url="${track.url}" data-title="${track.title}">▶</button>
+            <button class="track-play" data-url="${track.url}" data-title="${track.title}" data-id="${albumId}" data-is-album="false">▶</button>
             <button class="track-favorite ${isFavorite ? 'active' : ''}">${isFavorite ? '❤️' : '🩶'}</button>
             <button class="track-share" title="Share">🔗</button>
           </div>
@@ -1482,7 +1532,19 @@ function displayAlbumTracks(albumId, tracksContainer) {
         const playBtn = trackItem.querySelector('.track-play');
         playBtn.addEventListener('click', (e) => {
           e.stopPropagation(); // Evitar que el clic se propague al resultado principal
-          playSpecificTrack(track, albumId, index, files.length);
+          
+          // Detectar si estamos en favoritos o en resultados de búsqueda
+          const isFavoritesContext = tracksContainer.closest('#favorites-list') !== null;
+          
+          if (isFavoritesContext) {
+            // Si estamos en favoritos, usar la función que oculta los favoritos
+            // Pasar el track específico para reproducir el correcto
+            console.log('🎵 Track clicked in favorites context - calling playFromFavoritesQueue with track:', track.title);
+            playFromFavoritesQueue(track);
+          } else {
+            // Si estamos en resultados, usar la función normal de búsqueda
+            playSpecificSearchTrack(track, albumId, index, files.length);
+          }
         });
 
         const favoriteBtn = trackItem.querySelector('.track-favorite');
@@ -1733,7 +1795,7 @@ function showOfflineHints() {
 async function syncOfflineData() {
   try {
     // Preload any pending favorites that weren't cached while offline
-    if (state.favorites && state.favorites.length > 0) {
+    if (state.favoritesPreloadEnabled && state.favorites && state.favorites.length > 0) {
       if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.preloadFavorites === 'function') {
         await audioCache.preloadFavorites(state.favorites);
         showStatus('Syncing your offline library', 'info', 2000);
@@ -1916,10 +1978,11 @@ function updateFavoritesList() {
 
     // Usar createFavoriteActions para consistencia
     const { actionsDiv, playBtn, favoriteBtn, shareBtn, expandBtn } = createFavoriteActions(mockResult, true);
-
-    // Configurar botones
+    
+    // Configurar botones - ASEGURAR que el play button tenga title="Play"
     playBtn.setAttribute('data-id', albumId);
     playBtn.setAttribute('data-is-album', isAlbum);
+    playBtn.title = 'Play'; // Asegurar que title sea "Play"
     favoriteBtn.setAttribute('data-id', albumId);
     expandBtn.setAttribute('data-id', albumId);
 
@@ -1930,22 +1993,24 @@ function updateFavoritesList() {
     albumItem.appendChild(infoDiv);
     albumItem.appendChild(actionsDiv);
 
-    // Event listeners
-    playBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const isAlbum = playBtn.getAttribute('data-is-album') === 'true';
-      const id = playBtn.getAttribute('data-id');
-
-      if (isAlbum) {
-        playAlbumFromFavorites(id);
+    // Listener para prevenir propagación de algunos clicks, pero permitir que play button se propague
+    albumItem.addEventListener('click', (e) => {
+      console.log('albumItem clicked - target:', e.target.tagName, 'class:', e.target.className, 'text:', e.target.textContent.trim());
+      
+      // IMPORTANTE: NO hacer stopPropagation para botones play - deben propagarse al listener en favoritesList
+      const isPlayButton = e.target.tagName === 'BUTTON' && e.target.title === 'Play' && e.target.textContent.trim() === '▶';
+      
+      if (!isPlayButton) {
+        // Para otros elementos, sí prevenir propagación
+        e.stopPropagation();
       } else {
-        const favoriteTrack = state.favorites.find(fav => fav.albumId === id);
-        if (favoriteTrack) {
-          playFromFavoritesQueue();
-        }
+        console.log('✨ Play button click allowed to propagate up');
       }
     });
 
+    // Event listeners para los otros botones (favorite, share, expand)
+    // El listener del play button se maneja con event delegation en handleFavoritesPlayClick
+    
     shareBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       shareTrack(albumId, albumData.albumTitle, albumData.albumCreator);
@@ -1977,6 +2042,95 @@ function updateFavoritesList() {
 
     favoritesList.appendChild(albumItem);
   });
+}
+
+// Inicializar el listener de event delegation para los botones play en favoritos
+// Se llama una sola vez en la inicialización de la app
+function initializeFavoritesPlayListener() {
+  const favoritesList = appElements.favoritesList;
+  if (!favoritesList) {
+    console.warn('❌ favoritesList element not found');
+    return;
+  }
+  
+  console.log('🎯 Initializing favorites play button listener with event delegation');
+  
+  // Event listener en CAPTURE PHASE para ejecutarse ANTES que otros listeners en elementos hijos
+  // Esto permite capturar el evento del play button antes de que albumItem.stopPropagation() lo bloquee
+  favoritesList.addEventListener('click', handleFavoritesPlayClick, true);
+  console.log('✅ Event listener added to favoritesList (CAPTURE PHASE)');
+}
+
+// Handler global para clicks en botones play de favoritos (event delegation)
+function handleFavoritesPlayClick(e) {
+  console.log('handleFavoritesPlayClick triggered - event target:', e.target.tagName, e.target.textContent);
+  
+  let button = e.target;
+  
+  // Si el click fue en un elemento dentro del botón (ej: SVG, span), buscar el botón padre
+  if (button.tagName !== 'BUTTON') {
+    button = button.closest('button');
+    if (!button) {
+      console.log('⚠️ Click not on a button or within a button element');
+      return;
+    }
+  }
+  
+  // IMPORTANTE: Ignorar clics dentro de track items (pistas expandidas)
+  // Estos tienen su propio listener directo que maneja la reproducción
+  if (button.closest('.track-item')) {
+    console.log('⚠️ Click was inside a track-item - letting the direct listener handle it');
+    return;
+  }
+  
+  // Verificar si es un botón play verificando:
+  // 1. Que sea un botón
+  // 2. Que tenga atributos data-id y data-is-album (que lo identifican como botón play en favoritos)
+  // 3. Que el textContent sea "▶"
+  const hasPlayDataAttributes = button.hasAttribute('data-id') && button.hasAttribute('data-is-album');
+  const isPlaySymbol = button.textContent.trim() === '▶';
+  
+  if (button.tagName === 'BUTTON' && hasPlayDataAttributes && isPlaySymbol) {
+    console.log('✅ VALID PLAY BUTTON CLICK DETECTED');
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const isAlbum = button.getAttribute('data-is-album') === 'true';
+    const id = button.getAttribute('data-id');
+    
+    console.log('📊 Button data - isAlbum:', isAlbum, 'id:', id);
+    
+    if (isAlbum) {
+      console.log('🎵 Calling playAlbumFromFavorites for album:', id);
+      if (typeof playAlbumFromFavorites === 'function') {
+        playAlbumFromFavorites(id);
+      } else {
+        console.error('❌ playAlbumFromFavorites is NOT a function!');
+      }
+    } else {
+      console.log('🎵 Calling playFromFavoritesQueue for single track');
+      // Para single tracks, encontrar el track correcto en favoritos
+      // y pasarlo a la función
+      if (typeof playFromFavoritesQueue === 'function') {
+        // Si el botón está dentro de un track item expandido, el track objeto está disponible
+        // en el contexto del listener que agregó. Pero aquí en event delegation,
+        // necesitamos encontrarlo basado en data-id (que es el albumId)
+        // El track estaría en state.favorites con ese albumId
+        const favoriteTrack = state.favorites.find(fav => fav.albumId === id || fav.id === id);
+        if (favoriteTrack) {
+          console.log('Found favorite track:', favoriteTrack.title, '- passing to playFromFavoritesQueue');
+          playFromFavoritesQueue(favoriteTrack);
+        } else {
+          console.warn('Favorite track not found for id:', id, '- playing from queue start');
+          playFromFavoritesQueue();
+        }
+      } else {
+        console.error('❌ playFromFavoritesQueue is NOT a function!');
+      }
+    }
+  } else {
+    console.log('⚠️ Click was not on a play button - has data attrs:', hasPlayDataAttributes, 'is play symbol:', isPlaySymbol, 'tagName:', button.tagName);
+  }
 }
 
 /**
@@ -2073,22 +2227,29 @@ class FavoritesToggle {
    * Oculta la lista de favoritos
    */
   hide() {
-    if (!this.isVisible) return;
+    console.log('FavoritesToggle.hide() called - current isVisible:', this.isVisible);
     this.isVisible = false;
+    console.log('Set isVisible to false');
     this.updateVisibility();
+    console.log('Called updateVisibility()');
     this.updateAriaAttributes();
+    console.log('FavoritesToggle.hide() completed');
   }
 
   /**
    * Actualiza la visibilidad de los elementos
    */
   updateVisibility() {
+    console.log('updateVisibility() called - isVisible:', this.isVisible);
     if (this.isVisible) {
+      console.log('Adding active class');
       this.listElement?.classList.add('active');
       this.element?.classList.add('active');
     } else {
+      console.log('Removing active class');
       this.listElement?.classList.remove('active');
       this.element?.classList.remove('active');
+      console.log('Active class removed - listElement has active:', this.listElement?.classList.contains('active'));
     }
   }
 
@@ -2167,14 +2328,28 @@ function updateFavoritesCount() {
 }
 
 function hideFavoritesList() {
+  console.log('hideFavoritesList called - favoritesToggleInstance:', !!favoritesToggleInstance);
+  
+  // Siempre ejecutar el ocultamiento, sin importar el estado previo
   if (favoritesToggleInstance) {
+    console.log('Calling favoritesToggleInstance.hide()');
     favoritesToggleInstance.hide();
+  }
+  
+  // Siempre ejecutar el fallback para asegurar que se oculta
+  console.log('Executing fallback - removing active class');
+  state.favoritesVisible = false;
+  
+  if (appElements.favoritesList) {
+    appElements.favoritesList.classList.remove('active');
+    console.log('Favorites list active class removed, has active:', appElements.favoritesList.classList.contains('active'));
   } else {
-    // Fallback si la instancia no está disponible
-    state.favoritesVisible = false;
-    appElements.favoritesList?.classList.remove('active');
-    appElements.favoritesToggle?.classList.remove('active');
-    appElements.favoritesToggle?.setAttribute('aria-expanded', 'false');
+    console.warn('appElements.favoritesList not found');
+  }
+  
+  if (appElements.favoritesToggle) {
+    appElements.favoritesToggle.classList.remove('active');
+    appElements.favoritesToggle.setAttribute('aria-expanded', 'false');
   }
 }
 
@@ -2244,28 +2419,11 @@ async function handleStartFavoritesCTA() {
   }
 }
 
-// Hide favorites list when playing a favorite
+// Las listas permanecen visibles durante la reproducción
+// El usuario controla manualmente su visibilidad
 function addHideFavoritesOnPlay() {
-  // In playFromFavoritesQueue
-  const originalPlayFromFavoritesQueue = window.playFromFavoritesQueue;
-  window.playFromFavoritesQueue = async function (...args) {
-    hideFavoritesList();
-    return originalPlayFromFavoritesQueue.apply(this, args);
-  };
-
-  // In playAlbumFromFavorites
-  const originalPlayAlbumFromFavorites = window.playAlbumFromFavorites;
-  window.playAlbumFromFavorites = async function (...args) {
-    hideFavoritesList();
-    return originalPlayAlbumFromFavorites.apply(this, args);
-  };
-
-  // In playSpecificTrack
-  const originalPlaySpecificTrack = window.playSpecificTrack;
-  window.playSpecificTrack = async function (...args) {
-    hideFavoritesList();
-    return originalPlaySpecificTrack.apply(this, args);
-  };
+  // Esta función ya no modifica el comportamiento de reproducción
+  // Las listas permanecen visibles durante la reproducción
 }
 
 // Register service worker and handle updates
@@ -2712,6 +2870,9 @@ function updateMetaTagsForSharing(identifier, title, creator) {
   });
 }
 
+// Initialize UI toggles
+initializePreloadFavoritesToggle();
+
 // Expose critical functions globally for cross-module access
 window.loadFavorites = loadFavorites;
 window.saveFavorites = saveFavorites;
@@ -2729,6 +2890,7 @@ window.displaySearchResults = displaySearchResults;
 window.hideSearchResults = hideSearchResults;
 window.hideFavoritesList = hideFavoritesList;
 window.loadSearchHistory = loadSearchHistory;
+window.initializeFavoritesPlayListener = initializeFavoritesPlayListener;
 window.saveSearchHistory = saveSearchHistory;
 window.addToSearchHistory = addToSearchHistory;
 window.displaySearchHistory = displaySearchHistory;

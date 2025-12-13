@@ -33,8 +33,8 @@
 <body>
   <div class="app" id="app">
     <header>
-      <h1>
-        <a href="https://www.resonateplayer.com" style="text-decoration: none; color: inherit;">Resonate</a>
+      <h1 id="app-title" style="cursor: pointer;">
+        Resonate
       </h1>
       <button id="favorites-toggle" aria-label="View favorites" aria-expanded="false" aria-controls="favorites-list" title="Click to view your saved favorites">
         <span class="favorites-icon">❤️</span>
@@ -88,6 +88,10 @@
     </div>
     <footer class="footer">
       <div>&copy; 2025 Resonate Player - Early Stage - All rights reserved.</div>
+      <label class="preload-toggle" for="preload-favorites-toggle">
+        <input type="checkbox" id="preload-favorites-toggle" aria-label="Toggle favorites offline preload" checked>
+        <span>Preload favorites for offline</span>
+      </label>
     </footer>
   </div>
   <audio id="audio" preload="metadata"></audio>  
