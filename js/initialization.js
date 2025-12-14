@@ -751,9 +751,9 @@ function waitForAllScripts() {
 
       // Esperar específicamente a que ui.js se haya cargado completamente
       if (window.uiScriptLoaded === true &&
-          typeof state !== 'undefined' &&
-          typeof elements !== 'undefined' &&
-          typeof showStatus !== 'undefined') {
+          typeof window.state !== 'undefined' &&
+          typeof window.elements !== 'undefined' &&
+          typeof window.showStatus !== 'undefined') {
         if (window.logger) {
           window.logger.info('Critical scripts loaded, proceeding...', 'SYSTEM');
         } else {
@@ -763,9 +763,9 @@ function waitForAllScripts() {
       } else if (attempts >= maxAttempts) {
         console.error('CRITICAL: Timeout waiting for scripts. App may not function correctly.', {
           uiScriptLoaded: window.uiScriptLoaded,
-          stateAvailable: typeof state !== 'undefined',
-          elementsAvailable: typeof elements !== 'undefined',
-          showStatusAvailable: typeof showStatus !== 'undefined'
+          stateAvailable: typeof window.state !== 'undefined',
+          elementsAvailable: typeof window.elements !== 'undefined',
+          showStatusAvailable: typeof window.showStatus !== 'undefined'
         });
         
         // Show error UI if we can
@@ -800,6 +800,20 @@ function waitForAllScripts() {
 // Inicialización segura que espera a todos los scripts
 // Register Service Worker for offline functionality
 function registerServiceWorker() {
+  // PERMANENTLY DISABLED - Service Worker causing cache issues
+  console.log('⚠️ Service Worker disabled - use DevTools Application tab to clear old SW if needed');
+  
+  // Unregister any existing service workers
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(registrations => {
+      registrations.forEach(registration => {
+        registration.unregister();
+        console.log('🗑️ Unregistered old Service Worker');
+      });
+    });
+  }
+  return;
+  
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js')
       .then((registration) => {

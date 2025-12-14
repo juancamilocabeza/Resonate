@@ -1,5 +1,5 @@
-// Search configuration
-const appElements = {
+
+const elements = {
   audio: document.getElementById('audio'),
   art: document.getElementById('art'),
   title: document.getElementById('title'),
@@ -46,42 +46,73 @@ const SEARCH_CONFIG = {
   enableLazyLoading: true
 };
 
-// Loader Manager - Centralized loader state management
+// Loader Manager - Simplified single-state loader with auto-cleanup
 class LoaderManager {
   constructor() {
-    this.activeLoaders = new Set();
+    this.isActive = false;
+    this.timeoutId = null;
   }
 
   /**
-   * Show loader on play button
-   * @param {string} context - Context identifier for tracking
+   * Show loader on play button with automatic timeout cleanup
    */
-  showPlayButtonLoader(context = 'default') {
-    if (this.activeLoaders.has(`play-${context}`)) return;
+  showPlayButtonLoader() {
+    console.log('🔵 SHOW LOADER called');
+    // Clear any existing timeout
+    if (this.timeoutId) {
+      clearTimeout(this.timeoutId);
+      this.timeoutId = null;
+    }
 
-    this.activeLoaders.add(`play-${context}`);
+    // If already showing, reset it
+    if (this.isActive) {
+      console.warn('Loader already active, resetting');
+    }
+
+    this.isActive = true;
     appElements.playBtn.disabled = true;
     appElements.playBtn.innerHTML = '<span class="loader" aria-label="Loading" role="status"></span>';
     state.isLoading = true;
+    console.log('🔵 LOADER SHOWN - isActive:', this.isActive, 'state.isLoading:', state.isLoading);
+
+    // Fail-safe: auto-cleanup after 30 seconds
+    this.timeoutId = setTimeout(() => {
+      if (this.isActive) {
+        console.error('Loader stuck for 30s, forcing cleanup');
+        this.hidePlayButtonLoader();
+      }
+    }, 30000);
   }
 
   /**
    * Hide loader on play button
-   * @param {string} context - Context identifier for tracking
    */
-  hidePlayButtonLoader(context = 'default') {
-    this.activeLoaders.delete(`play-${context}`);
-
-    // Only restore if no other loaders are active
-    if (this.activeLoaders.size === 0) {
-      appElements.playBtn.disabled = false;
-      if (appElements.audio.paused) {
-        appElements.playBtn.classList.remove('playing');
-      } else {
-        appElements.playBtn.classList.add('playing');
-      }
-      state.isLoading = false;
+  hidePlayButtonLoader() {
+    console.log('🔴 HIDE LOADER called');
+    // Clear timeout
+    if (this.timeoutId) {
+      clearTimeout(this.timeoutId);
+      this.timeoutId = null;
     }
+
+    if (!this.isActive) {
+      console.log('🔴 LOADER already hidden, skipping');
+      return; // Already hidden
+    }
+
+    this.isActive = false;
+    appElements.playBtn.disabled = false;
+    
+    if (appElements.audio.paused) {
+      appElements.playBtn.classList.remove('playing');
+      appElements.playBtn.textContent = '▶';
+    } else {
+      appElements.playBtn.classList.add('playing');
+      appElements.playBtn.textContent = '| |';
+    }
+    
+    state.isLoading = false;
+    console.log('🔴 LOADER HIDDEN - isActive:', this.isActive, 'state.isLoading:', state.isLoading);
   }
 
   /**
@@ -141,6 +172,12 @@ class LoaderManager {
 // Global loader manager instance - expose to window for cross-file access
 const loaderManager = new LoaderManager();
 window.loaderManager = loaderManager;
+
+// Helper function to get loader manager
+function getLoaderManager() {
+  return window.loaderManager;
+}
+window.getLoaderManager = getLoaderManager;
 
 // Application state
 const state = {
@@ -1402,7 +1439,7 @@ function createSearchResultElement(result, globalIndex) {
     e.stopPropagation();
     const title = result.title || 'Untitled';
     showStatus(`Loading your track`, 'info');
-    await playOptimizedSearchResult(result, globalIndex, state.searchResults);
+    await window.playOptimizedSearchResult(result, globalIndex, state.searchResults);
   });
 
   shareBtn.addEventListener('click', async (e) => {
@@ -1414,7 +1451,7 @@ function createSearchResultElement(result, globalIndex) {
     if (e.target.closest('.result-buttons')) return;
     const title = result.title || 'Untitled';
     showStatus(`Getting track ready`, 'info');
-    await playOptimizedSearchResult(result, globalIndex, state.searchResults);
+    await window.playOptimizedSearchResult(result, globalIndex, state.searchResults);
   });
 
   favoriteBtn.addEventListener('click', async (e) => {
@@ -1543,7 +1580,7 @@ function displayAlbumTracks(albumId, tracksContainer) {
             playFromFavoritesQueue(track);
           } else {
             // Si estamos en resultados, usar la función normal de búsqueda
-            playSpecificSearchTrack(track, albumId, index, files.length);
+            window.playSpecificSearchTrack(track, albumId, index, files.length);
           }
         });
 
@@ -2898,7 +2935,7 @@ window.clearSearchHistory = clearSearchHistory;
 window.removeFromSearchHistory = removeFromSearchHistory;
 window.loadSavedPlaybackState = loadSavedPlaybackState;
 window.state = state;
-window.elements = appElements;
+window.elements = elements;
 window.SEARCH_CONFIG = SEARCH_CONFIG;
 
 // Signal that ui.js has fully loaded
