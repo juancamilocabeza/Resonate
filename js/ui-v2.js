@@ -1567,30 +1567,60 @@ function enableControlsForSearchResults() {
 }
 
 // Connectivity monitoring
-function setupConnectivityMonitoring() {
-  state.networkOnline = navigator.onLine;
+let __resonateConnectivityHandlersAttached = false;
+
+function __resonateSetSearchOnlineState(isOnline) {
+  // Keep search UX consistent with connectivity changes
+  if (elements.searchInput) {
+    elements.searchInput.disabled = !isOnline;
+    elements.searchInput.placeholder = isOnline ? "Search tracks" : "Search unavailable offline";
+  }
+
+  if (!isOnline) {
+    // Hide any active search results when offline
+    if (typeof hideSearchResults === 'function') hideSearchResults();
+  }
+}
+
+function __resonateAttachConnectivityHandlersOnce() {
+  if (__resonateConnectivityHandlersAttached) return;
+  __resonateConnectivityHandlersAttached = true;
+
+  // Let other scripts know that UI is handling connectivity status messaging
+  window.__resonateConnectivityStatusHandled = true;
 
   window.addEventListener('online', () => {
     state.networkOnline = true;
-    showStatus('Internet is back online', 'info', 2000);
-    // Re-enable search input when back online
-    if (elements.searchInput) {
-      elements.searchInput.disabled = false;
-      elements.searchInput.placeholder = "Search tracks";
-    }
+    showStatus('Connection is restored', 'info', 2000);
+
+    __resonateSetSearchOnlineState(true);
+    updateOfflineIndicator();
+    // Try to sync cached data when back online
+    syncOfflineData();
   });
 
   window.addEventListener('offline', () => {
     state.networkOnline = false;
-    showStatus('Offline only. No internet access', 'warning', 4000);
-    // Disable search functionality when offline
-    if (elements.searchInput) {
-      elements.searchInput.disabled = true;
-      elements.searchInput.placeholder = "Search unavailable offline";
+    showStatus('Switched to offline playback', 'info', 4000);
+
+    __resonateSetSearchOnlineState(false);
+    updateOfflineIndicator();
+
+    // Intentar reproducir desde caché si hay una pista actual
+    if (state.currentTrack && elements.audio && elements.audio.src) {
+      showStatus('Using cached version of track', 'info', 2000);
     }
-    // Hide any active search results
-    hideSearchResults();
+
+    // Show offline-specific UI hints
+    showOfflineHints();
   });
+}
+
+function setupConnectivityMonitoring() {
+  state.networkOnline = navigator.onLine;
+
+  __resonateSetSearchOnlineState(state.networkOnline);
+  __resonateAttachConnectivityHandlersOnce();
 }
 
 // Page visibility and playback resume management
@@ -1613,34 +1643,15 @@ function setupPageVisibilityHandling() {
 // Offline functionality setup
 function setupOfflineFunctionality() {
   // Create offline indicator element
-  createOfflineIndicator();
-
-  // Detectar cambios de conectividad
-  window.addEventListener('online', () => {
-    showStatus('Connection is restored', 'info', 2000);
-    state.networkOnline = true;
-    updateOfflineIndicator();
-    // Try to sync cached data when back online
-    syncOfflineData();
-  });
-
-  window.addEventListener('offline', () => {
-    showStatus('Switched to offline playback', 'info', 4000);
-    state.networkOnline = false;
-    updateOfflineIndicator();
-
-    // Intentar reproducir desde caché si hay una pista actual
-    if (state.currentTrack && elements.audio.src) {
-      showStatus('Using cached version of track', 'info', 2000);
-    }
-
-    // Show offline-specific UI hints
-    showOfflineHints();
-  });
+  if (!document.getElementById('offline-indicator')) {
+    createOfflineIndicator();
+  }
 
   // Initial check
   state.networkOnline = navigator.onLine;
   updateOfflineIndicator();
+
+  __resonateAttachConnectivityHandlersOnce();
 }
 
 // Create offline indicator in the UI

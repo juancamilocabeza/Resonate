@@ -3,10 +3,14 @@
 
 const http = require('http');
 const fs = require('fs');
+const fsp = require('fs/promises');
+const https = require('https');
 const path = require('path');
 const url = require('url');
 
 const PORT = process.env.PORT || 3000;
+
+const ROOT_DIR = path.resolve(__dirname);
 
 // Cache for metadata to reduce API calls
 const metadataCache = new Map();
@@ -15,6 +19,88 @@ const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 // Read the base HTML file
 const indexPath = path.join(__dirname, 'index.html');
 let baseHtml = fs.readFileSync(indexPath, 'utf-8');
+
+const CONTENT_TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.ttf': 'font/ttf',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.webmanifest': 'application/manifest+json'
+};
+
+function sendText(res, statusCode, text) {
+  res.writeHead(statusCode, { 'Content-Type': 'text/plain; charset=utf-8' });
+  res.end(text);
+}
+
+function sendHtml(res, statusCode, html) {
+  res.writeHead(statusCode, { 'Content-Type': 'text/html; charset=utf-8' });
+  res.end(html);
+}
+
+function getContentType(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  return CONTENT_TYPES[ext] || 'application/octet-stream';
+}
+
+function resolveSafeLocalPath(requestPathname) {
+  // url.parse().pathname is always rooted (e.g. "/css/app.css").
+  // Strip leading slashes so path.resolve stays within ROOT_DIR.
+  const rel = String(requestPathname || '').replace(/^\/+/, '');
+  const resolved = path.resolve(ROOT_DIR, rel);
+
+  // Security check: prevent directory traversal.
+  // Allow exact root match and any descendant.
+  if (resolved !== ROOT_DIR && !resolved.startsWith(ROOT_DIR + path.sep)) {
+    return null;
+  }
+
+  return resolved;
+}
+
+async function readJsonFromUrl(urlString) {
+  // Prefer global fetch when available.
+  if (typeof fetch === 'function') {
+    const response = await fetch(urlString);
+    if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+    return response.json();
+  }
+
+  // Minimal fallback for older Node runtimes.
+  return new Promise((resolve, reject) => {
+    https
+      .get(urlString, (resp) => {
+        const { statusCode } = resp;
+        if (!statusCode || statusCode < 200 || statusCode >= 300) {
+          resp.resume();
+          reject(new Error(`Request failed with ${statusCode}`));
+          return;
+        }
+        let raw = '';
+        resp.setEncoding('utf8');
+        resp.on('data', (chunk) => {
+          raw += chunk;
+        });
+        resp.on('end', () => {
+          try {
+            resolve(JSON.parse(raw));
+          } catch (e) {
+            reject(e);
+          }
+        });
+      })
+      .on('error', reject);
+  });
+}
 
 // Function to fetch metadata from archive.org
 async function fetchMetadata(identifier) {
@@ -25,11 +111,7 @@ async function fetchMetadata(identifier) {
   }
 
   try {
-    const response = await fetch(`https://archive.org/metadata/${identifier}`);
-    if (!response.ok) {
-      throw new Error(`Archive.org API returned ${response.status}`);
-    }
-    const metadata = await response.json();
+    const metadata = await readJsonFromUrl(`https://archive.org/metadata/${identifier}`);
     
     // Cache the result
     metadataCache.set(identifier, {
@@ -94,6 +176,45 @@ function getBaseUrl() {
   return process.env.BASE_URL || 'https://www.resonateplayer.com';
 }
 
+async function serveStaticPath(res, pathname) {
+  const localPath = resolveSafeLocalPath(pathname);
+  if (!localPath) {
+    sendText(res, 403, 'Forbidden');
+    return;
+  }
+
+  let stats;
+  try {
+    stats = await fsp.stat(localPath);
+  } catch {
+    sendText(res, 404, 'Not Found');
+    return;
+  }
+
+  if (stats.isDirectory()) {
+    const indexFile = path.join(localPath, 'index.html');
+    try {
+      const content = await fsp.readFile(indexFile);
+      sendHtml(res, 200, content);
+    } catch {
+      sendText(res, 404, 'Not Found');
+    }
+    return;
+  }
+
+  const contentType = getContentType(localPath);
+  res.writeHead(200, { 'Content-Type': contentType });
+  const stream = fs.createReadStream(localPath);
+  stream.on('error', () => {
+    if (!res.headersSent) {
+      sendText(res, 500, 'Internal Server Error');
+    } else {
+      res.end();
+    }
+  });
+  stream.pipe(res);
+}
+
 // Create HTTP server
 const server = http.createServer(async (req, res) => {
   try {
@@ -124,82 +245,12 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    // Serve static files
-    const filePath = path.join(__dirname, pathname);
-    
-    // Security check: prevent directory traversal
-    if (!filePath.startsWith(__dirname)) {
-      res.writeHead(403, { 'Content-Type': 'text/plain' });
-      res.end('Forbidden');
-      return;
-    }
-
-    // Try to serve the file
-    fs.stat(filePath, (err, stats) => {
-      if (err) {
-        // File not found
-        res.writeHead(404, { 'Content-Type': 'text/plain' });
-        res.end('Not Found');
-        return;
-      }
-
-      if (stats.isDirectory()) {
-        // If it's a directory, try to serve index.html
-        const indexFile = path.join(filePath, 'index.html');
-        fs.stat(indexFile, (err) => {
-          if (err) {
-            res.writeHead(404, { 'Content-Type': 'text/plain' });
-            res.end('Not Found');
-            return;
-          }
-          fs.readFile(indexFile, (err, content) => {
-            if (err) {
-              res.writeHead(500, { 'Content-Type': 'text/plain' });
-              res.end('Internal Server Error');
-              return;
-            }
-            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-            res.end(content);
-          });
-        });
-        return;
-      }
-
-      // Serve the file
-      const contentType = getContentType(filePath);
-      res.writeHead(200, { 'Content-Type': contentType });
-      fs.createReadStream(filePath).pipe(res);
-    });
+    await serveStaticPath(res, pathname);
   } catch (error) {
     console.error('Server error:', error);
-    res.writeHead(500, { 'Content-Type': 'text/plain' });
-    res.end('Internal Server Error');
+    sendText(res, 500, 'Internal Server Error');
   }
 });
-
-// Get content type based on file extension
-function getContentType(filePath) {
-  const ext = path.extname(filePath).toLowerCase();
-  const types = {
-    '.html': 'text/html; charset=utf-8',
-    '.css': 'text/css; charset=utf-8',
-    '.js': 'text/javascript; charset=utf-8',
-    '.json': 'application/json; charset=utf-8',
-    '.png': 'image/png',
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.gif': 'image/gif',
-    '.svg': 'image/svg+xml',
-    '.ico': 'image/x-icon',
-    '.wasm': 'application/wasm',
-    '.wast': 'text/plain; charset=utf-8',
-    '.ttf': 'font/ttf',
-    '.woff': 'font/woff',
-    '.woff2': 'font/woff2',
-    '.webmanifest': 'application/manifest+json',
-  };
-  return types[ext] || 'application/octet-stream';
-}
 
 // Start the server
 server.listen(PORT, () => {

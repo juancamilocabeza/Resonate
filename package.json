@@ -2,12 +2,12 @@
   "name": "resonate-player",
   "version": "1.0.0",
   "description": "A free music player for Archive.org content with social media sharing support",
+  "homepage": "https://www.resonateplayer.com",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js",
-    "build:wasm": "cd wasm && npm run build"
+    "dev": "node server.js"
   },
   "keywords": [
     "music",

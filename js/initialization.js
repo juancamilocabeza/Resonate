@@ -1,5 +1,151 @@
 // Application initialization
 
+const INIT_TIMING = {
+  SHARED_LINK_PLAY_DELAY_MS: 1000,
+  LOAD_FAVORITES_RETRY_DELAY_MS: 100,
+  FAVORITES_QUEUE_PREP_DELAY_MS: 500,
+  FAVORITES_PRELOAD_DELAY_MS: 1000,
+  OFFLINE_MODE_DELAY_MS: 100,
+  ONBOARDING_INIT_DELAY_MS: 500,
+  SCRIPT_WAIT_MAX_ATTEMPTS: 500,
+  SCRIPT_WAIT_INTERVAL_MS: 10
+};
+
+function logInitDebug(message, data) {
+  try {
+    if (window.logger && typeof window.logger.debug === 'function') {
+      window.logger.debug(message, 'SYSTEM');
+      if (data) window.logger.debug(JSON.stringify(data), 'SYSTEM');
+      return;
+    }
+  } catch {}
+
+  try {
+    if (data !== undefined) {
+      console.debug(message, data);
+    } else {
+      console.debug(message);
+    }
+  } catch {}
+}
+
+function logInitInfo(message) {
+  try {
+    window.logger?.info(message, 'SYSTEM');
+  } catch {
+    try { console.log(message); } catch {}
+  }
+}
+
+function logInitWarn(message, error) {
+  try {
+    const msg = error ? `${message}: ${error.message || String(error)}` : message;
+    window.logger?.warn(msg, 'SYSTEM');
+  } catch {
+    try { console.warn(message, error); } catch {}
+  }
+}
+
+function logInitError(message, error) {
+  try {
+    const msg = error ? `${message}: ${error.message || String(error)}` : message;
+    window.logger?.error(msg, 'SYSTEM');
+  } catch {
+    try { console.error(message, error); } catch {}
+  }
+}
+
+function safeShowStatus(message, type = 'info', duration = null, priority = 'normal') {
+  try {
+    if (typeof showStatus === 'function') {
+      showStatus(message, type, duration, priority);
+    }
+  } catch {
+    // ignore
+  }
+}
+
+function schedule(fn, delayMs) {
+  return setTimeout(() => {
+    try { fn(); } catch (e) { logInitWarn('Scheduled task failed', e); }
+  }, delayMs);
+}
+
+function requestClearLegacySwAudioCacheOnce() {
+  try {
+    const swAudioCacheCleared = localStorage.getItem('resonate_sw_audio_cache_cleared');
+    if (swAudioCacheCleared) return;
+
+    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_AUDIO_CACHE' });
+      window.logger?.info('Requested SW to clear old audio cache', 'INIT');
+      localStorage.setItem('resonate_sw_audio_cache_cleared', 'true');
+    }
+  } catch (error) {
+    window.logger?.warn(`Failed to clear SW cache: ${error.message}`, 'INIT');
+  }
+}
+
+async function initAudioCacheIfAvailable() {
+  try {
+    if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.init === 'function') {
+      await audioCache.init();
+      window.logger?.info('Audio cache initialized successfully', 'CACHE');
+      return true;
+    }
+
+    window.logger?.warn('audioCache not available, continuing without cache', 'CACHE');
+    return false;
+  } catch (error) {
+    window.logger?.error(`Error initializing cache: ${error.message}`, 'CACHE');
+    return false;
+  }
+}
+
+function tryLoadFavoritesWithRetry() {
+  if (typeof window.loadFavorites === 'function') {
+    window.loadFavorites();
+    return;
+  }
+
+  schedule(() => {
+    if (typeof window.loadFavorites === 'function') {
+      window.loadFavorites();
+    } else {
+      window.logger?.error('loadFavorites function not available', 'INIT');
+    }
+  }, INIT_TIMING.LOAD_FAVORITES_RETRY_DELAY_MS);
+}
+
+function scheduleFavoritesPreloadOnce() {
+  if (!state.favoritesPreloadEnabled) return;
+  if (typeof audioCache === 'undefined' || !audioCache || typeof audioCache.preloadFavorites !== 'function') return;
+
+  schedule(async () => {
+    try {
+      await audioCache.preloadFavorites(state.favorites);
+      window.logger?.info('Favorites preload attempted once at startup', 'CACHE');
+    } catch (error) {
+      window.logger?.warn(`Failed to preload favorites: ${error.message}`, 'CACHE');
+    }
+  }, INIT_TIMING.FAVORITES_PRELOAD_DELAY_MS);
+}
+
+function scheduleFavoritesQueuePreparation() {
+  if (!state.favorites || state.favorites.length === 0) return;
+
+  schedule(async () => {
+    try {
+      await loadPlaybackQueue('favorites', state.favorites, 0);
+      if (state.playbackQueue.length > 0) {
+        safeShowStatus('Tap play to start your favorites', 'info', 3000);
+      }
+    } catch (error) {
+      window.logger?.error(`Error preparing favorites queue: ${error.message}`, 'PLAYBACK');
+    }
+  }, INIT_TIMING.FAVORITES_QUEUE_PREP_DELAY_MS);
+}
+
 // Function to update meta tags for shared link previews
 async function updateMetaTagsForSharedLink(identifier) {
   try {
@@ -57,7 +203,7 @@ async function handleSharedLink() {
 
     if (playIdentifier) {
       console.log('Shared link detected, playing:', playIdentifier);
-      showStatus('Preparing to load your shared track', 'info');
+      safeShowStatus('Preparing to load your shared track', 'info');
 
       // Update meta tags for social media previews immediately
       try {
@@ -77,9 +223,9 @@ async function handleSharedLink() {
           await playSharedContent(playIdentifier);
         } catch (error) {
           console.error('Error playing shared content:', error);
-          showStatus('Failed to load the shared track', 'error');
+          safeShowStatus('Failed to load the shared track', 'error');
         }
-      }, 1000);
+      }, INIT_TIMING.SHARED_LINK_PLAY_DELAY_MS);
     }
   } catch (error) {
     console.error('Error handling shared link:', error);
@@ -123,7 +269,7 @@ async function playSharedContent(identifier) {
       // Load album tracks into playback queue
       await loadPlaybackQueue('shared-album', tracksWithMetadata, 0);
 
-      showStatus('Your shared album is ready to play', 'info', 3000);
+      safeShowStatus('Your shared album is ready to play', 'info', 3000);
 
       // Start playing the first track
       if (tracksWithMetadata.length > 0) {
@@ -152,75 +298,23 @@ async function playSharedContent(identifier) {
 }
 
 async function initializeApp() {
-  console.log('Starting app initialization...');
-
-  // Make loaderManager globally accessible (it's defined in ui.js which loads before)
-  if (typeof window !== 'undefined' && window.loaderManager) {
-    window.loaderManager = window.loaderManager;
-  }
+  logInitInfo('Starting app initialization...');
 
   // One-time: Clear old SW audio cache from previous versions (avoid duplicate audio storage)
-  try {
-    const swAudioCacheCleared = localStorage.getItem('resonate_sw_audio_cache_cleared');
-    if (!swAudioCacheCleared) {
-      // Clear old audio cache from SW on first load after update
-      if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-        navigator.serviceWorker.controller.postMessage({
-          type: 'CLEAR_AUDIO_CACHE'
-        });
-        window.logger?.info('Requested SW to clear old audio cache', 'INIT');
-        localStorage.setItem('resonate_sw_audio_cache_cleared', 'true');
-      }
-    }
-  } catch (error) {
-    window.logger?.warn(`Failed to clear SW cache: ${error.message}`, 'INIT');
-  }
+  requestClearLegacySwAudioCacheOnce();
 
   // Inicializar caché de audio primero
-  try {
-    console.log('Initializing audio cache...');
-    if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.init === 'function') {
-      await audioCache.init();
-      window.logger?.info('Audio cache initialized successfully', 'CACHE');
-      console.log('Audio cache initialized');
-    } else {
-      console.warn('audioCache not available, continuing without cache');
-      window.logger?.warn('audioCache not available, continuing without cache', 'CACHE');
-    }
-  } catch (error) {
-    console.error('Error initializing cache:', error);
-    window.logger?.error(`Error initializing cache: ${error.message}`, 'CACHE');
-  }
-
+  logInitDebug('Initializing audio cache...');
+  await initAudioCacheIfAvailable();
 
   // Load favorites if available, otherwise retry
-  if (typeof window.loadFavorites === 'function') {
-    window.loadFavorites();
-  } else {
-    // Retry after a short delay if ui.js hasn't loaded yet
-    setTimeout(() => {
-      if (typeof window.loadFavorites === 'function') {
-        window.loadFavorites();
-      } else {
-        window.logger?.error('loadFavorites function not available', 'INIT');
-      }
-    }, 100);
-  }
+  tryLoadFavoritesWithRetry();
   // Preparar el CTA (se mostrará si hay favoritos precargados)
   //createStartFavoritesCTA();
   // setupLoadingSafety() is called only when actual loading operations are in progress
 
   // Pre-cargar favoritos para reproducción offline (single guarded run)
-  if (state.favoritesPreloadEnabled && typeof audioCache !== 'undefined' && audioCache && typeof audioCache.preloadFavorites === 'function') {
-    setTimeout(async () => {
-      try {
-        await audioCache.preloadFavorites(state.favorites);
-        window.logger?.info('Favorites preload attempted once at startup', 'CACHE');
-      } catch (error) {
-        window.logger?.warn(`Failed to preload favorites: ${error.message}`, 'CACHE');
-      }
-    }, 1000); // Delay to avoid blocking initial load
-  }
+  scheduleFavoritesPreloadOnce();
 
   // Inicializar el componente FavoritesToggle
   if (typeof FavoritesToggle !== 'undefined') {
@@ -259,23 +353,8 @@ async function initializeApp() {
     setupListenTracking();
   }
 
-  // Preparar reproducción de favoritos (sin autoplay por restricciones del navegador)
-  // Solo preparar la cola sin hacer peticiones de red automáticas
-  if (state.favorites.length > 0) {
-    // Preparing favorites queue (no network requests during init)
-    setTimeout(async () => {
-      try {
-        // Solo cargar la cola FIFO sin precargar audio
-        await loadPlaybackQueue('favorites', state.favorites, 0);
-        if (state.playbackQueue.length > 0) {
-          const firstTrack = state.playbackQueue[0];
-          showStatus('Tap play to start your favorites', 'info', 3000);
-        }
-      } catch (error) {
-        window.logger.error(`Error preparing favorites queue: ${error.message}`, 'PLAYBACK');
-      }
-    }, 500);
-  }
+  // Prepare favorites queue (no autoplay)
+  scheduleFavoritesQueuePreparation();
 
   // Configurar funciones de UI - verificar existencia antes de llamar
   if (typeof setupMediaSession === 'function') {
@@ -477,7 +556,6 @@ async function initializeApp() {
   loadRepeatMode();
 
   // Inicializar PWA
-  registerServiceWorker();
   setupPWAInstall();
   setupOfflineFunctionality();
 
@@ -490,33 +568,18 @@ async function initializeApp() {
       window.elements.favoritesList.classList.contains('active');
 
     if (searchVisible || favoritesVisible) {
-      // Hide them and prevent navigation by pushing state back
+      // Close overlays on back, but don't trap the user in the app.
       if (searchVisible) window.hideSearchResults();
       if (favoritesVisible) window.hideFavoritesList();
-      // Push state again to stay on the page
+      // Keep the user on the current page after closing overlays.
       window.history.pushState(null, '', window.location.href);
-    } else if (isRunningAsPWA()) {
-      // PWA behavior: prevent closing the app
-      window.history.pushState(null, '', window.location.href);
-      showStatus('Use the action button to exit', 'info', 3000);
+      return;
     }
-    // If not PWA and no elements visible, allow normal back navigation (don't push state)
+    // Otherwise allow normal back/exit (lighter behavior for PWA)
   });
 
-  // Initialize push state to catch back button attempts
+  // One state entry so back can close overlays; we no longer hard-block exit.
   window.history.pushState(null, '', window.location.href);
-
-  // Additional safeguard for PWA: disable back button navigation entirely
-  if (isRunningAsPWA()) {
-    let lastUrl = window.location.href;
-    setInterval(() => {
-      if (window.location.href !== lastUrl) {
-        // If URL changed and we're in PWA, prevent it
-        window.location.href = lastUrl;
-      }
-      lastUrl = window.location.href;
-    }, 1000);
-  }
 
   // Si la app está ejecutándose como PWA, eliminar el splash y mostrar la app inmediatamente
   if (isRunningAsPWA()) {
@@ -561,30 +624,28 @@ async function initializeApp() {
 
   // Debug functions for offline testing
   window.forceShowApp = () => {
-    console.log('Forcing app to show...');
+    logInitDebug('Forcing app to show...');
     const fallback = document.getElementById('offline-fallback');
     const app = document.getElementById('app');
     if (fallback) fallback.style.display = 'none';
     if (app) app.style.display = 'block';
-    console.log('App forced to show');
+    logInitDebug('App forced to show');
   };
 
   window.testOfflineMode = () => {
-    console.log('Testing offline mode...');
+    logInitDebug('Testing offline mode...');
     handleOfflineMode();
   };
 
   // Handle offline mode after everything is initialized
-  setTimeout(() => {
-    handleOfflineMode();
-  }, 100); // Small delay to ensure everything is ready
+  schedule(handleOfflineMode, INIT_TIMING.OFFLINE_MODE_DELAY_MS);
 
   // Initialize onboarding for first-time users
   if (typeof onboardingManager !== 'undefined' && onboardingManager) {
-    setTimeout(() => {
+    schedule(() => {
       onboardingManager.initialize();
-      window.logger.info('Onboarding system initialized', 'UI');
-    }, 500); // Delay to let UI render first
+      window.logger?.info('Onboarding system initialized', 'UI');
+    }, INIT_TIMING.ONBOARDING_INIT_DELAY_MS);
   }
 
 }
@@ -739,26 +800,18 @@ function handleOfflineMode() {
 function waitForAllScripts() {
   return new Promise((resolve) => {
     let attempts = 0;
-    const maxAttempts = 500; // 5 seconds max wait
+    const maxAttempts = INIT_TIMING.SCRIPT_WAIT_MAX_ATTEMPTS; // ~5 seconds max wait
 
     const checkScripts = () => {
       attempts++;
-      if (window.logger && typeof window.logger.debug === 'function') {
-        window.logger.debug(`Checking scripts (attempt ${attempts})`, 'SYSTEM');
-      } else {
-        console.log(`Checking scripts (attempt ${attempts})`);
-      }
+      logInitDebug(`Checking scripts (attempt ${attempts})`);
 
       // Esperar específicamente a que ui.js se haya cargado completamente
       if (window.uiScriptLoaded === true &&
           typeof window.state !== 'undefined' &&
           typeof window.elements !== 'undefined' &&
           typeof window.showStatus !== 'undefined') {
-        if (window.logger) {
-          window.logger.info('Critical scripts loaded, proceeding...', 'SYSTEM');
-        } else {
-          console.log('Critical scripts loaded, proceeding...');
-        }
+        logInitInfo('Critical scripts loaded, proceeding...');
         resolve();
       } else if (attempts >= maxAttempts) {
         console.error('CRITICAL: Timeout waiting for scripts. App may not function correctly.', {
@@ -789,7 +842,7 @@ function waitForAllScripts() {
         
         resolve(); // Continue anyway after timeout
       } else {
-        setTimeout(checkScripts, 10);
+        setTimeout(checkScripts, INIT_TIMING.SCRIPT_WAIT_INTERVAL_MS);
       }
     };
     checkScripts();
@@ -797,44 +850,16 @@ function waitForAllScripts() {
 }
 
 
-// Inicialización segura que espera a todos los scripts
-// Register Service Worker for offline functionality
-function registerServiceWorker() {
-  // PERMANENTLY DISABLED - Service Worker causing cache issues
-  console.log('⚠️ Service Worker disabled - use DevTools Application tab to clear old SW if needed');
-  
-  // Unregister any existing service workers
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.getRegistrations().then(registrations => {
-      registrations.forEach(registration => {
-        registration.unregister();
-        console.log('🗑️ Unregistered old Service Worker');
-      });
-    });
-  }
-  return;
-  
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js')
-      .then((registration) => {
-        window.logger.info('Service Worker registered successfully', 'SYSTEM');
-      })
-      .catch((error) => {
-        window.logger.warn(`Service Worker registration failed: ${error.message}`, 'SYSTEM');
-      });
-  } else {
-    window.logger.warn('Service Worker not supported in this browser', 'SYSTEM');
-  }
-}
-
 async function safeInitialize() {
   try {
     window.logger.info('Waiting for all scripts to be available...', 'SYSTEM');
     await waitForAllScripts();
     window.logger.info('All scripts loaded, initializing application...', 'SYSTEM');
     
-    // Register Service Worker immediately for offline support
-    registerServiceWorker();
+    // Register Service Worker immediately for offline support (UI-owned behavior)
+    if (typeof window.registerServiceWorker === 'function') {
+      window.registerServiceWorker();
+    }
 
     await initializeApp();
   } catch (error) {

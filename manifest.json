@@ -1,8 +1,10 @@
 {
+  "id": "/",
   "name": "Resonate Player",
   "short_name": "Resonate",
   "description": "Free music player that works offline",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#000000",
   "theme_color": "#6ee7b7",
@@ -13,20 +15,26 @@
   ],
   "icons": [
     {
-      "src": "icons/favicon.svg",
-      "sizes": "512x512",
+      "src": "/icons/favicon.svg",
+      "sizes": "any",
       "type": "image/svg+xml"
     },
     {
-      "purpose": "maskable",
+      "purpose": "any maskable",
       "sizes": "192x192",
-      "src": "icons/maskable_icon_x192.png",
+      "src": "/icons/maskable_icon_x192.png",
       "type": "image/png"
     },
     {
-      "purpose": "maskable",
+      "purpose": "any maskable",
+      "sizes": "384x384",
+      "src": "/icons/maskable_icon_x384.png",
+      "type": "image/png"
+    },
+    {
+      "purpose": "any maskable",
       "sizes": "512x512",
-      "src": "icons/maskable_icon_x512.png",
+      "src": "/icons/maskable_icon_x512.png",
       "type": "image/png"
     }
   ],

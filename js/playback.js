@@ -15,6 +15,48 @@ const RepeatMode = {
   OFF: 'off'            // No repeat
 };
 
+const PLAYBACK_CONSTANTS = {
+  DEFAULT_QUEUE_SIZE: 5,
+  PREFETCH_TIMEOUT_MS: 15000,
+  AUDIO_LOAD_TIMEOUT_MS: 20000,
+  LOCAL_DEFAULT_FETCH_TIMEOUT_MS: 30000,
+  PROD_DEFAULT_FETCH_TIMEOUT_MS: 8000
+};
+
+function isLocalDevEnv() {
+  return window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+}
+
+function getElementsSafe() {
+  return (window.elements && typeof window.elements === 'object') ? window.elements : {};
+}
+
+function getAudioEl() {
+  const elements = getElementsSafe();
+  return elements.audio || null;
+}
+
+function safeShowStatus(message, type, duration, variant, showLoader) {
+  if (typeof showStatus === 'function') {
+    showStatus(message, type, duration, variant, showLoader);
+  }
+}
+
+function logPlayback(level, message, error) {
+  try {
+    if (window.logger && typeof window.logger.playback === 'function') {
+      const combined = error ? `${message} ${error && error.message ? `(${error.message})` : ''}` : message;
+      window.logger.playback(combined, level);
+      return;
+    }
+  } catch {}
+
+  const method = String(level || 'info').toLowerCase();
+  const fn = console[method] || console.log;
+  if (error) fn(message, error);
+  else fn(message);
+}
+
 // Retry strategies
 const RetryStrategy = {
   NETWORK: { maxRetries: 5, backoff: 'exponential', baseDelay: 1000 },
@@ -614,8 +656,9 @@ const enhancedPlaybackController = new EnhancedPlaybackController();
 
 // Fetch with timeout for network operations
 async function fetchWithTimeout(resource, options = {}) {
-  const isLocal = window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-  const defaultTimeout = isLocal ? 30000 : 8000; // Higher timeout for local development
+  const defaultTimeout = isLocalDevEnv()
+    ? PLAYBACK_CONSTANTS.LOCAL_DEFAULT_FETCH_TIMEOUT_MS
+    : PLAYBACK_CONSTANTS.PROD_DEFAULT_FETCH_TIMEOUT_MS;
   const { timeout = defaultTimeout, ...fetchOptions } = options;
 
   const controller = new AbortController();
@@ -641,17 +684,15 @@ async function fetchWithTimeout(resource, options = {}) {
     clearTimeout(timeoutId);
     try { state.lastFetchController = null; } catch (e) { }
     if (error && error.name === 'AbortError') {
-      const isLocal = window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
       const timeoutMsg = `Timeout: The request took more than ${timeout}ms`;
-      if (isLocal) {
+      if (isLocalDevEnv()) {
         throw new Error(`${timeoutMsg}. If running from a local file, use an HTTP server (e.g: python -m http.server) for full functionality.`);
       }
       throw new Error(`${timeoutMsg}. Check your internet connection.`);
     }
     // Provide better error messages for common network issues in development
     if (error.name === 'TypeError' && error.message.includes('fetch')) {
-      const isLocal = window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      if (isLocal) {
+      if (isLocalDevEnv()) {
         throw new Error('Network error: If you opened index.html directly, run a local server (python -m http.server) for full API access.');
       }
     }
@@ -683,7 +724,7 @@ async function loadAudioWithCache(track) {
     const cacheResult = typeof audioCache !== 'undefined' && audioCache && typeof audioCache.get === 'function' ? await audioCache.get(track.url, true) : null;
 
     if (cacheResult && cacheResult.blob) {
-      console.log('Playing from cache:', track.title);
+      logPlayback('info', `Playing from cache: ${track.title || track.url}`);
       const blobUrl = URL.createObjectURL(cacheResult.blob);
       return blobUrl;
     }
@@ -694,7 +735,7 @@ async function loadAudioWithCache(track) {
     }
 
     // Load from network with playback priority
-    const response = await fetchWithTimeout(track.url, { timeout: 15000 });
+    const response = await fetchWithTimeout(track.url, { timeout: PLAYBACK_CONSTANTS.PREFETCH_TIMEOUT_MS });
 
     if (!response.ok) {
       throw new Error(`HTTP Error: ${response.status}`);
@@ -710,17 +751,17 @@ async function loadAudioWithCache(track) {
         creator: track.creator || 'Unknown',
         url: track.url
       }).catch(error => {
-        console.error('Error saving to cache:', error);
+        logPlayback('warn', 'Error saving to cache', error);
       });
     }
 
     const blobUrl = URL.createObjectURL(blob);
 
-    showStatus('Audio file loaded successfully', 'info', 1000);
+    safeShowStatus('Audio file loaded successfully', 'info', 1000);
     return blobUrl;
 
   } catch (error) {
-    console.error('Error loading audio:', error);
+    logPlayback('error', 'Error loading audio', error);
 
     // Intentar estrategias de fallback
     if (!state.networkOnline) {
@@ -747,14 +788,15 @@ async function intelligentPrefetchNextTracks(allItems, currentIndex) {
 }
 
 function preloadNextTrack() {
-  if (state.playbackQueue.length > 0) {
+  try {
+    if (!state || !state.playbackQueue || state.playbackQueue.length === 0) return;
     const nextTrack = state.playbackQueue[0];
-    if (nextTrack && nextTrack.url) {
-      if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.prefetchAudio === 'function') {
-        // Precargar solo la siguiente pista con prioridad baja
-        audioCache.prefetchAudio(nextTrack.url, false).catch(console.error);
-      }
-    }
+    if (!nextTrack || !nextTrack.url) return;
+    if (typeof audioCache === 'undefined' || !audioCache || typeof audioCache.prefetchAudio !== 'function') return;
+    // Precargar solo la siguiente pista con prioridad baja
+    audioCache.prefetchAudio(nextTrack.url, false).catch((err) => logPlayback('debug', 'Failed to prefetch next track', err));
+  } catch (e) {
+    // Never let prefetch break playback
   }
 }
 
@@ -765,9 +807,15 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
   if (!track || !track.url) {
     throw new Error('Track not available');
   }
-  
-  window.elements.audio.pause();
-  window.elements.audio.currentTime = 0;
+
+  const elements = getElementsSafe();
+  const audioEl = elements.audio;
+  if (!audioEl) {
+    throw new Error('Audio element not available');
+  }
+
+  audioEl.pause();
+  audioEl.currentTime = 0;
 
   if (totalTracks > 1) {
     window.elements.title.textContent = `${track.title || 'Untitled'}`;
@@ -814,19 +862,19 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
     updateMetaTags(track, identifier);
   }
 
-  showStatus(`Getting your track ready to play`, 'info');
+  safeShowStatus('Getting your track ready to play', 'info');
 
   return new Promise((resolve, reject) => {
-    const audio = window.elements.audio;
+    const audio = audioEl;
     let timeoutId;
 
     const onCanPlay = () => {
       cleanup();
       audio.play().then(async () => {
         if (totalTracks > 1) {
-          showStatus(`Now playing album track with numbers`, 'info');
+          safeShowStatus('Now playing album track with numbers', 'info');
         } else {
-          showStatus(`Now playing your selected track`, 'info');
+          safeShowStatus('Now playing your selected track', 'info');
         }
 
         // EJECUTAR CALLBACK ONPLAY
@@ -847,8 +895,6 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
         // Preload only the next track to avoid excessive downloads
         preloadNextTrack();
 
-        // Hide loaders
-        cleanup();
         resolve(true);
       }).catch(error => {
         // Handle playback error
@@ -887,7 +933,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
             cleanup();
             reject(new Error('Timeout while loading audio'));
           }
-        }, 20000);
+        }, PLAYBACK_CONSTANTS.AUDIO_LOAD_TIMEOUT_MS);
 
         audio.addEventListener('canplay', onCanPlay, { once: true });
         audio.addEventListener('error', onError, { once: true });
@@ -959,14 +1005,18 @@ async function resumeSavedPlayback() {
 function togglePlay() {
   if (state.isLoading) return;
 
+  const elements = getElementsSafe();
+  const audio = elements.audio;
+  if (!audio) return;
+
   // Check if there's a saved playback state to resume
-  if (window.elements.audio.paused && !window.elements.audio.src && state.savedPlaybackState) {
+  if (audio.paused && !audio.src && state.savedPlaybackState) {
     resumeSavedPlayback();
     return;
   }
 
   // Check if there's a saved track to resume (legacy)
-  if (window.elements.audio.paused && !window.elements.audio.src && state.currentTrack && state.currentTrack.url) {
+  if (audio.paused && !audio.src && state.currentTrack && state.currentTrack.url) {
     // Resume last track
     playAudioTrackOptimized(state.currentTrack, state.currentTrack.id, state.currentTrack.trackIndex, state.currentTrack.totalTracks).catch(error => {
       console.error('Error resuming track:', error);
@@ -976,34 +1026,35 @@ function togglePlay() {
   }
 
   // Prevenir reproducción si no hay favoritos y no hay audio cargado
-  if (window.elements.audio.paused && !window.elements.audio.src && state.favorites.length === 0) {
-    showStatus('Add tracks to favorites to begin', 'info');
+  if (audio.paused && !audio.src && state.favorites.length === 0) {
+    safeShowStatus('Add tracks to favorites to begin', 'info');
     return;
   }
 
   state.userInteracted = true;
 
-  if (window.elements.audio.paused) {
-    if (!window.elements.audio.src) {
+  if (audio.paused) {
+    if (!audio.src) {
       forcePlay();
       return;
     }
 
-    window.elements.audio.play().then(() => {
-      window.elements.playBtn.textContent = '| |';
-      showStatus('Music is playing now', 'info');
+    audio.play().then(() => {
+      if (elements.playBtn) elements.playBtn.textContent = '| |';
+      safeShowStatus('Music is playing now', 'info');
 
       // Actualizar Media Session
       if ('mediaSession' in navigator) {
         navigator.mediaSession.playbackState = 'playing';
       }
     }).catch(error => {
-      showStatus(`Playback encountered an error`, 'error');
+      safeShowStatus('Playback encountered an error', 'error');
+      logPlayback('warn', 'Playback play() failed', error);
     });
   } else {
-    window.elements.audio.pause();
-    window.elements.playBtn.textContent = '▶';
-    showStatus('Music is now paused', 'info');
+    audio.pause();
+    if (elements.playBtn) elements.playBtn.textContent = '▶';
+    safeShowStatus('Music is now paused', 'info');
 
     // Actualizar Media Session
     if ('mediaSession' in navigator) {
@@ -1020,7 +1071,7 @@ function loadPlaybackQueue(context, items, startIndex = 0) {
     return;
   }
 
-  const queueSize = 5; // Keep small to reduce parallel downloads
+  const queueSize = PLAYBACK_CONSTANTS.DEFAULT_QUEUE_SIZE; // Keep small to reduce parallel downloads
   // Queue behavior by context and shuffle mode
   if (context === 'favorites') {
     if (state.shuffleFavorites) {
@@ -1057,7 +1108,7 @@ function loadPlaybackQueue(context, items, startIndex = 0) {
   // Preload only the first item in queue to minimize parallel fetches
   if (state.networkOnline && state.playbackQueue.length > 0) {
     if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.prefetchAudio === 'function') {
-      audioCache.prefetchAudio(state.playbackQueue[0].url, true).catch(console.error);
+      audioCache.prefetchAudio(state.playbackQueue[0].url, true).catch((err) => logPlayback('debug', 'Failed to prefetch first queue item', err));
     }
   }
 
@@ -1092,29 +1143,29 @@ function forcePlay() {
 // FUNCIÓN: Reproducir desde cola FIFO de favoritos
 async function playFromFavoritesQueue(specificTrack = null) {
   if (state.isLoading || state.favorites.length === 0) {
-    console.log('playFromFavoritesQueue: Blocked - isLoading:', state.isLoading, 'favorites:', state.favorites.length);
+    logPlayback('debug', `playFromFavoritesQueue: Blocked (isLoading=${state.isLoading}, favorites=${state.favorites.length})`);
     return;
   }
 
-  console.log('playFromFavoritesQueue: Starting...', specificTrack ? 'with specific track' : 'from queue start');
+  logPlayback('debug', `playFromFavoritesQueue: Starting (${specificTrack ? 'specific track' : 'queue'})`);
   
   // Ocultar listas al reproducir desde favoritos
-  console.log('Hiding search results and favorites list...');
+  logPlayback('debug', 'Hiding search results and favorites list');
   if (typeof hideSearchResults === 'function') {
     hideSearchResults();
-    console.log('hideSearchResults called');
+    logPlayback('debug', 'hideSearchResults called');
   } else {
-    console.warn('hideSearchResults is not a function');
+    logPlayback('warn', 'hideSearchResults is not a function');
   }
   
   if (typeof hideFavoritesList === 'function') {
     hideFavoritesList();
-    console.log('hideFavoritesList called');
+    logPlayback('debug', 'hideFavoritesList called');
   } else {
-    console.warn('hideFavoritesList is not a function');
+    logPlayback('warn', 'hideFavoritesList is not a function');
   }
 
-  showStatus('Loading...', 'info', null, 'normal', true);
+  safeShowStatus('Loading...', 'info', null, 'normal', true);
 
   state.isPlayingFavorites = true;
 
@@ -1122,7 +1173,7 @@ async function playFromFavoritesQueue(specificTrack = null) {
     // Si se proporcionó un track específico, usarlo directamente
     let track;
     if (specificTrack) {
-      console.log('Using specific track:', specificTrack.title);
+      logPlayback('debug', `Using specific track: ${specificTrack.title || specificTrack.url || '[unknown]'}`);
       track = specificTrack;
     } else {
       // Cargar cola FIFO con favoritos
@@ -1142,7 +1193,7 @@ async function playFromFavoritesQueue(specificTrack = null) {
       throw new Error('Audio URL not available in favorite');
     }
 
-    showStatus(`Getting next track from queue`, 'info');
+    safeShowStatus('Getting next track from queue', 'info');
 
     // Loader se ocultará cuando audio.play() inicie
     await playAudioTrackOptimized(track, track.id, track.trackIndex, track.totalTracks);
@@ -1150,20 +1201,20 @@ async function playFromFavoritesQueue(specificTrack = null) {
     updateShuffleButton();
 
   } catch (error) {
-    console.error('Error in playFromFavoritesQueue:', error);
+    logPlayback('error', 'Error in playFromFavoritesQueue', error);
 
     // Handle offline/cache errors by trying next track
     if (error.message.includes('Offline and audio not available in cache')) {
-      showStatus('This track isn\'t cached offline', 'error', 2000);
+      safeShowStatus('This track isn\'t cached offline', 'error', 2000);
       // Try next track in queue if available
       if (state.playbackQueue.length > 0) {
         setTimeout(() => playFromFavoritesQueue(), 2000);
         return;
       } else {
-        showStatus('All offline tracks have finished', 'error', 3000);
+        safeShowStatus('All offline tracks have finished', 'error', 3000);
       }
     } else {
-      showStatus(`Something went wrong with playback`, 'error');
+      safeShowStatus('Something went wrong with playback', 'error');
     }
   }
 }
@@ -1182,7 +1233,7 @@ function setupPreloadedPlayback(tracks, startIndex = 0) {
   playbackManager.setContext('searchPlaylist', preloadedPlaylist, startIndex);
   state.autoPlaySearchResults = true;
 
-  console.log(`Preloaded list configured with ${preloadedPlaylist.length} tracks`);
+  logPlayback('debug', `Preloaded list configured with ${preloadedPlaylist.length} tracks`);
 }
 
 async function playNextInContext(maxRetries = 3) {
@@ -1521,7 +1572,7 @@ function saveRepeatMode(mode) {
   try {
     localStorage.setItem('resonate_repeat_mode', mode);
   } catch (e) {
-    console.warn('Error saving repeat mode:', e);
+    logPlayback('warn', 'Error saving repeat mode', e);
   }
 }
 
@@ -1816,7 +1867,7 @@ function setupMediaSession() {
       }
     });
   } catch (error) {
-    console.warn('Some Media Session actions unavailable:', error);
+    logPlayback('warn', 'Some Media Session actions unavailable', error);
   }
 }
 // Ocultar listas al reproducir un favorito
@@ -1874,9 +1925,9 @@ async function playOptimizedFavorite(favoriteIndex = 0) {
     const isPreloaded = favoritesQueue.includes(track.url);
 
     if (isPreloaded) {
-      console.log('Playing from preloaded favorites:', track.title);
+      logPlayback('debug', `Playing from preloaded favorites: ${track.title || track.url || '[unknown]'}`);
     } else {
-      console.log('Favorite not preloaded, loading from network:', track.title);
+      logPlayback('debug', `Favorite not preloaded, loading from network: ${track.title || track.url || '[unknown]'}`);
     }
 
     const cached = typeof audioCache !== 'undefined' && audioCache && typeof audioCache.get === 'function' ? await audioCache.get(track.url, true) : null;

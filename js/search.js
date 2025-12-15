@@ -2,29 +2,103 @@
 // Loader Manager reference is already defined in playback.js
 // const getLoaderManager = () => window.loaderManager;
 
+const SEARCH_DEFAULTS = {
+  resultsPerPage: 5,
+  timeout: 8000,
+  metadataTimeout: 30000
+};
+
+const SEARCH_LIMITS = {
+  metadataBatchSize: 2,
+  maxResultsToPreload: 3,
+  maxResultsToLoad: 10,
+  playlistBatchSize: 2,
+  prefetchNextCount: 2
+};
+
+function getSearchStateRef() {
+  return window.state || (typeof state !== 'undefined' ? state : null);
+}
+
+function getSearchElementsRef() {
+  return window.elements || (typeof elements !== 'undefined' ? elements : null);
+}
+
+function getSearchConfigRef() {
+  return window.SEARCH_CONFIG || (typeof SEARCH_CONFIG !== 'undefined' ? SEARCH_CONFIG : null);
+}
+
+function getSearchConfigNumber(key, fallback) {
+  const config = getSearchConfigRef() || {};
+  const value = config[key];
+  const parsed = typeof value === 'number' ? value : parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function getSearchFetchFn() {
+  return window.fetchWithTimeout ? window.fetchWithTimeout : (window.fetch || fetch);
+}
+
+function logSearch(message, level = 'debug', category = 'NETWORK') {
+  if (window.logger) {
+    if (typeof window.logger._call === 'function') {
+      window.logger._call(level, message, category);
+      return;
+    }
+
+    const normalized = String(category || 'SYSTEM').toLowerCase();
+    const wrapper = window.logger[normalized];
+    if (typeof wrapper === 'function') {
+      wrapper(message, level);
+      return;
+    }
+  }
+
+  const fn = level === 'error'
+    ? console.error
+    : level === 'warn'
+      ? console.warn
+      : console.log;
+  fn(message);
+}
+
+function setSearchActiveUI(isActive) {
+  const els = getSearchElementsRef();
+  if (els && els.searchResults && els.searchResults.classList) {
+    els.searchResults.classList.toggle('active', Boolean(isActive));
+  }
+  const st = getSearchStateRef();
+  if (st) st.searchActive = Boolean(isActive);
+}
+
+function setSearchErrorMessage(message) {
+  const els = getSearchElementsRef();
+  if (els && els.searchResultsList) {
+    els.searchResultsList.innerHTML = `<div class="no-results">${message}</div>`;
+  }
+}
+
 async function performOptimizedSearch(query, page = 0) {
-  if (!query.trim()) {
-    if (window.elements && window.elements.searchResults) window.elements.searchResults.classList.remove('active');
-    if (window.state) window.state.searchActive = false;
+  const normalizedQuery = (query || '').trim();
+  if (!normalizedQuery) {
+    setSearchActiveUI(false);
     return { results: [], hasMore: false };
   }
   // Prevent search when offline
-  if (!(window.state && window.state.networkOnline)) {
+  const st = getSearchStateRef();
+  if (!(st && st.networkOnline)) {
+    logSearch('Searching needs internet connection', 'info', 'UI');
     if (window.showStatus) window.showStatus('Searching needs internet connection', 'warning', 3000);
-    if (window.elements && window.elements.searchResults) window.elements.searchResults.classList.remove('active');
-    if (window.state) window.state.searchActive = false;
+    setSearchActiveUI(false);
     return { results: [], hasMore: false };
   }
   const cacheKey = `search:${query}:${page}`;
   const cached = window.enhancedCache && window.enhancedCache.get('search', cacheKey);
   if (cached) {
-    console.log('Cached results count:', cached.results.length);
     return cached;
   }
-  if (window.elements && window.elements.searchResults) window.elements.searchResults.classList.add('active');
-  if (window.state) window.state.searchActive = true;
+  setSearchActiveUI(true);
   try {
-    const startTime = Date.now();
     // Optimized query compatible with Archive.org API
     // Multi-phase search strategy for better relevance
     const baseQuery = `(${query}) AND mediatype:audio`;
@@ -39,10 +113,12 @@ async function performOptimizedSearch(query, page = 0) {
     // Build OR query to cover all phases
     const optimizedQuery = searchPhases.join(' OR ');
     const encodedQuery = encodeURIComponent(optimizedQuery);
-    const url = `https://archive.org/advancedsearch.php?q=${encodedQuery}&fl[]=identifier,title,creator,description&rows=${(window.SEARCH_CONFIG && window.SEARCH_CONFIG.resultsPerPage) ? window.SEARCH_CONFIG.resultsPerPage : 5}&page=${page + 1}&output=json&sort[]=downloads+desc`;
-    const fetchFn = window.fetchWithTimeout ? window.fetchWithTimeout : (window.fetch || fetch);
+    const resultsPerPage = getSearchConfigNumber('resultsPerPage', SEARCH_DEFAULTS.resultsPerPage);
+    const timeout = getSearchConfigNumber('timeout', SEARCH_DEFAULTS.timeout);
+    const url = `https://archive.org/advancedsearch.php?q=${encodedQuery}&fl[]=identifier,title,creator,description&rows=${resultsPerPage}&page=${page + 1}&output=json&sort[]=downloads+desc`;
+    const fetchFn = getSearchFetchFn();
     const response = await fetchFn(url, {
-      timeout: (window.SEARCH_CONFIG && window.SEARCH_CONFIG.timeout) ? window.SEARCH_CONFIG.timeout : 8000,
+      timeout,
       headers: {
         'Accept': 'application/json'
       }
@@ -67,7 +143,7 @@ async function performOptimizedSearch(query, page = 0) {
     // Filter out non-playable items by checking optimized playable files
     // Limit concurrent metadata fetches to avoid excessive parallel downloads
     const enrichedResults = [];
-    const batchSize = 2; // Process metadata in small batches
+    const batchSize = SEARCH_LIMITS.metadataBatchSize; // Process metadata in small batches
     
     for (let i = 0; i < processedResults.length; i += batchSize) {
       const batch = processedResults.slice(i, i + batchSize);
@@ -91,7 +167,7 @@ async function performOptimizedSearch(query, page = 0) {
       const batchResults = (await Promise.all(batchPromises)).filter(Boolean);
       enrichedResults.push(...batchResults);
     }
-    const hasMore = results.length === ((window.SEARCH_CONFIG && window.SEARCH_CONFIG.resultsPerPage) ? window.SEARCH_CONFIG.resultsPerPage : 5);
+    const hasMore = results.length === resultsPerPage;
     const searchResult = {
       results: enrichedResults,
       hasMore,
@@ -100,14 +176,16 @@ async function performOptimizedSearch(query, page = 0) {
     if (window.enhancedCache) window.enhancedCache.set('search', cacheKey, searchResult);
     return searchResult;
   } catch (error) {
-    console.error('Error in optimized search:', error);
+    logSearch(error, 'error', 'NETWORK');
     // Fallback: try simple query if optimized fails
     try {
       const simpleQuery = encodeURIComponent(`(${query}) AND mediatype:audio`);
-      const fallbackUrl = `https://archive.org/advancedsearch.php?q=${simpleQuery}&fl[]=identifier,title,creator&rows=${(window.SEARCH_CONFIG && window.SEARCH_CONFIG.resultsPerPage) ? window.SEARCH_CONFIG.resultsPerPage : 5}&page=${page + 1}&output=json&sort[]=downloads+desc`;
-      const fetchFn2 = window.fetchWithTimeout ? window.fetchWithTimeout : (window.fetch || fetch);
+      const resultsPerPage = getSearchConfigNumber('resultsPerPage', SEARCH_DEFAULTS.resultsPerPage);
+      const timeout = getSearchConfigNumber('timeout', SEARCH_DEFAULTS.timeout);
+      const fallbackUrl = `https://archive.org/advancedsearch.php?q=${simpleQuery}&fl[]=identifier,title,creator&rows=${resultsPerPage}&page=${page + 1}&output=json&sort[]=downloads+desc`;
+      const fetchFn2 = getSearchFetchFn();
       const fallbackResponse = await fetchFn2(fallbackUrl, {
-        timeout: (window.SEARCH_CONFIG && window.SEARCH_CONFIG.timeout) ? window.SEARCH_CONFIG.timeout : 8000
+        timeout
       });
       if (fallbackResponse && fallbackResponse.ok) {
         const fallbackData = await fallbackResponse.json();
@@ -123,7 +201,7 @@ async function performOptimizedSearch(query, page = 0) {
         }));
         // Filter out non-playable items in fallback path too
         const enrichedFallback = [];
-        const batchSize = 2; // Process metadata in small batches
+        const batchSize = SEARCH_LIMITS.metadataBatchSize; // Process metadata in small batches
         
         for (let i = 0; i < processedFallbackResults.length; i += batchSize) {
           const batch = processedFallbackResults.slice(i, i + batchSize);
@@ -148,16 +226,16 @@ async function performOptimizedSearch(query, page = 0) {
         }
         const searchResult = {
           results: enrichedFallback,
-          hasMore: fallbackResults.length === ((window.SEARCH_CONFIG && window.SEARCH_CONFIG.resultsPerPage) ? window.SEARCH_CONFIG.resultsPerPage : 5),
+          hasMore: fallbackResults.length === resultsPerPage,
           total: (fallbackData.response && fallbackData.response.numFound) ? fallbackData.response.numFound : 0
         };
         if (window.enhancedCache) window.enhancedCache.set('search', cacheKey, searchResult);
         return searchResult;
       }
     } catch (fallbackError) {
-      console.error('Fallback also failed:', fallbackError);
+      logSearch(fallbackError, 'error', 'NETWORK');
     }
-    elements.searchResultsList.innerHTML = '<div class="no-results">Error in search. Try other terms.</div>';
+    setSearchErrorMessage('Error in search. Try other terms.');
     return { results: [], hasMore: false };
   }
 }
@@ -212,8 +290,9 @@ async function fetchOptimizedPlayableFiles(identifier) {
   const url = `https://archive.org/metadata/${identifier}`;
   try {
     // Force longer timeout for metadata fetching
-    const fetchFn = window.fetchWithTimeout ? window.fetchWithTimeout : (window.fetch || fetch);
-    const response = await fetchFn(url, { timeout: 30000 });
+    const fetchFn = getSearchFetchFn();
+    const metadataTimeout = getSearchConfigNumber('metadataTimeout', SEARCH_DEFAULTS.metadataTimeout);
+    const response = await fetchFn(url, { timeout: metadataTimeout });
     if (!(response && response.ok)) throw new Error('Error fetching metadata');
     const metadata = await response.json();
     if (!(metadata && metadata.files)) {
@@ -244,7 +323,7 @@ async function fetchOptimizedPlayableFiles(identifier) {
     if (window.enhancedCache) window.enhancedCache.set('metadata', identifier, playableFiles);
     return playableFiles;
   } catch (error) {
-    console.error('Error loading optimized files:', error);
+    logSearch(error, 'error', 'NETWORK');
     throw error;
   }
 }
@@ -327,7 +406,6 @@ function createPlayableFiles(audioFiles, identifier, metadata) {
       };
     });
     // Deduplication: prefer .ogg over .mp3 for the same track based on title and artist
-    const deduplicatedFiles = [];
     const seenTracks = new Map();
     for (const file of allFiles) {
       // Create normalized key based on title and artist for better deduplication
@@ -444,13 +522,14 @@ function extractTrackInfo(file, itemMetadata) {
 }
 
 async function playOptimizedSearchResult(result, index, allResults) {
-  console.log('?? playOptimizedSearchResult CALLED');
-  if (state.isLoading) {
-    console.log('Playback in progress, ignoring click');
+  const st = getSearchStateRef();
+  if (st && st.isLoading) {
+    logSearch('Playback in progress, ignoring click', 'debug', 'PLAYBACK');
     return;
   }
   
   try {
+    logSearch('Loading track...', 'info', 'UI');
     window.showStatus?.(`Loading track...`, 'info', null, 'normal', true);
     
     const files = await fetchOptimizedPlayableFiles(result.identifier);
@@ -461,17 +540,19 @@ async function playOptimizedSearchResult(result, index, allResults) {
       if (typeof window.hideFavoritesList === 'function') window.hideFavoritesList();
       
       if (files.length > 1) {
+        logSearch('Found an album with tracks', 'info', 'UI');
         window.showStatus?.(`Found an album with tracks`, 'info', 2000);
-        if (window.state) window.state.albumOrigin = 'search';
+        const st2 = getSearchStateRef();
+        if (st2) st2.albumOrigin = 'search';
         if (window.playbackManager) window.playbackManager.setAlbumPlaylist(result.identifier, files, 0);
         window.loadPlaybackQueue?.('album', files, 0);
         const firstTrack = files[0];
         // Loader se ocultar� cuando audio.play() inicie
-        await playAudioTrackOptimized(firstTrack, result.identifier, 0, files.length);
+        await window.playAudioTrackOptimized(firstTrack, result.identifier, 0, files.length);
       } else {
         // Create preloaded list with next search results (limit to avoid excessive downloads)
         const searchPlaylist = [];
-        const maxResultsToPreload = 3;
+        const maxResultsToPreload = SEARCH_LIMITS.maxResultsToPreload;
         
         // Preload metadata for only the next few results (not audio files yet)
         for (let i = index; i < Math.min(index + maxResultsToPreload, allResults.length); i++) {
@@ -485,78 +566,73 @@ async function playOptimizedSearchResult(result, index, allResults) {
               }
             }
           } catch (error) {
-            console.error(`Error preloading result metadata ${i}:`, error);
+            logSearch(error, 'warn', 'NETWORK');
           }
         }
         // Set up preloaded playback
-        setupPreloadedPlayback(searchPlaylist, index);
+        window.setupPreloadedPlayback?.(searchPlaylist, index);
         // Load FIFO queue with search results
         window.loadPlaybackQueue?.('search', searchPlaylist, index);
         const track = files[0];
         // Loader se ocultar� cuando audio.play() inicie
-        await playAudioTrackOptimized(track, result.identifier);
+        await window.playAudioTrackOptimized(track, result.identifier);
       }
     } else {
       throw new Error('No playable audio files found');
     }
   } catch (error) {
-    console.error('Error in playOptimizedSearchResult:', error);
+    logSearch(error, 'error', 'PLAYBACK');
     
     if (allResults && index < allResults.length - 1) {
+      logSearch('Issue with this track, trying next', 'warn', 'UI');
       window.showStatus?.(`Issue with this track, trying next`, 'error', 1500);
       setTimeout(() => {
         playOptimizedSearchResult(allResults[index + 1], index + 1, allResults);
       }, 1500);
     } else {
+      logSearch('Playback error occurred', 'error', 'UI');
       window.showStatus?.(`Playback error occurred`, 'error');
     }
   }
 }
 
 async function playSpecificSearchTrack(track, albumId, trackIndex, totalTracks) {
-  if (state.isLoading) return;
+  const st = getSearchStateRef();
+  if (st && st.isLoading) return;
   
   try {
+    logSearch('Loading track...', 'info', 'UI');
     window.showStatus?.(`Loading track...`, 'info', null, 'normal', true);
     window.hideSearchResults?.();
     
     if (totalTracks > 1) {
       const files = await fetchOptimizedPlayableFiles(albumId);
       if (window.playbackManager) window.playbackManager.setAlbumPlaylist(albumId, files, trackIndex);
-      state.albumOrigin = 'search';
+      const st2 = getSearchStateRef();
+      if (st2) st2.albumOrigin = 'search';
       // Load FIFO queue with album tracks
       window.loadPlaybackQueue?.('album', files, trackIndex);
     }
     
     // Loader se ocultar� cuando audio.play() inicie
-    await playAudioTrackOptimized(track, albumId, trackIndex, totalTracks);
+    await window.playAudioTrackOptimized(track, albumId, trackIndex, totalTracks);
   } catch (error) {
-    console.error('Error in playSpecificSearchTrack:', error);
+    logSearch(error, 'error', 'PLAYBACK');
 
+    logSearch('Something went wrong', 'error', 'UI');
     window.showStatus?.(`Something went wrong`, 'error');
   }
 }
 
 async function playAlbumFromFavorites(albumId) {
-  if (state.isLoading) return;
-  
-  console.log('playAlbumFromFavorites called with albumId:', albumId);
-  
-  // Ocultar listas al reproducir �lbum desde favoritos
-  console.log('Hiding search results and favorites list...');
-  if (typeof hideSearchResults === 'function') {
-    hideSearchResults();
-  } else {
-    console.warn('hideSearchResults not available');
-  }
-  
-  if (typeof hideFavoritesList === 'function') {
-    hideFavoritesList();
-  } else {
-    console.warn('hideFavoritesList not available');
-  }
+  const st = getSearchStateRef();
+  if (st && st.isLoading) return;
+
+  if (typeof window.hideSearchResults === 'function') window.hideSearchResults();
+  if (typeof window.hideFavoritesList === 'function') window.hideFavoritesList();
   
   try {
+    logSearch('Loading album...', 'info', 'UI');
     window.showStatus?.(`Loading album...`, 'info', null, 'normal', true);
     const files = await fetchOptimizedPlayableFiles(albumId);
     if (files.length > 0) {
@@ -564,17 +640,20 @@ async function playAlbumFromFavorites(albumId) {
       // Load FIFO queue with album tracks
       window.loadPlaybackQueue?.('album', files, 0);
       // Loader se ocultar� cuando audio.play() inicie
-      await playAudioTrackOptimized(files[0], albumId, 0, files.length);
+      await window.playAudioTrackOptimized(files[0], albumId, 0, files.length);
+      logSearch('Now playing your full album', 'info', 'UI');
       window.showStatus?.(`Now playing your full album`, 'info');
     } else {
       throw new Error('No tracks found in album');
     }
   } catch (error) {
-    console.error('Error in playAlbumFromFavorites:', error);
+    logSearch(error, 'error', 'PLAYBACK');
     // Handle offline/cache errors more gracefully
     if (error.message.includes('Offline and audio not available in cache')) {
+      logSearch('Album needs internet to play', 'error', 'UI');
       window.showStatus?.('Album needs internet to play', 'error', 4000);
     } else {
+      logSearch('Error loading album', 'error', 'UI');
       window.showStatus?.(`Error loading album`, 'error');
     }
   }
@@ -582,6 +661,7 @@ async function playAlbumFromFavorites(albumId) {
 
 async function playOptimizedFavorite(favoriteIndex = 0) {
   if (!window.state?.isLoading && window.state?.favorites?.length > 0) {
+    logSearch('Loading favorite...', 'info', 'UI');
     window.showStatus?.(`Loading favorite...`, 'info', null, 'normal', true);
     if (window.state) window.state.isPlayingFavorites = true;
     try {
@@ -595,11 +675,13 @@ async function playOptimizedFavorite(favoriteIndex = 0) {
       const favorite = window.state.favorites[actualIndex];
       // Validate favorite has URL
       if (!favorite.url) {
-        console.error('Favorite without valid URL:', favorite);
+        logSearch({ message: 'Favorite without valid URL', favorite }, 'error', 'PLAYBACK');
+        logSearch('Favorite is broken, skipping it', 'error', 'UI');
         window.showStatus?.('Favorite is broken, skipping it', 'error', 2000);
         const nextIndex = (actualIndex + 1) % window.state.favorites.length;
         return playOptimizedFavorite(nextIndex);
       }
+      logSearch('Loading favorite...', 'info', 'UI');
       window.showStatus?.(`Loading favorite...`, 'info', null, 'normal', true);
       const track = {
         url: favorite.url,
@@ -618,20 +700,22 @@ async function playOptimizedFavorite(favoriteIndex = 0) {
       const favoritesQueue = typeof window.audioCache !== 'undefined' && window.audioCache ? window.audioCache.getFavoritesQueue() : [];
       const isPreloaded = favoritesQueue.includes(track.url);
       if (isPreloaded) {
-        console.log('Playing from preloaded favorites:', track.title);
+        logSearch(`Playing from preloaded favorites: ${track.title}`, 'debug', 'PLAYBACK');
       } else {
-        console.log('Favorite not preloaded, loading from network:', track.title);
+        logSearch(`Favorite not preloaded, loading from network: ${track.title}`, 'debug', 'PLAYBACK');
       }
       const cached = typeof window.audioCache !== 'undefined' && window.audioCache ? await window.audioCache.get(track.url) : null;
       if (!cached && !window.state.networkOnline) {
+        logSearch("Favorite isn't offline. Skipping it", 'warn', 'UI');
         window.showStatus?.('Favorite isn\'t offline. Skipping it', 'error', 2000);
         const nextIndex = (actualIndex + 1) % window.state.favorites.length;
         return playOptimizedFavorite(nextIndex);
       }
-      await playAudioTrackOptimized(track, favorite.id, favorite.trackIndex, favorite.totalTracks);
-      updateShuffleButton?.();
+      await window.playAudioTrackOptimized(track, favorite.id, favorite.trackIndex, favorite.totalTracks);
+      if (typeof window.updateShuffleButton === 'function') window.updateShuffleButton();
     } catch (error) {
-      console.error('Error in playOptimizedFavorite:', error);
+      logSearch(error, 'error', 'PLAYBACK');
+      logSearch('Error with this favorite', 'error', 'UI');
       window.showStatus?.(`Error with this favorite`, 'error');
       if (window.state?.favorites?.length > 1) {
         const nextIndex = (favoriteIndex + 1) % window.state.favorites.length;
@@ -642,17 +726,20 @@ async function playOptimizedFavorite(favoriteIndex = 0) {
 }
 
 async function playRandomSearchResults() {
-  if (state.isLoading || state.searchResults.length === 0) return;
+  const st = getSearchStateRef();
+  const results = st && Array.isArray(st.searchResults) ? st.searchResults : [];
+  if (!st || st.isLoading || results.length === 0) return;
   try {
+    logSearch('Loading playlist...', 'info', 'UI');
     window.showStatus?.('Loading playlist...', 'info', null, 'normal', true);
     // Create playlist with first N tracks from results (limit to avoid excessive downloads)
     const searchPlaylist = [];
-    const maxResultsToLoad = 10; // Limit to first 10 results to avoid excessive parallel loading
+    const maxResultsToLoad = SEARCH_LIMITS.maxResultsToLoad; // Limit to first 10 results to avoid excessive parallel loading
     
     // Load tracks in batches to avoid excessive parallel fetches
-    const batchSize = 2;
-    for (let i = 0; i < Math.min(maxResultsToLoad, state.searchResults.length); i += batchSize) {
-      const batch = state.searchResults.slice(i, i + batchSize);
+    const batchSize = SEARCH_LIMITS.playlistBatchSize;
+    for (let i = 0; i < Math.min(maxResultsToLoad, results.length); i += batchSize) {
+      const batch = results.slice(i, i + batchSize);
       const batchPromises = batch.map(async (result) => {
         try {
           const files = await fetchOptimizedPlayableFiles(result.identifier);
@@ -667,7 +754,7 @@ async function playRandomSearchResults() {
           }
           return [];
         } catch (error) {
-          console.error(`Error loading tracks for ${result.identifier}:`, error);
+          logSearch(error, 'warn', 'NETWORK');
           return [];
         }
       });
@@ -684,20 +771,23 @@ async function playRandomSearchResults() {
     window.loadPlaybackQueue?.('search', searchPlaylist, 0);
     // Play first track
     const firstTrack = searchPlaylist[0];
-    await playAudioTrackOptimized(firstTrack, firstTrack.id, 0, 1);
+    await window.playAudioTrackOptimized(firstTrack, firstTrack.id, 0, 1);
+    logSearch('Playing tracks from search', 'info', 'UI');
     window.showStatus?.(`Playing tracks from search`, 'info', 3000);
   } catch (error) {
-    console.error('Error in playRandomSearchResults:', error);
+    logSearch(error, 'error', 'PLAYBACK');
+    logSearch("Couldn't load search tracks", 'error', 'UI');
     window.showStatus?.(`Couldn't load search tracks`, 'error');
   }
 }
 
 // Prefetch next search results in background (non-blocking)
 async function prefetchNextSearchResults(allResults, currentIndex) {
-  if (!allResults || currentIndex >= allResults.length - 1 || !state.networkOnline) return;
+  const st = getSearchStateRef();
+  if (!allResults || currentIndex >= allResults.length - 1 || !(st && st.networkOnline)) return;
   
-  // Precarga solo los metadatos de las 2 siguientes b�squedas (no audio en paralelo)
-  for (let i = 1; i <= 2 && currentIndex + i < allResults.length; i++) {
+  // Precarga solo los metadatos de las 2 siguientes bsquedas (no audio en paralelo)
+  for (let i = 1; i <= SEARCH_LIMITS.prefetchNextCount && currentIndex + i < allResults.length; i++) {
     const nextResult = allResults[currentIndex + i];
     if (nextResult) {
       try {

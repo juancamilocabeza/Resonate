@@ -1,59 +1,57 @@
 // Simple offline detection - handles connectivity indicators only
-// Main offline logic is handled in initialization.js to ensure app always shows
+// Main offline logic is handled elsewhere; this file only keeps the indicator stable.
 
-// Listen for online/offline events for indicators only
-window.addEventListener('online', function() {
-  console.log('Network: Online event detected');
+(function () {
+  if (window.__resonateOfflineIndicatorFixLoaded) return;
+  window.__resonateOfflineIndicatorFixLoaded = true;
 
-  // Show online indicator but don't change app visibility
-  if (typeof showStatus === 'function') {
-    showStatus('Your connection is back online', 'info', 2000);
+  function getIndicator() {
+    return document.getElementById('offline-indicator');
   }
 
-  // Update offline indicator
-  const indicator = document.getElementById('offline-indicator');
-  if (indicator) {
-    indicator.classList.remove('active');
-    indicator.classList.add('hidden');
-    document.body.classList.remove('offline-mode');
-  }
-});
+  function setIndicatorOffline(isOffline) {
+    const indicator = getIndicator();
+    if (!indicator) return;
 
-// offline indicator initialization
-document.addEventListener('DOMContentLoaded', function() {
-  // Override the initial check to not show indicator on load
-  setTimeout(function() {
-    // Find the offline indicator
-    const indicator = document.getElementById('offline-indicator');
-    if (indicator) {
-      // Ensure it's hidden initially regardless of navigator.onLine
-      indicator.classList.remove('active');
-      indicator.classList.add('hidden');
-      document.body.classList.remove('offline-mode');
-
-      console.log('Offline indicator fixed - hidden on load');
+    if (isOffline) {
+      indicator.classList.remove('hidden');
+      indicator.classList.add('active');
+      const textEl = indicator.querySelector('.offline-text');
+      if (textEl) textEl.textContent = 'No connection';
+      document.body.classList.add('offline-mode');
+      return;
     }
-  }, 100);
-});
 
-// Listen for actual offline/online events
-window.addEventListener('offline', function() {
-  const indicator = document.getElementById('offline-indicator');
-  if (indicator) {
-    indicator.classList.remove('hidden');
-    indicator.classList.add('active');
-    indicator.querySelector('.offline-text').textContent = 'No connection';
-    document.body.classList.add('offline-mode');
-  }
-});
-
-window.addEventListener('online', function() {
-  const indicator = document.getElementById('offline-indicator');
-  if (indicator) {
     indicator.classList.remove('active');
     indicator.classList.add('hidden');
     document.body.classList.remove('offline-mode');
   }
-});
 
-console.log('Offline fix loaded');
+  // Override the initial check to not show indicator on load
+  document.addEventListener('DOMContentLoaded', function () {
+    setTimeout(function () {
+      setIndicatorOffline(false);
+      if (getIndicator()) {
+        console.log('Offline indicator fixed - hidden on load');
+      }
+    }, 100);
+  });
+
+  // Listen for online/offline events for indicators only
+  window.addEventListener('online', function () {
+    console.log('Network: Online event detected');
+
+    // Avoid duplicate toasts if UI layer handles connectivity status
+    if (!window.__resonateConnectivityStatusHandled && typeof showStatus === 'function') {
+      showStatus('Your connection is back online', 'info', 2000);
+    }
+
+    setIndicatorOffline(false);
+  });
+
+  window.addEventListener('offline', function () {
+    setIndicatorOffline(true);
+  });
+
+  console.log('Offline fix loaded');
+})();
