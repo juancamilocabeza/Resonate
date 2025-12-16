@@ -173,6 +173,13 @@ async function networkFirstExternal(request, url) {
   const audio = isAudioRequest(request, url);
   const metadata = isMetadataRequest(url);
 
+  // For audio with Range headers, pass through to enable proper streaming
+  // This allows the browser to handle partial content requests efficiently
+  if (audio && request.headers.has('Range')) {
+    console.log('SW: Passing through Range request for audio streaming:', request.url);
+    return fetch(request);
+  }
+
   try {
     const networkResponse = await fetch(request);
 

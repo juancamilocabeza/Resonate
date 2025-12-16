@@ -560,10 +560,12 @@ async function playOptimizedSearchResult(result, index, allResults) {
         const st2 = getSearchStateRef();
         if (st2) st2.albumOrigin = 'search';
         if (window.playbackManager) window.playbackManager.setAlbumPlaylist(result.identifier, files, 0);
-        window.loadPlaybackQueue?.('album', files, 0);
+        // Don't preload entire album - only load queue after first track starts
         const firstTrack = files[0];
         // Loader se ocultar� cuando audio.play() inicie
         await window.playAudioTrackOptimized(firstTrack, result.identifier, 0, files.length);
+        // Load queue AFTER first track starts playing to avoid blocking
+        window.loadPlaybackQueue?.('album', files, 1);
       } else {
         // Create preloaded list with next search results (limit to avoid excessive downloads)
         const searchPlaylist = [];
@@ -664,10 +666,11 @@ async function playAlbumFromFavorites(albumId) {
         window.Loaders.showLoader({ type: 'spinner' });
       }
       if (window.playbackManager) window.playbackManager.setAlbumPlaylist(albumId, files, 0);
-      // Load FIFO queue with album tracks
-      window.loadPlaybackQueue?.('album', files, 0);
+      // Don't preload entire album - start playing first track immediately
       // Loader se ocultar� cuando audio.play() inicie
       await window.playAudioTrackOptimized(files[0], albumId, 0, files.length);
+      // Load queue AFTER first track starts playing to avoid blocking
+      window.loadPlaybackQueue?.('album', files, 1);
       logSearch('Now playing your full album', 'info', 'UI');
       window.showStatus?.(`Now playing your full album`, 'info');
     } else {

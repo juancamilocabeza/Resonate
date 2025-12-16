@@ -20,7 +20,8 @@ const PLAYBACK_CONSTANTS = {
   PREFETCH_TIMEOUT_MS: 45000,
   AUDIO_LOAD_TIMEOUT_MS: 45000,
   LOCAL_DEFAULT_FETCH_TIMEOUT_MS: 30000,
-  PROD_DEFAULT_FETCH_TIMEOUT_MS: 8000
+  PROD_DEFAULT_FETCH_TIMEOUT_MS: 8000,
+  MAX_BLOB_SIZE_MB: 50 // Use direct streaming for files larger than this
 };
 
 function isLocalDevEnv() {
@@ -732,6 +733,33 @@ async function loadAudioWithCache(track) {
     // Si no está en caché y no hay conexión, no podemos cargarlo
     if (!state.networkOnline) {
       throw new Error('Offline and audio not available in cache');
+    }
+
+    // Check file size with HEAD request to decide streaming strategy
+    let fileSize = 0;
+    let useDirectStreaming = false;
+    
+    try {
+      const headResponse = await fetch(track.url, { method: 'HEAD' });
+      if (headResponse.ok) {
+        const contentLength = headResponse.headers.get('Content-Length');
+        if (contentLength) {
+          fileSize = parseInt(contentLength, 10);
+          const fileSizeMB = fileSize / (1024 * 1024);
+          useDirectStreaming = fileSizeMB > PLAYBACK_CONSTANTS.MAX_BLOB_SIZE_MB;
+          logPlayback('info', `File size: ${fileSizeMB.toFixed(2)}MB, using ${useDirectStreaming ? 'direct streaming' : 'blob download'}`);
+        }
+      }
+    } catch (headError) {
+      logPlayback('warn', 'Could not determine file size, using blob download', headError);
+    }
+
+    // For large files, use direct streaming without downloading blob
+    if (useDirectStreaming) {
+      logPlayback('info', `Streaming large file directly: ${track.title || track.url}`);
+      safeShowStatus('Streaming audio...', 'info');
+      // Return direct URL for streaming
+      return track.url;
     }
 
     // Load from network with playback priority
