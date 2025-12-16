@@ -2963,3 +2963,162 @@ select:focus {
     transform: rotate(360deg);
   }
 }
+
+/* ===== STATUS MESSAGES ===== */
+
+/* Container for all status messages */
+#status-messages {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-sm);
+  pointer-events: none;
+  max-width: calc(100vw - 32px);
+}
+
+/* Base status message styles */
+.status-message {
+  background: var(--card);
+  color: var(--fg);
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow-heavy);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  text-align: center;
+  max-width: 480px;
+  width: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  pointer-events: auto;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(8px);
+  animation: statusSlideIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Entry animation - slide up from bottom with bounce */
+@keyframes statusSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Exit animation - fade out */
+.status-message.fade-out {
+  animation: statusFadeOut 0.3s ease forwards;
+}
+
+@keyframes statusFadeOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.95);
+  }
+}
+
+/* Type variants */
+.status-message.status-info {
+  border-left: 3px solid var(--accent-alt);
+  background: linear-gradient(135deg, var(--card) 0%, rgba(56, 189, 248, 0.08) 100%);
+}
+
+.status-message.status-success {
+  border-left: 3px solid var(--success);
+  background: linear-gradient(135deg, var(--card) 0%, rgba(46, 204, 113, 0.08) 100%);
+}
+
+.status-message.status-error {
+  border-left: 3px solid var(--error);
+  background: linear-gradient(135deg, var(--card) 0%, rgba(255, 85, 85, 0.08) 100%);
+}
+
+.status-message.status-warning {
+  border-left: 3px solid var(--warning);
+  background: linear-gradient(135deg, var(--card) 0%, rgba(255, 184, 77, 0.08) 100%);
+}
+
+.status-message.status-offline {
+  border-left: 3px solid var(--error);
+  background: linear-gradient(135deg, var(--card) 0%, rgba(255, 85, 85, 0.12) 100%);
+  font-weight: 600;
+}
+
+/* Loader/spinner inside status messages */
+.status-message .loader {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: var(--accent-alt);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+/* Responsive adjustments for mobile */
+@media (max-width: 768px) {
+  #status-messages {
+    bottom: 16px;
+    max-width: calc(100vw - 24px);
+  }
+
+  .status-message {
+    font-size: 13px;
+    padding: var(--spacing-sm) var(--spacing-md);
+    max-width: 100%;
+    border-radius: var(--border-radius-small);
+  }
+
+  .status-message .loader {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+/* Handle iPhone notch and safe areas */
+@supports (padding: env(safe-area-inset-bottom)) {
+  #status-messages {
+    bottom: calc(24px + env(safe-area-inset-bottom));
+  }
+
+  @media (max-width: 768px) {
+    #status-messages {
+      bottom: calc(16px + env(safe-area-inset-bottom));
+    }
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .status-message {
+    animation: statusFadeIn 0.2s ease;
+  }
+
+  .status-message.fade-out {
+    animation: statusFadeOut 0.2s ease forwards;
+  }
+
+  @keyframes statusFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  .status-message .loader {
+    animation-duration: 1.2s;
+  }
+}

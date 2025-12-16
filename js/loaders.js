@@ -2,7 +2,7 @@ const Loaders = (() => {
   const defaultStyles = {
     spinner: {
       border: "4px solid #f3f3f3",
-      borderTop: "4px solid #3498db",
+      borderTop: "4px solid #6ee7b7",
       borderRadius: "50%",
       width: "40px",
       height: "40px",
