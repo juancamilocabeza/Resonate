@@ -87,6 +87,8 @@ const state = {
   playbackHistory: [],
   playbackQueue: [],
   favoritesPreloadEnabled: true,
+  contextReloadCount: {},
+  contextRepeatCount: {},
 
   currentSearchPage: 0,
   currentSearchHasMore: false,
@@ -94,6 +96,9 @@ const state = {
   isLoadingMore: false,
   savedPlaybackState: null
 };
+
+// Expose state globally for other modules
+window.state = state;
 
 // Load persisted preference for favorites preload
 function loadFavoritesPreloadPreference() {
@@ -2572,13 +2577,17 @@ function displaySearchHistory() {
         state.currentSearchQuery = query;
 
         elements.searchResults.classList.add('active');
-        (window.performOptimizedSearch || performOptimizedSearch)(query, 0).then(result => {
-          displaySearchResults(result);
-        }).catch(error => {
-          console.error('Search error:', error);
-          showStatus('Search error', 'error');
-
-        });
+        if (window.performOptimizedSearch) {
+          window.performOptimizedSearch(query, 0).then(result => {
+            displaySearchResults(result);
+          }).catch(error => {
+            console.error('Search error:', error);
+            showStatus('Search error', 'error');
+          });
+        } else {
+          console.error('performOptimizedSearch is not available');
+          showStatus('Search unavailable', 'error');
+        }
       }
     });
 

@@ -558,7 +558,12 @@ async function playOptimizedSearchResult(result, index, allResults) {
         logSearch('Found an album with tracks', 'info', 'UI');
         window.showStatus?.(`Found an album with tracks`, 'info', 2000);
         const st2 = getSearchStateRef();
-        if (st2) st2.albumOrigin = 'search';
+        if (st2) {
+          st2.albumOrigin = 'search';
+          // Resetear contadores de repetición al iniciar nuevo álbum
+          if (!st2.contextRepeatCount) st2.contextRepeatCount = {};
+          st2.contextRepeatCount[result.identifier] = 0;
+        }
         if (window.playbackManager) window.playbackManager.setAlbumPlaylist(result.identifier, files, 0);
         // Don't preload entire album - only load queue after first track starts
         const firstTrack = files[0];
@@ -588,6 +593,12 @@ async function playOptimizedSearchResult(result, index, allResults) {
         }
         // Set up preloaded playback
         window.setupPreloadedPlayback?.(searchPlaylist, index);
+        // Resetear contador de repetición de search
+        const st3 = getSearchStateRef();
+        if (st3) {
+          if (!st3.contextRepeatCount) st3.contextRepeatCount = {};
+          st3.contextRepeatCount['search'] = 0;
+        }
         // Load FIFO queue with search results
         window.loadPlaybackQueue?.('search', searchPlaylist, index);
         const track = files[0];
@@ -630,7 +641,12 @@ async function playSpecificSearchTrack(track, albumId, trackIndex, totalTracks) 
       const files = await fetchOptimizedPlayableFiles(albumId);
       if (window.playbackManager) window.playbackManager.setAlbumPlaylist(albumId, files, trackIndex);
       const st2 = getSearchStateRef();
-      if (st2) st2.albumOrigin = 'search';
+      if (st2) {
+        st2.albumOrigin = 'search';
+        // Resetear contador de repetición al reproducir álbum
+        if (!st2.contextRepeatCount) st2.contextRepeatCount = {};
+        st2.contextRepeatCount[albumId] = 0;
+      }
       // Load FIFO queue with album tracks
       window.loadPlaybackQueue?.('album', files, trackIndex);
     }
@@ -660,7 +676,13 @@ async function playAlbumFromFavorites(albumId) {
   try {
     logSearch('Loading album...', 'info', 'UI');
     window.showStatus?.(`Loading album...`, 'info', null, 'normal', true);
-    const files = await fetchOptimizedPlayableFiles(albumId);
+    co// Resetear contador de repetición de álbum
+      const st3 = getSearchStateRef();
+      if (st3) {
+        if (!st3.contextRepeatCount) st3.contextRepeatCount = {};
+        st3.contextRepeatCount[albumId] = 0;
+      }
+      const files = await fetchOptimizedPlayableFiles(albumId);
     if (files.length > 0) {
       if (window.Loaders) {
         window.Loaders.showLoader({ type: 'spinner' });

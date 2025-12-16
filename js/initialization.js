@@ -118,12 +118,12 @@ function tryLoadFavoritesWithRetry() {
 }
 
 function scheduleFavoritesPreloadOnce() {
-  if (!state.favoritesPreloadEnabled) return;
+  if (!window.state || !window.state.favoritesPreloadEnabled) return;
   if (typeof audioCache === 'undefined' || !audioCache || typeof audioCache.preloadFavorites !== 'function') return;
 
   schedule(async () => {
     try {
-      await audioCache.preloadFavorites(state.favorites);
+      await audioCache.preloadFavorites(window.state.favorites);
       window.logger?.info('Favorites preload attempted once at startup', 'CACHE');
     } catch (error) {
       window.logger?.warn(`Failed to preload favorites: ${error.message}`, 'CACHE');
@@ -132,12 +132,12 @@ function scheduleFavoritesPreloadOnce() {
 }
 
 function scheduleFavoritesQueuePreparation() {
-  if (!state.favorites || state.favorites.length === 0) return;
+  if (!window.state || !window.state.favorites || window.state.favorites.length === 0) return;
 
   schedule(async () => {
     try {
-      await loadPlaybackQueue('favorites', state.favorites, 0);
-      if (state.playbackQueue.length > 0) {
+      await loadPlaybackQueue('favorites', window.state.favorites, 0);
+      if (window.state.playbackQueue.length > 0) {
         safeShowStatus('Tap play to start your favorites', 'info', 3000);
       }
     } catch (error) {
@@ -376,12 +376,12 @@ async function initializeApp() {
   // Configurar elementos opcionales - SOLO SI EXISTEN
   if (elements.playAllFavoritesBtn) {
     elements.playAllFavoritesBtn.addEventListener('click', async () => {
-      if (state.favorites.length === 0) {
+      if (!window.state || window.state.favorites.length === 0) {
         showStatus('Add some favorites first to play', 'info');
         return;
       }
 
-      state.userInteracted = true;
+      window.state.userInteracted = true;
       showStatus('Starting your favorites collection', 'info');
       await playFromFavoritesQueue();
     });
@@ -434,7 +434,7 @@ async function initializeApp() {
       showStatus('Sorry, there was a playback issue', 'error');
 
       // Restore state on error
-      state.isLoading = false;
+      if (window.state) window.state.isLoading = false;
       elements.playBtn.disabled = false;
       elements.playBtn.textContent = '▶';
     });
@@ -472,19 +472,19 @@ async function initializeApp() {
 
   if (elements.favoriteBtn) {
     elements.favoriteBtn.addEventListener('click', async () => {
-      if (state.currentTrack && !state.currentTrack.url && state.currentTrack.id) {
+      if (window.state && window.state.currentTrack && !window.state.currentTrack.url && window.state.currentTrack.id) {
         try {
-          const files = await fetchOptimizedPlayableFiles(state.currentTrack.id);
+          const files = await fetchOptimizedPlayableFiles(window.state.currentTrack.id);
           if (files.length > 0) {
-            state.currentTrack.url = files[0].url;
-            toggleFavorite(state.currentTrack);
+            window.state.currentTrack.url = files[0].url;
+            toggleFavorite(window.state.currentTrack);
           }
         } catch (error) {
           window.logger.error(`Error fetching URL for favorite: ${error.message}`, 'UI');
           showStatus('Couldn\'t add that to favorites', 'error');
         }
-      } else {
-        toggleFavorite(state.currentTrack);
+      } else if (window.state) {
+        toggleFavorite(window.state.currentTrack);
       }
     });
   }

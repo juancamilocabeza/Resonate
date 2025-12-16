@@ -1208,6 +1208,10 @@ async function playFromFavoritesQueue(specificTrack = null) {
   safeShowStatus('Loading...', 'info', null, 'normal', true);
 
   state.isPlayingFavorites = true;
+  
+  // Resetear contador de recarga al iniciar manualmente
+  if (!state.contextReloadCount) state.contextReloadCount = {};
+  state.contextReloadCount['favorites'] = 0;
 
   try {
     // Si se proporcionó un track específico, usarlo directamente
@@ -1323,6 +1327,25 @@ async function playNextInContext(maxRetries = 3) {
             return;
           }
         }
+        
+        // RECARGA AUTOMÁTICA DEL ÁLBUM (una sola repetición)
+        if (!state.contextRepeatCount) state.contextRepeatCount = {};
+        const albumKey = albumContext.currentAlbumId || 'album';
+        const albumRepeatCount = state.contextRepeatCount[albumKey] || 0;
+        
+        if (albumRepeatCount < 1 && albumContext.items.length > 0) {
+          state.contextRepeatCount[albumKey] = albumRepeatCount + 1;
+          playbackManager.setContext('album', albumContext.items, 0, albumContext.currentAlbumId);
+          loadPlaybackQueue('album', albumContext.items, 0);
+          
+          if (state.playbackQueue.length > 0) {
+            await playNextInContext(maxRetries);
+            return;
+          }
+        }
+        
+        // Limpiar contador y terminar
+        delete state.contextRepeatCount[albumKey];
         showStatus('Album playback finished', 'info', 2000);
         return;
       }
@@ -1389,10 +1412,46 @@ async function playNextInContext(maxRetries = 3) {
         showStatus('Album finished playing', 'info', 2000);
         return;
       } else if (context === 'favorites') {
+        // RECARGA AUTOMÁTICA PARA FAVORITES
+        const favoritesContext = playbackManager.contextData.favorites;
+        if (!state.contextReloadCount) state.contextReloadCount = {};
+        const reloadCount = state.contextReloadCount['favorites'] || 0;
+        
+        if (favoritesContext.items.length > 0 && reloadCount < 50) {
+          state.contextReloadCount['favorites'] = reloadCount + 1;
+          playbackManager.setContext('favorites', favoritesContext.items, 0);
+          loadPlaybackQueue('favorites', favoritesContext.items, 0);
+          
+          if (state.playbackQueue.length > 0) {
+            await playNextInContext(maxRetries);
+            return;
+          }
+        }
+        
+        // Reset contador si llegamos al límite
+        state.contextReloadCount['favorites'] = 0;
         showStatus('Favorites complete. Search more', 'info', 2000);
         return;
       }
       if (context === 'search') {
+        // RECARGA AUTOMÁTICA PARA SEARCH (una sola repetición)
+        const searchContext = playbackManager.contextData.search;
+        if (!state.contextRepeatCount) state.contextRepeatCount = {};
+        const repeatCount = state.contextRepeatCount['search'] || 0;
+        
+        if (searchContext.items.length > 0 && repeatCount < 1) {
+          state.contextRepeatCount['search'] = repeatCount + 1;
+          playbackManager.setContext('search', searchContext.items, 0);
+          loadPlaybackQueue('search', searchContext.items, 0);
+          
+          if (state.playbackQueue.length > 0) {
+            await playNextInContext(maxRetries);
+            return;
+          }
+        }
+        
+        // Limpiar contador y terminar
+        delete state.contextRepeatCount['search'];
         showStatus('Search results all played', 'info', 2000);
         return;
       }
