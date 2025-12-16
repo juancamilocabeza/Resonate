@@ -98,6 +98,9 @@ async function performOptimizedSearch(query, page = 0) {
     return cached;
   }
   setSearchActiveUI(true);
+  if (window.Loaders) {
+    window.Loaders.showLoader({ type: 'spinner' });
+  }
   try {
     // Optimized query compatible with Archive.org API
     // Multi-phase search strategy for better relevance
@@ -237,6 +240,10 @@ async function performOptimizedSearch(query, page = 0) {
     }
     setSearchErrorMessage('Error in search. Try other terms.');
     return { results: [], hasMore: false };
+  } finally {
+    if (window.Loaders) {
+      window.Loaders.hideLoader();
+    }
   }
 }
 
@@ -356,7 +363,8 @@ function isPlayableAudioFile(file) {
     pattern.test(file.name)
   );
   if (hasExcludedPattern) return false;
-  const audioFormats = ['.mp3', '.ogg', '.wav', '.flac', '.m4a', '.aac'];
+  // Only accept .ogg and .mp3 formats (priority: .ogg first, then .mp3)
+  const audioFormats = ['.ogg', '.mp3'];
   const isAudioFile = audioFormats.some(format =>
     file.name.toLowerCase().endsWith(format)
   );
@@ -529,17 +537,24 @@ async function playOptimizedSearchResult(result, index, allResults) {
   }
   
   try {
+    if (window.Loaders) {
+      window.Loaders.showLoader({ type: 'spinner' });
+    }
+    
     logSearch('Loading track...', 'info', 'UI');
     window.showStatus?.(`Loading track...`, 'info', null, 'normal', true);
     
     const files = await fetchOptimizedPlayableFiles(result.identifier);
     
     if (files.length > 0) {
-      // Ocultar listas despu�s de obtener los archivos pero antes de reproducir
+      // Ocultar listas después de obtener los archivos pero antes de reproducir
       if (typeof window.hideSearchResults === 'function') window.hideSearchResults();
       if (typeof window.hideFavoritesList === 'function') window.hideFavoritesList();
       
       if (files.length > 1) {
+        if (window.Loaders) {
+          window.Loaders.showLoader({ type: 'spinner' });
+        }
         logSearch('Found an album with tracks', 'info', 'UI');
         window.showStatus?.(`Found an album with tracks`, 'info', 2000);
         const st2 = getSearchStateRef();
@@ -601,6 +616,10 @@ async function playSpecificSearchTrack(track, albumId, trackIndex, totalTracks) 
   if (st && st.isLoading) return;
   
   try {
+    if (window.Loaders) {
+      window.Loaders.showLoader({ type: 'spinner' });
+    }
+    
     logSearch('Loading track...', 'info', 'UI');
     window.showStatus?.(`Loading track...`, 'info', null, 'normal', true);
     window.hideSearchResults?.();
@@ -613,6 +632,7 @@ async function playSpecificSearchTrack(track, albumId, trackIndex, totalTracks) 
       // Load FIFO queue with album tracks
       window.loadPlaybackQueue?.('album', files, trackIndex);
     }
+    if (window.Loaders) window.Loaders.hideLoader();
     
     // Loader se ocultar� cuando audio.play() inicie
     await window.playAudioTrackOptimized(track, albumId, trackIndex, totalTracks);
@@ -628,6 +648,10 @@ async function playAlbumFromFavorites(albumId) {
   const st = getSearchStateRef();
   if (st && st.isLoading) return;
 
+  if (window.Loaders) {
+    window.Loaders.showLoader({ type: 'spinner' });
+  }
+
   if (typeof window.hideSearchResults === 'function') window.hideSearchResults();
   if (typeof window.hideFavoritesList === 'function') window.hideFavoritesList();
   
@@ -636,6 +660,9 @@ async function playAlbumFromFavorites(albumId) {
     window.showStatus?.(`Loading album...`, 'info', null, 'normal', true);
     const files = await fetchOptimizedPlayableFiles(albumId);
     if (files.length > 0) {
+      if (window.Loaders) {
+        window.Loaders.showLoader({ type: 'spinner' });
+      }
       if (window.playbackManager) window.playbackManager.setAlbumPlaylist(albumId, files, 0);
       // Load FIFO queue with album tracks
       window.loadPlaybackQueue?.('album', files, 0);
@@ -647,6 +674,7 @@ async function playAlbumFromFavorites(albumId) {
       throw new Error('No tracks found in album');
     }
   } catch (error) {
+    if (window.Loaders) window.Loaders.hideLoader();
     logSearch(error, 'error', 'PLAYBACK');
     // Handle offline/cache errors more gracefully
     if (error.message.includes('Offline and audio not available in cache')) {
@@ -661,6 +689,10 @@ async function playAlbumFromFavorites(albumId) {
 
 async function playOptimizedFavorite(favoriteIndex = 0) {
   if (!window.state?.isLoading && window.state?.favorites?.length > 0) {
+    if (window.Loaders) {
+      window.Loaders.showLoader({ type: 'spinner' });
+    }
+    
     logSearch('Loading favorite...', 'info', 'UI');
     window.showStatus?.(`Loading favorite...`, 'info', null, 'normal', true);
     if (window.state) window.state.isPlayingFavorites = true;
@@ -695,6 +727,7 @@ async function playOptimizedFavorite(favoriteIndex = 0) {
       };
       if (!track.url || track.url === '') {
         throw new Error('Audio URL not available in favorite');
+      if (window.Loaders) window.Loaders.hideLoader();
       }
       // CHECK IF PRELOADED FAVORITES CACHE
       const favoritesQueue = typeof window.audioCache !== 'undefined' && window.audioCache ? window.audioCache.getFavoritesQueue() : [];
@@ -710,6 +743,10 @@ async function playOptimizedFavorite(favoriteIndex = 0) {
         window.showStatus?.('Favorite isn\'t offline. Skipping it', 'error', 2000);
         const nextIndex = (actualIndex + 1) % window.state.favorites.length;
         return playOptimizedFavorite(nextIndex);
+    if (window.Loaders) {
+      window.Loaders.showLoader({ type: 'spinner' });
+    }
+    
       }
       await window.playAudioTrackOptimized(track, favorite.id, favorite.trackIndex, favorite.totalTracks);
       if (typeof window.updateShuffleButton === 'function') window.updateShuffleButton();
@@ -775,6 +812,7 @@ async function playRandomSearchResults() {
     logSearch('Playing tracks from search', 'info', 'UI');
     window.showStatus?.(`Playing tracks from search`, 'info', 3000);
   } catch (error) {
+    if (window.Loaders) window.Loaders.hideLoader();
     logSearch(error, 'error', 'PLAYBACK');
     logSearch("Couldn't load search tracks", 'error', 'UI');
     window.showStatus?.(`Couldn't load search tracks`, 'error');

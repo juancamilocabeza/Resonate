@@ -177,6 +177,12 @@ function getBaseUrl() {
 }
 
 async function serveStaticPath(res, pathname) {
+  // Some browsers request /favicon.ico by convention.
+  // We ship an SVG favicon, so serve it for /favicon.ico to avoid 404s.
+  if (pathname === '/favicon.ico') {
+    pathname = '/icons/favicon.svg';
+  }
+
   const localPath = resolveSafeLocalPath(pathname);
   if (!localPath) {
     sendText(res, 403, 'Forbidden');

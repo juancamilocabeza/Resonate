@@ -51,7 +51,8 @@ function isStaticAsset(url) {
     path.endsWith('.html') ||
     path.endsWith('.json') ||
     path.endsWith('.svg') ||
-    path.endsWith('.png')
+    path.endsWith('.png') ||
+    path.endsWith('.ico')
   );
 }
 
@@ -139,6 +140,30 @@ async function cacheFirstWithBackgroundUpdate(request) {
   const url = getUrl(request);
   if (url && (url.pathname.endsWith('.html') || url.pathname === '/')) {
     return offlineHtmlResponse('Offline', 'Unable to load app', 'Please check your connection and reload.');
+  }
+
+  return new Response('Service unavailable', { status: 503, headers: { 'Content-Type': 'text/plain' } });
+}
+
+async function cacheFirst(request) {
+  try {
+    const cachedResponse = await caches.match(request);
+    if (cachedResponse) return cachedResponse;
+  } catch (cacheError) {
+    console.warn('Cache lookup failed for static asset:', cacheError);
+  }
+
+  try {
+    const networkResponse = await fetch(request);
+    if (networkResponse && networkResponse.ok) {
+      const responseClone = networkResponse.clone();
+      caches.open(CACHE_NAMES.STATIC)
+        .then((cache) => cache.put(request, responseClone))
+        .catch(() => {});
+      return networkResponse;
+    }
+  } catch (networkError) {
+    console.error('Failed to load static asset:', request.url, networkError);
   }
 
   return new Response('Service unavailable', { status: 503, headers: { 'Content-Type': 'text/plain' } });
@@ -278,9 +303,19 @@ self.addEventListener('fetch', (event) => {
 
   event.respondWith(
     (async () => {
+      // Some browsers request /favicon.ico even when an SVG favicon is declared.
+      // Serve our existing SVG favicon to avoid 404s and repeated network noise.
+      if (url.pathname === '/favicon.ico') {
+        return Response.redirect('/icons/favicon.svg', 302);
+      }
+
       // CACHE-FIRST strategy for our static assets
       if (isStaticAsset(url)) {
-        return cacheFirstWithBackgroundUpdate(event.request);
+        const path = url.pathname;
+        const isAppShell = path === '/' || path.endsWith('.html') || path.endsWith('.js') || path.endsWith('.css');
+        // Avoid background revalidation for frequently-requested assets (favicon/manifest/icons)
+        // which otherwise show up as repeated downloads in DevTools.
+        return isAppShell ? cacheFirstWithBackgroundUpdate(event.request) : cacheFirst(event.request);
       }
 
       // NETWORK-FIRST strategy for archive.org resources

@@ -17,8 +17,8 @@ const RepeatMode = {
 
 const PLAYBACK_CONSTANTS = {
   DEFAULT_QUEUE_SIZE: 5,
-  PREFETCH_TIMEOUT_MS: 15000,
-  AUDIO_LOAD_TIMEOUT_MS: 20000,
+  PREFETCH_TIMEOUT_MS: 45000,
+  AUDIO_LOAD_TIMEOUT_MS: 45000,
   LOCAL_DEFAULT_FETCH_TIMEOUT_MS: 30000,
   PROD_DEFAULT_FETCH_TIMEOUT_MS: 8000
 };
@@ -757,7 +757,7 @@ async function loadAudioWithCache(track) {
 
     const blobUrl = URL.createObjectURL(blob);
 
-    safeShowStatus('Audio file loaded successfully', 'info', 1000);
+    safeShowStatus('Audio file loaded successfully', 'info');
     return blobUrl;
 
   } catch (error) {
@@ -804,13 +804,20 @@ function preloadNextTrack() {
 
 // Play audio track with UI updates and state management
 async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalTracks = 1) {
+  // Show loader based on context
+  if (window.Loaders) {
+    window.Loaders.showLoader({ type: 'spinner' });
+  }
+
   if (!track || !track.url) {
+    if (window.Loaders) window.Loaders.hideLoader();
     throw new Error('Track not available');
   }
 
   const elements = getElementsSafe();
   const audioEl = elements.audio;
   if (!audioEl) {
+    if (window.Loaders) window.Loaders.hideLoader();
     throw new Error('Audio element not available');
   }
 
@@ -870,6 +877,9 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
 
     const onCanPlay = () => {
       cleanup();
+      // Hide loader when track is ready to play
+      if (window.Loaders) window.Loaders.hideLoader();
+      
       audio.play().then(async () => {
         if (totalTracks > 1) {
           safeShowStatus('Now playing album track with numbers', 'info');
@@ -905,6 +915,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
 
     const onError = (e) => {
       cleanup();
+      if (window.Loaders) window.Loaders.hideLoader();
       const errMsg = (e && e.target && e.target.error && e.target.error.message) ? e.target.error.message : 'Source not supported';
       reject(new Error(`Audio error: ${errMsg}`));
     };
@@ -925,11 +936,11 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
 
         state.currentBlobUrl = blobUrl;
         audio.src = blobUrl;
+        audio.preload = 'metadata';
         audio.load();
-        audio.preload = 'auto';
 
         timeoutId = setTimeout(() => {
-          if (audio.readyState < 2) {
+          if (audio.readyState < 1) {
             cleanup();
             reject(new Error('Timeout while loading audio'));
           }
@@ -939,6 +950,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
         audio.addEventListener('error', onError, { once: true });
       })
       .catch(error => {
+        if (window.Loaders) window.Loaders.hideLoader();
         cleanup();
         reject(error);
       });
@@ -1870,167 +1882,23 @@ function setupMediaSession() {
     logPlayback('warn', 'Some Media Session actions unavailable', error);
   }
 }
-// Ocultar listas al reproducir un favorito
-  if (typeof hideSearchResults === 'function') hideSearchResults();
-  if (typeof hideFavoritesList === 'function') hideFavoritesList();
 
-  
-async function playOptimizedFavorite(favoriteIndex = 0) {
-  if (state.isLoading || state.favorites.length === 0) return;
-
-  showStatus('Loading...', 'info', null, 'normal', true);
-
-  state.isPlayingFavorites = true;
-
+async function playTrack(trackId) {
+  if (window.Loaders) {
+    window.Loaders.showLoader({ type: 'spinner' });
+  }
   try {
-    let actualIndex;
+    const audioElement = getAudioEl();
+    if (!audioElement) throw new Error('Audio element not found');
 
-    if (state.shuffleFavorites) {
-      actualIndex = Math.floor(Math.random() * state.favorites.length);
-    } else {
-      actualIndex = favoriteIndex >= 0 ? favoriteIndex : 0;
-    }
-
-    playbackManager.setContext('favorites', state.favorites, actualIndex);
-
-    const favorite = state.favorites[actualIndex];
-
-    // Validate favorite has URL
-    if (!favorite.url) {
-      console.error('Favorite without valid URL:', favorite);
-      showStatus('Favorite is invalid, skipping it', 'error', 2000);
-      const nextIndex = (actualIndex + 1) % state.favorites.length;
-      return playOptimizedFavorite(nextIndex);
-    }
-
-    showStatus(`Getting your favorite ready`, 'info');
-
-    const track = {
-      url: favorite.url,
-      title: favorite.title || 'Untitled',
-      creator: favorite.creator || 'Unknown',
-      id: favorite.id,
-      isAlbumTrack: favorite.isAlbumTrack || false,
-      albumId: favorite.albumId || favorite.id,
-      trackIndex: favorite.trackIndex || 0,
-      totalTracks: favorite.totalTracks || 1
-    };
-
-    if (!track.url || track.url === '') {
-      throw new Error('Audio URL not available in favorite');
-    }
-
-    // CHECK IF PRELOADED FAVORITES CACHE
-    const favoritesQueue = typeof audioCache !== 'undefined' && audioCache && typeof audioCache.getFavoritesQueue === 'function' ? audioCache.getFavoritesQueue() : [];
-    const isPreloaded = favoritesQueue.includes(track.url);
-
-    if (isPreloaded) {
-      logPlayback('debug', `Playing from preloaded favorites: ${track.title || track.url || '[unknown]'}`);
-    } else {
-      logPlayback('debug', `Favorite not preloaded, loading from network: ${track.title || track.url || '[unknown]'}`);
-    }
-
-    const cached = typeof audioCache !== 'undefined' && audioCache && typeof audioCache.get === 'function' ? await audioCache.get(track.url, true) : null;
-    if (!cached && !state.networkOnline) {
-      showStatus('Favorite isn\'t cached offline', 'error', 2000);
-      const nextIndex = (actualIndex + 1) % state.favorites.length;
-      return playOptimizedFavorite(nextIndex);
-    }
-
-    await playAudioTrackOptimized(track, favorite.id, favorite.trackIndex, favorite.totalTracks);
-
-    updateShuffleButton();
-
+    const trackUrl = await fetchTrackUrl(trackId);
+    audioElement.src = trackUrl;
+    await audioElement.play();
   } catch (error) {
-    console.error('Error in playOptimizedFavorite:', error);
-
-    showStatus(`Something went wrong with favorite`, 'error');
-
-    if (state.favorites.length > 1) {
-      const nextIndex = (favoriteIndex + 1) % state.favorites.length;
-      setTimeout(() => playOptimizedFavorite(nextIndex), 1000);
+    console.error('Error during playback:', error);
+  } finally {
+    if (window.Loaders) {
+      window.Loaders.hideLoader();
     }
   }
 }
-
-async function playSpecificTrack(track, albumId, trackIndex, totalTracks) {
-  if (state.isLoading) return;
-
-  try {
-    showStatus(`Loading your selected track`, 'info');
-
-    if (totalTracks > 1) {
-      const files = await fetchOptimizedPlayableFiles(albumId);
-      playbackManager.setAlbumPlaylist(albumId, files, trackIndex);
-      state.albumOrigin = 'search';
-
-      // Load FIFO queue with album tracks
-      loadPlaybackQueue('album', files, trackIndex);
-    }
-
-    // playAudioTrackOptimized maneja su propio loader con contexto 'track'
-    await playAudioTrackOptimized(track, albumId, trackIndex, totalTracks);
-
-  } catch (error) {
-    console.error('Error in playSpecificTrack:', error);
-
-    showStatus(`Error: ${error.message}`, 'error');
-  }
-}
-
-async function playRandomSearchResults() {
-  if (state.isLoading || !state.searchResults || state.searchResults.length === 0) return;
-
-  showStatus('Loading...', 'info', null, 'normal', true);
-
-  try {
-    // Shuffle the search results
-    const shuffledResults = [...state.searchResults].sort(() => Math.random() - 0.5);
-
-    // Set up playback context for random search results
-    playbackManager.setContext('search', shuffledResults, 0);
-    state.albumOrigin = 'search';
-
-    // Load shuffled results into playback queue
-    loadPlaybackQueue('search', shuffledResults, 0);
-
-    if (state.playbackQueue.length === 0) {
-      throw new Error('No playable tracks found in search results');
-    }
-
-    const firstTrack = state.playbackQueue[0];
-
-    if (!firstTrack.url) {
-      throw new Error('First track has no URL');
-    }
-
-    showStatus(`Playing shuffled search results`, 'info');
-
-    // Remove from queue before playing
-    state.playbackQueue.shift();
-
-    await playAudioTrackOptimized(firstTrack, firstTrack.id, 0, 1);
-
-    updateShuffleButton();
-
-  } catch (error) {
-    console.error('Error in playRandomSearchResults:', error);
-
-    showStatus(`Error with random playback`, 'error');
-  }
-}
-
-window.playPrevious = playPrevious;
-window.playNext = playNext;
-window.resumeSavedPlayback = resumeSavedPlayback;
-window.setupPreloadedPlayback = setupPreloadedPlayback;
-window.playOptimizedFavorite = playOptimizedFavorite;
-window.playSpecificTrack = playSpecificTrack;
-window.playRandomSearchResults = playRandomSearchResults;
-window.setupListenTracking = setupListenTracking;
-window.updateProgressBar = updateProgressBar;
-window.loadPlaybackQueue = loadPlaybackQueue;
-window.playbackManager = playbackManager;
-window.fetchWithTimeout = fetchWithTimeout;
-window.playAudioTrackOptimized = playAudioTrackOptimized;
-window.updateShuffleButton = updateShuffleButton;

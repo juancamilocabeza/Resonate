@@ -4,7 +4,7 @@
   "description": "A free music player for Archive.org content with social media sharing support",
   "homepage": "https://www.resonateplayer.com",
   "main": "server.js",
-  "type": "commonjs",
+  "type": "module",
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js"

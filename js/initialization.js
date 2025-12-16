@@ -607,19 +607,17 @@ async function initializeApp() {
   window.playPreviousInContext = playPreviousInContext;
   window.playNextInContext = playNextInContext;
   window.forcePlay = forcePlay;
-  window.playOptimizedFavorite = playOptimizedFavorite;
-  window.playAlbumFromFavorites = playAlbumFromFavorites;
-  window.playSpecificTrack = playSpecificTrack;
   window.toggleShuffleFavorites = toggleShuffleFavorites;
   window.addAlbumToFavorites = addAlbumToFavorites;
   window.removeAlbumFromFavorites = removeAlbumFromFavorites;
   window.isAlbumInFavorites = isAlbumInFavorites;
-  window.playRandomSearchResults = playRandomSearchResults;
   window.audioCache = typeof audioCache !== 'undefined' ? audioCache : null;
+  // Note: playOptimizedFavorite, playAlbumFromFavorites, playSpecificSearchTrack, and playRandomSearchResults are exposed in search.js
   window.installPWA = typeof window.installPWA !== 'undefined' ? window.installPWA : null;
   window.preloadNextTrack = preloadNextTrack;
   window.loadPlaybackQueue = loadPlaybackQueue;
   window.playFromFavoritesQueue = playFromFavoritesQueue;
+  window.updateProgressBar = updateProgressBar;
   window.dispatchEvent(new Event('resonate:results-rendered'));
 
   // Debug functions for offline testing

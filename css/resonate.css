@@ -73,10 +73,10 @@
   --art-size-mobile: 280px;
   --art-size-tablet: 320px;
   --art-size-desktop: 380px;
-  --btn-size-mobile: 48px;
+  --btn-size-mobile: 64px;
   --btn-size-tablet: 44px;
   --btn-size-desktop: 40px;
-  --btn-large-mobile: 56px;
+  --btn-large-mobile: 80px;
   --btn-large-tablet: 52px;
   --btn-large-desktop: 50px;
   --search-height-mobile: 48px;
@@ -2243,8 +2243,9 @@ select:focus {
   .controls {
     display: flex !important;
     flex-direction: row !important;
-    gap: var(--spacing-md);
+    gap: clamp(var(--spacing-sm), 3vw, var(--spacing-md));
     flex-wrap: nowrap;
+    padding-bottom: calc(var(--spacing-md) + env(safe-area-inset-bottom, 0));
   }
 
   .controls button {
@@ -2253,6 +2254,7 @@ select:focus {
     min-width: var(--btn-size-mobile);
     min-height: var(--btn-size-mobile);
     flex-shrink: 0;
+    font-size: 22px;
   }
 
   .play-btn,
@@ -2261,6 +2263,7 @@ select:focus {
     height: var(--btn-large-mobile);
     min-width: var(--btn-large-mobile);
     min-height: var(--btn-large-mobile);
+    font-size: 30px;
   }
 
   .current-track-info {
@@ -2301,6 +2304,31 @@ select:focus {
     margin-bottom: 12px !important;
   }
 
+}
+
+/* Large phones / small tablets (481px–767px) */
+@media (min-width: 481px) and (max-width: 767px) {
+  .controls {
+    gap: clamp(var(--spacing-md), 4vw, calc(var(--spacing-lg) * 2));
+    padding-bottom: calc(var(--spacing-md) + env(safe-area-inset-bottom, 0));
+  }
+
+  .controls button {
+    width: 72px;
+    height: 72px;
+    min-width: 72px;
+    min-height: 72px;
+    font-size: 22px;
+  }
+
+  .play-btn,
+  .play-btn-favorite {
+    width: 86px;
+    height: 86px;
+    min-width: 86px;
+    min-height: 86px;
+    font-size: 30px;
+  }
 }
 
 /* ===== SEARCH HISTORY ===== */
@@ -2923,5 +2951,15 @@ select:focus {
 @media print {
   .onboarding-modal {
     display: none !important;
+  }
+}
+
+/* ===== LOADER STYLES ===== */
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
   }
 }
