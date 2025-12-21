@@ -261,6 +261,34 @@ self.addEventListener('install', (event) => {
   self.skipWaiting(); // Activate immediately
 });
 
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open('v1').then((cache) => {
+      const resourcesToCache = [
+        '/',
+        '/index.html',
+        '/css/resonate.css',
+        '/js/ui-v2.js',
+        '/js/playback.js',
+        '/js/search.js'
+      ];
+
+      return Promise.all(
+        resourcesToCache.map((resource) =>
+          fetch(resource).then((response) => {
+            if (!response.ok) {
+              throw new Error(`Failed to fetch ${resource}: ${response.statusText}`);
+            }
+            return cache.put(resource, response);
+          })
+        )
+      );
+    }).catch((error) => {
+      console.error('Failed to cache resources during install:', error);
+    })
+  );
+});
+
 // Activation and cleanup of old caches
 self.addEventListener('activate', (event) => {
   console.log('SW: Activating service worker');
@@ -286,7 +314,6 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Cache-first for own assets, Network-first for external resources
 self.addEventListener('fetch', (event) => {
   // Skip non-GET requests and certain destinations
   if (event.request.method !== 'GET' ||
@@ -296,6 +323,11 @@ self.addEventListener('fetch', (event) => {
 
   const url = getUrl(event.request);
   if (!url) return;
+
+  // Never intercept the service worker script itself
+  if (url.pathname === '/sw.js') {
+    return; // let the browser fetch it directly
+  }
 
   // Only handle our own assets and archive.org. Avoid intercepting third-party
   // scripts (e.g. analytics) which can otherwise show confusing 503 errors.
@@ -325,7 +357,7 @@ self.addEventListener('fetch', (event) => {
         return isAppShell ? cacheFirstWithBackgroundUpdate(event.request) : cacheFirst(event.request);
       }
 
-      // NETWORK-FIRST strategy for archive.org resources
+      // NETWORK_FIRST strategy for archive.org resources
       return networkFirstExternal(event.request, url);
     })()
   );

@@ -1,4 +1,3 @@
-
 const elements = {
   audio: document.getElementById('audio'),
   art: document.getElementById('art'),
@@ -41,7 +40,7 @@ const elements = {
 
 // Search configuration
 const SEARCH_CONFIG = {
-  resultsPerPage: 5,
+  resultsPerPage: 12,
   timeout: 8000,
   enableLazyLoading: true
 };
@@ -94,7 +93,9 @@ const state = {
   currentSearchHasMore: false,
   currentSearchQuery: '',
   isLoadingMore: false,
-  savedPlaybackState: null
+  savedPlaybackState: null,
+  // View mode: 'grid' | 'list' (new card grid by default)
+  viewMode: 'grid'
 };
 
 // Expose state globally for other modules
@@ -1017,24 +1018,23 @@ function displaySearchResults(searchData, clearExisting = true) {
     return;
   }
 
-  const fragment = document.createDocumentFragment();
-
-  results.forEach((result, index) => {
-    const globalIndex = clearExisting ? index : state.searchResults.length - results.length + index;
-    const resultEl = createSearchResultElement(result, globalIndex);
-    fragment.appendChild(resultEl);
-  });
-
-  if (clearExisting) {
-    elements.searchResultsList.appendChild(fragment);
+  // Render results either as legacy list or new card grid
+  if (state.viewMode === 'grid') {
+    renderCardGrid(elements.searchResultsList, results, 'search', clearExisting);
   } else {
-    // Eliminar el observador anterior si existe
-    const existingObserver = elements.searchResultsList.querySelector('.lazy-load-observer');
-    if (existingObserver) {
-      existingObserver.remove();
+    const fragment = document.createDocumentFragment();
+    results.forEach((result, index) => {
+      const globalIndex = clearExisting ? index : state.searchResults.length - results.length + index;
+      const resultEl = createSearchResultElement(result, globalIndex);
+      fragment.appendChild(resultEl);
+    });
+    if (clearExisting) {
+      elements.searchResultsList.appendChild(fragment);
+    } else {
+      const existingObserver = elements.searchResultsList.querySelector('.lazy-load-observer');
+      if (existingObserver) existingObserver.remove();
+      elements.searchResultsList.appendChild(fragment);
     }
-
-    elements.searchResultsList.appendChild(fragment);
   }
 
   // Configurar lazy loading si hay más resultados
@@ -1092,6 +1092,15 @@ async function loadAlbumInfoBackground(identifier, resultEl) {
     return;
   }
 
+  // Skip when offline to prevent noisy failures
+  if (typeof navigator !== 'undefined' && navigator && navigator.onLine === false) {
+    const metaElement = resultEl.querySelector('.result-meta');
+    if (metaElement) {
+      metaElement.innerHTML = '<span style="color: var(--muted); font-size: 10px;">Info not available offline</span>';
+    }
+    return;
+  }
+
   try {
     const metadata = await fetchOptimizedPlayableFiles(identifier);
     const itemMetadata = metadata[0]?.metadata;
@@ -1145,19 +1154,7 @@ function createResultInfo(result) {
   titleDiv.className = 'result-title';
   titleDiv.textContent = result.title || 'Untitled';
 
-  const creatorDiv = document.createElement('div');
-  creatorDiv.className = 'result-creator';
-  creatorDiv.textContent = result.creator || 'Unknown';
-
-  const metaDiv = document.createElement('div');
-  metaDiv.className = 'result-meta';
-  const albumSpan = document.createElement('span');
-  albumSpan.className = 'result-album';
-  metaDiv.appendChild(albumSpan);
-
   infoDiv.appendChild(titleDiv);
-  infoDiv.appendChild(creatorDiv);
-  infoDiv.appendChild(metaDiv);
 
   return infoDiv;
 }
@@ -1204,16 +1201,8 @@ function createFavoriteInfo(result) {
   creatorDiv.className = 'favorite-creator';
   creatorDiv.textContent = result.creator || 'Unknown';
 
-  // Album indicator will be added by loadAlbumInfoBackground
-  const metaDiv = document.createElement('div');
-  metaDiv.className = 'result-meta'; // Keep for compatibility with loadAlbumInfoBackground
-  const albumSpan = document.createElement('span');
-  albumSpan.className = 'result-album';
-  metaDiv.appendChild(albumSpan);
-
   infoDiv.appendChild(titleDiv);
   infoDiv.appendChild(creatorDiv);
-  infoDiv.appendChild(metaDiv);
 
   return infoDiv;
 }
@@ -1326,7 +1315,7 @@ function createSearchResultElement(result, globalIndex) {
 
   shareBtn.addEventListener('click', async (e) => {
     e.stopPropagation();
-    await shareTrack(result.identifier, result.title, result.creator);
+    await shareTrack(result.identifier, result.title);
   });
 
   infoDiv.addEventListener('click', async (e) => {
@@ -1394,19 +1383,245 @@ function createSearchResultElement(result, globalIndex) {
   return resultEl;
 }
 
+// ===== Card Grid (New) =====
+function renderCardGrid(container, items, context = 'search', clearExisting = true) {
+  if (!container) return;
+  if (clearExisting) container.innerHTML = '';
+
+  // Ensure a grid wrapper exists
+  let grid = container.querySelector('.card-grid');
+  if (!grid || clearExisting) {
+    grid = document.createElement('div');
+    grid.className = 'card-grid';
+    if (clearExisting) container.appendChild(grid); else container.appendChild(grid);
+  }
+
+  const fragment = document.createDocumentFragment();
+  items.forEach((item, index) => {
+    const globalIndex = clearExisting ? index : state.searchResults.length - items.length + index;
+    const card = buildContentCard(item, context, globalIndex);
+    fragment.appendChild(card);
+  });
+  grid.appendChild(fragment);
+}
+
+function buildContentCard(item, context = 'search', globalIndex = 0) {
+  // Normalize fields across contexts
+  const identifier = item.identifier || item.id || item.albumId || item.id;
+  const title = item.title || item.albumTitle || 'Untitled';
+  const creator = item.creator || 'Unknown';
+
+  const card = document.createElement('article');
+  card.className = 'content-card';
+  card.setAttribute('role', 'listitem');
+  card.setAttribute('tabindex', '0');
+  card.setAttribute('aria-label', `${title} by ${creator}`);
+
+  // Media
+  const media = document.createElement('div');
+  media.className = 'card-media';
+  const img = new Image();
+  img.alt = `Cover for ${title}`;
+  img.loading = 'lazy';
+  img.src = `https://archive.org/services/img/${identifier}`;
+  img.onerror = () => {
+    // Compact inline SVG placeholder to avoid external dependencies
+    const svg = encodeURIComponent(
+      `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'>` +
+      `<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>` +
+      `<stop offset='0%' stop-color='#1f2937'/><stop offset='100%' stop-color='#111827'/></linearGradient></defs>` +
+      `<rect width='100%' height='100%' fill='url(#g)'/>` +
+      `<g fill='#6ee7b7' font-family='sans-serif' font-weight='700'>` +
+      `<text x='50%' y='48%' dominant-baseline='middle' text-anchor='middle' font-size='22'>No Cover</text>` +
+      `<text x='50%' y='66%' dominant-baseline='middle' text-anchor='middle' font-size='12'>${(creator || '').toString().slice(0,24)}</text>` +
+      `</g></svg>`
+    );
+    img.src = `data:image/svg+xml;charset=utf-8,${svg}`;
+  };
+  media.appendChild(img);
+
+  // Chips
+  const chips = document.createElement('div');
+  chips.className = 'card-chips';
+  const chipType = document.createElement('span');
+  chipType.className = 'chip';
+  const isAlbum = !item.isTrackList && ( !!item.isAlbum || (typeof item.trackCount === 'number' && item.trackCount > 1) || !!item.isAlbumTrack );
+  chipType.textContent = isAlbum ? 'Álbum' : 'Single';
+  chips.appendChild(chipType);
+  media.appendChild(chips);
+
+  // Body
+  const body = document.createElement('div');
+  body.className = 'card-body';
+
+  const metaOverlay = document.createElement('div');
+  metaOverlay.className = 'result-meta-overlay';
+
+  const chipTypeOverlay = document.createElement('span');
+  chipTypeOverlay.className = 'chip';
+  chipTypeOverlay.textContent = isAlbum ? 'Album' : 'Single';
+  metaOverlay.appendChild(chipTypeOverlay);
+
+  if (item.trackCount) {
+    const chipTrackCount = document.createElement('span');
+    chipTrackCount.className = 'chip';
+    chipTrackCount.textContent = `${item.trackCount} tracks`;
+    metaOverlay.appendChild(chipTrackCount);
+  }
+
+  body.appendChild(metaOverlay);
+
+  const t = document.createElement('div');
+  t.className = 'card-title';
+  t.textContent = title;
+  t.title = title;
+  body.appendChild(t);
+
+  // Actions
+  const actions = document.createElement('div');
+  actions.className = 'card-actions';
+  const playBtn = document.createElement('button');
+  playBtn.className = 'card-btn play';
+  playBtn.title = 'Play';
+  playBtn.textContent = '▶';
+  const favBtn = document.createElement('button');
+  favBtn.className = 'card-btn favorite';
+  favBtn.textContent = isAlbum ? '🩶' : '🩶';
+  const expandBtn = document.createElement('button');
+  expandBtn.className = 'card-btn expand';
+  expandBtn.title = '▼';
+  expandBtn.textContent = '▼';
+  expandBtn.style.display = isAlbum ? 'flex' : 'none';
+  actions.appendChild(playBtn);
+  actions.appendChild(favBtn);
+  actions.appendChild(expandBtn);
+
+  card.appendChild(media);
+  card.appendChild(body);
+  card.appendChild(actions);
+
+  // Background album info population (track count / album flag)
+  try { loadAlbumInfoBackground(identifier, card); } catch (e) {}
+
+  // Event wiring
+  if (context === 'search') {
+    // Play
+    playBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showStatus('Loading your track', 'info');
+      window.playOptimizedSearchResult?.(item, globalIndex, state.searchResults);
+    });
+    // Favorite
+    favBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      try {
+        const files = await fetchOptimizedPlayableFiles(identifier);
+        if (files.length > 1) {
+          const buttonState = getAlbumButtonState(identifier, files.length);
+          if (buttonState.action === 'remove') {
+            removeAlbumFromFavorites(identifier);
+            favBtn.classList.remove('active');
+            favBtn.textContent = '🩶';
+          } else {
+            addAlbumToFavorites(identifier, files);
+            favBtn.classList.add('active');
+            favBtn.textContent = '❤️';
+          }
+        } else if (files.length === 1) {
+          const track = files[0];
+          const before = isTrackFavorite(track);
+          toggleFavorite(track);
+          const after = isTrackFavorite(track);
+          favBtn.classList.toggle('active', after);
+          favBtn.textContent = after ? '❤️' : '🩶';
+        }
+      } catch (err) {
+        showStatus('Couldn\'t manage favorite', 'error');
+      }
+    });
+    // Expand
+    expandBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      let tracksContainer = card.nextElementSibling;
+      if (!tracksContainer || !tracksContainer.classList.contains('tracks-container')) {
+        tracksContainer = document.createElement('div');
+        tracksContainer.className = 'tracks-container';
+        tracksContainer.style.display = 'none';
+        const parent = card.parentNode; if (parent) parent.insertBefore(tracksContainer, card.nextSibling);
+      }
+      toggleAlbumTracks(identifier, tracksContainer, expandBtn);
+    });
+  } else {
+    // favorites context
+    // Integrate with existing delegation; set attributes
+    playBtn.setAttribute('data-id', identifier);
+    const isAlbumFavorite = Array.isArray(item.tracks) ? item.tracks.length > 1 : isAlbum;
+    playBtn.setAttribute('data-is-album', String(isAlbumFavorite));
+    // Mark card type for CSS layout tweaks
+    card.classList.add(isAlbumFavorite ? 'album' : 'single');
+
+    favBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // Remove whole album
+      removeAlbumFromFavorites(identifier);
+      updateFavoritesList();
+      updateFavoriteButton();
+      showStatus('Favorite was removed', 'info');
+    });
+
+    expandBtn.style.display = isAlbumFavorite ? 'inline-block' : 'none';
+    expandBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      let tracksContainer = card.nextElementSibling;
+      if (!tracksContainer || !tracksContainer.classList.contains('tracks-container')) {
+        tracksContainer = document.createElement('div');
+        tracksContainer.className = 'tracks-container';
+        tracksContainer.style.display = 'none';
+        const parent = containerForFavorites(); parent.insertBefore(tracksContainer, card.nextSibling);
+      }
+      toggleAlbumTracks(identifier, tracksContainer, expandBtn);
+    });
+  }
+
+  return card;
+}
+
+function containerForFavorites() {
+  return elements.favoritesList || document.getElementById('favorites-list');
+}
+
 // Toggle album tracks visibility
 function toggleAlbumTracks(albumId, tracksContainer, expandButton) {
+  if (!tracksContainer || !tracksContainer.parentNode) {
+    console.error('Tracks container is not a child of the expected parent node.');
+    return;
+  }
+
   if (tracksContainer.style.display === 'none') {
-    displayAlbumTracks(albumId, tracksContainer);
     tracksContainer.style.display = 'block';
     expandButton.textContent = '▲';
-    expandButton.title = '▲';
-    state.expandedAlbums.add(albumId);
+
+    // Progressive enhancement: render Tracklist V2 when enabled
+    try {
+      if (window.features && window.features.tracklistV2) {
+        // Avoid duplicate mounting
+        if (!tracksContainer.dataset.tlv2Mounted) {
+          if (typeof window.displayAlbumTracksV2 === 'function') {
+            window.displayAlbumTracksV2(albumId, tracksContainer);
+            tracksContainer.dataset.tlv2Mounted = 'true';
+          }
+        }
+      } else {
+        // Legacy renderer fallback
+        displayAlbumTracks(albumId, tracksContainer);
+      }
+    } catch (e) {
+      // Fallback to legacy on any issue
+      try { displayAlbumTracks(albumId, tracksContainer); } catch {}
+    }
   } else {
     tracksContainer.style.display = 'none';
     expandButton.textContent = '▼';
-    expandButton.title = '▼';
-    state.expandedAlbums.delete(albumId);
   }
 }
 
@@ -1487,7 +1702,7 @@ function displayAlbumTracks(albumId, tracksContainer) {
         if (shareBtn) {
           shareBtn.addEventListener('click', (e) => {
             e.stopPropagation(); // Evitar que el clic se propague al resultado principal
-            shareTrack(track.id || albumId, track.title, track.creator);
+            shareTrack(track.id || albumId, track.title);
           });
         }
 
@@ -1807,6 +2022,7 @@ function updateFavoritesList() {
   updateFavoritesCount();
 
   if (state.favorites.length === 0) {
+
     favoritesList.innerHTML = `
       <div class="no-results">
         <div class="no-results-icon">♡</div>
@@ -1831,147 +2047,80 @@ function updateFavoritesList() {
     favoritesByAlbum[albumId].tracks.push(favorite);
   });
 
-  Object.keys(favoritesByAlbum).forEach(albumId => {
-    const albumData = favoritesByAlbum[albumId];
-    const isAlbum = albumData.tracks.length > 1;
+  if (state.viewMode === 'grid') {
+    // Transform into items for card renderer
+    const items = Object.keys(favoritesByAlbum).map(albumId => ({
+      identifier: albumId,
+      title: favoritesByAlbum[albumId].albumTitle || 'Untitled',
+      creator: favoritesByAlbum[albumId].albumCreator || 'Unknown',
+      trackCount: favoritesByAlbum[albumId].tracks.length,
+      isAlbum: favoritesByAlbum[albumId].tracks.length > 1,
+      tracks: favoritesByAlbum[albumId].tracks
+    }));
 
-    const albumItem = document.createElement('div');
-    albumItem.className = 'favorite-item';
-    albumItem.setAttribute('role', 'listitem');
-    albumItem.setAttribute('aria-label', `${albumData.albumTitle || 'Untitled'} by ${albumData.albumCreator || 'Unknown'}${isAlbum ? ` - ${albumData.tracks.length} tracks` : ''}`);
+    renderCardGrid(favoritesList, items, 'favorites', true);
+  } else {
+    // Legacy list rendering (original implementation)
+    Object.keys(favoritesByAlbum).forEach(albumId => {
+      const albumData = favoritesByAlbum[albumId];
+      const isAlbum = albumData.tracks.length > 1;
 
-    // Highlight currently playing track
-    if (state.currentTrack && (
-      state.currentTrack.albumId === albumId ||
-      state.currentTrack.id === albumId ||
-      (isAlbum && albumData.tracks.some(track => track.url === state.currentTrack.url))
-    )) {
-      albumItem.classList.add('now-playing');
-      albumItem.setAttribute('aria-current', 'true');
-    }
+      const albumItem = document.createElement('div');
+      albumItem.className = 'favorite-item';
+      albumItem.setAttribute('role', 'listitem');
+      albumItem.setAttribute('aria-label', `${albumData.albumTitle || 'Untitled'} by ${albumData.albumCreator || 'Unknown'}${isAlbum ? ` - ${albumData.tracks.length} tracks` : ''}`);
 
-    // Create cover container
-    const coverContainer = document.createElement('div');
-    coverContainer.className = 'result-cover';
+      if (state.currentTrack && (
+        state.currentTrack.albumId === albumId ||
+        state.currentTrack.id === albumId ||
+        (isAlbum && albumData.tracks.some(track => track.url === state.currentTrack.url))
+      )) {
+        albumItem.classList.add('now-playing');
+        albumItem.setAttribute('aria-current', 'true');
+      }
 
-    // Load cover image with lazy loading
-    const img = new Image();
-    img.alt = 'Album cover';
-    img.style.width = '100%';
-    img.style.height = '100%';
-    img.style.objectFit = 'cover';
-    img.style.borderRadius = '6px';
+      const coverContainer = document.createElement('div');
+      coverContainer.className = 'result-cover';
 
-    const archiveCoverUrl = `https://archive.org/services/img/${albumId}`;
+      const img = new Image();
+      img.alt = 'Album cover';
+      img.style.width = '100%';
+      img.style.height = '100%';
+      img.style.objectFit = 'cover';
+      img.style.borderRadius = '6px';
 
-    // Configure event listeners BEFORE setting src
-    img.onload = () => {
-      coverContainer.appendChild(img);
-    };
+      const archiveCoverUrl = `https://archive.org/services/img/${albumId}`;
+      img.onload = () => { coverContainer.appendChild(img); };
+      const lazyLoadCover = (entries, observer) => {
+        entries.forEach(entry => { if (entry.isIntersecting) { img.src = archiveCoverUrl; observer.unobserve(entry.target); } });
+      };
+      const observer = new IntersectionObserver(lazyLoadCover, { rootMargin: '50px' });
+      observer.observe(coverContainer);
 
-    img.onerror = () => {
-      // Let the image fail naturally - no fallback
-    };
-
-    // Lazy loading: create intersection observer to load image when visible
-    const lazyLoadCover = (entries, observer) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          // Load the image when it becomes visible
-          img.src = archiveCoverUrl;
-          observer.unobserve(entry.target);
-        }
+      const mockResult = { title: albumData.albumTitle || 'Untitled', creator: albumData.albumCreator || 'Unknown', identifier: albumId };
+      const infoDiv = createFavoriteInfo(mockResult);
+      const metaElement = infoDiv.querySelector('.result-meta');
+      if (metaElement && isAlbum) metaElement.innerHTML = `<span class="album-indicator">${albumData.tracks.length} tracks</span>`;
+      const { actionsDiv, playBtn, favoriteBtn, shareBtn, expandBtn } = createFavoriteActions(mockResult, true);
+      playBtn.setAttribute('data-id', albumId);
+      playBtn.setAttribute('data-is-album', isAlbum);
+      playBtn.title = 'Play';
+      favoriteBtn.setAttribute('data-id', albumId);
+      expandBtn.setAttribute('data-id', albumId);
+      expandBtn.style.display = isAlbum ? 'inline-block' : 'none';
+      albumItem.appendChild(coverContainer);
+      albumItem.appendChild(infoDiv);
+      albumItem.appendChild(actionsDiv);
+      albumItem.addEventListener('click', (e) => {
+        const isPlayButton = e.target.tagName === 'BUTTON' && e.target.title === 'Play' && e.target.textContent.trim() === '▶';
+        if (!isPlayButton) e.stopPropagation();
       });
-    };
-
-    const observer = new IntersectionObserver(lazyLoadCover, {
-      rootMargin: '50px' // Load 50px before the image comes into view
+      shareBtn.addEventListener('click', (e) => { e.stopPropagation(); shareTrack(albumId, albumData.albumTitle); });
+      favoriteBtn.addEventListener('click', (e) => { e.stopPropagation(); const albumId = favoriteBtn.getAttribute('data-id'); state.favorites = state.favorites.filter(fav => fav.albumId !== albumId); saveFavorites(); updateFavoritesList(); updateFavoriteButton(); showStatus('Favorite was removed', 'info'); });
+      expandBtn.addEventListener('click', (e) => { e.stopPropagation(); let tracksContainer = albumItem.nextElementSibling; if (!tracksContainer || !tracksContainer.classList.contains('tracks-container')) { tracksContainer = document.createElement('div'); tracksContainer.className = 'tracks-container'; tracksContainer.style.display = 'none'; favoritesList.insertBefore(tracksContainer, albumItem.nextSibling); } toggleAlbumTracks(albumId, tracksContainer, expandBtn); });
+      favoritesList.appendChild(albumItem);
     });
-
-    observer.observe(coverContainer);
-
-    // Crear objeto mock para usar createFavoriteInfo
-    const mockResult = {
-      title: albumData.albumTitle || 'Untitled',
-      creator: albumData.albumCreator || 'Unknown',
-      identifier: albumId
-    };
-
-    // Usar createFavoriteInfo para consistencia
-    const infoDiv = createFavoriteInfo(mockResult);
-
-    // Agregar indicador de álbum manualmente
-    const metaElement = infoDiv.querySelector('.result-meta');
-    if (metaElement && isAlbum) {
-      metaElement.innerHTML = `<span class="album-indicator">${albumData.tracks.length} tracks</span>`;
-    }
-
-    // Usar createFavoriteActions para consistencia
-    const { actionsDiv, playBtn, favoriteBtn, shareBtn, expandBtn } = createFavoriteActions(mockResult, true);
-    
-    // Configurar botones - ASEGURAR que el play button tenga title="Play"
-    playBtn.setAttribute('data-id', albumId);
-    playBtn.setAttribute('data-is-album', isAlbum);
-    playBtn.title = 'Play'; // Asegurar que title sea "Play"
-    favoriteBtn.setAttribute('data-id', albumId);
-    expandBtn.setAttribute('data-id', albumId);
-
-    // Mostrar botón de expandir solo para álbumes
-    expandBtn.style.display = isAlbum ? 'inline-block' : 'none';
-
-    albumItem.appendChild(coverContainer);
-    albumItem.appendChild(infoDiv);
-    albumItem.appendChild(actionsDiv);
-
-    // Listener para prevenir propagación de algunos clicks, pero permitir que play button se propague
-    albumItem.addEventListener('click', (e) => {
-      console.log('albumItem clicked - target:', e.target.tagName, 'class:', e.target.className, 'text:', e.target.textContent.trim());
-      
-      // IMPORTANTE: NO hacer stopPropagation para botones play - deben propagarse al listener en favoritesList
-      const isPlayButton = e.target.tagName === 'BUTTON' && e.target.title === 'Play' && e.target.textContent.trim() === '▶';
-      
-      if (!isPlayButton) {
-        // Para otros elementos, sí prevenir propagación
-        e.stopPropagation();
-      } else {
-        console.log('✨ Play button click allowed to propagate up');
-      }
-    });
-
-    // Event listeners para los otros botones (favorite, share, expand)
-    // El listener del play button se maneja con event delegation en handleFavoritesPlayClick
-    
-    shareBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      shareTrack(albumId, albumData.albumTitle, albumData.albumCreator);
-    });
-
-    favoriteBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const albumId = favoriteBtn.getAttribute('data-id');
-
-      state.favorites = state.favorites.filter(fav => fav.albumId !== albumId);
-      saveFavorites();
-      updateFavoritesList();
-      updateFavoriteButton();
-      showStatus('Favorite was removed', 'info');
-    });
-
-    // Agregar funcionalidad de expandir pistas del álbum
-    expandBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      let tracksContainer = albumItem.nextElementSibling;
-      if (!tracksContainer || !tracksContainer.classList.contains('tracks-container')) {
-        tracksContainer = document.createElement('div');
-        tracksContainer.className = 'tracks-container';
-        tracksContainer.style.display = 'none';
-        favoritesList.insertBefore(tracksContainer, albumItem.nextSibling); // ← FUERA del favorite-item (CORRECTO)
-      }
-      toggleAlbumTracks(albumId, tracksContainer, expandBtn);
-    });
-
-    favoritesList.appendChild(albumItem);
-  });
+  }
 }
 
 // Inicializar el listener de event delegation para los botones play en favoritos
@@ -1986,7 +2135,6 @@ function initializeFavoritesPlayListener() {
   console.log('🎯 Initializing favorites play button listener with event delegation');
   
   // Event listener en CAPTURE PHASE para ejecutarse ANTES que otros listeners en elementos hijos
-  // Esto permite capturar el evento del play button antes de que albumItem.stopPropagation() lo bloquee
   favoritesList.addEventListener('click', handleFavoritesPlayClick, true);
   console.log('✅ Event listener added to favoritesList (CAPTURE PHASE)');
 }
@@ -2357,51 +2505,19 @@ function addHideFavoritesOnPlay() {
 }
 
 // Register service worker and handle updates
-function registerServiceWorker() {
+async function registerServiceWorker() {
   if ('serviceWorker' in navigator) {
-    if (window.location.protocol === 'https:' || window.location.hostname === 'localhost') {
-      navigator.serviceWorker.register('/sw.js')
-        .then((registration) => {
-          registration.update().catch(err => console.warn('Update SW error:', err));
-          if (registration.waiting) {
-            try {
-              registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-              showStatus('App is updating right now', 'info', 3000);
-            } catch (e) {
-              if (typeof registration.waiting.skipWaiting === 'function') {
-                registration.waiting.skipWaiting();
-              }
-            }
-          }
-          registration.addEventListener('updatefound', () => {
-            const newWorker = registration.installing;
-            newWorker.addEventListener('statechange', () => {
-              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                if (isRunningAsPWA()) {
-                  try {
-                    newWorker.postMessage({ type: 'SKIP_WAITING' });
-                    showStatus('App update is installing', 'info', 3000);
-                  } catch (err) {
-                    console.warn('SKIP_WAITING error:', err);
-                  }
-                } else {
-                  showStatus('New version available for you', 'info', 5000);
-                }
-              }
-            });
-          });
-        })
-        .catch((error) => {
-          console.error('Service Worker registration error:', error);
-        });
-
-      let swRefreshing = false;
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (swRefreshing) return;
-        swRefreshing = true;
-        window.location.reload();
-      });
+    try {
+      const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+      console.log('Service Worker registered with scope:', registration.scope);
+    } catch (error) {
+      console.error('Service Worker registration failed:', error);
+      if (error.message.includes('Failed to fetch')) {
+        console.error('Ensure the Service Worker file is accessible and the server is running.');
+      }
     }
+  } else {
+    console.warn('Service Workers are not supported in this browser.');
   }
 }
 
@@ -2678,7 +2794,7 @@ function updateMetaTag(attrName, attrValue, content) {
 }
 
 // Share functionality
-async function shareTrack(identifier, title = 'Track', creator = 'Unknown') {
+async function shareTrack(identifier, title = 'Track') {
   const shareUrl = `${window.location.origin}${window.location.pathname}?play=${encodeURIComponent(identifier)}`;
   const shortTitle = `"${title}"`;
   const shareTitle = `You might like this!\n${shortTitle}`;
@@ -2687,7 +2803,7 @@ async function shareTrack(identifier, title = 'Track', creator = 'Unknown') {
   console.log('Attempting to share:', { shareUrl, shareTitle, shareText });
 
   // Update Open Graph meta tags for rich previews
-  updateMetaTagsForSharing(identifier, title, creator);
+  updateMetaTagsForSharing(identifier, title);
 
   // Try to get cover image for sharing
   let coverFile = null;
@@ -2772,25 +2888,25 @@ async function getCoverImageForSharing(identifier) {
 }
 
 // Update meta tags for rich sharing (Open Graph, Twitter Cards)
-function updateMetaTagsForSharing(identifier, title, creator) {
+function updateMetaTagsForSharing(identifier, title) {
   const baseUrl = window.location.origin;
   const shareUrl = `${baseUrl}${window.location.pathname}?play=${encodeURIComponent(identifier)}`;
   const imageUrl = `https://archive.org/services/img/${identifier}`;
 
   // Update page title
-  document.title = `${title} - ${creator} | Resonate Player`;
+  document.title = `${title} | Resonate Player`;
 
   // Update Open Graph tags
-  updateMetaTag('property', 'og:title', `${title} - ${creator}`);
-  updateMetaTag('property', 'og:description', `Listen to "${title}" by ${creator} on Resonate Player. Free music from archive.org.`);
+  updateMetaTag('property', 'og:title', `${title}`);
+  updateMetaTag('property', 'og:description', `Listen to "${title}" on Resonate Player. Free music from archive.org.`);
   updateMetaTag('property', 'og:image', imageUrl);
   updateMetaTag('property', 'og:url', shareUrl);
   updateMetaTag('property', 'og:type', 'music.song');
 
   // Update Twitter Card tags
   updateMetaTag('property', 'twitter:card', 'summary_large_image');
-  updateMetaTag('property', 'twitter:title', `${title} - ${creator}`);
-  updateMetaTag('property', 'twitter:description', `Listen to "${title}" by ${creator} on Resonate Player. Free music from archive.org.`);
+  updateMetaTag('property', 'twitter:title', `${title}`);
+  updateMetaTag('property', 'twitter:description', `Listen to "${title}" on Resonate Player. Free music from archive.org.`);
   updateMetaTag('property', 'twitter:image', imageUrl);
   updateMetaTag('property', 'twitter:url', shareUrl);
 
@@ -2819,6 +2935,7 @@ window.startApp = startApp;
 window.createStartFavoritesCTA = createStartFavoritesCTA;
 window.hideStartFavoritesCTA = hideStartFavoritesCTA;
 window.registerServiceWorker = registerServiceWorker;
+window.updateServiceWorker = updateServiceWorker;
 window.setupPWAInstall = setupPWAInstall;
 window.displaySearchResults = displaySearchResults;
 window.hideSearchResults = hideSearchResults;
@@ -2840,3 +2957,32 @@ window.uiScriptLoaded = true;
 if (window.logger) {
   window.logger.info('UI script fully loaded and exported to window', 'UI');
 }
+
+// Manual update trigger for Service Worker
+async function updateServiceWorker() {
+  try {
+    if (!('serviceWorker' in navigator)) return;
+    const reg = await navigator.serviceWorker.getRegistration('/');
+    if (!reg) { showStatus('No Service Worker registration found', 'warning', 3000); return; }
+    try {
+      await reg.update();
+      if (reg.waiting) {
+        reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+      }
+      showStatus('Checking for updates…', 'info', 2500);
+    } catch (err) {
+      console.warn('Manual SW update error:', err);
+      showStatus('Service Worker update failed', 'warning', 3500);
+    }
+  } catch (e) {
+    console.error('updateServiceWorker unexpected error:', e);
+  }
+}
+
+// Optionally wire a button if present in DOM
+(() => {
+  const btn = document.getElementById('update-sw-btn');
+  if (btn) {
+    btn.addEventListener('click', (e) => { e.preventDefault(); updateServiceWorker(); });
+  }
+})();

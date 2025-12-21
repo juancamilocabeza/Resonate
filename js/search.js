@@ -3,9 +3,9 @@
 // const getLoaderManager = () => window.loaderManager;
 
 const SEARCH_DEFAULTS = {
-  resultsPerPage: 5,
-  timeout: 8000,
-  metadataTimeout: 30000
+  resultsPerPage: 8,
+  timeout: 15000,
+  metadataTimeout: 60000
 };
 
 const SEARCH_LIMITS = {
@@ -135,6 +135,15 @@ async function performOptimizedSearch(query, page = 0) {
       title: item.title || 'Untitled',
       creator: item.creator || 'Unknown',
       description: item.description || '', // Ensure description is included
+      // Heuristic: mark explicit "track list" items to be rendered as singles
+      isTrackList: (() => {
+        const t = normalizeString(item.title || '');
+        const d = normalizeString(item.description || '');
+        const cues = [
+          'track list', 'tracklist', 'lista de temas', 'lista de canciones', 'track-list'
+        ];
+        return cues.some(c => t.includes(c) || d.includes(c));
+      })(),
       isAlbum: null,
       trackCount: null,
       relevanceScore: calculateRelevanceScore(item, query)
@@ -157,7 +166,8 @@ async function performOptimizedSearch(query, page = 0) {
           if (count > 0) {
             return {
               ...item,
-              isAlbum: count > 1,
+              // Respect explicit track-list flag: render as single even if multiple files
+              isAlbum: item.isTrackList ? false : (count > 1),
               trackCount: count
             };
           }
@@ -170,6 +180,8 @@ async function performOptimizedSearch(query, page = 0) {
       const batchResults = (await Promise.all(batchPromises)).filter(Boolean);
       enrichedResults.push(...batchResults);
     }
+    // Apply priority ordering: Single > Album; Exact contains > Typo-similar > others
+    prioritizeResults(enrichedResults, query);
     const hasMore = results.length === resultsPerPage;
     const searchResult = {
       results: enrichedResults,
@@ -227,6 +239,8 @@ async function performOptimizedSearch(query, page = 0) {
           const batchResults = (await Promise.all(batchPromises)).filter(Boolean);
           enrichedFallback.push(...batchResults);
         }
+        // Apply priority ordering to fallback results as well
+        prioritizeResults(enrichedFallback, query);
         const searchResult = {
           results: enrichedFallback,
           hasMore: fallbackResults.length === resultsPerPage,
@@ -250,29 +264,28 @@ async function performOptimizedSearch(query, page = 0) {
 // Auxiliary function to calculate relevance in client
 function calculateRelevanceScore(item, query) {
   let score = 0;
-  const queryLower = query.toLowerCase();
-  const titleLower = safeToLowerCase(item.title);
-  const creatorLower = safeToLowerCase(item.creator);
-  const descriptionLower = safeToLowerCase(item.description);
-  // Points for exact match in title
-  if (titleLower.includes(queryLower)) {
+  const q = normalizeString(query);
+  const titleNorm = normalizeString(item.title);
+  const creatorNorm = normalizeString(item.creator);
+  const descriptionNorm = normalizeString(item.description);
+  if (titleNorm.includes(q)) {
     score += 3;
   }
-  // Points for exact match in creator
-  if (creatorLower.includes(queryLower)) {
+  if (creatorNorm.includes(q)) {
     score += 2;
   }
-  // Points for match in description
-  if (descriptionLower.includes(queryLower)) {
+  if (descriptionNorm.includes(q)) {
     score += 1;
   }
-  // Bonus if title starts with query starting
-  if (titleLower.startsWith(queryLower)) {
+  if (titleNorm.startsWith(q)) {
     score += 2;
   }
-  // Bonus if title and creator match query
-  if (titleLower.includes(queryLower) && creatorLower.includes(queryLower)) {
+  if (titleNorm.includes(q) && creatorNorm.includes(q)) {
     score += 2;
+  }
+  if (!titleNorm.includes(q) && !creatorNorm.includes(q)) {
+    if (isTypoSimilar(q, titleNorm)) score += 1;
+    if (isTypoSimilar(q, creatorNorm)) score += 1;
   }
   return score;
 }
@@ -287,6 +300,99 @@ function safeToLowerCase(value) {
   }
   // Convert array or object to string if necessary
   return String(value).toLowerCase();
+}
+
+function normalizeString(value) {
+  const s = typeof value === 'string' ? value : String(value ?? '');
+  return s
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .trim();
+}
+
+function damerauLevenshtein(a, b) {
+  const alen = a.length;
+  const blen = b.length;
+  if (alen === 0) return blen;
+  if (blen === 0) return alen;
+  const INF = alen + blen;
+  const da = new Map();
+  const score = Array.from({ length: alen + 2 }, () => new Array(blen + 2).fill(0));
+  score[0][0] = INF;
+  for (let i = 0; i <= alen; i++) {
+    score[i + 1][1] = i;
+    score[i + 1][0] = INF;
+  }
+  for (let j = 0; j <= blen; j++) {
+    score[1][j + 1] = j;
+    score[0][j + 1] = INF;
+  }
+  for (let i = 1; i <= alen; i++) {
+    let db = 0;
+    for (let j = 1; j <= blen; j++) {
+      const i1 = (da.get(b[j - 1]) ?? 0);
+      const j1 = db;
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      if (cost === 0) db = j;
+      score[i + 1][j + 1] = Math.min(
+        score[i][j] + cost,
+        score[i + 1][j] + 1,
+        score[i][j + 1] + 1,
+        score[i1][j1] + (i - i1 - 1) + 1 + (j - j1 - 1)
+      );
+    }
+    da.set(a[i - 1], i);
+  }
+  return score[alen + 1][blen + 1];
+}
+
+function getTypoThreshold(len) {
+  if (len <= 5) return 1;
+  if (len <= 10) return 2;
+  return Math.max(2, Math.floor(len * 0.1));
+}
+
+function isTypoSimilar(queryNorm, textNorm) {
+  const threshold = getTypoThreshold(queryNorm.length);
+  const dist = damerauLevenshtein(queryNorm, textNorm);
+  return dist <= threshold;
+}
+
+function prioritizeResults(items, query) {
+  const q = normalizeString(query);
+  const hasExact = (item) => {
+    const t = normalizeString(item.title || '');
+    const c = normalizeString(item.creator || '');
+    return t.includes(q) || c.includes(q);
+  };
+  const hasFuzzy = (item) => {
+    const t = normalizeString(item.title || '');
+    const c = normalizeString(item.creator || '');
+    return isTypoSimilar(q, t) || isTypoSimilar(q, c);
+  };
+  items.sort((a, b) => {
+    // Type rank respecting requested priority:
+    // 1) Single exact; 2) Album exact; 3) Track list exact (rendered as single);
+    // Then fuzzy in same order; finally relevance.
+    const typeRank = (item) => {
+      if (item.isTrackList) return 2; // rank after album
+      if ((item.trackCount === 1) || (item.isAlbum === false)) return 0; // single
+      return 1; // album
+    };
+    const aType = typeRank(a);
+    const bType = typeRank(b);
+    if (aType !== bType) return aType - bType;
+    const aExact = hasExact(a) ? 1 : 0;
+    const bExact = hasExact(b) ? 1 : 0;
+    if (aExact !== bExact) return bExact - aExact;
+    const aFuzzy = hasFuzzy(a) ? 1 : 0;
+    const bFuzzy = hasFuzzy(b) ? 1 : 0;
+    if (aFuzzy !== bFuzzy) return bFuzzy - aFuzzy;
+    const ar = typeof a.relevanceScore === 'number' ? a.relevanceScore : 0;
+    const br = typeof b.relevanceScore === 'number' ? b.relevanceScore : 0;
+    return br - ar;
+  });
 }
 
 async function fetchOptimizedPlayableFiles(identifier) {
@@ -676,13 +782,13 @@ async function playAlbumFromFavorites(albumId) {
   try {
     logSearch('Loading album...', 'info', 'UI');
     window.showStatus?.(`Loading album...`, 'info', null, 'normal', true);
-    co// Resetear contador de repetición de álbum
-      const st3 = getSearchStateRef();
-      if (st3) {
-        if (!st3.contextRepeatCount) st3.contextRepeatCount = {};
-        st3.contextRepeatCount[albumId] = 0;
-      }
-      const files = await fetchOptimizedPlayableFiles(albumId);
+    // Resetear contador de repetición de álbum
+    const st3 = getSearchStateRef();
+    if (st3) {
+      if (!st3.contextRepeatCount) st3.contextRepeatCount = {};
+      st3.contextRepeatCount[albumId] = 0;
+    }
+    const files = await fetchOptimizedPlayableFiles(albumId);
     if (files.length > 0) {
       if (window.Loaders) {
         window.Loaders.showLoader({ type: 'spinner' });
@@ -752,8 +858,8 @@ async function playOptimizedFavorite(favoriteIndex = 0) {
       };
       if (!track.url || track.url === '') {
         throw new Error('Audio URL not available in favorite');
-      if (window.Loaders) window.Loaders.hideLoader();
       }
+      if (window.Loaders) window.Loaders.hideLoader();
       // CHECK IF PRELOADED FAVORITES CACHE
       const favoritesQueue = typeof window.audioCache !== 'undefined' && window.audioCache ? window.audioCache.getFavoritesQueue() : [];
       const isPreloaded = favoritesQueue.includes(track.url);
@@ -765,14 +871,12 @@ async function playOptimizedFavorite(favoriteIndex = 0) {
       const cached = typeof window.audioCache !== 'undefined' && window.audioCache ? await window.audioCache.get(track.url) : null;
       if (!cached && !window.state.networkOnline) {
         logSearch("Favorite isn't offline. Skipping it", 'warn', 'UI');
-        window.showStatus?.('Favorite isn\'t offline. Skipping it', 'error', 2000);
+        window.showStatus?.("Favorite isn't offline. Skipping it", 'error', 2000);
         const nextIndex = (actualIndex + 1) % window.state.favorites.length;
+        if (window.Loaders) window.Loaders.hideLoader();
         return playOptimizedFavorite(nextIndex);
-    if (window.Loaders) {
-      window.Loaders.showLoader({ type: 'spinner' });
-    }
-    
       }
+      if (window.Loaders) window.Loaders.hideLoader();
       await window.playAudioTrackOptimized(track, favorite.id, favorite.trackIndex, favorite.totalTracks);
       if (typeof window.updateShuffleButton === 'function') window.updateShuffleButton();
     } catch (error) {

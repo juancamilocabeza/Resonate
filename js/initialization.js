@@ -11,6 +11,24 @@ const INIT_TIMING = {
   SCRIPT_WAIT_INTERVAL_MS: 10
 };
 
+// Feature flags bootstrap (progressive enhancement)
+function initFeatureFlags() {
+  try {
+    const url = new URL(window.location.href);
+    const tlv2Param = url.searchParams.get('tlv2');
+    const stored = localStorage.getItem('resonate_feature_tracklist_v2');
+
+    const enabled = tlv2Param === '1' || stored === 'true';
+    window.features = window.features || {};
+    window.features.tracklistV2 = Boolean(enabled);
+  } catch (e) {
+    window.features = window.features || {};
+    window.features.tracklistV2 = false;
+  }
+}
+// Initialize flags early
+initFeatureFlags();
+
 function logInitDebug(message, data) {
   try {
     if (window.logger && typeof window.logger.debug === 'function') {
@@ -492,7 +510,7 @@ async function initializeApp() {
   if (elements.currentTrackShare) {
     elements.currentTrackShare.addEventListener('click', async () => {
       if (state.currentTrack && state.currentTrack.id) {
-        await shareTrack(state.currentTrack.id, state.currentTrack.title, state.currentTrack.creator);
+        await shareTrack(state.currentTrack.id, state.currentTrack.title);
       } else {
         showStatus('Nothing to share right now', 'warning');
       }

@@ -354,10 +354,16 @@ class AudioCache {
         const response = await fetch(url);
         if (response && response.ok) {
           await this.put(url, response, priority);
+        } else {
+          throw new Error(`Failed to fetch audio: ${response.status} ${response.statusText}`);
         }
       });
     } catch (error) {
       logCache('warn', `Failed to prefetch audio: ${error.message}`);
+      if (error.message.includes('503')) {
+        logCache('warn', 'Service Unavailable - Offline. Retrying...');
+        // Implement retry logic or fallback here
+      }
     }
   }
 

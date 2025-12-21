@@ -16,7 +16,7 @@ const RepeatMode = {
 };
 
 const PLAYBACK_CONSTANTS = {
-  DEFAULT_QUEUE_SIZE: 5,
+  DEFAULT_QUEUE_SIZE: 6,
   PREFETCH_TIMEOUT_MS: 45000,
   AUDIO_LOAD_TIMEOUT_MS: 45000,
   LOCAL_DEFAULT_FETCH_TIMEOUT_MS: 30000,
@@ -656,46 +656,29 @@ class EnhancedPlaybackController {
 const enhancedPlaybackController = new EnhancedPlaybackController();
 
 // Fetch with timeout for network operations
-async function fetchWithTimeout(resource, options = {}) {
-  const defaultTimeout = isLocalDevEnv()
-    ? PLAYBACK_CONSTANTS.LOCAL_DEFAULT_FETCH_TIMEOUT_MS
-    : PLAYBACK_CONSTANTS.PROD_DEFAULT_FETCH_TIMEOUT_MS;
-  const { timeout = defaultTimeout, ...fetchOptions } = options;
-
+async function fetchWithTimeout(resource, options = {}, timeout = 8000) {
+  const requestedTimeout = (options && typeof options.timeout === 'number') ? options.timeout : timeout;
   const controller = new AbortController();
-  // track the controller globally so we can abort from watchdogs
-  try {
-    state.lastFetchController = controller;
-  } catch (e) {
-    // state may not be available in some rare cases during early init
-  }
-  const timeoutId = setTimeout(() => {
-    controller.abort();
-  }, timeout);
+  const id = setTimeout(() => controller.abort('Timeout exceeded'), requestedTimeout);
+
+  // Clone options to avoid leaking non-standard props to fetch
+  const fetchOpts = { ...(options || {}) };
+  delete fetchOpts.timeout;
+  fetchOpts.signal = controller.signal;
 
   try {
-    const response = await fetch(resource, {
-      ...fetchOptions,
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
-    try { state.lastFetchController = null; } catch (e) { }
+    const response = await fetch(resource, fetchOpts);
+    clearTimeout(id);
     return response;
   } catch (error) {
-    clearTimeout(timeoutId);
-    try { state.lastFetchController = null; } catch (e) { }
-    if (error && error.name === 'AbortError') {
-      const timeoutMsg = `Timeout: The request took more than ${timeout}ms`;
-      if (isLocalDevEnv()) {
-        throw new Error(`${timeoutMsg}. If running from a local file, use an HTTP server (e.g: python -m http.server) for full functionality.`);
-      }
-      throw new Error(`${timeoutMsg}. Check your internet connection.`);
+    clearTimeout(id);
+    if (error && (error.name === 'AbortError' || String(error).includes('Timeout'))) {
+      console.error(`Timeout: The request took more than ${requestedTimeout}ms.`, error);
+      throw new Error(`Timeout exceeded: ${resource}`);
     }
-    // Provide better error messages for common network issues in development
-    if (error.name === 'TypeError' && error.message.includes('fetch')) {
-      if (isLocalDevEnv()) {
-        throw new Error('Network error: If you opened index.html directly, run a local server (python -m http.server) for full API access.');
-      }
+    // Normalize network failures into a predictable error to avoid noisy logs upstream
+    if (error && error instanceof TypeError && String(error.message).includes('Failed to fetch')) {
+      throw new Error('Network request failed');
     }
     throw error;
   }
