@@ -65,18 +65,18 @@ class OnboardingManager {
           <div class="onboarding-steps">
             <div id="step-0" class="onboarding-step active">
               <div class="onboarding-header">
-                <h2 tabindex="-1">Welcome to Resonate</h2>
+                <h2 tabindex="-1">Resonate</h2>
               </div>
               <div class="onboarding-body">
-                <p class="onboarding-subtitle">Quick start</p>
+                <p class="onboarding-subtitle">Get started</p>
                 <ul class="onboarding-features">
-                  <li><strong>Search</strong> a track, artist, or genre</li>
-                  <li><strong>Favorite</strong> songs to keep them handy</li>
-                  <li><strong>Offline</strong> playback works for saved favorites</li>
+                  <li><strong>Search</strong> find songs, artists, or genres</li>
+                  <li><strong>Favorites</strong> save songs you like</li>
+                  <li><strong>Offline</strong> play saved favorites</li>
                 </ul>
               </div>
               <div class="onboarding-footer">
-                <button class="onboarding-btn-complete">Got it</button>
+                <button class="onboarding-btn-complete">Done</button>
               </div>
             </div>
           </div>

@@ -1168,7 +1168,6 @@ select:focus {
 }
 
 .search-input {
-  flex: 1;
   height: var(--search-height-mobile);
   background: var(--btn);
   border: 2px solid transparent;
@@ -1202,6 +1201,8 @@ select:focus {
   overflow-x: hidden;
   display: none;
   height: auto; /* Dynamic height, no scroll */
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .search-results.active {
@@ -1253,6 +1254,8 @@ select:focus {
   max-width: 1024px;
   margin: 0 auto;
   padding: 0 12px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .search-result {
@@ -1741,6 +1744,15 @@ select:focus {
   .card-grid { grid-template-columns: repeat(4, minmax(180px, 1fr)); gap: 16px; }
 }
 
+/* Extra desktop (1280px and up) - Wider container and denser grid */
+@media (min-width: 1280px) {
+  .search-results,
+  .search-container,
+  .search-results-list,
+  .favorites-list { max-width: 1200px; }
+  .card-grid { grid-template-columns: repeat(5, minmax(200px, 1fr)); gap: 18px; }
+}
+
 .no-results-icon {
   font-size: 48px;
   opacity: 0.6;
@@ -2072,15 +2084,18 @@ select:focus {
     overflow-y: auto;
     overflow-x: hidden;
     padding: var(--spacing-md) var(--spacing-lg);
-    min-height: 0;
+    min-height: 160px;
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: stretch; /* Stretch children to full width for desktop */
   }
 
-  /* Main player section - maintains size */
+  /* Main player section - can shrink so search stays visible */
   .main-player-section {
-    flex-shrink: 0; /* Doesn't shrink */
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
     padding: var(--spacing-lg) 0;
   }
 
@@ -2148,7 +2163,7 @@ select:focus {
   .controls {
     display: flex !important;
     flex-direction: row !important;
-    max-width: 600px;
+    max-width: 960px;
     gap: 32px;
   }
 
@@ -2169,11 +2184,33 @@ select:focus {
     font-size: 24px;
   }
 
+  .search-section {
+    width: 100%;
+    max-width: 1000px;
+    margin: 8px auto 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--spacing-sm);
+  }
+
+  .search-container {
+    width: 100%;
+    margin: 0;
+  }
+
   .search-input {
     height: var(--search-height-desktop);
     font-size: 16px;
-    max-width: 900px;
-    width: 90%;
+    width: 100%;
+    max-width: none;
+    background: var(--btn);
+    border: 2px solid transparent;
+    color: var(--fg);
+  }
+
+  .search-input::placeholder {
+    color: var(--muted);
   }
 
   .progress-bar {
@@ -2190,26 +2227,27 @@ select:focus {
     height: 100%;
   }
 
-  /* Search results - with scroll for desktop */
+  /* Search results / recent searches: full width, natural height (scroll handled by .discovery-section) */
   .search-results {
-    overflow-y: auto;
-    max-height: 60vh;
-    max-width: 900px;
-    margin: 5px auto !important;
+    width: 100%;
+    max-width: 1000px;
+    margin: 6px auto 0 !important;
+    overflow-y: visible;
+    max-height: none;
   }
-  
+
   .search-results-list {
-    max-width: 900px;
+    width: 100%;
+    max-width: none;
   }
   
   .search-container {
-    max-width: 900px;
+    max-width: 1000px;
     width: 100%;
-    margin: 0 auto;
   }
   
   .favorites-list {
-    max-width: 900px;
+    max-width: 1000px;
     margin: 6px auto !important;
   }
 }
@@ -2322,6 +2360,8 @@ select:focus {
     min-height: var(--btn-large-mobile);
     font-size: 30px;
   }
+
+  /* Search styles inherit from base rules */
 
   .current-track-info {
     min-height: 48px;
@@ -2486,7 +2526,7 @@ select:focus {
 /* ===== PWA INSTALL BANNER ===== */
 .pwa-install-banner {
   position: fixed;
-  top: 0;
+  top:  0;
   left: 0;
   right: 0;
   background: var(--card);
@@ -2810,12 +2850,13 @@ select:focus {
   z-index: 10001;
   background: var(--card);
   border-radius: 16px;
-  width: 90%;
-  max-width: 420px;
+  width: 92%;
+  max-width: 460px;
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: var(--shadow-heavy);
-  padding: 20px;
+  padding: 24px 24px 20px 24px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   animation: slideUp 0.4s ease;
 }
 
@@ -2833,23 +2874,28 @@ select:focus {
 /* Close button */
 .onboarding-close {
   position: absolute;
-  top: 16px;
-  right: 16px;
-  background: transparent;
-  border: none;
-  color: var(--muted);
-  font-size: 24px;
+  top: 18px;
+  right: 18px;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  color: var(--accent-alt);
+  font-size: 20px;
   cursor: pointer;
   padding: 8px;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: color 0.2s;
+  box-shadow: var(--shadow-accent);
+  transition: var(--transition-all-norm);
   z-index: 10002;
 }
 
 .onboarding-close:hover {
-  color: var(--fg);
+  background: rgba(34, 211, 238, 0.18);
+  color: #22d3ee;
 }
 
 /* Step container */
@@ -2872,6 +2918,9 @@ select:focus {
 /* Header */
 .onboarding-header {
   margin-bottom: 14px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: linear-gradient(to bottom, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
 }
 
 .onboarding-header h2 {
@@ -2897,7 +2946,7 @@ select:focus {
 
 .onboarding-subtitle {
   font-size: 14px;
-  color: var(--muted);
+  color: var(--accent);
   margin: 8px 0 16px 0;
   font-weight: 500;
 }
@@ -2914,19 +2963,21 @@ select:focus {
 
 .onboarding-features li {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
-  padding: 6px 8px;
-  background: rgba(110, 231, 183, 0.05);
-  border-radius: 8px;
-  border-left: 3px solid var(--accent-alt);
+  padding: 10px 14px;
+  background: var(--btn);
+  border-radius: 10px;
+  border-left: 4px solid var(--accent-alt);
   color: var(--fg);
-  font-size: 12.5px;
+  font-size: 13px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
 }
 
 .onboarding-features li strong {
   color: var(--accent-alt);
   font-weight: 600;
+  min-width: 76px;
 }
 
 /* Highlight box */
@@ -2945,14 +2996,15 @@ select:focus {
 /* Buttons */
 .onboarding-btn-complete {
   border: none;
-  border-radius: 8px;
-  padding: 10px 16px;
+  border-radius: 12px;
+  width: 100px;
+  height: 46px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   transition: var(--transition-all-norm);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.6px;
 }
 
 .onboarding-btn-complete {
@@ -2962,7 +3014,7 @@ select:focus {
 
 .onboarding-btn-complete:hover {
   background: #22d3ee;
-  box-shadow: 0 4px 12px rgba(56, 189, 248, 0.3);
+  box-shadow: 0 6px 16px rgba(56, 189, 248, 0.35);
 }
 
 .onboarding-btn-complete:active {

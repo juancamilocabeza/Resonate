@@ -71,7 +71,8 @@ class PlaybackStateManager {
     this.state = {
       current: { track: null, context: null, contextId: null },
       queue: { items: [], position: 0 },
-      modes: { repeat: RepeatMode.ALL, shuffle: false },
+      // Resonate UX: playback should be continuous by default
+      modes: { repeat: RepeatMode.CONTEXT, shuffle: false },
       history: { played: [], skipped: [] },
       stats: { consecutiveFailures: 0, totalFailures: 0 }
     };
@@ -412,7 +413,7 @@ class FavoritesContextHandler extends BaseContextHandler {
       }, RetryStrategy.CACHE);
     } else {
       // No more tracks
-      if (repeatMode === RepeatMode.CONTEXT || repeatMode === RepeatMode.INFINITE) {
+      if (repeatMode === RepeatMode.ALL || repeatMode === RepeatMode.CONTEXT || repeatMode === RepeatMode.INFINITE) {
         // Restart favorites
         loadPlaybackQueue('favorites', state.favorites, 0);
         const firstTrack = state.playbackQueue.shift();
@@ -560,16 +561,12 @@ class SearchPlaylistContextHandler extends BaseContextHandler {
         this.stateManager.recordSuccess();
       }, RetryStrategy.NETWORK);
     } else {
-      if (repeatMode === RepeatMode.CONTEXT) {
-        // Restart playlist
-        const context = playbackManager.contextData.searchPlaylist;
-        if (context && context.items && context.items.length > 0) {
-          context.currentIndex = 0;
-          const firstTrack = context.items[0];
-          await playAudioTrackOptimized(firstTrack, firstTrack.id, 0, 1);
-        }
-      } else {
-        showStatus('Playlist playback is now complete', 'info', 2000);
+      // Resonate UX: loop playlist (never stop).
+      const context = playbackManager.contextData.searchPlaylist;
+      if (context && context.items && context.items.length > 0) {
+        context.currentIndex = 0;
+        const firstTrack = context.items[0];
+        await playAudioTrackOptimized(firstTrack, firstTrack.id, 0, 1);
       }
     }
   }
@@ -577,10 +574,6 @@ class SearchPlaylistContextHandler extends BaseContextHandler {
   async getNextTrack() {
     const context = playbackManager.contextData.searchPlaylist;
     if (!context || !context.items || context.items.length === 0) return null;
-
-    if (!playbackManager.hasNextTrack()) {
-      return null;
-    }
 
     const isShuffle = this.stateManager.getShuffleMode();
     if (isShuffle) {
@@ -641,7 +634,9 @@ class EnhancedPlaybackController {
       // Try fallback: skip to next track
       setTimeout(() => {
         if (this.currentHandler) {
-          this.currentHandler.handleTrackEnd();
+          this.currentHandler.handleTrackEnd().catch((err) => {
+            console.error('Fallback track end handling failed:', err);
+          });
         }
       }, 2000);
     }
@@ -654,6 +649,12 @@ class EnhancedPlaybackController {
 
 // Global enhanced controller instance
 const enhancedPlaybackController = new EnhancedPlaybackController();
+
+// Expose core playback primitives for other scripts (search.js loads after playback.js).
+window.playbackManager = playbackManager;
+window.playbackStateManager = playbackStateManager;
+window.enhancedPlaybackController = enhancedPlaybackController;
+window.RepeatMode = RepeatMode;
 
 // Fetch with timeout for network operations
 async function fetchWithTimeout(resource, options = {}, timeout = 8000) {
@@ -723,7 +724,10 @@ async function loadAudioWithCache(track) {
     let useDirectStreaming = false;
     
     try {
-      const headResponse = await fetch(track.url, { method: 'HEAD' });
+      const headTimeout = isLocalDevEnv()
+        ? PLAYBACK_CONSTANTS.LOCAL_DEFAULT_FETCH_TIMEOUT_MS
+        : PLAYBACK_CONSTANTS.PROD_DEFAULT_FETCH_TIMEOUT_MS;
+      const headResponse = await fetchWithTimeout(track.url, { method: 'HEAD', timeout: headTimeout });
       if (headResponse.ok) {
         const contentLength = headResponse.headers.get('Content-Length');
         if (contentLength) {
@@ -939,14 +943,19 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
 
     // Cargar audio con caché
     loadAudioWithCache(track)
-      .then(blobUrl => {
-        // CORRECCIÓN CRÍTICA: Solo ahora limpiar la URL anterior y asignar la nueva
-        if (state.currentBlobUrl) {
-          URL.revokeObjectURL(state.currentBlobUrl);
+      .then(audioUrl => {
+        // Revoke only blob: URLs that we created
+        if (state.currentBlobUrl && typeof state.currentBlobUrl === 'string' && state.currentBlobUrl.startsWith('blob:')) {
+          try {
+            URL.revokeObjectURL(state.currentBlobUrl);
+          } catch (e) {
+            logPlayback('debug', 'Failed to revoke previous blob URL', e);
+          }
         }
 
-        state.currentBlobUrl = blobUrl;
-        audio.src = blobUrl;
+        state.currentAudioUrl = audioUrl;
+        state.currentBlobUrl = (typeof audioUrl === 'string' && audioUrl.startsWith('blob:')) ? audioUrl : null;
+        audio.src = audioUrl;
         audio.preload = 'metadata';
         audio.load();
 
@@ -1120,6 +1129,17 @@ function loadPlaybackQueue(context, items, startIndex = 0) {
         if (items[index]) state.playbackQueue.push(items[index]);
       }
     }
+  } else if (context === 'album') {
+    // Albums should remain continuous; keep only one prefetch, but store full remaining list.
+    if (state.shuffleFavorites) {
+      const shuffledAll = [...items].sort(() => Math.random() - 0.5);
+      state.playbackQueue = shuffledAll.slice();
+    } else {
+      for (let i = 0; i < items.length; i++) {
+        const index = (startIndex + i) % items.length;
+        if (items[index]) state.playbackQueue.push(items[index]);
+      }
+    }
   } else {
     // Default behavior (other contexts): load next `queueSize` items
     for (let i = 0; i < queueSize; i++) {
@@ -1197,23 +1217,37 @@ async function playFromFavoritesQueue(specificTrack = null) {
   state.contextReloadCount['favorites'] = 0;
 
   try {
+    // Ensure favorites context is set for reliable auto-advance/looping
+    const favoritesItems = Array.isArray(state.favorites) ? state.favorites : [];
+    if (!favoritesItems.length) {
+      throw new Error('No favorites available');
+    }
+
     // Si se proporcionó un track específico, usarlo directamente
     let track;
     if (specificTrack) {
       logPlayback('debug', `Using specific track: ${specificTrack.title || specificTrack.url || '[unknown]'}`);
       track = specificTrack;
+
+      const idx = favoritesItems.findIndex(f => (f && track && f.url && track.url && f.url === track.url) || (f && track && f.id && track.id && f.id === track.id));
+      const contextIndex = idx >= 0 ? idx : 0;
+
+      playbackManager.setContext('favorites', favoritesItems, contextIndex);
+
+      // Build FIFO starting *after* the selected track to avoid immediate duplicates
+      const queueStartIndex = favoritesItems.length > 1 ? (contextIndex + 1) % favoritesItems.length : 0;
+      loadPlaybackQueue('favorites', favoritesItems, queueStartIndex);
     } else {
       // Cargar cola FIFO con favoritos
-      loadPlaybackQueue('favorites', state.favorites, 0);
+      playbackManager.setContext('favorites', favoritesItems, 0);
+      loadPlaybackQueue('favorites', favoritesItems, 0);
 
       if (state.playbackQueue.length === 0) {
         throw new Error('Could not load playback queue');
       }
 
-      track = state.playbackQueue[0];
-      
       // Remove track from queue before playing
-      state.playbackQueue.shift();
+      track = state.playbackQueue.shift();
     }
 
     if (!track.url) {
@@ -1235,7 +1269,9 @@ async function playFromFavoritesQueue(specificTrack = null) {
       safeShowStatus('This track isn\'t cached offline', 'error', 2000);
       // Try next track in queue if available
       if (state.playbackQueue.length > 0) {
-        setTimeout(() => playFromFavoritesQueue(), 2000);
+        setTimeout(() => {
+          playFromFavoritesQueue().catch((err) => logPlayback('warn', 'Retry playFromFavoritesQueue failed', err));
+        }, 2000);
         return;
       } else {
         safeShowStatus('All offline tracks have finished', 'error', 3000);
@@ -1271,175 +1307,81 @@ async function playNextInContext(maxRetries = 3) {
   const currentTrackUrl = (state.currentTrack && state.currentTrack.url) ? state.currentTrack.url : undefined;
 
   try {
-    const context = playbackManager.getCurrentContext();
+    let context = playbackManager.getCurrentContext();
 
-    // ALBUMS: Play next track based on shuffle state (sequential if shuffle off, random if shuffle on)
+    // If context is missing, reconstruct something that can loop.
+    if (!context) {
+      if (state.isPlayingFavorites && Array.isArray(state.favorites) && state.favorites.length > 0) {
+        playbackManager.setContext('favorites', state.favorites, 0);
+        context = 'favorites';
+      } else if (Array.isArray(state.searchResults) && state.searchResults.length > 0) {
+        playbackManager.setContext('search', state.searchResults, 0);
+        context = 'search';
+      } else if (state.currentTrack && state.currentTrack.url) {
+        // Last resort: loop current track.
+        await playAudioTrackOptimized(state.currentTrack, state.currentTrack.id, state.currentTrack.trackIndex, state.currentTrack.totalTracks);
+        return;
+      }
+    }
+
+    // ALBUMS: always loop through album tracks
     if (context === 'album') {
       const albumContext = playbackManager.contextData.album;
       const nextItem = playbackManager.getNextTrack();
-
-      if (nextItem && albumContext.currentIndex < albumContext.items.length) {
+      if (nextItem && albumContext && Array.isArray(albumContext.items) && albumContext.items.length > 0) {
         try {
           await playAudioTrackOptimized(nextItem, playbackManager.getCurrentAlbumId(), albumContext.currentIndex, albumContext.items.length);
           return;
         } catch (error) {
           console.error('Error playing album track:', error);
-
-          // Automatically try next track for albums
           if (maxRetries > 0) {
-            showStatus(`Skipping this problematic track`, 'error', 1500);
+            showStatus('Skipping this problematic track', 'error', 1500);
             return playNextInContext(maxRetries - 1);
-          } else {
-            showStatus('Too many errors. Stopping playback', 'error', 3000);
-            return;
           }
+          // Never stop; try again from next.
+          setTimeout(() => playNextInContext(3), 1000);
+          return;
         }
-      } else if (albumContext.currentIndex >= albumContext.items.length - 1) {
-        // Album finished, check if we should continue with next search result
-        showStatus('Album playback finished', 'info', 2000);
-        if (state.albumOrigin === 'search') {
-          const currentAlbumId = playbackManager.getCurrentAlbumId();
-          const currentIndex = state.searchResults.findIndex(item => item.identifier === currentAlbumId);
-
-          if (currentIndex !== -1 && currentIndex < state.searchResults.length - 1) {
-            const nextResult = state.searchResults[currentIndex + 1];
-            showStatus('Moving ahead in search results', 'info', 2000);
-
-            playbackManager.setContext('search', state.searchResults, currentIndex + 1);
-            await playOptimizedSearchResult(nextResult, currentIndex + 1, state.searchResults);
-            return;
-          }
-        }
-        
-        // RECARGA AUTOMÁTICA DEL ÁLBUM (una sola repetición)
-        if (!state.contextRepeatCount) state.contextRepeatCount = {};
-        const albumKey = albumContext.currentAlbumId || 'album';
-        const albumRepeatCount = state.contextRepeatCount[albumKey] || 0;
-        
-        if (albumRepeatCount < 1 && albumContext.items.length > 0) {
-          state.contextRepeatCount[albumKey] = albumRepeatCount + 1;
-          playbackManager.setContext('album', albumContext.items, 0, albumContext.currentAlbumId);
-          loadPlaybackQueue('album', albumContext.items, 0);
-          
-          if (state.playbackQueue.length > 0) {
-            await playNextInContext(maxRetries);
-            return;
-          }
-        }
-        
-        // Limpiar contador y terminar
-        delete state.contextRepeatCount[albumKey];
-        showStatus('Album playback finished', 'info', 2000);
-        return;
       }
+      // If album context is empty/missing, fall through to other strategies.
     }
 
-    // Always play from FIFO queue if tracks available
+    // Always play from FIFO queue if tracks available (with bounded duplicate-skip)
     if (state.playbackQueue.length > 0) {
-      const nextTrack = state.playbackQueue[0];
+      let guard = 0;
+      while (state.playbackQueue.length > 0 && guard < 12) {
+        const peek = state.playbackQueue[0];
+        if (peek && currentTrackUrl && peek.url && peek.url === currentTrackUrl) {
+          state.playbackQueue.shift();
+          guard++;
+          continue;
+        }
 
-      // Check it's not the same as current track
-      if (nextTrack && currentTrackUrl && nextTrack.url === currentTrackUrl) {
-        // Skipping same track, moving to next
-        state.playbackQueue.shift(); // Remover la duplicada
-        if (state.playbackQueue.length > 0) {
-          await playNextInContext(maxRetries); // Intentar con la siguiente
+        const actualNextTrack = state.playbackQueue.shift();
+        if (!actualNextTrack) break;
+
+        if (state.currentTrack && state.currentTrack.url && state.currentTrack.url !== actualNextTrack.url) {
+          state.playbackHistory.push(state.currentTrack);
+        }
+
+        try {
+          await playAudioTrackOptimized(actualNextTrack, actualNextTrack.id, actualNextTrack.trackIndex, actualNextTrack.totalTracks);
           return;
-        }
-      }
-
-      const actualNextTrack = state.playbackQueue.shift();
-
-      if (!actualNextTrack) {
-        // No track available
-        return;
-      }
-
-      // Agregar la pista actual al historial solo si es diferente
-      if (state.currentTrack && state.currentTrack.url !== actualNextTrack.url) {
-        state.playbackHistory.push(state.currentTrack);
-      }
-
-      try {
-        await playAudioTrackOptimized(actualNextTrack, actualNextTrack.id, actualNextTrack.trackIndex, actualNextTrack.totalTracks);
-        return;
-      } catch (error) {
-        console.error('Error reproduciendo desde cola FIFO:', error);
-
-        // Automatically try next track instead of stopping
-        if (maxRetries > 0) {
-          showStatus(`Track issue detected, trying next`, 'error', 2000);
-          return playNextInContext(maxRetries - 1);
-        } else {
-          showStatus('Too many issues. Pausing auto-play', 'error', 3000);
-          return;
-        }
-      }
-    }
-
-    // Si estamos en un contexto de búsqueda con playlist precargada
-    if (context === 'searchPlaylist' && state.autoPlaySearchResults) {
-      if (!playbackManager.hasNextTrack()) {
-        showStatus('Your playlist has finished playing', 'info', 2000);
-        return;
-      }
-
-      const nextItem = playbackManager.getNextTrack();
-      await playAudioTrackOptimized(nextItem, nextItem.id, 0, 1);
-      return;
-    }
-
-    // Para otros contextos, usar el comportamiento de precarga existente
-    if (!playbackManager.hasNextTrack()) {
-      if (context === 'album') {
-        showStatus('Album finished playing', 'info', 2000);
-        return;
-      } else if (context === 'favorites') {
-        // RECARGA AUTOMÁTICA PARA FAVORITES
-        const favoritesContext = playbackManager.contextData.favorites;
-        if (!state.contextReloadCount) state.contextReloadCount = {};
-        const reloadCount = state.contextReloadCount['favorites'] || 0;
-        
-        if (favoritesContext.items.length > 0 && reloadCount < 50) {
-          state.contextReloadCount['favorites'] = reloadCount + 1;
-          playbackManager.setContext('favorites', favoritesContext.items, 0);
-          loadPlaybackQueue('favorites', favoritesContext.items, 0);
-          
-          if (state.playbackQueue.length > 0) {
-            await playNextInContext(maxRetries);
-            return;
+        } catch (error) {
+          console.error('Error reproduciendo desde cola FIFO:', error);
+          guard++;
+          if (maxRetries > 0) {
+            showStatus('Track issue detected, trying next', 'error', 1500);
+            maxRetries--;
+            continue;
           }
+          // Never stop; keep trying.
+          continue;
         }
-        
-        // Reset contador si llegamos al límite
-        state.contextReloadCount['favorites'] = 0;
-        showStatus('Favorites complete. Search more', 'info', 2000);
-        return;
       }
-      if (context === 'search') {
-        // RECARGA AUTOMÁTICA PARA SEARCH (una sola repetición)
-        const searchContext = playbackManager.contextData.search;
-        if (!state.contextRepeatCount) state.contextRepeatCount = {};
-        const repeatCount = state.contextRepeatCount['search'] || 0;
-        
-        if (searchContext.items.length > 0 && repeatCount < 1) {
-          state.contextRepeatCount['search'] = repeatCount + 1;
-          playbackManager.setContext('search', searchContext.items, 0);
-          loadPlaybackQueue('search', searchContext.items, 0);
-          
-          if (state.playbackQueue.length > 0) {
-            await playNextInContext(maxRetries);
-            return;
-          }
-        }
-        
-        // Limpiar contador y terminar
-        delete state.contextRepeatCount['search'];
-        showStatus('Search results all played', 'info', 2000);
-        return;
-      }
-      return;
     }
+
+    // No stop conditions: always continue by looping through context.
 
     const nextItem = playbackManager.getNextTrack();
 
@@ -1447,8 +1389,16 @@ async function playNextInContext(maxRetries = 3) {
       if (context === 'genre' || context === 'search') {
         const files = await fetchOptimizedPlayableFiles(nextItem.identifier);
         if (files && files.length > 0) {
-          const track = files[0];
-          await playAudioTrackOptimized(track, nextItem.identifier);
+          // If next search item is an album, switch into album context so the album itself loops.
+          if (files.length > 1) {
+            state.albumOrigin = 'search';
+            playbackManager.setAlbumPlaylist(nextItem.identifier, files, 0);
+            await playAudioTrackOptimized(files[0], nextItem.identifier, 0, files.length);
+            loadPlaybackQueue('album', files, 1);
+          } else {
+            const track = files[0];
+            await playAudioTrackOptimized(track, nextItem.identifier);
+          }
         } else {
           await playNextInContext();
         }
@@ -1487,6 +1437,9 @@ async function playNextInContext(maxRetries = 3) {
         }
 
         await playAudioTrackOptimized(track, nextItem.id, nextItem.trackIndex, nextItem.totalTracks);
+      } else if (context === 'searchPlaylist') {
+        // Loop through the preloaded playlist context.
+        await playAudioTrackOptimized(nextItem, nextItem.id, 0, 1);
       }
 
     } catch (error) {
@@ -1599,7 +1552,8 @@ async function playPreviousInContext() {
 
 // Enhanced repeat mode functions
 function toggleRepeatMode() {
-  const modes = ['all', 'context', 'one', 'infinite', 'off'];
+  // Resonate UX: never stop at end; keep loop-based repeat modes only.
+  const modes = ['context', 'one', 'infinite', 'all'];
   const currentIndex = modes.indexOf(state.repeatMode);
   state.repeatMode = modes[(currentIndex + 1) % modes.length];
   saveRepeatMode(state.repeatMode);
@@ -1643,10 +1597,15 @@ function loadRepeatMode() {
   try {
     const saved = localStorage.getItem('resonate_repeat_mode');
     if (saved && ['all', 'context', 'one', 'infinite', 'off'].includes(saved)) {
-      state.repeatMode = saved;
+      // Treat 'off' as 'context' so playback stays continuous.
+      state.repeatMode = saved === 'off' ? 'context' : saved;
     }
   } catch (e) {
     state.repeatMode = 'all'; // Default
+  }
+
+  if (playbackStateManager) {
+    playbackStateManager.setRepeatMode(state.repeatMode);
   }
 }
 
@@ -1675,9 +1634,11 @@ function setupListenTracking() {
   if (!window.elements.audio) return;
   
   let endedHandlerExecuted = false;
+  let errorHandlerExecuted = false;
 
   window.elements.audio.addEventListener('play', () => {
     endedHandlerExecuted = false;
+    errorHandlerExecuted = false;
     if (state.currentTrack) {
       state.currentTrackListenStart = Date.now();
     }
@@ -1690,53 +1651,79 @@ function setupListenTracking() {
     }
     endedHandlerExecuted = true;
 
-    // Track listening statistics
+    // Track listening statistics (must never block auto-advance)
     if (state.currentTrack) {
-      const listenDuration = Date.now() - state.currentTrackListenStart;
-      const trackDuration = window.elements.audio.duration * 1000; // Convertir a ms
+      try {
+        const listenDuration = Date.now() - state.currentTrackListenStart;
+        const trackDuration = window.elements.audio.duration * 1000; // Convertir a ms
 
-      // Si se escuchó al menos el 90% de la pista, marcarla como escuchada completamente
-      if (listenDuration >= trackDuration * 0.9) {
-        await audioCache.markAsFullyListened(state.currentTrack.url);
-        // Replace in FIFO when playback completes
-        if (isTrackFavorite(state.currentTrack)) {
-          await audioCache.replaceFavoritesQueueItem(state.currentTrack.url, null, state.favorites);
+        // Si se escuchó al menos el 90% de la pista, marcarla como escuchada completamente
+        if (isFinite(trackDuration) && trackDuration > 0 && listenDuration >= trackDuration * 0.9) {
+          if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.markAsFullyListened === 'function') {
+            await audioCache.markAsFullyListened(state.currentTrack.url);
+          }
+          if (isTrackFavorite(state.currentTrack) && typeof audioCache !== 'undefined' && audioCache && typeof audioCache.replaceFavoritesQueueItem === 'function') {
+            await audioCache.replaceFavoritesQueueItem(state.currentTrack.url, null, state.favorites);
+          }
+          if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.getUsageStats === 'function') {
+            const stats = await audioCache.getUsageStats();
+            if (stats && stats.usagePercentage > 90) {
+              showStatus(`Cache storage almost full`, 'info', 3000);
+            }
+          }
+        } else {
+          if (state.tracksSkippedEarly && state.currentTrack.url) {
+            const skipCount = state.tracksSkippedEarly.get(state.currentTrack.url) || 0;
+            state.tracksSkippedEarly.set(state.currentTrack.url, skipCount + 1);
+          }
         }
-
-        // Update usage stats and warn if very high
-        const stats = await audioCache.getUsageStats();
-        if (stats && stats.usagePercentage > 90) {
-          showStatus(`Cache storage almost full`, 'info', 3000);
-        }
-      } else {
-        // Registrar que se saltó temprano
-        const skipCount = state.tracksSkippedEarly.get(state.currentTrack.url) || 0;
-        state.tracksSkippedEarly.set(state.currentTrack.url, skipCount + 1);
-        // Track skipped early: increment skip counter silently
+      } catch (err) {
+        logPlayback('debug', 'Listen tracking failed', err);
+      } finally {
+        state.currentTrackListenStart = 0;
       }
-
-      state.currentTrackListenStart = 0;
     }
 
     // Use enhanced playback controller for track end handling
     const currentContext = playbackManager.getCurrentContext();
     if (currentContext) {
-      enhancedPlaybackController.setContext(currentContext);
-      await enhancedPlaybackController.handleTrackEnd();
-    } else {
-      // Fallback to legacy behavior
-      const repeatMode = state.repeatMode;
-      if (repeatMode === 'one') {
-        window.elements.audio.currentTime = 0;
-        window.elements.audio.play();
-        endedHandlerExecuted = false; // Allow loop
-        return;
-      } else if (repeatMode === 'all') {
-        playNextInContext();
-      } else {
-        showStatus('Your playback is complete', 'info', 2000);
+      try {
+        const contextId = currentContext === 'album' ? playbackManager.getCurrentAlbumId() : null;
+        enhancedPlaybackController.setContext(currentContext, contextId);
+        await enhancedPlaybackController.handleTrackEnd();
+      } catch (err) {
+        logPlayback('warn', 'Enhanced track end handling failed', err);
+        setTimeout(() => {
+          playNextInContext().catch((e) => logPlayback('warn', 'Fallback playNextInContext failed', e));
+        }, 500);
       }
+    } else {
+      // Resonate UX: never stop when context is missing.
+      playNextInContext().catch((e) => logPlayback('warn', 'No-context playNextInContext failed', e));
     }
+  });
+
+  // If a track errors and never reaches 'ended', skip forward to keep continuous playback.
+  window.elements.audio.addEventListener('error', () => {
+    if (errorHandlerExecuted) return;
+    errorHandlerExecuted = true;
+
+    try {
+      showStatus('Track error. Skipping...', 'error', 2000);
+    } catch {}
+
+    setTimeout(() => {
+      const currentContext = playbackManager.getCurrentContext();
+      if (currentContext) {
+        enhancedPlaybackController.setContext(currentContext);
+        enhancedPlaybackController.handleTrackEnd().catch((err) => {
+          logPlayback('warn', 'Error-skip handler failed', err);
+          playNextInContext().catch((e) => logPlayback('warn', 'Fallback skip failed', e));
+        });
+      } else {
+        playNextInContext().catch((e) => logPlayback('warn', 'Skip failed', e));
+      }
+    }, 800);
   });
 
   window.elements.audio.addEventListener('seeked', () => {
@@ -1850,10 +1837,12 @@ function setupProgressBarInteraction() {
 
 function updateShuffleButton() {
   const ctx = playbackManager.getCurrentContext();
-  let noun = ctx === 'search' ? 'search results' : ctx === 'album' ? 'album' : 'favorites';
+  let noun = ctx === 'search' ? 'search results' : ctx === 'searchPlaylist' ? 'playlist' : ctx === 'album' ? 'album' : 'favorites';
+
+  if (!window.elements || !window.elements.shuffleFavoritesBtn) return;
 
   // Shuffle button is always enabled for all contexts
-  window.elements.shuffleFavoritesBtn.enable = false;
+  window.elements.shuffleFavoritesBtn.disabled = false;
 
   if (state.shuffleFavorites) {
     window.elements.shuffleFavoritesBtn.classList.add('active');
@@ -1866,6 +1855,10 @@ function updateShuffleButton() {
 
 function toggleShuffleFavorites() {
   state.shuffleFavorites = !state.shuffleFavorites;
+
+  if (playbackStateManager) {
+    playbackStateManager.setShuffleMode(state.shuffleFavorites);
+  }
 
   const context = playbackManager.getCurrentContext() || (state.favorites && state.favorites.length > 0 ? 'favorites' : 'search');
 

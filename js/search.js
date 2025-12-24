@@ -678,35 +678,12 @@ async function playOptimizedSearchResult(result, index, allResults) {
         // Load queue AFTER first track starts playing to avoid blocking
         window.loadPlaybackQueue?.('album', files, 1);
       } else {
-        // Create preloaded list with next search results (limit to avoid excessive downloads)
-        const searchPlaylist = [];
-        const maxResultsToPreload = SEARCH_LIMITS.maxResultsToPreload;
-        
-        // Preload metadata for only the next few results (not audio files yet)
-        for (let i = index; i < Math.min(index + maxResultsToPreload, allResults.length); i++) {
-          try {
-            const resultFiles = await fetchOptimizedPlayableFiles(allResults[i].identifier);
-            if (resultFiles && resultFiles.length > 0) {
-              if (resultFiles.length > 1) {
-                searchPlaylist.push(resultFiles[0]);
-              } else {
-                searchPlaylist.push(resultFiles[0]);
-              }
-            }
-          } catch (error) {
-            logSearch(error, 'warn', 'NETWORK');
-          }
+        // Continuous search context: loop through the real result list (no caps)
+        if (window.playbackManager) {
+          window.playbackManager.setContext('search', allResults, index);
         }
-        // Set up preloaded playback
-        window.setupPreloadedPlayback?.(searchPlaylist, index);
-        // Resetear contador de repetición de search
-        const st3 = getSearchStateRef();
-        if (st3) {
-          if (!st3.contextRepeatCount) st3.contextRepeatCount = {};
-          st3.contextRepeatCount['search'] = 0;
-        }
-        // Load FIFO queue with search results
-        window.loadPlaybackQueue?.('search', searchPlaylist, index);
+        // Load FIFO queue with real search results (starting AFTER current)
+        window.loadPlaybackQueue?.('search', allResults, index + 1);
         const track = files[0];
         // Loader se ocultar� cuando audio.play() inicie
         await window.playAudioTrackOptimized(track, result.identifier);
@@ -898,46 +875,19 @@ async function playRandomSearchResults() {
   try {
     logSearch('Loading playlist...', 'info', 'UI');
     window.showStatus?.('Loading playlist...', 'info', null, 'normal', true);
-    // Create playlist with first N tracks from results (limit to avoid excessive downloads)
-    const searchPlaylist = [];
-    const maxResultsToLoad = SEARCH_LIMITS.maxResultsToLoad; // Limit to first 10 results to avoid excessive parallel loading
-    
-    // Load tracks in batches to avoid excessive parallel fetches
-    const batchSize = SEARCH_LIMITS.playlistBatchSize;
-    for (let i = 0; i < Math.min(maxResultsToLoad, results.length); i += batchSize) {
-      const batch = results.slice(i, i + batchSize);
-      const batchPromises = batch.map(async (result) => {
-        try {
-          const files = await fetchOptimizedPlayableFiles(result.identifier);
-          if (files && files.length > 0) {
-            // For albums, add all tracks
-            if (files.length > 1) {
-              return files;
-            } else {
-              // For individual tracks, add single track
-              return [files[0]];
-            }
-          }
-          return [];
-        } catch (error) {
-          logSearch(error, 'warn', 'NETWORK');
-          return [];
-        }
-      });
-      const batchResults = await Promise.all(batchPromises);
-      batchResults.forEach(tracks => searchPlaylist.push(...tracks));
+    // Ensure shuffle is ON for "random" mode
+    if (window.state && window.state.shuffleFavorites === false && typeof window.toggleShuffleFavorites === 'function') {
+      window.toggleShuffleFavorites();
     }
-    
-    if (searchPlaylist.length === 0) {
-      throw new Error('Could not load tracks from results');
+
+    // Continuous search context (no caps)
+    if (window.playbackManager) {
+      window.playbackManager.setContext('search', results, 0);
     }
-    // Set up preloaded playback
-    window.setupPreloadedPlayback?.(searchPlaylist, 0);
-    // Load FIFO queue with search results
-    window.loadPlaybackQueue?.('search', searchPlaylist, 0);
-    // Play first track
-    const firstTrack = searchPlaylist[0];
-    await window.playAudioTrackOptimized(firstTrack, firstTrack.id, 0, 1);
+    window.loadPlaybackQueue?.('search', results, 0);
+
+    // Start playing from the first result (shuffle will affect the subsequent selection)
+    await playOptimizedSearchResult(results[0], 0, results);
     logSearch('Playing tracks from search', 'info', 'UI');
     window.showStatus?.(`Playing tracks from search`, 'info', 3000);
   } catch (error) {

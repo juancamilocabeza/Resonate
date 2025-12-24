@@ -73,6 +73,8 @@ const state = {
   shuffleFavorites: false,
   repeatMode: 'all', // 'all', 'one', 'off'
   networkOnline: true,
+  // URL currently assigned to the <audio> element (may be a normal URL or a blob: URL)
+  currentAudioUrl: null,
   currentBlobUrl: null,
   autoPlaySearchResults: true,
   searchPlaylist: [],
@@ -1111,12 +1113,13 @@ async function loadAlbumInfoBackground(identifier, resultEl) {
 
     const metaElement = resultEl.querySelector('.result-meta');
     if (metaElement) {
+      const forceSingle = resultEl.dataset.isTrackList === 'true';
       if (trackCount === 0) {
         metaElement.innerHTML = '<span style="color: var(--muted); font-size: 10px;">No playable tracks</span>';
       } else {
-        metaElement.innerHTML = isAlbum ?
-          `<span class="album-indicator">${trackCount} tracks</span>` :
-          `<span class="album-indicator">Single track</span>`;
+        metaElement.innerHTML = (isAlbum && !forceSingle)
+          ? `<span class="album-indicator">${trackCount} tracks</span>`
+          : `<span class="album-indicator">Single track</span>`;
       }
     }
 
@@ -1132,7 +1135,9 @@ async function loadAlbumInfoBackground(identifier, resultEl) {
     // Mostrar/ocultar el botón de expandir basado en si es un álbum
     const expandButton = resultEl.querySelector('.favorite-actions button:last-child');
     if (expandButton) {
-      expandButton.style.display = trackCount > 1 ? 'inline-block' : 'none';
+      const forceSingle = resultEl.dataset.isTrackList === 'true';
+      // Never show expand for explicit track-list items
+      expandButton.style.display = (!forceSingle && trackCount > 1) ? 'inline-block' : 'none';
     }
   } catch (error) {
     console.error('Error loading album info for:', identifier, error);
@@ -1255,6 +1260,13 @@ function createSearchResultElement(result, globalIndex) {
   resultEl.setAttribute('role', 'article');
   resultEl.setAttribute('tabindex', '0');
   resultEl.setAttribute('aria-label', `${result.title || 'Untitled'} by ${result.creator || 'Unknown'}`);
+  // Persist explicit track-list classification so background metadata respects it
+  if (result.isTrackList) {
+    resultEl.dataset.isTrackList = 'true';
+    resultEl.classList.add('is-track-list');
+  } else {
+    resultEl.dataset.isTrackList = 'false';
+  }
 
   const hasFavoriteTrack = isAlbumInFavorites(result.identifier);
 
@@ -1295,7 +1307,9 @@ function createSearchResultElement(result, globalIndex) {
   expandBtn.setAttribute('aria-label', 'Show album tracks');
 
   // Show expand button immediately for all results
-  expandBtn.style.display = 'inline-block';
+  // Respect explicit track-list override: list and behave as single
+  // Hide expand control up-front for track-list results
+  expandBtn.style.display = result.isTrackList ? 'none' : 'inline-block';
 
   // Add cover to the left, then info and actions
   resultEl.appendChild(coverContainer);
@@ -1446,7 +1460,7 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
   const chipType = document.createElement('span');
   chipType.className = 'chip';
   const isAlbum = !item.isTrackList && ( !!item.isAlbum || (typeof item.trackCount === 'number' && item.trackCount > 1) || !!item.isAlbumTrack );
-  chipType.textContent = isAlbum ? 'Álbum' : 'Single';
+  chipType.textContent = isAlbum ? 'Album' : 'Single';
   chips.appendChild(chipType);
   media.appendChild(chips);
 
