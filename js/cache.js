@@ -261,6 +261,26 @@ class AudioCache {
         await this.updateMetadata(url, { lastAccessed: nowMs() });
         // Convert Response to blob for playback compatibility
         const blob = await cachedResponse.blob();
+        // Verificar integridad si existe hash
+        try {
+          const meta = await this.getMetadata(url);
+          if (meta && meta.hash) {
+            const actualHash = await this.computeBlobHash(blob);
+            if (actualHash !== meta.hash) {
+              logCache('error', `Integridad fallida para ${url}: esperado ${meta.hash}, obtenido ${actualHash}`);
+              if (typeof window.showStatus === 'function') {
+                window.showStatus('Archivo de audio corrupto detectado y eliminado: ' + url, 'error', 8000, 'error');
+              } else {
+                alert('Archivo de audio corrupto detectado y eliminado: ' + url);
+              }
+              // Eliminar archivo corrupto
+              await this.remove(url);
+              return null;
+            }
+          }
+        } catch (err) {
+          logCache('warn', `Error verificando integridad de ${url}: ${err}`);
+        }
         return { blob, fromCache: true };
       }
 
@@ -293,6 +313,10 @@ class AudioCache {
         return;
       }
 
+      // Calcular hash para integridad
+      const blob = await data.clone().blob();
+      const hash = await this.computeBlobHash(blob);
+
       // Store in Cache API (best-effort + quota recovery)
       const stored = await this.putWithQuotaRecovery(url, data, { size, isFavorite, metadata });
       if (!stored) {
@@ -300,7 +324,7 @@ class AudioCache {
         return;
       }
 
-      // Store metadata in IndexedDB
+      // Store metadata in IndexedDB (con hash)
       await this.storeMetadata(url, {
         url,
         size,
@@ -308,8 +332,21 @@ class AudioCache {
         isFavorite,
         cachedAt: nowMs(),
         title: metadata.title,
-        creator: metadata.creator
+        creator: metadata.creator,
+        hash
       });
+  // Calcula el hash SHA-256 de un blob
+  async computeBlobHash(blob) {
+    try {
+      const arrayBuffer = await blob.arrayBuffer();
+      const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    } catch (err) {
+      logCache('warn', `Error calculando hash de blob: ${err}`);
+      return null;
+    }
+  }
 
       // Enforce logical cache size (never evict favorites)
       await this.enforceCacheSize({ interactive, reasonUrl: url });
@@ -378,7 +415,7 @@ class AudioCache {
     const shouldFetch = await this.shouldPrefetch(true);
     if (!shouldFetch) {
       logCache('info', 'Skipping favorites preload due to network or quota limits');
-      return;
+      throw new Error('Skipping favorites preload due to network or quota limits');
     }
 
     logCache('info', `Preloading ${favorites.length} favorites for offline playback`);
@@ -392,11 +429,17 @@ class AudioCache {
     const prefetchPromises = favorites.map(favorite =>
       this.prefetchAudio(favorite.url, true).catch(error => {
         window.logger?.warn(`Failed to preload favorite: ${favorite.title} - ${error.message}`, 'CACHE');
+        throw new Error(`Failed to preload favorite: ${favorite.title} - ${error.message}`);
       })
     );
 
     // Wait for all to complete (with timeout)
-    await Promise.allSettled(prefetchPromises);
+    const results = await Promise.allSettled(prefetchPromises);
+    const failed = results.filter(r => r.status === 'rejected');
+    if (failed.length > 0) {
+      logCache('warn', `${failed.length} favorites failed to preload`);
+      throw new Error(`${failed.length} favorites failed to preload`);
+    }
     logCache('info', 'Favorites preload completed');
     this.isPreloadingFavorites = false;
   }
@@ -529,23 +572,57 @@ class AudioCache {
 
   async storeMetadata(url, metadata) {
     return new Promise((resolve, reject) => {
-      const transaction = this.db.transaction(['audioMetadata'], 'readwrite');
-      const store = transaction.objectStore('audioMetadata');
-      const request = store.put(metadata);
-
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
+      try {
+        const transaction = this.db.transaction(['audioMetadata'], 'readwrite');
+        const store = transaction.objectStore('audioMetadata');
+        const request = store.put(metadata);
+        request.onsuccess = () => resolve();
+        request.onerror = () => {
+          logCache('error', `IndexedDB storeMetadata error: ${request.error}`);
+          try {
+            if (typeof window.showStatus === 'function') {
+              window.showStatus('Error al guardar metadatos en almacenamiento offline: ' + request.error, 'error', 8000, 'error');
+            }
+          } catch {}
+          reject(request.error);
+        };
+      } catch (err) {
+        logCache('error', `IndexedDB storeMetadata exception: ${err}`);
+        try {
+          if (typeof window.showStatus === 'function') {
+            window.showStatus('Error al guardar metadatos en almacenamiento offline: ' + err, 'error', 8000, 'error');
+          }
+        } catch {}
+        reject(err);
+      }
     });
   }
 
   async getMetadata(url) {
     return new Promise((resolve, reject) => {
-      const transaction = this.db.transaction(['audioMetadata'], 'readonly');
-      const store = transaction.objectStore('audioMetadata');
-      const request = store.get(url);
-
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
+      try {
+        const transaction = this.db.transaction(['audioMetadata'], 'readonly');
+        const store = transaction.objectStore('audioMetadata');
+        const request = store.get(url);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => {
+          logCache('error', `IndexedDB getMetadata error: ${request.error}`);
+          try {
+            if (typeof window.showStatus === 'function') {
+              window.showStatus('Error al leer metadatos de almacenamiento offline: ' + request.error, 'error', 8000, 'error');
+            }
+          } catch {}
+          reject(request.error);
+        };
+      } catch (err) {
+        logCache('error', `IndexedDB getMetadata exception: ${err}`);
+        try {
+          if (typeof window.showStatus === 'function') {
+            window.showStatus('Error al leer metadatos de almacenamiento offline: ' + err, 'error', 8000, 'error');
+          }
+        } catch {}
+        reject(err);
+      }
     });
   }
 
@@ -604,8 +681,24 @@ class AudioCache {
         // All cached items are pinned favorites; cannot evict. Offer to increase limit.
         if (interactive) {
           const increased = await this.maybeIncreaseLimitInteractively({ reason: 'favorites-only', reasonUrl });
+          if (!increased) {
+            try {
+              if (typeof window.showStatus === 'function') {
+                window.showStatus('La caché está llena solo con favoritos. No se puede liberar espacio para nuevos archivos.', 'warning', 8000, 'warning');
+              } else {
+                alert('La caché está llena solo con favoritos. No se puede liberar espacio para nuevos archivos.');
+              }
+            } catch {}
+          }
           return increased;
         }
+        try {
+          if (typeof window.showStatus === 'function') {
+            window.showStatus('La caché está llena solo con favoritos. No se puede liberar espacio para nuevos archivos.', 'warning', 8000, 'warning');
+          } else {
+            alert('La caché está llena solo con favoritos. No se puede liberar espacio para nuevos archivos.');
+          }
+        } catch {}
         return false;
       }
 

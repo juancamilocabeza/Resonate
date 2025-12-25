@@ -1431,8 +1431,8 @@ async function playNextInContext(maxRetries = 3) {
         // Verificar si está en caché antes de reproducir
         const cached = typeof audioCache !== 'undefined' && audioCache && typeof audioCache.get === 'function' ? await audioCache.get(track.url, true) : null;
         if (!cached && !state.networkOnline) {
-          showStatus('Track not in offline cache', 'error', 2000);
-          setTimeout(() => playNextInContext(), 1000);
+          // Transparente: saltar sin mostrar error
+          setTimeout(() => playNextInContext(), 100);
           return;
         }
 
@@ -1445,12 +1445,8 @@ async function playNextInContext(maxRetries = 3) {
     } catch (error) {
       console.error('Error playing next track:', error);
 
-      if (error.message.includes('conexión') || error.message.includes('offline')) {
-        showStatus('No internet. Trying next track', 'error', 2000);
-        setTimeout(() => playNextInContext(), 1000);
-      } else {
-        setTimeout(() => playNextInContext(), 1000);
-      }
+      // Transparente: siempre intentar la siguiente pista sin mostrar error
+      setTimeout(() => playNextInContext(), 100);
     }
   } catch (error) {
     console.error('Error crítico en playNextInContext:', error);

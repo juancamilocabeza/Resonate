@@ -159,10 +159,10 @@ function loadFavorites() {
     const favorites = localStorage.getItem('resonate_favorites');
     window.logger.debug('Raw favorites from localStorage retrieved', 'UI');
 
+    let parsedFavorites = [];
     if (favorites) {
-      let parsedFavorites = JSON.parse(favorites);
+      parsedFavorites = JSON.parse(favorites);
       window.logger.debug(`Parsed ${parsedFavorites.length} favorites`, 'UI');
-
       // Filter out unsupported format favorites (keep .ogg and .mp3)
       const originalCount = parsedFavorites.length;
       parsedFavorites = parsedFavorites.filter(fav => {
@@ -170,33 +170,37 @@ function loadFavorites() {
         const url = fav.url.toLowerCase();
         return url.endsWith('.ogg') || url.endsWith('.mp3');
       });
-
       if (parsedFavorites.length < originalCount) {
         // Save filtered favorites back to localStorage
         localStorage.setItem('resonate_favorites', JSON.stringify(parsedFavorites));
         window.logger.info(`Filtered ${originalCount - parsedFavorites.length} unsupported format favorites`, 'UI');
       }
-
-      state.favorites = parsedFavorites;
-      window.logger.info(`Final favorites loaded: ${state.favorites.length} items`, 'UI');
-
-      // Precargar favoritos en cola FIFO
-      if (state.favoritesPreloadEnabled && typeof audioCache !== 'undefined' && audioCache && typeof audioCache.preloadFavorites === 'function') {
-        audioCache.preloadFavorites(state.favorites);
-        window.logger.debug('Favorites preload initiated', 'CACHE');
-      }
-    } else {
-      window.logger.info('No favorites found in localStorage', 'UI');
-      state.favorites = [];
     }
+    // Eliminar duplicados por url
+    const uniqueFavorites = [];
+    const seenUrls = new Set();
+    for (const fav of parsedFavorites) {
+      if (!seenUrls.has(fav.url)) {
+        uniqueFavorites.push(fav);
+        seenUrls.add(fav.url);
+      }
+    }
+    state.favorites = uniqueFavorites;
+    window.logger.info(`Final favorites loaded: ${state.favorites.length} items`, 'UI');
 
+    // Precargar favoritos en cola FIFO
+    if (state.favoritesPreloadEnabled && typeof audioCache !== 'undefined' && audioCache && typeof audioCache.preloadFavorites === 'function') {
+      audioCache.preloadFavorites(state.favorites).catch(err => {
+        showStatus('Error preloading favorites for offline: ' + (err && err.message ? err.message : err), 'error', 6000, 'error');
+        window.logger.error('Error preloading favorites for offline: ' + (err && err.message ? err.message : err), 'UI');
+      });
+      window.logger.debug('Favorites preload initiated', 'CACHE');
+    }
     // Actualizar estado del botón de reproducción
     updatePlayButtonState();
-
     // Actualizar la lista visual de favoritos
     updateFavoritesList();
     updateFavoritesCount();
-
   } catch (e) {
     window.logger.error(`Error loading favorites: ${e.message}`, 'UI');
     state.favorites = [];
@@ -206,12 +210,25 @@ function loadFavorites() {
 
 function saveFavorites() {
   try {
-    const payload = JSON.stringify(state.favorites || []);
+    // Eliminar duplicados antes de guardar
+    const uniqueFavorites = [];
+    const seenUrls = new Set();
+    for (const fav of (state.favorites || [])) {
+      if (!seenUrls.has(fav.url)) {
+        uniqueFavorites.push(fav);
+        seenUrls.add(fav.url);
+      }
+    }
+    state.favorites = uniqueFavorites;
+    const payload = JSON.stringify(state.favorites);
     localStorage.setItem('resonate_favorites', payload);
     window.logger.debug('Favorites saved to localStorage', 'UI');
     // Request preload/update of favorites in cache if available
     if (state.favoritesPreloadEnabled && typeof audioCache !== 'undefined' && audioCache && typeof audioCache.preloadFavorites === 'function') {
-      audioCache.preloadFavorites(state.favorites || []);
+      audioCache.preloadFavorites(state.favorites).catch(err => {
+        showStatus('Error preloading favorites for offline: ' + (err && err.message ? err.message : err), 'error', 6000, 'error');
+        window.logger.error('Error preloading favorites for offline: ' + (err && err.message ? err.message : err), 'UI');
+      });
       window.logger.debug('Favorites preload requested', 'CACHE');
     }
   } catch (err) {
@@ -323,6 +340,9 @@ function toggleFavorite(track) {
     return;
   }
 
+  // Sincronizar favoritos antes de modificar
+  loadFavorites();
+
   const isFavorite = isTrackFavorite(track);
 
   if (isFavorite) {
@@ -356,6 +376,11 @@ function toggleFavorite(track) {
     }
     showStatus('Track removed from favorites', 'info');
   } else {
+    // Evitar duplicados
+    if (state.favorites.some(fav => fav.url === track.url)) {
+      showStatus('Track is already in your favorites', 'info');
+      return;
+    }
     const favoriteTrack = {
       id: track.id,
       title: track.title || 'Untitled',
@@ -371,7 +396,10 @@ function toggleFavorite(track) {
 
     // Precargar el favorito en caché
     if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.prefetchAudio === 'function') {
-      audioCache.prefetchAudio(track.url, true);
+      audioCache.prefetchAudio(track.url, true).catch(err => {
+        showStatus('Error preloading favorite for offline: ' + (err && err.message ? err.message : err), 'error', 6000, 'error');
+        window.logger.error('Error preloading favorite for offline: ' + (err && err.message ? err.message : err), 'UI');
+      });
     }
 
     showStatus('Track added to your favorites', 'info');
@@ -386,6 +414,34 @@ function toggleFavorite(track) {
   if (track.albumId && track.albumId !== track.id) {
     updateAlbumButtonForTrack(track.albumId);
   }
+// Reconciliación básica tras reconexión: merge de favoritos locales y persistidos
+window.addEventListener('online', () => {
+  try {
+    // Cargar favoritos persistidos
+    const persisted = localStorage.getItem('resonate_favorites');
+    let parsed = [];
+    if (persisted) {
+      parsed = JSON.parse(persisted);
+    }
+    // Merge con los favoritos en memoria
+    const all = [...parsed, ...(state.favorites || [])];
+    const unique = [];
+    const seen = new Set();
+    for (const fav of all) {
+      if (fav.url && !seen.has(fav.url)) {
+        unique.push(fav);
+        seen.add(fav.url);
+      }
+    }
+    state.favorites = unique;
+    localStorage.setItem('resonate_favorites', JSON.stringify(unique));
+    window.logger.info('Favorites reconciled after reconnect', 'UI');
+    updateFavoritesList();
+    updateFavoritesCount();
+  } catch (e) {
+    window.logger.error('Error during favorites reconciliation: ' + (e && e.message ? e.message : e), 'UI');
+  }
+});
 }
 
 // FUNCIÓN: Agregar todas las pistas de un álbum a favoritos
