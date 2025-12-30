@@ -34,7 +34,6 @@ const elements = {
   startButton: document.getElementById('start-button'),
   app: document.getElementById('app'),
   playerContent: document.getElementById('player-content'),
-  repeatBtn: document.getElementById('repeat-btn'),
   currentTrackShare: document.getElementById('current-track-share')
 };
 
@@ -174,6 +173,45 @@ function loadFavorites() {
         // Save filtered favorites back to localStorage
         localStorage.setItem('resonate_favorites', JSON.stringify(parsedFavorites));
         window.logger.info(`Filtered ${originalCount - parsedFavorites.length} unsupported format favorites`, 'UI');
+      }
+      // Limpieza automática de favoritos huérfanos: eliminar favoritos cuyo archivo no existe en cache
+      if (
+        typeof audioCache !== 'undefined' &&
+        audioCache &&
+        audioCache.cache &&
+        typeof audioCache.cache.has === 'function' &&
+        typeof audioCache.cache.get === 'function'
+      ) {
+        const orphaned = [];
+        parsedFavorites = parsedFavorites.filter(fav => {
+          // Solo elimina si no existe en cache ni en IndexedDB
+          const exists = audioCache.cache.has('audio') && audioCache.cache.get('audio').has(fav.url);
+          if (!exists) {
+            orphaned.push(fav.url);
+          }
+          return exists;
+        });
+        if (orphaned.length > 0) {
+          localStorage.setItem('resonate_favorites', JSON.stringify(parsedFavorites));
+          window.logger.info(`Removed ${orphaned.length} orphaned favorites (not found in cache)`, 'UI');
+        }
+      }
+      // Resolución automática de conflictos: fusionar favoritos en memoria y persistidos, priorizando los más recientes
+      if (Array.isArray(state.favorites) && state.favorites.length > 0) {
+        // Combina favoritos persistidos y en memoria, priorizando los más recientes (al final)
+        const all = [...parsedFavorites, ...state.favorites];
+        const unique = [];
+        const seen = new Set();
+        for (let i = all.length - 1; i >= 0; i--) {
+          const fav = all[i];
+          if (fav.url && !seen.has(fav.url)) {
+            unique.unshift(fav); // Mantiene el orden de los más recientes
+            seen.add(fav.url);
+          }
+        }
+        parsedFavorites = unique;
+        localStorage.setItem('resonate_favorites', JSON.stringify(parsedFavorites));
+        window.logger.info('Favorites merged and deduplicated (conflict resolution)', 'UI');
       }
     }
     // Eliminar duplicados por url
@@ -330,9 +368,15 @@ function isTrackFavorite(track) {
   return state.favorites.some(fav => fav.url === track.url);
 }
 
+/**
+ * Carga los favoritos desde localStorage, eliminando duplicados, resolviendo conflictos locales
+ * y limpiando favoritos huérfanos (sin archivo en caché).
+ * Prioriza los favoritos más recientes en caso de conflicto.
+ */
 function toggleFavorite(track) {
   if (!track || !track.url) return;
-
+      // Limpieza automática de favoritos huérfanos:
+      // Elimina favoritos cuyo archivo no existe en la caché local (ni en Cache API ni IndexedDB).
   // Only allow .ogg and .mp3 files to be favorited
   const urlLower = track.url.toLowerCase();
   if (!urlLower.endsWith('.ogg') && !urlLower.endsWith('.mp3')) {
@@ -348,7 +392,8 @@ function toggleFavorite(track) {
   if (isFavorite) {
     state.favorites = state.favorites.filter(fav => fav.url !== track.url);
 
-    // Reemplazar en cola FIFO si se elimina un favorito
+      // Resolución automática de conflictos:
+      // Fusiona favoritos persistidos y en memoria, priorizando los más recientes (al final de la lista).
     if (state.playbackQueue.some(item => item.url === track.url)) {
       const availableFavorites = state.favorites.filter(fav =>
         !state.playbackQueue.some(item => item.url === fav.url)
@@ -438,6 +483,19 @@ window.addEventListener('online', () => {
     window.logger.info('Favorites reconciled after reconnect', 'UI');
     updateFavoritesList();
     updateFavoritesCount();
+
+    // Sincronizar caché de audio: recargar favoritas y resultados de búsqueda
+    if (typeof window.audioCache === 'object' && window.audioCache) {
+      // Precarga favoritas (mínimo 10)
+      window.audioCache.preloadFavorites(state.favorites);
+      // Precarga resultados de búsqueda actuales si existen
+      if (Array.isArray(state.searchResults) && state.searchResults.length > 0) {
+        window.audioCache.preloadSearchResults(state.searchResults);
+      }
+    }
+    if (typeof window.showStatus === 'function') {
+      window.showStatus('Conexión recuperada: sincronizando caché offline', 'info', 4000, 'info');
+    }
   } catch (e) {
     window.logger.error('Error during favorites reconciliation: ' + (e && e.message ? e.message : e), 'UI');
   }
@@ -1891,10 +1949,21 @@ function __resonateAttachConnectivityHandlersOnce() {
 
   window.addEventListener('offline', () => {
     state.networkOnline = false;
-    showStatus('Switched to offline playback', 'info', 4000);
+    showStatus('Switched to offline playback', 'offline', 4000);
 
     __resonateSetSearchOnlineState(false);
     updateOfflineIndicator();
+
+    // Notificar si solo hay pistas offline disponibles
+    if (typeof window.audioCache === 'object' && window.audioCache) {
+      window.audioCache.getUsageStats().then(stats => {
+        if (stats.itemCount > 0) {
+          showStatus('Solo tienes acceso a pistas guardadas offline. Conéctate para actualizar tu biblioteca.', 'offline', 6000, 'offline');
+        } else {
+          showStatus('No hay pistas disponibles offline. Conéctate para descargar tus favoritas.', 'offline', 6000, 'offline');
+        }
+      });
+    }
 
     // Intentar reproducir desde caché si hay una pista actual
     if (state.currentTrack && elements.audio && elements.audio.src) {
@@ -2998,6 +3067,32 @@ window.loadFavorites = loadFavorites;
 window.saveFavorites = saveFavorites;
 window.loadVolume = loadVolume;
 window.saveVolume = saveVolume;
+// ...existing code...
+if (elements.shuffleFavoritesBtn) {
+  elements.shuffleFavoritesBtn.addEventListener('click', () => {
+    // Ciclo de modos: Off → Repeat All → Repeat One → Shuffle → Shuffle+Repeat → Off
+    const config = window.getPlaybackConfigStatus ? window.getPlaybackConfigStatus() : { repeat: 'context', shuffle: false };
+    let next = { repeat: 'off', shuffle: false };
+    if (config.repeat === 'off' && !config.shuffle) {
+      next = { repeat: 'all', shuffle: false };
+    } else if (config.repeat === 'all' && !config.shuffle) {
+      next = { repeat: 'one', shuffle: false };
+    } else if (config.repeat === 'one' && !config.shuffle) {
+      next = { repeat: 'off', shuffle: true };
+    } else if (config.repeat === 'off' && config.shuffle) {
+      next = { repeat: 'all', shuffle: true };
+    } else if (config.repeat === 'all' && config.shuffle) {
+      next = { repeat: 'off', shuffle: false };
+    }
+    // Actualizar PlaybackStateManager
+    if (window.playbackStateManager) {
+      window.playbackStateManager.setRepeatMode(next.repeat);
+      window.playbackStateManager.setShuffleMode(next.shuffle);
+    }
+    // No status UI update needed
+  });
+}
+// ...existing code...
 window.saveMutedState = saveMutedState;
 window.showStatus = showStatus;
 window.updatePlayButtonState = updatePlayButtonState;

@@ -33,6 +33,17 @@
 
       const favContext = isFavoritesContext(tracksContainer);
 
+      // INTEGRACIÓN: Precachear favoritas o resultados según contexto
+      if (typeof window.audioCache === 'object' && window.audioCache) {
+        if (favContext) {
+          // Precarga favoritas (mínimo 10)
+          window.audioCache.preloadFavorites(files);
+        } else if (tracksContainer.closest('.search-result')) {
+          // Precarga resultados de búsqueda (mínimo 10)
+          window.audioCache.preloadSearchResults(files);
+        }
+      }
+
       files.forEach((track, index) => {
         const row = document.createElement('div');
         row.className = 'tlv2-row';

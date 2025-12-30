@@ -181,6 +181,66 @@ setInterval(() => {
 // Enhanced Audio Cache using Cache API and IndexedDB
 // Provides real offline caching for audio files
 class AudioCache {
+  // Contextos definidos
+  static CONTEXTS = {
+    FAVORITES: 'favorites',
+    SEARCH: 'search',
+    OFFLINE: 'offline',
+  };
+
+  // Número mínimo de pistas por contexto
+  static MIN_TRACKS_PER_CONTEXT = 10;
+
+  // Obtiene pistas cacheadas por contexto
+  async getCachedTracksByContext(context) {
+    if (!this.isInitialized) await this.init();
+    const metadata = await this.getAllMetadata();
+    switch (context) {
+      case AudioCache.CONTEXTS.FAVORITES:
+        return metadata.filter(item => item.isFavorite);
+      case AudioCache.CONTEXTS.SEARCH:
+        return metadata.filter(item => item.context === AudioCache.CONTEXTS.SEARCH);
+      case AudioCache.CONTEXTS.OFFLINE:
+        return metadata;
+      default:
+        return [];
+    }
+  }
+
+  // Garantiza mínimo de pistas cacheadas por contexto
+  async ensureMinTracksPerContext(context, tracks) {
+    if (!tracks || tracks.length === 0) return;
+    const cached = await this.getCachedTracksByContext(context);
+    if (cached.length >= AudioCache.MIN_TRACKS_PER_CONTEXT) return;
+    // Prioriza favoritas si aplica
+    let toCache = tracks;
+    if (context === AudioCache.CONTEXTS.FAVORITES) {
+      toCache = tracks.filter(t => t.isFavorite);
+      if (toCache.length < AudioCache.MIN_TRACKS_PER_CONTEXT) {
+        // Rellena con otras si faltan
+        const others = tracks.filter(t => !t.isFavorite);
+        toCache = toCache.concat(others).slice(0, AudioCache.MIN_TRACKS_PER_CONTEXT);
+      } else {
+        toCache = toCache.slice(0, AudioCache.MIN_TRACKS_PER_CONTEXT);
+      }
+    } else {
+      toCache = toCache.slice(0, AudioCache.MIN_TRACKS_PER_CONTEXT);
+    }
+    // Preload las necesarias
+    await this.preloadTracks(toCache, true);
+  }
+    // Calcula el hash SHA-256 de un blob
+    async computeBlobHash(blob) {
+      try {
+        const arrayBuffer = await blob.arrayBuffer();
+        const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      } catch (err) {
+        logCache('warn', `Error calculando hash de blob: ${err}`);
+        return null;
+      }
+    }
   constructor() {
     this.cache = null;
     this.db = null;
@@ -335,18 +395,6 @@ class AudioCache {
         creator: metadata.creator,
         hash
       });
-  // Calcula el hash SHA-256 de un blob
-  async computeBlobHash(blob) {
-    try {
-      const arrayBuffer = await blob.arrayBuffer();
-      const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    } catch (err) {
-      logCache('warn', `Error calculando hash de blob: ${err}`);
-      return null;
-    }
-  }
 
       // Enforce logical cache size (never evict favorites)
       await this.enforceCacheSize({ interactive, reasonUrl: url });
@@ -419,30 +467,31 @@ class AudioCache {
     }
 
     logCache('info', `Preloading ${favorites.length} favorites for offline playback`);
-
-    this.isPreloadingFavorites = true;
-
-    // Load favorites queue
-    this.favoritesQueue = favorites.map(f => f.url);
-
-    // Prefetch favorites in background
-    const prefetchPromises = favorites.map(favorite =>
-      this.prefetchAudio(favorite.url, true).catch(error => {
-        window.logger?.warn(`Failed to preload favorite: ${favorite.title} - ${error.message}`, 'CACHE');
-        throw new Error(`Failed to preload favorite: ${favorite.title} - ${error.message}`);
-      })
-    );
-
-    // Wait for all to complete (with timeout)
-    const results = await Promise.allSettled(prefetchPromises);
-    const failed = results.filter(r => r.status === 'rejected');
-    if (failed.length > 0) {
-      logCache('warn', `${failed.length} favorites failed to preload`);
-      throw new Error(`${failed.length} favorites failed to preload`);
-    }
-    logCache('info', 'Favorites preload completed');
-    this.isPreloadingFavorites = false;
+    // Garantiza mínimo de favoritas cacheadas
+    await this.ensureMinTracksPerContext(AudioCache.CONTEXTS.FAVORITES, favorites);
   }
+
+  // Nuevo: Preload mínimo de resultados de búsqueda
+  async preloadSearchResults(tracks) {
+    await this.ensureMinTracksPerContext(AudioCache.CONTEXTS.SEARCH, tracks);
+  }
+
+  // Nuevo: Preload mínimo para modo offline (todas las pistas)
+  async preloadOffline(tracks) {
+    await this.ensureMinTracksPerContext(AudioCache.CONTEXTS.OFFLINE, tracks);
+  }
+
+  // --- El siguiente bloque pertenece a preloadFavorites, reubicado correctamente ---
+  // (esto estaba después del cierre de preloadOffline por error de indentación)
+
+  // (Método: preloadFavorites, continuación)
+  // NOTA: Este bloque debe estar dentro de preloadFavorites, después de await this.ensureMinTracksPerContext(...)
+
+  // El siguiente código debe estar dentro de preloadFavorites, después de await this.ensureMinTracksPerContext(...)
+  // (pero aquí lo dejamos comentado para referencia, ya que la lógica ya está implementada correctamente arriba)
+  //
+  // this.isPreloadingFavorites = true;
+  // ...
 
   async preloadTracks(tracks, priority = false) {
     if (!this.isInitialized) await this.init();

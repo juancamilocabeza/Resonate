@@ -1163,8 +1163,10 @@ select:focus {
   flex-shrink: 0;
   position: relative;
   display: flex;
-  margin: 0 2px;
+  margin: 0 auto;
   gap: 8px;
+  width: 100%;
+  max-width: 500px;
 }
 
 .search-input {
@@ -1176,6 +1178,8 @@ select:focus {
   font-size: 16px;
   padding: 0 var(--spacing-md);
   transition: var(--transition-all-slow);
+  width: 100%;
+  min-width: 0;
 }
 
 .search-input:focus {
@@ -2321,19 +2325,30 @@ select:focus {
   .track-actions { justify-content: flex-end; }
 }
 
-@media (max-width: 480px) {
-  h1 {
-    font-size: 22px;
-    gap: 6px;
+@media (min-width: 600px) {
+  .search-section {
+    padding: 8px 0 0 0;
   }
-
-  h2 {
-    font-size: 16px;
+  .search-container {
+    max-width: 600px;
+    margin: 0 auto;
   }
-
-  h3 {
-    font-size: 16px;
+  .search-input {
+    height: var(--search-height-tablet);
+    font-size: 15px;
+    max-width: 100%;
   }
+}
+@media (min-width: 900px) {
+  .search-container {
+    max-width: 700px;
+  }
+}
+@media (min-width: 1200px) {
+  .search-container {
+    max-width: 900px;
+  }
+}
 
   .controls {
     display: flex !important;

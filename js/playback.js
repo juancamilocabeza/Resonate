@@ -68,11 +68,21 @@ const RetryStrategy = {
 // Playback state manager
 class PlaybackStateManager {
   constructor() {
+    // Cargar configuración persistente
+    let repeat = RepeatMode.CONTEXT;
+    let shuffle = false;
+    try {
+      const config = JSON.parse(localStorage.getItem('playbackConfig'));
+      if (config) {
+        if (Object.values(RepeatMode).includes(config.repeat)) repeat = config.repeat;
+        if (typeof config.shuffle === 'boolean') shuffle = config.shuffle;
+      }
+    } catch {}
     this.state = {
       current: { track: null, context: null, contextId: null },
       queue: { items: [], position: 0 },
-      // Resonate UX: playback should be continuous by default
-      modes: { repeat: RepeatMode.CONTEXT, shuffle: false },
+      // Resonate UX: playback should be continuous por defecto
+      modes: { repeat, shuffle },
       history: { played: [], skipped: [] },
       stats: { consecutiveFailures: 0, totalFailures: 0 }
     };
@@ -86,11 +96,29 @@ class PlaybackStateManager {
   setRepeatMode(mode) {
     if (Object.values(RepeatMode).includes(mode)) {
       this.state.modes.repeat = mode;
+      this.saveConfig();
     }
   }
 
   setShuffleMode(enabled) {
     this.state.modes.shuffle = enabled;
+    this.saveConfig();
+  }
+
+  saveConfig() {
+    try {
+      localStorage.setItem('playbackConfig', JSON.stringify({
+        repeat: this.state.modes.repeat,
+        shuffle: this.state.modes.shuffle
+      }));
+    } catch {}
+  }
+
+  getPlaybackConfigStatus() {
+    return {
+      repeat: this.state.modes.repeat,
+      shuffle: this.state.modes.shuffle
+    };
   }
 
   addToHistory(track, action = 'played') {
@@ -404,6 +432,11 @@ class FavoritesContextHandler extends BaseContextHandler {
       return;
     }
 
+    // Precarga favoritas (mínimo 10) antes de continuar
+    if (typeof window.audioCache === 'object' && window.audioCache && Array.isArray(state.favorites)) {
+      window.audioCache.preloadFavorites(state.favorites);
+    }
+
     // Try to get next track from queue or context
     const nextTrack = await this.getNextTrack();
     if (nextTrack) {
@@ -487,6 +520,11 @@ class SearchContextHandler extends BaseContextHandler {
     if (repeatMode === RepeatMode.OFF) {
       showStatus('Current search results finished', 'info', 2000);
       return;
+    }
+
+    // Precarga resultados de búsqueda (mínimo 10) antes de continuar
+    if (typeof window.audioCache === 'object' && window.audioCache && Array.isArray(playbackManager.contextData.search.items)) {
+      window.audioCache.preloadSearchResults(playbackManager.contextData.search.items);
     }
 
     const nextTrack = await this.getNextTrack();
@@ -652,6 +690,13 @@ const enhancedPlaybackController = new EnhancedPlaybackController();
 
 // Expose core playback primitives for other scripts (search.js loads after playback.js).
 window.playbackManager = playbackManager;
+// Utilidad para mostrar el estado actual en la UI
+window.getPlaybackConfigStatus = function() {
+  if (window.playbackStateManager && typeof window.playbackStateManager.getPlaybackConfigStatus === 'function') {
+    return window.playbackStateManager.getPlaybackConfigStatus();
+  }
+  return { repeat: RepeatMode.CONTEXT, shuffle: false };
+};
 window.playbackStateManager = playbackStateManager;
 window.enhancedPlaybackController = enhancedPlaybackController;
 window.RepeatMode = RepeatMode;
