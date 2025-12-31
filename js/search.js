@@ -656,8 +656,9 @@ async function playOptimizedSearchResult(result, index, allResults) {
       // Ocultar listas después de obtener los archivos pero antes de reproducir
       if (typeof window.hideSearchResults === 'function') window.hideSearchResults();
       if (typeof window.hideFavoritesList === 'function') window.hideFavoritesList();
-      
+
       if (files.length > 1) {
+        // Es un álbum
         if (window.Loaders) {
           window.Loaders.showLoader({ type: 'spinner' });
         }
@@ -673,27 +674,26 @@ async function playOptimizedSearchResult(result, index, allResults) {
         if (window.playbackManager) window.playbackManager.setAlbumPlaylist(result.identifier, files, 0);
         // Don't preload entire album - only load queue after first track starts
         const firstTrack = files[0];
-        // Loader se ocultar� cuando audio.play() inicie
         await window.playAudioTrackOptimized(firstTrack, result.identifier, 0, files.length);
-        // Load queue AFTER first track starts playing to avoid blocking
         window.loadPlaybackQueue?.('album', files, 1);
       } else {
-        // Continuous search context: loop through the real result list (no caps)
+        // Es un single: preparar cola solo con singles para reproducción continua
+        const singles = allResults.filter(item => (item.trackCount === 1) || (item.isAlbum === false));
+        const singleIndex = singles.findIndex(item => item.identifier === result.identifier);
         if (window.playbackManager) {
-          window.playbackManager.setContext('search', allResults, index);
+          window.playbackManager.setContext('search', singles, singleIndex);
         }
-        // Load FIFO queue with real search results (starting AFTER current)
-        window.loadPlaybackQueue?.('search', allResults, index + 1);
+        window.loadPlaybackQueue?.('search', singles, singleIndex + 1);
         const track = files[0];
-        // Loader se ocultar� cuando audio.play() inicie
         await window.playAudioTrackOptimized(track, result.identifier);
       }
     } else {
+      window.showStatus?.('No playable audio files found for this result.', 'warning', 3000);
       throw new Error('No playable audio files found');
     }
   } catch (error) {
     logSearch(error, 'error', 'PLAYBACK');
-    
+
     if (allResults && index < allResults.length - 1) {
       logSearch('Issue with this track, trying next', 'warn', 'UI');
       window.showStatus?.(`Issue with this track, trying next`, 'error', 1500);
@@ -701,8 +701,13 @@ async function playOptimizedSearchResult(result, index, allResults) {
         playOptimizedSearchResult(allResults[index + 1], index + 1, allResults);
       }, 1500);
     } else {
-      logSearch('Playback error occurred', 'error', 'UI');
-      window.showStatus?.(`Playback error occurred`, 'error');
+      // Mensaje claro y sugerencia al usuario
+      logSearch('Playback finished or unrecoverable error', 'error', 'UI');
+      window.showStatus?.(
+        'Playback finished. Try searching for more music or add tracks to your favorites.',
+        'info',
+        4000
+      );
     }
   }
 }

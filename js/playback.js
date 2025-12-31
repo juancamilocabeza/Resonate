@@ -1148,45 +1148,22 @@ function loadPlaybackQueue(context, items, startIndex = 0) {
     return;
   }
 
-  const queueSize = PLAYBACK_CONSTANTS.DEFAULT_QUEUE_SIZE; // Keep small to reduce parallel downloads
-  // Queue behavior by context and shuffle mode
-  if (context === 'favorites') {
+  // Unificar: para álbumes, favoritos y búsqueda, cargar toda la lista para reproducción continua
+  if (context === 'favorites' || context === 'search' || context === 'album') {
     if (state.shuffleFavorites) {
-      // Favorites random mode: load random selection for FIFO queue
-      const shuffled = [...items].sort(() => Math.random() - 0.5);
-      state.playbackQueue = shuffled.slice(0, queueSize);
-    } else {
-      // Sequential mode: take next `queueSize` items from startIndex
-      for (let i = 0; i < queueSize; i++) {
-        const index = (startIndex + i) % items.length;
-        if (items[index]) state.playbackQueue.push(items[index]);
-      }
-    }
-  } else if (context === 'search') {
-    if (state.shuffleFavorites) {
-      // Search random mode: shuffle and play all results
+      // Modo aleatorio: reproducir toda la lista mezclada
       const shuffledAll = [...items].sort(() => Math.random() - 0.5);
       state.playbackQueue = shuffledAll.slice();
     } else {
-      // Sequential mode: play linearly all results from startIndex
-      for (let i = 0; i < items.length; i++) {
-        const index = (startIndex + i) % items.length;
-        if (items[index]) state.playbackQueue.push(items[index]);
-      }
-    }
-  } else if (context === 'album') {
-    // Albums should remain continuous; keep only one prefetch, but store full remaining list.
-    if (state.shuffleFavorites) {
-      const shuffledAll = [...items].sort(() => Math.random() - 0.5);
-      state.playbackQueue = shuffledAll.slice();
-    } else {
+      // Modo secuencial: reproducir toda la lista desde startIndex
       for (let i = 0; i < items.length; i++) {
         const index = (startIndex + i) % items.length;
         if (items[index]) state.playbackQueue.push(items[index]);
       }
     }
   } else {
-    // Default behavior (other contexts): load next `queueSize` items
+    // Otros contextos: mantener comportamiento anterior (cola limitada)
+    const queueSize = PLAYBACK_CONSTANTS.DEFAULT_QUEUE_SIZE;
     for (let i = 0; i < queueSize; i++) {
       const index = (startIndex + i) % items.length;
       if (items[index]) state.playbackQueue.push(items[index]);
@@ -1230,9 +1207,52 @@ function forcePlay() {
 
 // FUNCIÓN: Reproducir desde cola FIFO de favoritos
 async function playFromFavoritesQueue(specificTrack = null) {
-  if (state.isLoading || state.favorites.length === 0) {
-    logPlayback('debug', `playFromFavoritesQueue: Blocked (isLoading=${state.isLoading}, favorites=${state.favorites.length})`);
+  // Si la lista de favoritos está vacía, sugerir acción al usuario
+  if (state.isLoading || !Array.isArray(state.favorites) || state.favorites.length === 0) {
+    logPlayback('debug', `playFromFavoritesQueue: Blocked (isLoading=${state.isLoading}, favorites=${state.favorites ? state.favorites.length : 0})`);
+    safeShowStatus('No favorites to play. Add tracks to your favorites to start listening.', 'info', 4000);
     return;
+  }
+
+  // Detección de ciclo infinito con un solo favorito
+  if (state.favorites.length === 1) {
+    safeShowStatus('Only one favorite in your list. Add more for continuous playback.', 'warning', 4000);
+  }
+
+  // Actualización automática de la cola si la lista de favoritos cambia
+  if (!window._favoritesListenerAttached) {
+    window._favoritesListenerAttached = true;
+    // Observa cambios en la lista de favoritos y actualiza la cola si es necesario
+    const updateFavoritesQueue = () => {
+      if (Array.isArray(state.favorites) && state.favorites.length > 0) {
+        // Si se está reproduciendo favoritos, recargar la cola
+        if (state.isPlayingFavorites) {
+          logPlayback('info', 'Favorites list changed, updating playback queue');
+          // Mantener el track actual si es posible
+          const currentTrack = state.currentTrack;
+          playFromFavoritesQueue(currentTrack || null);
+        }
+      }
+    };
+    // Hook para cambios en favoritos (asume que se usa un setter o evento personalizado)
+    if (window.addEventListener) {
+      window.addEventListener('favoritesChanged', updateFavoritesQueue);
+    }
+    // Fallback: monkey patch push/splice para detectar cambios (si no hay eventos)
+    if (Array.isArray(state.favorites)) {
+      const origPush = state.favorites.push;
+      state.favorites.push = function() { const r = origPush.apply(this, arguments); updateFavoritesQueue(); return r; };
+      const origSplice = state.favorites.splice;
+      state.favorites.splice = function() { const r = origSplice.apply(this, arguments); updateFavoritesQueue(); return r; };
+    }
+  }
+  // Prefetch configurable: precargar varios favoritos si es posible
+  const PREFETCH_COUNT = 3; // configurable
+  if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.prefetchAudio === 'function') {
+    const toPrefetch = state.favorites.slice(0, PREFETCH_COUNT).filter(f => f && f.url);
+    toPrefetch.forEach(fav => {
+      audioCache.prefetchAudio(fav.url, true).catch((err) => logPlayback('debug', 'Failed to prefetch favorite', err));
+    });
   }
 
   logPlayback('debug', `playFromFavoritesQueue: Starting (${specificTrack ? 'specific track' : 'queue'})`);
@@ -1273,7 +1293,6 @@ async function playFromFavoritesQueue(specificTrack = null) {
     if (specificTrack) {
       logPlayback('debug', `Using specific track: ${specificTrack.title || specificTrack.url || '[unknown]'}`);
       track = specificTrack;
-
       const idx = favoritesItems.findIndex(f => (f && track && f.url && track.url && f.url === track.url) || (f && track && f.id && track.id && f.id === track.id));
       const contextIndex = idx >= 0 ? idx : 0;
 
@@ -1288,6 +1307,7 @@ async function playFromFavoritesQueue(specificTrack = null) {
       loadPlaybackQueue('favorites', favoritesItems, 0);
 
       if (state.playbackQueue.length === 0) {
+        safeShowStatus('No playable favorites in your list. Add tracks to your favorites.', 'info', 4000);
         throw new Error('Could not load playback queue');
       }
 
@@ -1296,10 +1316,15 @@ async function playFromFavoritesQueue(specificTrack = null) {
     }
 
     if (!track.url) {
+      safeShowStatus('Audio URL not available in favorite. Try another track or re-add to favorites.', 'error', 4000);
       throw new Error('Audio URL not available in favorite');
     }
 
     safeShowStatus('Getting next track from queue', 'info');
+    // Sincronización visual: actualizar UI de favoritos si existe función
+    if (typeof window.updateFavoritesListUI === 'function') {
+      window.updateFavoritesListUI();
+    }
 
     // Loader se ocultará cuando audio.play() inicie
     await playAudioTrackOptimized(track, track.id, track.trackIndex, track.totalTracks);
@@ -1309,9 +1334,9 @@ async function playFromFavoritesQueue(specificTrack = null) {
   } catch (error) {
     logPlayback('error', 'Error in playFromFavoritesQueue', error);
 
-    // Handle offline/cache errors by trying next track
+    // Manejo de errores mejorado y sugerencias
     if (error.message.includes('Offline and audio not available in cache')) {
-      safeShowStatus('This track isn\'t cached offline', 'error', 2000);
+      safeShowStatus('This track isn\'t cached offline. Try reconnecting or add more favorites.', 'error', 3000);
       // Try next track in queue if available
       if (state.playbackQueue.length > 0) {
         setTimeout(() => {
@@ -1319,10 +1344,14 @@ async function playFromFavoritesQueue(specificTrack = null) {
         }, 2000);
         return;
       } else {
-        safeShowStatus('All offline tracks have finished', 'error', 3000);
+        safeShowStatus('All offline tracks have finished. Add more favorites or check your connection.', 'error', 4000);
       }
     } else {
-      safeShowStatus('Something went wrong with playback', 'error');
+      safeShowStatus('Something went wrong with playback. Try adding new favorites or refreshing the page.', 'error', 4000);
+    }
+    // Sincronización visual: actualizar UI de favoritos si existe función
+    if (typeof window.updateFavoritesListUI === 'function') {
+      window.updateFavoritesListUI();
     }
   }
 }
