@@ -105,6 +105,36 @@ function updateDescriptionUI(track) {
   }
 }
 window.updateDescriptionUI = updateDescriptionUI;
+
+// Title Ticker Management
+function updateTitleTicker(titleText) {
+  if (!elements.title) return;
+  
+  // Remover cualquier clase de ticker anterior
+  elements.title.classList.remove('ticker');
+  
+  if (!titleText) return;
+  
+  // Usar setTimeout para asegurar que el DOM se actualice primero
+  setTimeout(() => {
+    // Obtener el ancho disponible del contenedor padre
+    const container = elements.title.parentElement;
+    if (!container) return;
+    
+    const containerWidth = container.clientWidth;
+    const titleWidth = elements.title.scrollWidth;
+    
+    // Activar ticker si el texto es más ancho que el contenedor
+    if (titleWidth > containerWidth) {
+      // Calcular duración basada en la longitud del texto
+      const duration = Math.max(15, Math.ceil((titleText.length / 30) * 15));
+      elements.title.style.animationDuration = duration + 's';
+      elements.title.classList.add('ticker');
+    }
+  }, 0);
+}
+window.updateTitleTicker = updateTitleTicker;
+
 const SEARCH_CONFIG = {
   resultsPerPage: 6,
   timeout: 8000,
@@ -2186,6 +2216,7 @@ function loadSavedPlaybackState() {
       // Restore the track information (but don't start playing yet)
       state.currentTrack = savedState.track;
       elements.title.textContent = state.currentTrack.title;
+      window.updateTitleTicker(state.currentTrack.title);
       elements.creator.textContent = state.currentTrack.totalTracks > 1 ?
         `${state.currentTrack.creator || 'Unknown'} (${state.currentTrack.trackIndex + 1}/${state.currentTrack.totalTracks})` :
         `${state.currentTrack.creator || 'Unknown'}`;

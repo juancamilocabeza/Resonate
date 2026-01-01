@@ -1086,10 +1086,13 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
   audioEl.currentTime = 0;
 
   if (totalTracks > 1) {
-    window.elements.title.textContent = `${track.title || 'Untitled'}`;
+    const titleText = `${track.title || 'Untitled'}`;
+    window.elements.title.textContent = titleText;
+    window.updateTitleTicker(titleText);
     window.elements.creator.textContent = `${track.creator || 'Unknown'} (${trackIndex + 1}/${totalTracks})`;
   } else {
     window.elements.title.textContent = track.title;
+    window.updateTitleTicker(track.title);
     window.elements.creator.textContent = track.creator;
   }
 
@@ -1397,6 +1400,7 @@ function forcePlay() {
     state.isInitialized = true;
     showStatus('Resonate is waking up', 'info');
     window.elements.title.textContent = '';
+    window.updateTitleTicker('');
     window.elements.creator.textContent = '';
   }
 

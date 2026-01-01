@@ -343,6 +343,16 @@ h3 {
   }
 }
 
+/* Title Ticker Animation */
+@keyframes titleTicker {
+  0% {
+    transform: translateX(100%);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
 .current-track-info {
   width: 100%;
   text-align: center;
@@ -387,6 +397,8 @@ h3 {
   justify-content: center;
   gap: 0;
   width: 100%;
+  overflow: hidden;
+  position: relative;
 }
 
 .title {
@@ -400,6 +412,16 @@ h3 {
   margin: 0;
   text-align: center;
   width: 100%;
+  display: inline-block;
+  transition: none;
+}
+
+.title.ticker {
+  overflow: visible;
+  text-overflow: clip;
+  animation: titleTicker 15s linear infinite;
+  padding: 0 20px;
+  width: auto;
 }
 
 .creator {
