@@ -99,7 +99,7 @@ async function performOptimizedSearch(query, page = 0) {
   }
   setSearchActiveUI(true);
   if (window.Loaders) {
-    window.Loaders.showLoader({ type: 'spinner' });
+    window.Loaders.showLoader({ type: 'spinner', showProgress: false });
   }
   try {
     // Optimized query compatible with Archive.org API
@@ -644,7 +644,7 @@ async function playOptimizedSearchResult(result, index, allResults) {
   
   try {
     if (window.Loaders) {
-      window.Loaders.showLoader({ type: 'spinner' });
+      window.Loaders.showLoader({ type: 'spinner', showProgress: false });
     }
     
     logSearch('Loading track...', 'info', 'UI');
@@ -674,7 +674,7 @@ async function playOptimizedSearchResult(result, index, allResults) {
       if (files.length > 1) {
         // Es un álbum
         if (window.Loaders) {
-          window.Loaders.showLoader({ type: 'spinner' });
+          window.Loaders.showLoader({ type: 'spinner', showProgress: false });
         }
         logSearch('Found an album with tracks', 'info', 'UI');
         window.showStatus?.(`Found an album with tracks`, 'info', 2000);
@@ -691,7 +691,7 @@ async function playOptimizedSearchResult(result, index, allResults) {
         if (result.description && !firstTrack.description) {
           firstTrack.description = result.description;
         }
-        await window.playAudioTrackOptimized(firstTrack, result.identifier, 0, files.length);
+        await window.playAudioTrackOptimized(firstTrack, result.identifier, 0, files.length, false);
         window.loadPlaybackQueue?.('album', files, 1);
       } else {
         // Es un single: preparar cola solo con singles para reproducción continua
@@ -725,7 +725,7 @@ async function playOptimizedSearchResult(result, index, allResults) {
           if (window.Loaders) window.Loaders.hideLoader();
           return;
         }
-        await window.playAudioTrackOptimized(track, result.identifier);
+        await window.playAudioTrackOptimized(track, result.identifier, 0, 1, false);
       }
     } else {
       window.showStatus?.('No playable audio files found for this result.', 'warning', 3000);
@@ -758,7 +758,7 @@ async function playSpecificSearchTrack(track, albumId, trackIndex, totalTracks) 
   
   try {
     if (window.Loaders) {
-      window.Loaders.showLoader({ type: 'spinner' });
+      window.Loaders.showLoader({ type: 'spinner', showProgress: false });
     }
     
     logSearch('Loading track...', 'info', 'UI');
@@ -781,7 +781,7 @@ async function playSpecificSearchTrack(track, albumId, trackIndex, totalTracks) 
     if (window.Loaders) window.Loaders.hideLoader();
     
     // Loader se ocultar� cuando audio.play() inicie
-    await window.playAudioTrackOptimized(track, albumId, trackIndex, totalTracks);
+    await window.playAudioTrackOptimized(track, albumId, trackIndex, totalTracks, false);
   } catch (error) {
     logSearch(error, 'error', 'PLAYBACK');
 
@@ -795,7 +795,7 @@ async function playAlbumFromFavorites(albumId) {
   if (st && st.isLoading) return;
 
   if (window.Loaders) {
-    window.Loaders.showLoader({ type: 'spinner' });
+    window.Loaders.showLoader({ type: 'spinner', showProgress: false });
   }
 
   if (typeof window.hideSearchResults === 'function') window.hideSearchResults();
@@ -813,12 +813,12 @@ async function playAlbumFromFavorites(albumId) {
     const files = await fetchOptimizedPlayableFiles(albumId);
     if (files.length > 0) {
       if (window.Loaders) {
-        window.Loaders.showLoader({ type: 'spinner' });
+        window.Loaders.showLoader({ type: 'spinner', showProgress: false });
       }
       if (window.playbackManager) window.playbackManager.setAlbumPlaylist(albumId, files, 0);
       // Don't preload entire album - start playing first track immediately
       // Loader se ocultar� cuando audio.play() inicie
-      await window.playAudioTrackOptimized(files[0], albumId, 0, files.length);
+      await window.playAudioTrackOptimized(files[0], albumId, 0, files.length, false);
       // Load queue AFTER first track starts playing to avoid blocking
       window.loadPlaybackQueue?.('album', files, 1);
       logSearch('Now playing your full album', 'info', 'UI');
@@ -843,7 +843,7 @@ async function playAlbumFromFavorites(albumId) {
 async function playOptimizedFavorite(favoriteIndex = 0) {
   if (!window.state?.isLoading && window.state?.favorites?.length > 0) {
     if (window.Loaders) {
-      window.Loaders.showLoader({ type: 'spinner' });
+      window.Loaders.showLoader({ type: 'spinner', showProgress: false });
     }
     
     logSearch('Loading favorite...', 'info', 'UI');
@@ -899,7 +899,7 @@ async function playOptimizedFavorite(favoriteIndex = 0) {
         return playOptimizedFavorite(nextIndex);
       }
       if (window.Loaders) window.Loaders.hideLoader();
-      await window.playAudioTrackOptimized(track, favorite.id, favorite.trackIndex, favorite.totalTracks);
+      await window.playAudioTrackOptimized(track, favorite.id, favorite.trackIndex, favorite.totalTracks, false);
       if (typeof window.updateShuffleButton === 'function') window.updateShuffleButton();
     } catch (error) {
       logSearch(error, 'error', 'PLAYBACK');

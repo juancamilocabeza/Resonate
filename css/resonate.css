@@ -3057,6 +3057,11 @@ select:focus {
   }
 }
 
+.loader-overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.5); z-index: 9999; backdrop-filter: blur(4px); }
+.loader-container { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 16px 20px; min-width: 140px; background: rgba(12,12,12,0.65); border: 1px solid rgba(110,231,183,0.3); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
+.loader-spinner { width: var(--loader-size, 40px); height: var(--loader-size, 40px); border-radius: 50%; border: var(--loader-border-width, 4px) solid #f3f3f3; border-top: var(--loader-border-width, 4px) solid #6ee7b7aa; animation: spin var(--loader-duration, 2s) linear infinite; }
+.loader-progress { font-size: 14px; font-weight: 700; letter-spacing: 0.6px; color: #f8fafc; text-shadow: 0 2px 8px rgba(0,0,0,0.4); text-align: center; min-width: 48px; }
+
 /* ===== Tracklist V2 (scoped under .tracks-container) ===== */
 .tracks-container .tlv2 { padding: 8px 4px; border-top: 1px solid rgba(255,255,255,0.06); }
 .tracks-container .tlv2-list { display: flex; flex-direction: column; gap: 6px; }

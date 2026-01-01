@@ -730,11 +730,56 @@ async function fetchWithTimeout(resource, options = {}, timeout = 8000) {
   }
 }
 
+// Reliable download with progress events (XMLHttpRequest gives lengthComputable)
+function downloadBlobWithProgress(url, timeoutMs, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', url, true);
+    xhr.responseType = 'blob';
+    xhr.timeout = timeoutMs || 20000;
+
+    xhr.onprogress = (event) => {
+      if (typeof onProgress === 'function') {
+        onProgress(event.loaded, event.lengthComputable ? event.total : 0);
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        // Final progress push before completion
+        if (typeof onProgress === 'function') {
+          onProgress(xhr.response.size, xhr.response.size);
+        }
+        console.debug(`[XHR] Download complete: ${xhr.response.size} bytes`);
+        resolve(xhr.response);
+      } else {
+        reject(new Error(`HTTP Error: ${xhr.status}`));
+      }
+    };
+
+    xhr.onerror = () => reject(new Error('Network error'));
+    xhr.ontimeout = () => reject(new Error('Timeout while downloading audio'));
+
+    try {
+      xhr.send();
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
 function formatTime(seconds) {
   if (!isFinite(seconds) || seconds < 0) return '0:00';
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = Math.floor(seconds % 60);
   return `${minutes}:${String(remainingSeconds).padStart(2, '0')}`;
+}
+
+// Update loader percentage when available; no-op if loader is hidden
+function updateLoaderProgress(value) {
+  if (window.Loaders && typeof window.Loaders.setProgress === 'function') {
+    window.Loaders.setProgress(value);
+  }
 }
 
 // Load audio from cache or network
@@ -750,11 +795,25 @@ async function loadAudioWithCache(track) {
   }
 
   try {
+    updateLoaderProgress(10);
     // Intentar obtener de la caché primero
     const cacheResult = typeof audioCache !== 'undefined' && audioCache && typeof audioCache.get === 'function' ? await audioCache.get(track.url, true) : null;
 
     if (cacheResult && cacheResult.blob) {
       logPlayback('info', `Playing from cache: ${track.title || track.url}`);
+      
+      // Simulate smooth progress from cache hit (20→85%) with faster steps
+      const cacheProgressStart = 20;
+      const cacheProgressEnd = 85;
+      const cacheSteps = 13;
+      const cacheStepDuration = 30; // ms between steps - faster for cache
+      
+      for (let i = 1; i <= cacheSteps; i++) {
+        await new Promise(resolve => setTimeout(resolve, cacheStepDuration));
+        const pct = cacheProgressStart + Math.round(((i / cacheSteps) * (cacheProgressEnd - cacheProgressStart)));
+        updateLoaderProgress(pct);
+      }
+      
       const blobUrl = URL.createObjectURL(cacheResult.blob);
       return blobUrl;
     }
@@ -780,7 +839,11 @@ async function loadAudioWithCache(track) {
           const fileSizeMB = fileSize / (1024 * 1024);
           useDirectStreaming = fileSizeMB > PLAYBACK_CONSTANTS.MAX_BLOB_SIZE_MB;
           logPlayback('info', `File size: ${fileSizeMB.toFixed(2)}MB, using ${useDirectStreaming ? 'direct streaming' : 'blob download'}`);
+          updateLoaderProgress(25);
         }
+      } else if (headResponse.status === 405) {
+        // Some hosts block HEAD; ignore
+        logPlayback('debug', 'HEAD not allowed, falling back to GET for download');
       }
     } catch (headError) {
       logPlayback('warn', 'Could not determine file size, using blob download', headError);
@@ -790,23 +853,101 @@ async function loadAudioWithCache(track) {
     if (useDirectStreaming) {
       logPlayback('info', `Streaming large file directly: ${track.title || track.url}`);
       safeShowStatus('Streaming audio...', 'info');
+      updateLoaderProgress(65);
       // Return direct URL for streaming
       return track.url;
     }
 
-    // Load from network with playback priority
-    const response = await fetchWithTimeout(track.url, { timeout: PLAYBACK_CONSTANTS.PREFETCH_TIMEOUT_MS });
+    // Load from network with progress proportional to bytes downloaded
+    const startProgress = 20; // after artwork/state is ready
+    const endProgress = 85;   // just before canplay (leave 85 to 100 for canplay)
+    let lastProgress = 35;
+    updateLoaderProgress(lastProgress);
 
-    if (!response.ok) {
-      throw new Error(`HTTP Error: ${response.status}`);
+    let totalBytes = fileSize > 0 ? fileSize : 0;
+    let fallbackTimer = null;
+    let hasReceivedProgress = false;
+
+    const stopFallback = () => {
+      if (fallbackTimer) {
+        clearInterval(fallbackTimer);
+        fallbackTimer = null;
+      }
+    };
+
+    const nudgeProgress = (step = 2) => {
+      lastProgress = Math.min(endProgress - 1, lastProgress + step);
+      updateLoaderProgress(lastProgress);
+      console.debug(`[Loader] nudge -> ${lastProgress}%`);
+    };
+
+    // Start fallback timer immediately if we don't know the total size
+    if (!totalBytes) {
+      console.debug('[Loader] No total size from HEAD, starting fallback progress timer');
+      fallbackTimer = setInterval(() => nudgeProgress(5), 200); // More aggressive: +5% every 200ms
     }
 
-    const blob = await response.blob();
+    let blob;
+    try {
+      blob = await downloadBlobWithProgress(
+        track.url,
+        PLAYBACK_CONSTANTS.PREFETCH_TIMEOUT_MS,
+        (loaded, total) => {
+          hasReceivedProgress = true;
+          console.debug(`[Loader] onprogress: loaded=${loaded}, total=${total}`);
+
+          // Stop fallback if we now have actual progress
+          if (fallbackTimer && (total || totalBytes)) {
+            stopFallback();
+          }
+
+          const denom = total || totalBytes;
+          if (denom) {
+            const ratio = Math.min(1, loaded / denom);
+            const pct = startProgress + Math.round(ratio * (endProgress - startProgress));
+            lastProgress = pct;
+            updateLoaderProgress(pct);
+            console.debug(`[Loader] progress -> ${pct}% (${loaded}/${denom})`);
+          }
+        }
+      );
+
+      stopFallback();
+      console.debug(`[Loader] Download complete. hasReceivedProgress=${hasReceivedProgress}, blob.size=${blob?.size}`);
+
+      // If progress events lacked total but HEAD had it, push based on final size
+      if (totalBytes && blob && blob.size) {
+        const ratio = Math.min(1, blob.size / totalBytes);
+        const pct = startProgress + Math.round(ratio * (endProgress - startProgress));
+        lastProgress = pct;
+        updateLoaderProgress(pct);
+        console.debug(`[Loader] final progress -> ${pct}% based on blob.size`);
+      } else {
+        // Ensure we're at least at 85% before handing off to canplay
+        lastProgress = Math.max(lastProgress, endProgress);
+        updateLoaderProgress(lastProgress);
+        console.debug(`[Loader] forced to endProgress (${endProgress}%)`);
+      }
+    } catch (xhrError) {
+      stopFallback();
+      console.debug(`[Loader] XHR failed, falling back to fetch`, xhrError);
+      // Fallback to fetch if XHR fails
+      const response = await fetchWithTimeout(track.url, { timeout: PLAYBACK_CONSTANTS.PREFETCH_TIMEOUT_MS });
+      if (!response.ok) {
+        throw new Error(`HTTP Error: ${response.status}`);
+      }
+      updateLoaderProgress(60);
+      blob = await response.blob();
+      updateLoaderProgress(85);
+    }
+
+    stopFallback();
 
     // Save to cache for future use (background)
     const isFavorite = isTrackFavorite(track);
     if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.put === 'function') {
-      audioCache.put(track.url, response.clone(), isFavorite, {
+      const cacheResponse = new Response(blob);
+      audioCache.put(track.url, cacheResponse, isFavorite, {
         title: track.title || 'Untitled',
         creator: track.creator || 'Unknown',
         url: track.url
@@ -816,6 +957,8 @@ async function loadAudioWithCache(track) {
     }
 
     const blobUrl = URL.createObjectURL(blob);
+
+    updateLoaderProgress(85);
 
     safeShowStatus('Audio file loaded successfully', 'info');
     return blobUrl;
@@ -863,10 +1006,11 @@ function preloadNextTrack() {
 
 
 // Play audio track with UI updates and state management
-async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalTracks = 1) {
-  // Show loader based on context
+async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalTracks = 1, showProgress = true) {
+  // Show loader based on context - ONLY playback shows progress
   if (window.Loaders) {
-    window.Loaders.showLoader({ type: 'spinner' });
+    window.Loaders.showLoader({ type: 'spinner', showProgress: showProgress });
+    updateLoaderProgress(10);
   }
 
   if (!track || !track.url) {
@@ -902,6 +1046,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
   }
 
   await setArtwork(track, identifier);
+  updateLoaderProgress(20);
 
   state.currentTrack = {
     ...track,
@@ -912,6 +1057,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
     isAlbumTrack: totalTracks > 1,
     albumId: identifier
   };
+  updateLoaderProgress(30);
 
   updateFavoriteButton();
   updateMediaSessionMetadata(track, identifier);
@@ -930,6 +1076,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
     const onCanPlay = () => {
       cleanup();
       // Hide loader when track is ready to play
+      updateLoaderProgress(100);
       if (window.Loaders) window.Loaders.hideLoader();
       
       audio.play().then(async () => {
@@ -981,6 +1128,9 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
     // Cargar audio con caché
     loadAudioWithCache(track)
       .then(audioUrl => {
+        // Progress already advanced in loadAudioWithCache (20→85%)
+        // Skip updating here to preserve cache progress
+        updateLoaderProgress(85);
         // Revoke only blob: URLs that we created
         if (state.currentBlobUrl && typeof state.currentBlobUrl === 'string' && state.currentBlobUrl.startsWith('blob:')) {
           try {
@@ -995,6 +1145,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
         audio.src = audioUrl;
         audio.preload = 'metadata';
         audio.load();
+        updateLoaderProgress(88);
 
         timeoutId = setTimeout(() => {
           if (audio.readyState < 1) {
@@ -1003,6 +1154,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
           }
         }, PLAYBACK_CONSTANTS.AUDIO_LOAD_TIMEOUT_MS);
 
+        audio.addEventListener('loadeddata', () => updateLoaderProgress(92), { once: true });
         audio.addEventListener('canplay', onCanPlay, { once: true });
         audio.addEventListener('error', onError, { once: true });
       })
@@ -2018,7 +2170,7 @@ function setupMediaSession() {
 
 async function playTrack(trackId) {
   if (window.Loaders) {
-    window.Loaders.showLoader({ type: 'spinner' });
+    window.Loaders.showLoader({ type: 'spinner', showProgress: false });
   }
   try {
     const audioElement = getAudioEl();
