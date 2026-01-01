@@ -870,11 +870,12 @@ async function loadAudioWithCache(track) {
     // Load from network with progress proportional to bytes downloaded
     const startProgress = 25; // after artwork/state is ready
     const endProgress = 85;   // just before canplay (leave 85 to 100 for canplay)
-    let lastProgress = 35;
+    let lastProgress = 40; // start a bit higher to reduce initial stall
     updateLoaderProgress(lastProgress);
 
     let totalBytes = fileSize > 0 ? fileSize : 0;
     let fallbackTimer = null;
+    let guardTimer = null;
     let hasReceivedProgress = false;
 
     const stopFallback = () => {
@@ -896,6 +897,16 @@ async function loadAudioWithCache(track) {
       fallbackTimer = setInterval(() => nudgeProgress(5), 180); // More aggressive
     }
 
+    // Guard timer: if no onprogress yet, keep moving forward smoothly
+    guardTimer = setInterval(() => {
+      if (hasReceivedProgress || lastProgress >= endProgress - 2) {
+        clearInterval(guardTimer);
+        guardTimer = null;
+        return;
+      }
+      nudgeProgress(3);
+    }, 140);
+
     let blob;
     try {
       blob = await downloadBlobWithProgress(
@@ -904,10 +915,14 @@ async function loadAudioWithCache(track) {
         (loaded, total) => {
           hasReceivedProgress = true;
           console.debug(`[Loader] onprogress: loaded=${loaded}, total=${total}`);
-
-          // Stop fallback if we now have actual progress
-          if (fallbackTimer && (total || totalBytes)) {
+          const hasTotal = (total || totalBytes);
+          // Stop timers when real progress with total arrives
+          if (hasTotal) {
             stopFallback();
+            if (guardTimer) {
+              clearInterval(guardTimer);
+              guardTimer = null;
+            }
           }
 
           const denom = total || totalBytes;
@@ -922,6 +937,10 @@ async function loadAudioWithCache(track) {
       );
 
       stopFallback();
+      if (guardTimer) {
+        clearInterval(guardTimer);
+        guardTimer = null;
+      }
       console.debug(`[Loader] Download complete. hasReceivedProgress=${hasReceivedProgress}, blob.size=${blob?.size}`);
 
       // If progress events lacked total but HEAD had it, push based on final size
@@ -951,6 +970,10 @@ async function loadAudioWithCache(track) {
     }
 
     stopFallback();
+    if (guardTimer) {
+      clearInterval(guardTimer);
+      guardTimer = null;
+    }
 
     // Save to cache for future use (background)
     const isFavorite = isTrackFavorite(track);
@@ -1028,9 +1051,15 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
   const startInitialRamp = () => {
     let rampValue = 10;
     rampTimer = setInterval(() => {
-      rampValue = Math.min(30, rampValue + 5);
+      // push up to 55% quickly to avoid visible freeze at 30%
+      rampValue = Math.min(55, rampValue + 6);
+      // stop ramping if actual progress already ahead
+      if (activeLoaderProgress >= rampValue) {
+        stopInitialRamp();
+        return;
+      }
       updateLoaderProgress(rampValue);
-      if (rampValue >= 30) stopInitialRamp();
+      if (rampValue >= 55) stopInitialRamp();
     }, 120);
   };
   const stopInitialRamp = () => {
