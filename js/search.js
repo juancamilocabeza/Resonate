@@ -691,7 +691,7 @@ async function playOptimizedSearchResult(result, index, allResults) {
         if (result.description && !firstTrack.description) {
           firstTrack.description = result.description;
         }
-        await window.playAudioTrackOptimized(firstTrack, result.identifier, 0, files.length, false);
+        await window.playAudioTrackOptimized(firstTrack, result.identifier, 0, files.length, true);
         window.loadPlaybackQueue?.('album', files, 1);
       } else {
         // Es un single: preparar cola solo con singles para reproducción continua
@@ -725,7 +725,7 @@ async function playOptimizedSearchResult(result, index, allResults) {
           if (window.Loaders) window.Loaders.hideLoader();
           return;
         }
-        await window.playAudioTrackOptimized(track, result.identifier, 0, 1, false);
+        await window.playAudioTrackOptimized(track, result.identifier, 0, 1, true);
       }
     } else {
       window.showStatus?.('No playable audio files found for this result.', 'warning', 3000);
@@ -781,7 +781,7 @@ async function playSpecificSearchTrack(track, albumId, trackIndex, totalTracks) 
     if (window.Loaders) window.Loaders.hideLoader();
     
     // Loader se ocultar� cuando audio.play() inicie
-    await window.playAudioTrackOptimized(track, albumId, trackIndex, totalTracks, false);
+    await window.playAudioTrackOptimized(track, albumId, trackIndex, totalTracks, true);
   } catch (error) {
     logSearch(error, 'error', 'PLAYBACK');
 
@@ -818,7 +818,7 @@ async function playAlbumFromFavorites(albumId) {
       if (window.playbackManager) window.playbackManager.setAlbumPlaylist(albumId, files, 0);
       // Don't preload entire album - start playing first track immediately
       // Loader se ocultar� cuando audio.play() inicie
-      await window.playAudioTrackOptimized(files[0], albumId, 0, files.length, false);
+      await window.playAudioTrackOptimized(files[0], albumId, 0, files.length, true);
       // Load queue AFTER first track starts playing to avoid blocking
       window.loadPlaybackQueue?.('album', files, 1);
       logSearch('Now playing your full album', 'info', 'UI');
@@ -899,7 +899,7 @@ async function playOptimizedFavorite(favoriteIndex = 0) {
         return playOptimizedFavorite(nextIndex);
       }
       if (window.Loaders) window.Loaders.hideLoader();
-      await window.playAudioTrackOptimized(track, favorite.id, favorite.trackIndex, favorite.totalTracks, false);
+      await window.playAudioTrackOptimized(track, favorite.id, favorite.trackIndex, favorite.totalTracks, true);
       if (typeof window.updateShuffleButton === 'function') window.updateShuffleButton();
     } catch (error) {
       logSearch(error, 'error', 'PLAYBACK');
