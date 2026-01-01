@@ -10,43 +10,43 @@
   const THEME_KEY = 'resonate-theme';
   const DEFAULT_THEME = 'night'; // Por defecto, modo noche (ahorra energía)
   
-  // Obtener el tema guardado o usar el predeterminado
+  // Get saved theme or use default
   function getSavedTheme() {
     try {
       return localStorage.getItem(THEME_KEY) || DEFAULT_THEME;
     } catch (e) {
-      console.warn('No se pudo acceder a localStorage:', e);
+      console.warn('Could not access localStorage:', e);
       return DEFAULT_THEME;
     }
   }
 
-  // Guardar el tema seleccionado
+  // Save selected theme
   function saveTheme(theme) {
     try {
       localStorage.setItem(THEME_KEY, theme);
     } catch (e) {
-      console.warn('No se pudo guardar el tema:', e);
+      console.warn('Could not save theme:', e);
     }
   }
 
-  // Aplicar el tema al documento
+  // Apply theme to document
   function applyTheme(theme) {
-    // Remover temas anteriores
+    // Remove previous themes
     document.documentElement.removeAttribute('data-theme');
     
-    // Aplicar nuevo tema si no es el predeterminado
+    // Apply new theme if not default
     if (theme !== 'night') {
       document.documentElement.setAttribute('data-theme', theme);
     }
     
-    // Actualizar el color del theme-color meta tag
+    // Update theme-color meta tag
     updateThemeColor(theme);
     
-    // Log para debugging
-    console.log(`Tema aplicado: ${theme}`);
+    // Log for debugging
+    console.log(`Theme applied: ${theme}`);
   }
 
-  // Actualizar el color del meta tag theme-color
+  // Update theme-color meta tag
   function updateThemeColor(theme) {
     const themeColorMeta = document.querySelector('meta[name="theme-color"]');
     if (!themeColorMeta) return;
@@ -60,43 +60,43 @@
     themeColorMeta.setAttribute('content', colors[theme] || colors['night']);
   }
 
-  // Inicializar el gestor de temas
+  // Initialize theme manager
   function initThemeManager() {
     const themeSelector = document.getElementById('theme-selector');
     
     if (!themeSelector) {
-      console.warn('No se encontró el selector de tema');
+      console.warn('Theme selector not found');
       return;
     }
 
-    // Aplicar tema guardado al cargar
+    // Apply saved theme on load
     const savedTheme = getSavedTheme();
     applyTheme(savedTheme);
     themeSelector.value = savedTheme;
 
-    // Escuchar cambios en el selector
+    // Listen for selector changes
     themeSelector.addEventListener('change', function(e) {
       const selectedTheme = e.target.value;
       applyTheme(selectedTheme);
       saveTheme(selectedTheme);
       
-      // Mostrar mensaje temporal (opcional)
+      // Show temporary notification (optional)
       showThemeNotification(selectedTheme);
     });
 
-    // Detectar preferencia del sistema (opcional)
+    // Detect system preference (optional)
     detectSystemPreference();
   }
 
   // Mostrar notificación de cambio de tema
   function showThemeNotification(theme) {
     const messages = {
-      'day': 'Modo Día activado',
-      'night': 'Modo Noche activado - Ahorra energía',
-      'energy-saver': 'Modo Ahorro de Energía activado - Máximo ahorro'
+      'day': 'Day mode enabled',
+      'night': 'Night mode enabled - Battery saver',
+      'energy-saver': 'Eco mode enabled - Maximum battery saving'
     };
 
-    const message = messages[theme] || 'Tema cambiado';
+    const message = messages[theme] || 'Theme changed';
     
     // Buscar el contenedor de mensajes de estado
     const statusMessages = document.getElementById('status-messages');
@@ -136,20 +136,20 @@
     }
   }
 
-  // Detectar preferencia del sistema
+  // Detect system preference
   function detectSystemPreference() {
-    // Detectar si el sistema prefiere modo oscuro
+    // Detect if system prefers dark mode
     if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      // Solo aplicar si no hay preferencia guardada
+      // Only apply if no saved preference
       if (!localStorage.getItem(THEME_KEY)) {
         applyTheme('night');
       }
     }
 
-    // Escuchar cambios en la preferencia del sistema
+    // Listen for system preference changes
     if (window.matchMedia) {
       window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
-        // Solo aplicar si el usuario no ha seleccionado manualmente un tema
+        // Only apply if user hasn't manually selected a theme
         if (!localStorage.getItem(THEME_KEY)) {
           const newTheme = e.matches ? 'night' : 'day';
           applyTheme(newTheme);
@@ -162,14 +162,14 @@
     }
   }
 
-  // Exponer funciones globales si es necesario
+  // Expose global functions if needed
   window.resonateTheme = {
     applyTheme,
     getSavedTheme,
     saveTheme
   };
 
-  // Inicializar cuando el DOM esté listo
+  // Initialize when DOM is ready
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initThemeManager);
   } else {
