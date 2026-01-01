@@ -775,11 +775,20 @@ function formatTime(seconds) {
   return `${minutes}:${String(remainingSeconds).padStart(2, '0')}`;
 }
 
-// Update loader percentage when available; no-op if loader is hidden
+let activeLoaderProgress = 0;
+
+// Update loader percentage when available; monotonic to avoid regressions
 function updateLoaderProgress(value) {
+  const numeric = Number.isFinite(Number(value)) ? Number(value) : 0;
+  const clamped = Math.max(0, Math.min(100, Math.round(numeric)));
+  activeLoaderProgress = Math.max(activeLoaderProgress, clamped);
   if (window.Loaders && typeof window.Loaders.setProgress === 'function') {
-    window.Loaders.setProgress(value);
+    window.Loaders.setProgress(activeLoaderProgress);
   }
+}
+
+function resetLoaderProgress() {
+  activeLoaderProgress = 0;
 }
 
 // Load audio from cache or network
@@ -802,11 +811,11 @@ async function loadAudioWithCache(track) {
     if (cacheResult && cacheResult.blob) {
       logPlayback('info', `Playing from cache: ${track.title || track.url}`);
       
-      // Simulate smooth progress from cache hit (20→85%) with faster steps
+      // Simulate smooth progress from cache hit (20→85%) with very short steps
       const cacheProgressStart = 20;
       const cacheProgressEnd = 85;
-      const cacheSteps = 13;
-      const cacheStepDuration = 30; // ms between steps - faster for cache
+      const cacheSteps = 14;
+      const cacheStepDuration = 25; // faster cadence for cache
       
       for (let i = 1; i <= cacheSteps; i++) {
         await new Promise(resolve => setTimeout(resolve, cacheStepDuration));
@@ -859,7 +868,7 @@ async function loadAudioWithCache(track) {
     }
 
     // Load from network with progress proportional to bytes downloaded
-    const startProgress = 20; // after artwork/state is ready
+    const startProgress = 25; // after artwork/state is ready
     const endProgress = 85;   // just before canplay (leave 85 to 100 for canplay)
     let lastProgress = 35;
     updateLoaderProgress(lastProgress);
@@ -884,7 +893,7 @@ async function loadAudioWithCache(track) {
     // Start fallback timer immediately if we don't know the total size
     if (!totalBytes) {
       console.debug('[Loader] No total size from HEAD, starting fallback progress timer');
-      fallbackTimer = setInterval(() => nudgeProgress(5), 200); // More aggressive: +5% every 200ms
+      fallbackTimer = setInterval(() => nudgeProgress(5), 180); // More aggressive
     }
 
     let blob;
@@ -1010,8 +1019,27 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
   // Show loader based on context - ONLY playback shows progress
   if (window.Loaders) {
     window.Loaders.showLoader({ type: 'spinner', showProgress: showProgress });
+    resetLoaderProgress();
     updateLoaderProgress(10);
   }
+
+  // Kick off a short ramp so the UI doesn't sit at 10%
+  let rampTimer = null;
+  const startInitialRamp = () => {
+    let rampValue = 10;
+    rampTimer = setInterval(() => {
+      rampValue = Math.min(30, rampValue + 5);
+      updateLoaderProgress(rampValue);
+      if (rampValue >= 30) stopInitialRamp();
+    }, 120);
+  };
+  const stopInitialRamp = () => {
+    if (rampTimer) {
+      clearInterval(rampTimer);
+      rampTimer = null;
+    }
+  };
+  if (showProgress) startInitialRamp();
 
   if (!track || !track.url) {
     if (window.Loaders) window.Loaders.hideLoader();
@@ -1123,6 +1151,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
       audio.removeEventListener('canplay', onCanPlay);
       audio.removeEventListener('error', onError);
       clearTimeout(timeoutId);
+      stopInitialRamp();
     };
 
     // Cargar audio con caché
