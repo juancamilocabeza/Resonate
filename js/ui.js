@@ -4,7 +4,9 @@ const elements = {
   title: document.getElementById('title'),
   creator: document.getElementById('creator'),
   description: document.getElementById('description'),
-  statusMessages: document.getElementById('status-messages'),
+    statusMessages: document.getElementById('status-messages'),
+    descriptionContainer: document.getElementById('description-container'),
+    toggleDescriptionBtn: document.getElementById('toggle-description-btn'),
   progressBar: document.getElementById('progress-bar'),
   progressSection: document.querySelector('.progress-section'),
   progress: document.getElementById('progress'),
@@ -38,8 +40,73 @@ const elements = {
 };
 
 // Search configuration
+// Llamar a updateDescriptionUI cada vez que se actualiza la pista
+if (!window._resonateDescriptionInit) {
+  window._resonateDescriptionInit = true;
+  document.addEventListener('DOMContentLoaded', function() {
+    if (window.state && window.state.currentTrack) {
+      updateDescriptionUI(window.state.currentTrack);
+    }
+  });
+}
+// Sanitiza HTML básico para evitar XSS
+function sanitizeHTML(html) {
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = html;
+  // Elimina scripts y eventos
+  Array.from(tempDiv.querySelectorAll('script, iframe, object, embed')).forEach(e => e.remove());
+  Array.from(tempDiv.querySelectorAll('*')).forEach(el => {
+    Array.from(el.attributes).forEach(attr => {
+      if (/^on/i.test(attr.name)) el.removeAttribute(attr.name);
+    });
+  });
+  return tempDiv.innerHTML;
+}
+
+// Control de descripción de pista
+function updateDescriptionUI(track) {
+  if (!elements.descriptionContainer || !elements.toggleDescriptionBtn) return;
+  // ...existing code...
+  // Modal elements
+  const modal = document.getElementById('description-modal');
+  const modalDesc = document.getElementById('modal-description');
+  const closeModalBtn = document.getElementById('close-description-modal');
+
+  // Buscar la mejor descripción disponible
+  const bestDescription = window.getBestDescription
+    ? window.getBestDescription(track, track?._albumDescription, '')
+    : (track?.description || track?._albumDescription || '');
+
+  if (bestDescription && bestDescription.trim() !== '') {
+    elements.descriptionContainer.style.display = 'block';
+    elements.toggleDescriptionBtn.style.display = '';
+    elements.toggleDescriptionBtn.textContent = 'Info';
+    elements.toggleDescriptionBtn.disabled = false;
+    console.log('[updateDescriptionUI] Mostrando botón de descripción');
+    elements.toggleDescriptionBtn.onclick = function() {
+      console.log('[updateDescriptionUI] Click en botón de descripción, mostrando modal');
+      if (modal && modalDesc) {
+        modalDesc.innerHTML = sanitizeHTML(bestDescription);
+        modal.style.display = 'flex';
+      }
+    };
+    if (closeModalBtn && modal) {
+      closeModalBtn.onclick = function() {
+        console.log('[updateDescriptionUI] Cerrando modal de descripción');
+        modal.style.display = 'none';
+      };
+    }
+  } else {
+    console.log('[updateDescriptionUI] Ocultando botón de descripción, no hay descripción disponible');
+    elements.descriptionContainer.style.display = 'none';
+    elements.toggleDescriptionBtn.style.display = 'none';
+    if (modal) modal.style.display = 'none';
+    if (modalDesc) modalDesc.innerHTML = '';
+  }
+}
+window.updateDescriptionUI = updateDescriptionUI;
 const SEARCH_CONFIG = {
-  resultsPerPage: 12,
+  resultsPerPage: 6,
   timeout: 8000,
   enableLazyLoading: true
 };
@@ -790,7 +857,9 @@ function setArtwork(track, identifier) {
   img.style.objectFit = 'cover';
   img.style.borderRadius = '12px';
 
-  const archiveCoverUrl = `https://archive.org/services/img/${identifier}`;
+  // Evitar que el identificador sea undefined
+  const safeIdentifier = identifier || (track && track.id) || (track && track.identifier) || 'default';
+  const archiveCoverUrl = `https://archive.org/services/img/${safeIdentifier}`;
 
   // Create load handler function
   const handleLoad = () => {
@@ -929,37 +998,22 @@ function setupSearchFocusBehavior() {
 
     const currentQuery = elements.searchInput.value.trim();
 
-    // If input is empty, show search history
+    // Si el input está vacío, mostrar historial
     if (currentQuery === '') {
       displaySearchHistory();
       state.searchActive = true;
-      // Auto-hide favorites when search is active
       hideFavoritesList();
       return;
     }
 
-    // If input has text, show results or perform search
+    // Si hay texto, solo mostrar resultados existentes si coinciden
     if (currentQuery.length > 0) {
-      // Auto-hide favorites when search is active
       hideFavoritesList();
-
-      // If we have matching results for this query, show them
       if (state.searchResults.length > 0 && currentQuery === state.currentSearchQuery) {
         elements.searchResults.classList.add('active');
         state.searchActive = true;
-        return;
       }
-
-      // Otherwise, perform new search with current query
-      elements.searchResults.classList.add('active');
-      state.searchActive = true;
-      (window.performOptimizedSearch || performOptimizedSearch)(currentQuery, 0).then(result => {
-        displaySearchResults(result);
-      }).catch(error => {
-        console.error('Search error:', error);
-        showStatus('Search problem occurred', 'error');
-
-      });
+      // No lanzar nueva búsqueda automáticamente
     }
   });
 
@@ -1374,6 +1428,8 @@ function createSearchResultElement(result, globalIndex) {
   resultEl.setAttribute('role', 'article');
   resultEl.setAttribute('tabindex', '0');
   resultEl.setAttribute('aria-label', `${result.title || 'Untitled'} by ${result.creator || 'Unknown'}`);
+  // Asociar la descripción y otros datos al DOM para uso en tracklist-v2.js
+  resultEl.__resultData = result;
   // Persist explicit track-list classification so background metadata respects it
   if (result.isTrackList) {
     resultEl.dataset.isTrackList = 'true';

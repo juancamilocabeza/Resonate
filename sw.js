@@ -16,6 +16,7 @@ const STATIC_FILES = [
   '/js/playback.js',
   '/js/search.js',
   '/js/ui-v2.js',
+  '/js/tracklist-v2.js',
   '/js/offline.js',
   '/js/onboarding.js',
   '/js/initialization.js',

@@ -44,7 +44,32 @@
         }
       }
 
+      // Buscar descripción a nivel de álbum/resultado si falta en el track
+      let albumDescription = '';
+      let resultDescription = '';
+      if (tracksContainer && tracksContainer.closest('.search-result')) {
+        const resultData = tracksContainer.closest('.search-result').__resultData;
+        if (resultData) {
+          if (resultData.description) albumDescription = resultData.description;
+          if (resultData.description) resultDescription = resultData.description;
+        }
+      }
+
+      // ...existing code...
+
       files.forEach((track, index) => {
+        // Asignar la mejor descripción disponible
+        track.description = window.getBestDescription
+          ? window.getBestDescription(track, albumDescription, resultDescription)
+          : (track.description || albumDescription || resultDescription || '');
+        // Propagar descripción al reproducir desde favoritos
+        track._albumDescription = albumDescription;
+
+        // Actualizar la UI de descripción para cada track renderizado
+        if (window.updateDescriptionUI && typeof window.updateDescriptionUI === 'function') {
+          window.updateDescriptionUI(track);
+        }
+
         const row = document.createElement('div');
         row.className = 'tlv2-row';
 
@@ -65,6 +90,13 @@
         creator.textContent = track.creator || 'Unknown';
         info.appendChild(title);
         info.appendChild(creator);
+        // Mostrar descripción si existe
+        if (track.description) {
+          const desc = document.createElement('div');
+          desc.className = 'tlv2-description';
+          desc.textContent = track.description;
+          info.appendChild(desc);
+        }
 
         const right = document.createElement('div');
         right.className = 'tlv2-right';

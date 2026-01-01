@@ -703,7 +703,7 @@ window.RepeatMode = RepeatMode;
 
 // Fetch with timeout for network operations
 async function fetchWithTimeout(resource, options = {}, timeout = 8000) {
-  const requestedTimeout = (options && typeof options.timeout === 'number') ? options.timeout : timeout;
+  const requestedTimeout = (options && typeof options.timeout === 'number') ? options.timeout : 20000;
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort('Timeout exceeded'), requestedTimeout);
 
@@ -892,21 +892,13 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
     window.elements.creator.textContent = track.creator;
   }
 
-  // ACTUALIZACIÓN: Mostrar descripción si está disponible de forma segura
-  if (window.elements.description) {
-    if (track.description && track.description.trim() !== '') {
-      window.elements.description.textContent = track.description;
-      // Asegurar que el contenedor padre esté visible
-      if (window.elements.description.parentElement) {
-        window.elements.description.parentElement.style.display = 'block';
-      }
-    } else {
-      window.elements.description.textContent = '';
-      // Ocultar el contenedor si no hay descripción
-      if (window.elements.description.parentElement) {
-        window.elements.description.parentElement.style.display = 'none';
-      }
-    }
+  // Mostrar/ocultar descripción usando UI avanzada
+  // Asignar la mejor descripción disponible antes de mostrar
+  track.description = window.getBestDescription
+    ? window.getBestDescription(track, track._albumDescription, '')
+    : (track.description || track._albumDescription || '');
+  if (window.updateDescriptionUI) {
+    window.updateDescriptionUI(track);
   }
 
   await setArtwork(track, identifier);
@@ -1148,25 +1140,33 @@ function loadPlaybackQueue(context, items, startIndex = 0) {
     return;
   }
 
+  // Filter out items with invalid or undefined URLs
+  const validItems = items.filter(item => item && item.url && typeof item.url === 'string' && !item.url.includes('/undefined') && item.url.trim() !== '' && (item.url.endsWith('.mp3') || item.url.endsWith('.ogg')));
+
+  if (validItems.length === 0) {
+    // No valid items to load into FIFO
+    return;
+  }
+
   // Unificar: para álbumes, favoritos y búsqueda, cargar toda la lista para reproducción continua
   if (context === 'favorites' || context === 'search' || context === 'album') {
     if (state.shuffleFavorites) {
       // Modo aleatorio: reproducir toda la lista mezclada
-      const shuffledAll = [...items].sort(() => Math.random() - 0.5);
+      const shuffledAll = [...validItems].sort(() => Math.random() - 0.5);
       state.playbackQueue = shuffledAll.slice();
     } else {
       // Modo secuencial: reproducir toda la lista desde startIndex
-      for (let i = 0; i < items.length; i++) {
-        const index = (startIndex + i) % items.length;
-        if (items[index]) state.playbackQueue.push(items[index]);
+      for (let i = 0; i < validItems.length; i++) {
+        const index = (startIndex + i) % validItems.length;
+        if (validItems[index]) state.playbackQueue.push(validItems[index]);
       }
     }
   } else {
     // Otros contextos: mantener comportamiento anterior (cola limitada)
     const queueSize = PLAYBACK_CONSTANTS.DEFAULT_QUEUE_SIZE;
     for (let i = 0; i < queueSize; i++) {
-      const index = (startIndex + i) % items.length;
-      if (items[index]) state.playbackQueue.push(items[index]);
+      const index = (startIndex + i) % validItems.length;
+      if (validItems[index]) state.playbackQueue.push(validItems[index]);
     }
   }
 
@@ -1178,7 +1178,7 @@ function loadPlaybackQueue(context, items, startIndex = 0) {
   }
 
   // Prefetch just the immediate next track in context
-  intelligentPrefetchNextTracks(items, startIndex);
+  intelligentPrefetchNextTracks(validItems, startIndex);
 }
 
 // Force playback by determining context and playing

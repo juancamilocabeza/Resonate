@@ -653,6 +653,20 @@ async function playOptimizedSearchResult(result, index, allResults) {
     const files = await fetchOptimizedPlayableFiles(result.identifier);
     
     if (files.length > 0) {
+      // Guard: skip if file or URL is missing/invalid
+      const firstTrack = files[0];
+      if (!firstTrack || !firstTrack.url || typeof firstTrack.url !== 'string' || firstTrack.url.includes('/undefined') || firstTrack.url.trim() === '') {
+        logSearch('Invalid or missing audio URL in search result, skipping playback', 'warn', 'PLAYBACK');
+        window.showStatus?.('Invalid audio file for this result, skipping.', 'warning', 2000);
+        // Try next result if available
+        if (allResults && index < allResults.length - 1) {
+          setTimeout(() => {
+            playOptimizedSearchResult(allResults[index + 1], index + 1, allResults);
+          }, 1000);
+        }
+        if (window.Loaders) window.Loaders.hideLoader();
+        return;
+      }
       // Ocultar listas después de obtener los archivos pero antes de reproducir
       if (typeof window.hideSearchResults === 'function') window.hideSearchResults();
       if (typeof window.hideFavoritesList === 'function') window.hideFavoritesList();
@@ -673,18 +687,44 @@ async function playOptimizedSearchResult(result, index, allResults) {
         }
         if (window.playbackManager) window.playbackManager.setAlbumPlaylist(result.identifier, files, 0);
         // Don't preload entire album - only load queue after first track starts
-        const firstTrack = files[0];
+        // Propagar descripción del resultado al track si no la tiene
+        if (result.description && !firstTrack.description) {
+          firstTrack.description = result.description;
+        }
         await window.playAudioTrackOptimized(firstTrack, result.identifier, 0, files.length);
         window.loadPlaybackQueue?.('album', files, 1);
       } else {
         // Es un single: preparar cola solo con singles para reproducción continua
         const singles = allResults.filter(item => (item.trackCount === 1) || (item.isAlbum === false));
-        const singleIndex = singles.findIndex(item => item.identifier === result.identifier);
-        if (window.playbackManager) {
-          window.playbackManager.setContext('search', singles, singleIndex);
+        // Fetch playable files for all singles and filter out those with invalid URLs
+        const validSingles = [];
+        for (const single of singles) {
+          try {
+            const singleFiles = await fetchOptimizedPlayableFiles(single.identifier);
+            if (singleFiles && singleFiles[0] && singleFiles[0].url && typeof singleFiles[0].url === 'string' && !singleFiles[0].url.includes('/undefined') && singleFiles[0].url.trim() !== '') {
+              validSingles.push(single);
+            }
+          } catch (e) {
+            // skip invalid
+          }
         }
-        window.loadPlaybackQueue?.('search', singles, singleIndex + 1);
+        const singleIndex = validSingles.findIndex(item => item.identifier === result.identifier);
+        if (window.playbackManager) {
+          window.playbackManager.setContext('search', validSingles, singleIndex);
+        }
+        window.loadPlaybackQueue?.('search', validSingles, singleIndex + 1);
         const track = files[0];
+        if (!track || !track.url || typeof track.url !== 'string' || track.url.includes('/undefined') || track.url.trim() === '') {
+          logSearch('Invalid or missing audio URL for single, skipping playback', 'warn', 'PLAYBACK');
+          window.showStatus?.('Invalid audio file for this result, skipping.', 'warning', 2000);
+          if (allResults && index < allResults.length - 1) {
+            setTimeout(() => {
+              playOptimizedSearchResult(allResults[index + 1], index + 1, allResults);
+            }, 1000);
+          }
+          if (window.Loaders) window.Loaders.hideLoader();
+          return;
+        }
         await window.playAudioTrackOptimized(track, result.identifier);
       }
     } else {

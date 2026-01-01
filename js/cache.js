@@ -419,6 +419,10 @@ class AudioCache {
   }
 
   async prefetchAudio(url, priority = false) {
+    if (!url || url === 'undefined') {
+      logCache('warn', 'Skipping prefetch: invalid or undefined url');
+      return;
+    }
     if (!this.isInitialized) await this.init();
 
     try {
@@ -503,11 +507,13 @@ class AudioCache {
       return;
     }
 
-    const prefetchPromises = tracks.map(track =>
-      this.prefetchAudio(track.url, priority).catch(error => {
-        logCache('warn', `Failed to preload track: ${track.title}`);
-      })
-    );
+    const prefetchPromises = tracks
+      .filter(track => track && track.url && track.url !== 'undefined')
+      .map(track =>
+        this.prefetchAudio(track.url, priority).catch(error => {
+          logCache('warn', `Failed to preload track: ${track.title}`);
+        })
+      );
 
     await Promise.allSettled(prefetchPromises);
   }

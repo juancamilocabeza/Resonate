@@ -55,7 +55,7 @@
     <div class="main-player-section">
       <div class="player-container">
         <div class="player-content" id="player-content">
-            <div class="art" id="art">
+          <div class="art" id="art">
             <span class="hint"></span>
           </div>
           <div class="current-track-info">
@@ -63,7 +63,10 @@
               <div class="title" id="title"></div>
             </div>
             <div class="creator" id="creator"></div>
-            <button id="current-track-share" class="current-track-share" aria-label="Share current track" title="Share this track">🔗</button>
+            <button id="current-track-share" class="current-track-share" aria-label="Share current track" title="Share this track" style="display:none;">🔗</button>
+            <div id="description-container" style="display:none;">
+              <div id="toggle-description-btn" style="display:none;" aria-label="Show track description" title="Show description">Info</div>
+            </div>
           </div>
           <div class="progress-section">
             <div class="progress-bar" id="progress-bar">
@@ -81,19 +84,27 @@
         </div>
         <div id="status-messages"></div>
       </div>
+      <!-- Modal para descripción -->
+      <div id="description-modal" class="description-modal" style="display:none;">
+        <div class="description-modal-content">
+          <button id="close-description-modal" class="close-description-modal" aria-label="Close description">X</button>
+          <div id="modal-description" class="modal-description"></div>
+        </div>
+      </div>
     </div>
     <footer class="footer">
       <div>&copy; 2025 Resonate Player - Early Stage - All rights reserved.</div>
     </footer>
   </div>
   <audio id="audio" preload="metadata"></audio>
+  <script src="js/description-utils.js"></script>
   <script src="js/logger.js"></script>
   <script src="js/cache.js"></script>
   <script src="js/loaders.js"></script>
   <script src="js/playback.js"></script>
   <script src="js/search.js"></script>
-  <script src="js/tracklist-v2.js"></script>
-  <script src="js/ui-v2.js"></script>
+  <script src="js/tracklist.js"></script>
+  <script src="js/ui.js"></script>
   <script src="js/offline.js"></script>
   <script src="js/onboarding.js"></script>
   <script src="js/initialization.js"></script>
