@@ -2014,7 +2014,7 @@ function __resonateSetSearchOnlineState(isOnline) {
   // Keep search UX consistent with connectivity changes
   if (elements.searchInput) {
     elements.searchInput.disabled = !isOnline;
-    elements.searchInput.placeholder = isOnline ? "Search tracks" : "Search unavailable offline";
+    elements.searchInput.placeholder = isOnline ? "Discover something new to play" : "Search unavailable offline";
   }
 
   if (!isOnline) {
