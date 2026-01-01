@@ -269,7 +269,7 @@ self.addEventListener('install', (event) => {
         '/',
         '/index.html',
         '/css/resonate.css',
-        '/js/ui-v2.js',
+        '/js/ui.js',
         '/js/playback.js',
         '/js/search.js'
       ];

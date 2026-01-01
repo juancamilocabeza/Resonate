@@ -586,7 +586,13 @@ async function initializeApp() {
 
     if (searchVisible || favoritesVisible) {
       // Close overlays on back, but don't trap the user in the app.
-      if (searchVisible) window.hideSearchResults();
+      if (searchVisible) {
+        // Abort ongoing search operations before closing
+        if (typeof window.abortAllSearchOperations === 'function') {
+          window.abortAllSearchOperations();
+        }
+        window.hideSearchResults();
+      }
       if (favoritesVisible) window.hideFavoritesList();
       // Keep the user on the current page after closing overlays.
       window.history.pushState(null, '', window.location.href);

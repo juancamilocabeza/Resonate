@@ -16,6 +16,12 @@ const SEARCH_LIMITS = {
   prefetchNextCount: 2
 };
 
+// AbortController state for cancellable operations
+const searchControllers = {
+  currentSearch: null,
+  activeMetadata: new Map()
+};
+
 function getSearchStateRef() {
   return window.state || (typeof state !== 'undefined' ? state : null);
 }
@@ -97,6 +103,17 @@ async function performOptimizedSearch(query, page = 0) {
   if (cached) {
     return cached;
   }
+  
+  // Abort previous search if exists
+  if (searchControllers.currentSearch) {
+    searchControllers.currentSearch.abort();
+    logSearch('Previous search aborted', 'debug', 'NETWORK');
+  }
+  
+  // Create new AbortController for this search
+  searchControllers.currentSearch = new AbortController();
+  const signal = searchControllers.currentSearch.signal;
+  
   setSearchActiveUI(true);
   if (window.Loaders) {
     window.Loaders.showLoader({ type: 'spinner', showProgress: false });
@@ -121,6 +138,7 @@ async function performOptimizedSearch(query, page = 0) {
     const url = `https://archive.org/advancedsearch.php?q=${encodedQuery}&fl[]=identifier,title,creator,description&rows=${resultsPerPage}&page=${page + 1}&output=json&sort[]=downloads+desc`;
     const fetchFn = getSearchFetchFn();
     const response = await fetchFn(url, {
+      signal,
       timeout,
       headers: {
         'Accept': 'application/json'
@@ -200,6 +218,7 @@ async function performOptimizedSearch(query, page = 0) {
       const fallbackUrl = `https://archive.org/advancedsearch.php?q=${simpleQuery}&fl[]=identifier,title,creator&rows=${resultsPerPage}&page=${page + 1}&output=json&sort[]=downloads+desc`;
       const fetchFn2 = getSearchFetchFn();
       const fallbackResponse = await fetchFn2(fallbackUrl, {
+        signal,
         timeout
       });
       if (fallbackResponse && fallbackResponse.ok) {
@@ -257,6 +276,10 @@ async function performOptimizedSearch(query, page = 0) {
   } finally {
     if (window.Loaders) {
       window.Loaders.hideLoader();
+    }
+    // Clean up controller after search completes or is aborted
+    if (searchControllers.currentSearch) {
+      searchControllers.currentSearch = null;
     }
   }
 }
@@ -400,12 +423,20 @@ async function fetchOptimizedPlayableFiles(identifier) {
   if (cached) {
     return cached;
   }
+  
+  // Create AbortController for this metadata fetch
+  const controller = new AbortController();
+  searchControllers.activeMetadata.set(identifier, controller);
+  
   const url = `https://archive.org/metadata/${identifier}`;
   try {
     // Force longer timeout for metadata fetching
     const fetchFn = getSearchFetchFn();
     const metadataTimeout = getSearchConfigNumber('metadataTimeout', SEARCH_DEFAULTS.metadataTimeout);
-    const response = await fetchFn(url, { timeout: metadataTimeout });
+    const response = await fetchFn(url, { 
+      signal: controller.signal,
+      timeout: metadataTimeout 
+    });
     if (!(response && response.ok)) throw new Error('Error fetching metadata');
     const metadata = await response.json();
     if (!(metadata && metadata.files)) {
@@ -438,6 +469,9 @@ async function fetchOptimizedPlayableFiles(identifier) {
   } catch (error) {
     logSearch(error, 'error', 'NETWORK');
     throw error;
+  } finally {
+    // Clean up controller after metadata fetch completes or is aborted
+    searchControllers.activeMetadata.delete(identifier);
   }
 }
 
@@ -587,6 +621,34 @@ function createPlayableFiles(audioFiles, identifier, metadata) {
     }];
   }
   return playableFiles;
+}
+
+// Abort all active search operations (main search and metadata fetches)
+function abortAllSearchOperations() {
+  try {
+    // Abort main search
+    if (searchControllers.currentSearch) {
+      searchControllers.currentSearch.abort();
+      searchControllers.currentSearch = null;
+      logSearch('Search operation aborted by user', 'debug', 'NETWORK');
+    }
+    
+    // Abort all metadata fetches
+    if (searchControllers.activeMetadata.size > 0) {
+      searchControllers.activeMetadata.forEach((controller, identifier) => {
+        controller.abort();
+      });
+      searchControllers.activeMetadata.clear();
+      logSearch(`${searchControllers.activeMetadata.size} metadata fetches aborted`, 'debug', 'NETWORK');
+    }
+    
+    // Hide loader
+    if (window.Loaders) {
+      window.Loaders.hideLoader();
+    }
+  } catch (error) {
+    logSearch(`Error aborting search operations: ${error.message}`, 'warn', 'NETWORK');
+  }
 }
 
 function extractTrackInfo(file, itemMetadata) {
@@ -972,3 +1034,4 @@ window.playSpecificSearchTrack = playSpecificSearchTrack;
 window.playAlbumFromFavorites = playAlbumFromFavorites;
 window.playOptimizedFavorite = playOptimizedFavorite;
 window.playRandomSearchResults = playRandomSearchResults;
+window.abortAllSearchOperations = abortAllSearchOperations;

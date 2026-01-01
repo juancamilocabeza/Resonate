@@ -920,6 +920,11 @@ function formatTime(seconds) {
 }
 
 function hideSearchResults() {
+  // Abort any ongoing search operations
+  if (typeof window.abortAllSearchOperations === 'function') {
+    window.abortAllSearchOperations();
+  }
+  
   elements.searchResults.classList.remove('active');
   state.searchActive = false;
   hideFavoritesList();
