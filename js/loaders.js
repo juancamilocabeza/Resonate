@@ -41,6 +41,16 @@ const Loaders = (() => {
       textShadow: "0 2px 8px rgba(0, 0, 0, 0.4)",
       minWidth: "48px",
     },
+    messageText: {
+      color: "#d1d5db",
+      fontSize: "12px",
+      fontWeight: "400",
+      textAlign: "center",
+      lineHeight: "1.4",
+      maxWidth: "280px",
+      marginTop: "4px",
+      opacity: "0.85",
+    },
   };
 
   let activeLoader = null;
@@ -48,13 +58,17 @@ const Loaders = (() => {
   function showLoader({ type = "spinner", target = document.body, progress = 0, showProgress = false } = {}) {
     if (activeLoader) hideLoader();
 
-    const { overlay, progressEl } = createLoaderElement(type);
+    const { overlay, progressEl, messageEl } = createLoaderElement(type);
     overlay._progressEl = progressEl;
+    overlay._messageEl = messageEl;
     overlay._showProgress = showProgress;
 
-    // Hide progress text if showProgress is false
+    // Hide progress and message if showProgress is false
     if (!showProgress && progressEl) {
       progressEl.style.display = 'none';
+    }
+    if (!showProgress && messageEl) {
+      messageEl.style.display = 'none';
     }
 
     target.appendChild(overlay);
@@ -88,11 +102,17 @@ const Loaders = (() => {
     Object.assign(progressEl.style, defaultStyles.progressText);
     progressEl.textContent = "0%";
 
+    const messageEl = document.createElement("div");
+    messageEl.className = "loader-message";
+    Object.assign(messageEl.style, defaultStyles.messageText);
+    messageEl.textContent = "Resonate is ensuring audio quality for an offline experience";
+
     container.appendChild(loader);
     container.appendChild(progressEl);
+    container.appendChild(messageEl);
     overlay.appendChild(container);
 
-    return { overlay, progressEl };
+    return { overlay, progressEl, messageEl };
   }
 
   function setProgress(value) {

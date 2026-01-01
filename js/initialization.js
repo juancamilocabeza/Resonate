@@ -6,7 +6,6 @@ const INIT_TIMING = {
   FAVORITES_QUEUE_PREP_DELAY_MS: 500,
   FAVORITES_PRELOAD_DELAY_MS: 1000,
   OFFLINE_MODE_DELAY_MS: 100,
-  ONBOARDING_INIT_DELAY_MS: 500,
   SCRIPT_WAIT_MAX_ATTEMPTS: 500,
   SCRIPT_WAIT_INTERVAL_MS: 10
 };
@@ -655,14 +654,6 @@ async function initializeApp() {
 
   // Handle offline mode after everything is initialized
   schedule(handleOfflineMode, INIT_TIMING.OFFLINE_MODE_DELAY_MS);
-
-  // Initialize onboarding for first-time users
-  if (typeof onboardingManager !== 'undefined' && onboardingManager) {
-    schedule(() => {
-      onboardingManager.initialize();
-      window.logger?.info('Onboarding system initialized', 'UI');
-    }, INIT_TIMING.ONBOARDING_INIT_DELAY_MS);
-  }
 
 }
 

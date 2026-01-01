@@ -1724,10 +1724,10 @@ async function playNextInContext(maxRetries = 3) {
           return;
         }
 
-        await playAudioTrackOptimized(track, nextItem.id, nextItem.trackIndex, nextItem.totalTracks);
+        await playAudioTrackOptimized(track, nextItem.id, nextItem.trackIndex, nextItem.totalTracks, true);
       } else if (context === 'searchPlaylist') {
         // Loop through the preloaded playlist context.
-        await playAudioTrackOptimized(nextItem, nextItem.id, 0, 1);
+        await playAudioTrackOptimized(nextItem, nextItem.id, 0, 1, true);
       }
 
     } catch (error) {
