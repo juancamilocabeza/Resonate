@@ -1615,7 +1615,7 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
       `<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>` +
       `<stop offset='0%' stop-color='#1f2937'/><stop offset='100%' stop-color='#111827'/></linearGradient></defs>` +
       `<rect width='100%' height='100%' fill='url(#g)'/>` +
-      `<g fill='#6ee7b7' font-family='sans-serif' font-weight='700'>` +
+      `<g fill='#6ee7b7aa' font-family='sans-serif' font-weight='700'>` +
       `<text x='50%' y='48%' dominant-baseline='middle' text-anchor='middle' font-size='22'>No Cover</text>` +
       `<text x='50%' y='66%' dominant-baseline='middle' text-anchor='middle' font-size='12'>${(creator || '').toString().slice(0,24)}</text>` +
       `</g></svg>`
