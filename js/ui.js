@@ -1004,6 +1004,8 @@ function setupSearchOnEnter() {
       if (state.currentSearchQuery) {
 
         elements.searchResults.classList.add('active');
+        // Ocultar teclado al lanzar búsqueda
+        elements.searchInput.blur();
         (window.performOptimizedSearch || performOptimizedSearch)(state.currentSearchQuery, 0).then(result => {
           displaySearchResults(result);
           addToSearchHistory(state.currentSearchQuery);

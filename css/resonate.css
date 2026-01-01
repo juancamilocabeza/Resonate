@@ -364,7 +364,7 @@ h3 {
 
 #description-container {
   width: 100%;
-  margin: 0 auto 18px auto;
+  margin: 12px auto 18px auto;
   display: flex;
   flex-direction: column;
   align-items: center;
