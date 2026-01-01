@@ -12,23 +12,22 @@
   z-index: 9999;
 }
 .description-modal-content {
-  background: linear-gradient(135deg, #23272f 80%, #1a1a1a 100%);
-  border: 2px solid #444a;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.55), 0 0 0 4px #6ee7b7aa;
+  background: var(--card);
+  border: 2px solid rgba(128, 128, 128, 0.3);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.55), 0 0 0 4px rgba(110, 231, 183, 0.4);
   border-radius: 16px;
   padding: 32px 24px 24px 24px;
   max-width: 480px;
   width: 90vw;
   max-height: 70vh;
   overflow-y: auto;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.35);
   position: relative;
-  color: #fff;
+  color: var(--fg);
 }
 .modal-description {
   font-size: 16px;
   line-height: 1.7;
-  color: #e6e6e6;
+  color: var(--fg);
   white-space: pre-line;
   word-break: break-word;
   overflow-wrap: break-word;
@@ -38,7 +37,7 @@
   top: -10px;
   right: 16px;
   font-size: 18px;
-  color: #6ee7b7aa;
+  color: var(--accent-alt);
   cursor: pointer;
   z-index: 2;
   transition: color 0.2s, background 0.2s;
@@ -77,7 +76,7 @@
    For maintenance, update variables here and all uses update automatically.
  */
 :root {
-  /* Color Palette - Optimized for Daytime Visibility */
+  /* Color Palette - Modo Día (por defecto) - Ahorro de energía con colores oscuros */
   --bg: #0f0f0f;
   --fg: #ffffff;
   --muted: #b0b8c1;
@@ -146,6 +145,95 @@
   --loader-duration: 0.8s;
 }
 
+/* ===== TEMA NOCHE - Colores más profundos para OLED ===== */
+[data-theme="night"] {
+  --bg: #000000;
+  --fg: #e0e0e0;
+  --muted: #888888;
+  --accent: #c0c0d0;
+  --accent-alt: #2a8fc8;
+  --highlight: #c94a8e;
+  --secondary: #d9a820;
+  --card: #121212;
+  --btn: #1f1f1f;
+  --btn-hover: rgba(110, 231, 183, 0.15);
+  --btn-active: #0a0a0a;
+  --result-hover: rgba(110, 231, 183, 0.1);
+  --item-hover: rgba(255, 255, 255, 0.08);
+}
+
+/* ===== TEMA DÍA - Colores claros optimizados ===== */
+[data-theme="day"] {
+  --bg: #f5f5f5;
+  --fg: #1a1a1a;
+  --muted: #606060;
+  --accent: #2d2d3d;
+  --accent-alt: #1e6ba8;
+  --highlight: #d63384;
+  --secondary: #f59e0b;
+  --error: #dc2626;
+  --success: #16a34a;
+  --warning: #ea580c;
+  --card: #ffffff;
+  --btn: #e5e5e5;
+  --btn-hover: rgba(46, 196, 152, 0.2);
+  --btn-active: #d0d0d0;
+  --result-hover: rgba(46, 196, 152, 0.15);
+  --item-hover: rgba(0, 0, 0, 0.08);
+  --neutral: #374151;
+  
+  /* Sombras ajustadas para modo día */
+  --shadow-light: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --shadow-heavy: 0 8px 32px rgba(0, 0, 0, 0.15);
+  --shadow-subtle: 0 2px 4px rgba(0, 0, 0, 0.08);
+  --shadow-accent: 0 0 12px rgba(46, 196, 152, 0.2);
+}
+
+/* Ajustes adicionales para modo día */
+[data-theme="day"] header {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+[data-theme="day"] .description-modal {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="day"] h1 {
+  color: #10b981;
+  text-shadow: 0 2px 8px rgba(16, 185, 129, 0.2);
+}
+
+/* ===== MODO AHORRO DE ENERGÍA - Máximo ahorro con OLED puro ===== */
+[data-theme="energy-saver"] {
+  --bg: #000000;
+  --fg: #b0b0b0;
+  --muted: #707070;
+  --accent: #909090;
+  --accent-alt: #608090;
+  --highlight: #a06080;
+  --secondary: #b09050;
+  --error: #cc4444;
+  --success: #44aa44;
+  --warning: #cc8844;
+  --card: #0a0a0a;
+  --btn: #181818;
+  --btn-hover: rgba(110, 231, 183, 0.1);
+  --btn-active: #050505;
+  --result-hover: rgba(110, 231, 183, 0.08);
+  --item-hover: rgba(255, 255, 255, 0.05);
+  --neutral: #808080;
+}
+
+/* Reduce animaciones en modo ahorro de energía */
+[data-theme="energy-saver"] * {
+  animation-duration: 0.01s !important;
+  transition-duration: 0.05s !important;
+}
+
+[data-theme="energy-saver"] .art {
+  filter: brightness(0.7);
+}
+
 /* ===== GLOBAL RESET & BASE STYLES ===== */
 * {
   margin: 0;
@@ -197,12 +285,61 @@ header {
   align-items: center;
   position: sticky;
   top: 0;
-  background: linear-gradient(to bottom, var(--bg), rgba(15, 15, 15, 0.95));
+  background: linear-gradient(to bottom, var(--bg), var(--bg));
   z-index: 100;
-  padding: 0 var(--spacing-lg);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-bottom: 1px solid rgba(128, 128, 128, 0.2);
   backdrop-filter: blur(8px);
   transition: var(--transition-all-slow);
+  min-height: 56px;
+  gap: var(--spacing-md);
+}
+
+/* Header Controls Container */
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-lg);
+  flex-shrink: 0;
+}
+
+/* Theme Selector */
+.theme-selector {
+  background: var(--card);
+  color: var(--fg);
+  border: 1px solid rgba(110, 231, 183, 0.25);
+  border-radius: var(--border-radius);
+  padding: 5px 9px;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  outline: none;
+  min-width: 50px;
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.theme-selector:hover {
+  background: var(--card);
+  border-color: rgba(110, 231, 183, 0.5);
+  box-shadow: 0 2px 8px rgba(110, 231, 183, 0.15);
+  transform: translateY(-1px);
+}
+
+.theme-selector:focus {
+  border-color: #6ee7b7;
+  box-shadow: 0 0 0 2px rgba(110, 231, 183, 0.2);
+  outline: none;
+}
+}
+
+.theme-selector option {
+  background: var(--card);
+  color: var(--fg);
+  font-size: 14px;
+  padding: 4px;
 }
 
 /* ===== OFFLINE INDICATOR ===== */
@@ -250,7 +387,7 @@ header {
 
 /* ===== TYPOGRAPHY HIERARCHY ===== */
 h1 {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 700;
   letter-spacing: -0.5px;
   color: #6ee7b7;
@@ -261,9 +398,11 @@ h1 {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: var(--spacing-lg) 0;
+  padding: 0;
   transition: all var(--transition-normal);
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  flex-shrink: 1;
+  max-width: 140px;
 }
 
 h2 {
@@ -1364,34 +1503,37 @@ select:focus {
 
 .search-results-list {
   overflow-x: hidden;
-  height: auto; /* Allow natural expansion */
+  height: auto;
   max-width: 1024px;
   margin: 0 auto;
-  padding: 0 12px;
+  padding: var(--spacing-md);
   width: 100%;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
 }
 
 .search-result {
-  padding: 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 14px 16px;
+  border: 1px solid rgba(128, 128, 128, 0.1);
   cursor: pointer;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  transition: background-color 0.2s, padding-left 0.15s;
-  gap: 16px;
+  transition: all 0.2s ease;
+  gap: 12px;
   overflow-x: hidden;
-}
-
-.search-result:last-child {
-  border-bottom: none;
+  background: var(--card);
+  border-radius: var(--border-radius-large);
+  box-shadow: var(--shadow-subtle);
 }
 
 .search-result:hover {
-  background: var(--result-hover);
-  padding-left: 20px;
-  box-shadow: inset 0 0 0 1px rgba(110, 231, 183, 0.2);
+  background: var(--card);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-light);
+  border-color: rgba(110, 231, 183, 0.2);
 }
 
 .search-result:active {
@@ -2369,6 +2511,26 @@ select:focus {
 /* Legacy max-width queries for specific overrides */
 @media (max-width: 768px) {
   /* Layout optimizations for mobile - titles on top of buttons */
+  
+  /* Theme selector on mobile */
+  .theme-selector {
+    font-size: 12px;
+    padding: 3px 6px;
+    min-width: 45px;
+  }
+  
+  h1 {
+    font-size: 18px;
+    max-width: 100px;
+  }
+  
+  header {
+    padding: var(--spacing-sm);
+  }
+  
+  .header-controls {
+    gap: var(--spacing-sm);
+  }
   
   /* Improve button sizing on mobile */
   .result-favorite,

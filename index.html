@@ -36,15 +36,22 @@
       <h1 id="app-title" style="cursor: pointer;">
         Resonate
       </h1>
-      <button id="favorites-toggle" aria-label="View favorites" aria-expanded="false" aria-controls="favorites-list" title="Click to view your saved favorites">
-        <span class="favorites-icon">❤️</span>
-        <span class="favorites-count" id="favorites-count">0</span>
-      </button>
+      <div class="header-controls">
+        <select id="theme-selector" class="theme-selector" aria-label="Select theme" title="Change mode">
+          <option value="day">Day</option>
+          <option value="night">Night</option>
+          <option value="energy-saver">Eco</option>
+        </select>
+        <button id="favorites-toggle" aria-label="View favorites" aria-expanded="false" aria-controls="favorites-list" title="Click to view your saved favorites">
+          <span class="favorites-icon">❤️</span>
+          <span class="favorites-count" id="favorites-count">0</span>
+        </button>
+      </div>
     </header>
     <div class="discovery-section">
       <div class="search-section">
         <div class="search-container">
-          <input type="text" id="search-input" class="search-input" placeholder="Search..." aria-label="Search music" autocomplete="off">
+          <input type="text" id="search-input" class="search-input" placeholder="Discover something new to play" aria-label="Discover something new to play" autocomplete="off">
         </div>
         <div id="search-results" class="search-results">
           <div id="search-results-list" class="search-results-list" role="list" aria-label="Search results"></div>
@@ -97,6 +104,7 @@
     </footer>
   </div>
   <audio id="audio" preload="metadata"></audio>
+  <script src="js/theme.js"></script>
   <script src="js/description-utils.js"></script>
   <script src="js/logger.js"></script>
   <script src="js/cache.js"></script>

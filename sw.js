@@ -1,8 +1,8 @@
 // sw.js - Enhanced Service Worker for audio and metadata caching
 const CACHE_NAMES = {
-  APP: 'resonate-v3',
-  STATIC: 'static-v3',
-  METADATA: 'metadata-v3'
+  APP: 'resonate-v4',
+  STATIC: 'static-v4',
+  METADATA: 'metadata-v4'
 };
 
 // Critical files for caching
@@ -11,6 +11,7 @@ const STATIC_FILES = [
   '/index.html',
   '/manifest.json',
   '/css/resonate.css',
+  '/js/theme.js',
   '/js/logger.js',
   '/js/cache.js',
   '/js/playback.js',
