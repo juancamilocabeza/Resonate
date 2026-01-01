@@ -8,7 +8,14 @@
   'use strict';
 
   const THEME_KEY = 'resonate-theme';
-  const DEFAULT_THEME = 'night'; // Por defecto, modo noche (ahorra energía)
+  const DEFAULT_THEME = 'night'; // Default to night for energy savings
+  const THEMES = ['day', 'night', 'energy-saver'];
+  const THEME_LABELS = {
+    'day': 'Day',
+    'night': 'Night',
+    'energy-saver': 'Eco'
+  };
+  let themeToggleEl = null;
   
   // Get saved theme or use default
   function getSavedTheme() {
@@ -60,28 +67,42 @@
     themeColorMeta.setAttribute('content', colors[theme] || colors['night']);
   }
 
+  function setToggleLabel(theme) {
+    if (!themeToggleEl) return;
+    const label = THEME_LABELS[theme] || 'Theme';
+    themeToggleEl.textContent = label;
+    themeToggleEl.setAttribute('aria-label', `Theme: ${label}`);
+    themeToggleEl.setAttribute('title', `Switch theme (current: ${label})`);
+  }
+
+  function getNextTheme(current) {
+    const idx = THEMES.indexOf(current);
+    if (idx === -1) return DEFAULT_THEME;
+    return THEMES[(idx + 1) % THEMES.length];
+  }
+
   // Initialize theme manager
   function initThemeManager() {
-    const themeSelector = document.getElementById('theme-selector');
+    themeToggleEl = document.getElementById('theme-toggle');
     
-    if (!themeSelector) {
-      console.warn('Theme selector not found');
+    if (!themeToggleEl) {
+      console.warn('Theme toggle not found');
       return;
     }
 
     // Apply saved theme on load
     const savedTheme = getSavedTheme();
     applyTheme(savedTheme);
-    themeSelector.value = savedTheme;
+    setToggleLabel(savedTheme);
 
-    // Listen for selector changes
-    themeSelector.addEventListener('change', function(e) {
-      const selectedTheme = e.target.value;
-      applyTheme(selectedTheme);
-      saveTheme(selectedTheme);
-      
-      // Show temporary notification (optional)
-      showThemeNotification(selectedTheme);
+    // Cycle themes on click
+    themeToggleEl.addEventListener('click', function() {
+      const current = getSavedTheme();
+      const next = getNextTheme(current);
+      applyTheme(next);
+      saveTheme(next);
+      setToggleLabel(next);
+      showThemeNotification(next);
     });
 
     // Detect system preference (optional)
@@ -143,6 +164,7 @@
       // Only apply if no saved preference
       if (!localStorage.getItem(THEME_KEY)) {
         applyTheme('night');
+        setToggleLabel('night');
       }
     }
 
@@ -153,10 +175,8 @@
         if (!localStorage.getItem(THEME_KEY)) {
           const newTheme = e.matches ? 'night' : 'day';
           applyTheme(newTheme);
-          const themeSelector = document.getElementById('theme-selector');
-          if (themeSelector) {
-            themeSelector.value = newTheme;
-          }
+          saveTheme(newTheme);
+          setToggleLabel(newTheme);
         }
       });
     }

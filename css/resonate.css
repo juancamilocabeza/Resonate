@@ -319,11 +319,11 @@ header {
   top: 0;
   background: linear-gradient(to bottom, var(--bg), var(--bg));
   z-index: 100;
-  padding: var(--spacing-sm) var(--spacing-md);
+  padding: 0 var(--spacing-md);
   border-bottom: 1px solid rgba(128, 128, 128, 0.2);
   backdrop-filter: blur(8px);
   transition: var(--transition-all-slow);
-  min-height: 56px;
+  min-height: 30px;
   gap: var(--spacing-md);
 }
 
@@ -341,17 +341,22 @@ header {
   color: var(--fg);
   border: 1px solid rgba(110, 231, 183, 0.2);
   border-radius: var(--border-radius-small);
-  padding: 4px 8px;
+  height: 30px;
+  padding: 0 10px;
   font-size: 11px;
-  font-weight: 400;
+  font-weight: 500;
   font-family: inherit;
   cursor: pointer;
   transition: all var(--transition-fast);
   outline: none;
-  min-width: 45px;
+  min-width: 44px;
   text-align: center;
   box-shadow: none;
-  margin-right: 4px;
+  margin-right: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 .theme-selector:hover {
@@ -366,14 +371,7 @@ header {
   box-shadow: 0 0 0 1px rgba(110, 231, 183, 0.2);
   outline: none;
 }
-}
 
-.theme-selector option {
-  background: var(--card);
-  color: var(--fg);
-  font-size: 14px;
-  padding: 4px;
-}
 
 /* ===== OFFLINE INDICATOR ===== */
 .offline-indicator {

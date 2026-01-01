@@ -19,7 +19,6 @@ const STATIC_FILES = [
   '/js/ui.js',
   '/js/tracklist.js',
   '/js/offline.js',
-  '/js/onboarding.js',
   '/js/initialization.js',
   '/icons/favicon.svg',
   '/icons/maskable_icon_x192.png',
