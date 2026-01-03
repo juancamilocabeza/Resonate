@@ -13,7 +13,7 @@ const CACHE_CONSTANTS = {
   AUDIO_CACHE: {
     CACHE_NAME: 'audio-cache-v1',
     DB_NAME: 'ResonateAudioCache',
-    DB_VERSION: 8,
+    DB_VERSION: 9,
     DEFAULT_MAX_BYTES: 500 * 1024 * 1024,
     LIMIT_STEP_BYTES: 3 * 1024 * 1024 * 1024,
     MIN_FREE_BUFFER_BYTES: 50 * 1024 * 1024,
@@ -173,6 +173,24 @@ function createPriorityQueue(limit = CACHE_CONSTANTS.AUDIO_FETCH_QUEUE.DEFAULT_C
 // Shared queue for audio fetches: playback has priority over prefetch
 const audioFetchQueue = createPriorityQueue(CACHE_CONSTANTS.AUDIO_FETCH_QUEUE.DEFAULT_CONCURRENCY);
 
+function getNetworkProfile() {
+  const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  const downlink = connection && typeof connection.downlink === 'number' ? connection.downlink : 0;
+  const effectiveType = connection && connection.effectiveType ? connection.effectiveType : '';
+
+  if (effectiveType === '5g' || downlink >= 20) return { tier: '5g', concurrency: 4 };
+  if (effectiveType === '4g' || downlink >= 5) return { tier: '4g', concurrency: 3 };
+  if (effectiveType === '3g' || downlink >= 1.5) return { tier: '3g', concurrency: 2 };
+  if (effectiveType === '2g' || effectiveType === 'slow-2g' || downlink > 0) return { tier: '2g', concurrency: 1 };
+  return { tier: 'online', concurrency: 3 };
+}
+
+function applyNetworkConcurrency(profile) {
+  try {
+    audioFetchQueue.setLimit(profile.concurrency);
+  } catch {}
+}
+
 // Periodic cleanup every 5 minutes
 setInterval(() => {
   enhancedCache.cleanup();
@@ -255,6 +273,7 @@ class AudioCache {
     this.isPreloadingFavorites = false;
     this.lastLimitPromptAt = 0;
     this.limitPromptCooldownMs = CACHE_CONSTANTS.AUDIO_CACHE.LIMIT_PROMPT_COOLDOWN_MS;
+    this.networkProfile = getNetworkProfile();
   }
 
   async init() {
@@ -265,12 +284,28 @@ class AudioCache {
       // Initialize IndexedDB for metadata
       await this.initIndexedDB();
 
+      // Apply network-based concurrency
+      this.applyNetworkProfile();
+      this.attachNetworkProfileListener();
+
       this.isInitialized = true;
       logCache('info', `Audio cache initialized successfully (limit: ${this.formatBytes(this.maxCacheSize)})`);
     } catch (error) {
       logCache('error', `Failed to initialize audio cache: ${error.message}`);
       throw error;
     }
+  }
+
+  applyNetworkProfile() {
+    this.networkProfile = getNetworkProfile();
+    applyNetworkConcurrency(this.networkProfile);
+    logCache('debug', `Network profile: ${this.networkProfile.tier} (concurrency ${this.networkProfile.concurrency})`);
+  }
+
+  attachNetworkProfileListener() {
+    const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    if (!connection || typeof connection.addEventListener !== 'function') return;
+    connection.addEventListener('change', () => this.applyNetworkProfile());
   }
 
   async initIndexedDB() {
@@ -291,6 +326,11 @@ class AudioCache {
           store = db.createObjectStore('audioMetadata', { keyPath: 'url' });
         } else {
           store = event.target.transaction.objectStore('audioMetadata');
+        }
+
+        // Failed download queue (persistent)
+        if (!db.objectStoreNames.contains('failedDownloads')) {
+          db.createObjectStore('failedDownloads', { keyPath: 'url' });
         }
 
         // Ensure indexes exist for all versions (safe on upgrades)
@@ -361,6 +401,16 @@ class AudioCache {
     }
   }
 
+  async isCached(url) {
+    try {
+      if (!this.isInitialized) await this.init();
+      const exists = await this.cache.match(url);
+      return !!exists;
+    } catch {
+      return false;
+    }
+  }
+
   async put(url, data, isFavorite = false, metadata = {}) {
     if (!this.isInitialized) await this.init();
 
@@ -393,6 +443,9 @@ class AudioCache {
         cachedAt: nowMs(),
         title: metadata.title,
         creator: metadata.creator,
+        trackId: metadata.trackId,
+        albumId: metadata.albumId,
+        downloadOffline: metadata.downloadOffline === true,
         hash
       });
 
@@ -449,10 +502,84 @@ class AudioCache {
       });
     } catch (error) {
       logCache('warn', `Failed to prefetch audio: ${error.message}`);
-      if (error.message.includes('503')) {
-        logCache('warn', 'Service Unavailable - Offline. Retrying...');
-        // Implement retry logic or fallback here
-      }
+      await this.recordFailedDownload(url, { lastError: error.message, isFavorite: priority });
+      this.scheduleBackgroundRetry();
+    }
+  }
+
+  async recordFailedDownload(url, extra = {}) {
+    try {
+      if (!this.isInitialized) await this.init();
+      const tx = this.db.transaction(['failedDownloads'], 'readwrite');
+      const store = tx.objectStore('failedDownloads');
+      const existingReq = store.get(url);
+      existingReq.onsuccess = () => {
+        const existing = existingReq.result || {};
+        const payload = {
+          url,
+          retryCount: existing.retryCount || 0,
+          lastAttempt: Date.now(),
+          isFavorite: !!extra.isFavorite,
+          trackId: extra.trackId,
+          albumId: extra.albumId,
+          downloadOffline: extra.downloadOffline === true,
+          lastError: extra.lastError || existing.lastError
+        };
+        store.put(payload);
+      };
+    } catch (err) {
+      logCache('warn', `Could not record failed download: ${err.message}`);
+    }
+  }
+
+  scheduleBackgroundRetry() {
+    if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+      navigator.serviceWorker.ready
+        .then(reg => {
+          if (reg.sync) {
+            return reg.sync.register('retry-failed-downloads');
+          }
+          throw new Error('Background Sync not supported');
+        })
+        .catch((err) => logCache('warn', `Background Sync registration failed: ${err.message}`));
+    } else {
+      // Fallback: attempt retry on next online event
+      window.addEventListener('online', () => {
+        this.retryFailedDownloads();
+      }, { once: true });
+    }
+  }
+
+  async retryFailedDownloads() {
+    try {
+      if (!this.isInitialized) await this.init();
+      const tx = this.db.transaction(['failedDownloads'], 'readwrite');
+      const store = tx.objectStore('failedDownloads');
+      const req = store.getAll();
+      req.onsuccess = async () => {
+        const items = req.result || [];
+        for (const item of items) {
+          try {
+            const response = await fetch(item.url);
+            if (!response || !response.ok) throw new Error(`Retry failed: ${response && response.status}`);
+            await this.put(item.url, response.clone(), item.isFavorite, {
+              trackId: item.trackId,
+              albumId: item.albumId,
+              downloadOffline: item.downloadOffline
+            });
+            store.delete(item.url);
+          } catch (err) {
+            const next = { ...item, retryCount: (item.retryCount || 0) + 1, lastError: err.message, lastAttempt: Date.now() };
+            if (next.retryCount > 5) {
+              store.delete(item.url);
+            } else {
+              store.put(next);
+            }
+          }
+        }
+      };
+    } catch (err) {
+      logCache('warn', `retryFailedDownloads failed: ${err.message}`);
     }
   }
 
@@ -684,10 +811,9 @@ class AudioCache {
   async updateMetadata(url, updates) {
     try {
       const existing = await this.getMetadata(url);
-      if (existing) {
-        const updated = { ...existing, ...updates };
-        await this.storeMetadata(url, updated);
-      }
+      const base = existing || { url, cachedAt: nowMs(), lastAccessed: nowMs() };
+      const updated = { ...base, ...updates };
+      await this.storeMetadata(url, updated);
     } catch (error) {
       // Silently fail for metadata updates
     }

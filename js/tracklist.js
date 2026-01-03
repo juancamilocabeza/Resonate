@@ -105,6 +105,20 @@
         duration.className = 'tlv2-duration';
         duration.textContent = formatTime(track.duration);
 
+        const offlineBadge = document.createElement('span');
+        offlineBadge.className = 'tlv2-offline';
+        offlineBadge.textContent = '';
+
+        const downloadBtn = document.createElement('button');
+        downloadBtn.className = 'tlv2-action tlv2-download';
+        downloadBtn.title = 'Download for offline';
+        downloadBtn.textContent = '⬇';
+
+        if (track.downloadOffline) {
+          downloadBtn.textContent = '✔';
+          offlineBadge.textContent = 'Offline';
+        }
+
         const playBtn = document.createElement('button');
         playBtn.className = 'tlv2-action tlv2-play';
         playBtn.title = 'Play';
@@ -122,9 +136,12 @@
         shareBtn.title = 'Share';
         shareBtn.textContent = '🔗';
 
+        info.appendChild(offlineBadge);
+
         right.appendChild(duration);
         right.appendChild(playBtn);
         right.appendChild(favBtn);
+        right.appendChild(downloadBtn);
         right.appendChild(shareBtn);
 
         row.appendChild(left);
@@ -176,6 +193,31 @@
             }
           } catch {}
         });
+
+        downloadBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          try {
+            track.downloadOffline = !track.downloadOffline;
+            downloadBtn.textContent = track.downloadOffline ? '✔' : '⬇';
+            if (typeof window.toggleDownloadOffline === 'function') {
+              await window.toggleDownloadOffline(track);
+            }
+            if (track.downloadOffline) {
+              offlineBadge.textContent = 'Offline';
+            } else {
+              offlineBadge.textContent = '';
+            }
+          } catch {}
+        });
+
+        if (window.audioCache && typeof window.audioCache.isCached === 'function') {
+          window.audioCache.isCached(track.url).then((isCached) => {
+            if (isCached) {
+              offlineBadge.textContent = 'Offline';
+              downloadBtn.textContent = '✔';
+            }
+          }).catch(() => {});
+        }
 
         shareBtn.addEventListener('click', (e) => {
           e.stopPropagation();

@@ -445,20 +445,39 @@ async function fetchOptimizedPlayableFiles(identifier) {
     let audioFiles = metadata.files.filter(file =>
       isPlayableAudioFile(file)
     );
-    // Sort remaining files by format priority (.ogg first, then .mp3, then others)
+    // Sort remaining files by format priority with network-aware sizing
+    const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    const effectiveType = connection && connection.effectiveType ? connection.effectiveType : '';
+    const downlink = connection && typeof connection.downlink === 'number' ? connection.downlink : 0;
+    const slowNetwork = effectiveType === '2g' || effectiveType === 'slow-2g' || downlink < 1;
+    const midNetwork = effectiveType === '3g' || downlink < 5;
+
     audioFiles.sort((a, b) => {
       const aIsOgg = a.name.toLowerCase().endsWith('.ogg');
       const bIsOgg = b.name.toLowerCase().endsWith('.ogg');
       const aIsMp3 = a.name.toLowerCase().endsWith('.mp3');
       const bIsMp3 = b.name.toLowerCase().endsWith('.mp3');
-      // Prioritize .ogg over .mp3
+      const aSize = a.size || 0;
+      const bSize = b.size || 0;
+
+      // On slow networks prefer the smallest payload first
+      if (slowNetwork) {
+        if (aSize !== bSize) return aSize - bSize;
+      }
+
+      // On mid networks bias toward smaller MP3 over larger OGG if size differs greatly
+      if (midNetwork && Math.abs(aSize - bSize) > 1500000) {
+        return aSize - bSize;
+      }
+
+      // Prioritize .ogg over .mp3 for quality when network is good enough
       if (aIsOgg && !bIsOgg) return -1;
       if (!aIsOgg && bIsOgg) return 1;
       // Then prioritize .mp3 over other formats
       if (aIsMp3 && !bIsMp3 && !bIsOgg) return -1;
       if (!aIsMp3 && bIsMp3 && !aIsOgg) return 1;
       // Finally sort by size
-      return (a.size || 0) - (b.size || 0);
+      return aSize - bSize;
     });
     if (audioFiles.length === 0) {
       return [];

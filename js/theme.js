@@ -105,6 +105,14 @@
       showThemeNotification(next);
     });
 
+    // Support keyboard activation (Enter/Space)
+    themeToggleEl.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        themeToggleEl.click();
+      }
+    });
+
     // Detect system preference (optional)
     detectSystemPreference();
   }

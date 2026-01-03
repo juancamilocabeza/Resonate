@@ -169,6 +169,7 @@ const state = {
   shuffleFavorites: false,
   repeatMode: 'all', // 'all', 'one', 'off'
   networkOnline: true,
+  networkType: 'online',
   // URL currently assigned to the <audio> element (may be a normal URL or a blob: URL)
   currentAudioUrl: null,
   currentBlobUrl: null,
@@ -532,7 +533,8 @@ function toggleFavorite(track) {
       albumId: track.albumId || track.id,
       trackIndex: track.trackIndex || 0,
       totalTracks: track.totalTracks || 1,
-      albumTitle: track.album || track.title
+      albumTitle: track.album || track.title,
+      downloadOffline: !!track.downloadOffline
     };
     state.favorites.push(favoriteTrack);
 
@@ -599,6 +601,42 @@ window.addEventListener('online', () => {
 });
 }
 
+// Toggle per-track offline download preference
+async function toggleDownloadOffline(track) {
+  if (!track || !track.url || typeof window.audioCache === 'undefined' || !window.audioCache) return;
+  try {
+    const desired = !!track.downloadOffline;
+    const meta = {
+      trackId: track.id || track.trackId,
+      albumId: track.albumId,
+      title: track.title,
+      creator: track.creator,
+      downloadOffline: desired
+    };
+
+    if (desired) {
+      await window.audioCache.prefetchAudio(track.url, true);
+    }
+
+    if (typeof window.audioCache.updateMetadata === 'function') {
+      await window.audioCache.updateMetadata(track.url, meta);
+    }
+
+    // Sync favorite entry if present
+    const fav = state.favorites.find(f => f.url === track.url);
+    if (fav) {
+      fav.downloadOffline = desired;
+    }
+
+    saveFavorites();
+    updateFavoritesList();
+  } catch (err) {
+    showStatus('Error updating offline download', 'error', 3000, 'error');
+    window.logger?.warn(`toggleDownloadOffline failed: ${err.message}`, 'UI');
+  }
+}
+window.toggleDownloadOffline = toggleDownloadOffline;
+
 // FUNCIÓN: Agregar todas las pistas de un álbum a favoritos
 function addAlbumToFavorites(albumId, files) {
   if (!files || files.length === 0) return;
@@ -617,7 +655,8 @@ function addAlbumToFavorites(albumId, files) {
         albumId: albumId,
         trackIndex: index,
         totalTracks: files.length,
-        albumTitle: track.album || files[0]?.album || 'Album'
+        albumTitle: track.album || files[0]?.album || 'Album',
+        downloadOffline: !!track.downloadOffline
       };
       state.favorites.push(favoriteTrack);
       addedCount++;
@@ -2007,6 +2046,57 @@ function enableControlsForSearchResults() {
   }
 }
 
+// Network information helpers
+function getNavigatorConnection() {
+  return navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+}
+
+function deriveNetworkLabel() {
+  if (!state.networkOnline) {
+    state.networkType = 'offline';
+    return 'Offline';
+  }
+
+  const connection = getNavigatorConnection();
+  let tier = 'online';
+
+  if (connection) {
+    const { effectiveType, downlink } = connection;
+
+    if (effectiveType === '5g' || downlink >= 20) {
+      tier = '5G';
+    } else if (effectiveType === '4g' || downlink >= 5) {
+      tier = '4G';
+    } else if (effectiveType === '3g' || downlink >= 1.5) {
+      tier = '3G';
+    } else if (effectiveType === '2g' || effectiveType === 'slow-2g' || downlink > 0) {
+      tier = '2G';
+    }
+  }
+
+  state.networkType = tier.toLowerCase();
+  return tier;
+}
+
+let __resonateNetworkListenerAttached = false;
+
+function updateNetworkIndicator() {
+  const indicator = document.getElementById('network-indicator');
+  if (!indicator) return;
+
+  indicator.textContent = deriveNetworkLabel();
+}
+
+function attachNetworkInformationListener() {
+  const connection = getNavigatorConnection();
+  if (!connection || __resonateNetworkListenerAttached || typeof connection.addEventListener !== 'function') return;
+
+  __resonateNetworkListenerAttached = true;
+  connection.addEventListener('change', () => {
+    updateNetworkIndicator();
+  });
+}
+
 // Connectivity monitoring
 let __resonateConnectivityHandlersAttached = false;
 
@@ -2036,6 +2126,7 @@ function __resonateAttachConnectivityHandlersOnce() {
 
     __resonateSetSearchOnlineState(true);
     updateOfflineIndicator();
+    updateNetworkIndicator();
     // Try to sync cached data when back online
     syncOfflineData();
   });
@@ -2046,6 +2137,7 @@ function __resonateAttachConnectivityHandlersOnce() {
 
     __resonateSetSearchOnlineState(false);
     updateOfflineIndicator();
+    updateNetworkIndicator();
 
     // Notificar si solo hay pistas offline disponibles
     if (typeof window.audioCache === 'object' && window.audioCache) {
@@ -2099,11 +2191,41 @@ function setupOfflineFunctionality() {
     createOfflineIndicator();
   }
 
+  // Create network indicator element
+  if (!document.getElementById('network-indicator')) {
+    createNetworkIndicator();
+  }
+
   // Initial check
   state.networkOnline = navigator.onLine;
+  updateNetworkIndicator();
   updateOfflineIndicator();
 
   __resonateAttachConnectivityHandlersOnce();
+  attachNetworkInformationListener();
+}
+
+// Create network indicator in the header
+function createNetworkIndicator() {
+  if (document.getElementById('network-indicator')) return;
+
+  const indicator = document.createElement('div');
+  indicator.id = 'network-indicator';
+  indicator.className = 'network-indicator';
+  indicator.setAttribute('aria-live', 'polite');
+  indicator.textContent = deriveNetworkLabel();
+
+  const headerControls = document.querySelector('.header-controls');
+  if (headerControls) {
+    headerControls.appendChild(indicator);
+  } else {
+    const header = document.querySelector('header');
+    if (header) {
+      header.appendChild(indicator);
+    } else {
+      document.body.insertBefore(indicator, document.body.firstChild);
+    }
+  }
 }
 
 // Create offline indicator in the UI

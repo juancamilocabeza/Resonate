@@ -58,6 +58,19 @@ function logPlayback(level, message, error) {
   else fn(message);
 }
 
+function signalServiceWorkerSafeActivation() {
+  if (!navigator.serviceWorker || !navigator.serviceWorker.getRegistration) return;
+  navigator.serviceWorker.getRegistration().then((reg) => {
+    if (reg && reg.waiting) {
+      try {
+        reg.waiting.postMessage({ type: 'SKIP_WAITING_WHEN_IDLE' });
+      } catch (err) {
+        logPlayback('debug', `Failed to postMessage skipWaiting: ${err.message}`);
+      }
+    }
+  });
+}
+
 // Retry strategies
 const RetryStrategy = {
   NETWORK: { maxRetries: 5, backoff: 'exponential', baseDelay: 1000 },
@@ -76,6 +89,9 @@ class PlaybackStateManager {
       if (config) {
         if (Object.values(RepeatMode).includes(config.repeat)) repeat = config.repeat;
         if (typeof config.shuffle === 'boolean') shuffle = config.shuffle;
+      }
+      if (localStorage.getItem('resonate_shuffle_enabled') !== null) {
+        shuffle = localStorage.getItem('resonate_shuffle_enabled') === 'true';
       }
     } catch {}
     this.state = {
@@ -103,6 +119,7 @@ class PlaybackStateManager {
   setShuffleMode(enabled) {
     this.state.modes.shuffle = enabled;
     this.saveConfig();
+    try { localStorage.setItem('resonate_shuffle_enabled', String(enabled)); } catch {}
   }
 
   saveConfig() {
@@ -1919,10 +1936,12 @@ function setupListenTracking() {
   
   let endedHandlerExecuted = false;
   let errorHandlerExecuted = false;
+  let isTransitioning = false;
 
   window.elements.audio.addEventListener('play', () => {
     endedHandlerExecuted = false;
     errorHandlerExecuted = false;
+    isTransitioning = false;
     if (state.currentTrack) {
       state.currentTrackListenStart = Date.now();
     }
@@ -1930,10 +1949,11 @@ function setupListenTracking() {
 
   window.elements.audio.addEventListener('ended', async () => {
     // PREVENIR EJECUCIÓN MÚLTIPLE
-    if (endedHandlerExecuted) {
+    if (endedHandlerExecuted || isTransitioning) {
       return;
     }
     endedHandlerExecuted = true;
+    isTransitioning = true;
 
     // Track listening statistics (must never block auto-advance)
     if (state.currentTrack) {
@@ -1985,12 +2005,15 @@ function setupListenTracking() {
       // Resonate UX: never stop when context is missing.
       playNextInContext().catch((e) => logPlayback('warn', 'No-context playNextInContext failed', e));
     }
+
+    signalServiceWorkerSafeActivation();
   });
 
   // If a track errors and never reaches 'ended', skip forward to keep continuous playback.
   window.elements.audio.addEventListener('error', () => {
-    if (errorHandlerExecuted) return;
+    if (errorHandlerExecuted || isTransitioning) return;
     errorHandlerExecuted = true;
+    isTransitioning = true;
 
     try {
       showStatus('Track error. Skipping...', 'error', 2000);
@@ -2008,6 +2031,11 @@ function setupListenTracking() {
         playNextInContext().catch((e) => logPlayback('warn', 'Skip failed', e));
       }
     }, 800);
+  });
+
+  window.elements.audio.addEventListener('pause', () => {
+    // When playback is idle, allow waiting SW to activate safely
+    signalServiceWorkerSafeActivation();
   });
 
   window.elements.audio.addEventListener('seeked', () => {

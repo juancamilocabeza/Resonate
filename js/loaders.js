@@ -87,15 +87,15 @@ const Loaders = (() => {
   function createLoaderElement(type) {
     const overlay = document.createElement("div");
     overlay.className = "loader-overlay";
-    Object.assign(overlay.style, defaultStyles.overlay);
-
+    // Don't override CSS - overlay uses class for styles
+    
     const container = document.createElement("div");
     container.className = "loader-container";
-    Object.assign(container.style, defaultStyles.container);
+    // Don't override CSS - container uses class for styles
 
     const loader = document.createElement("div");
     loader.className = "loader-spinner";
-    Object.assign(loader.style, defaultStyles[type] || defaultStyles.spinner);
+    // Spinner uses CSS class for animation - no inline styles needed
 
     const progressEl = document.createElement("div");
     progressEl.className = "loader-progress";

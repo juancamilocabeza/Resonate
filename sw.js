@@ -256,38 +256,8 @@ async function networkFirstExternal(request, url) {
 // Service Worker installation - more aggressive caching
 self.addEventListener('install', (event) => {
   console.log('SW: Installing service worker');
-  event.waitUntil(
-    precacheStaticFiles()
-  );
-  self.skipWaiting(); // Activate immediately
-});
-
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open('v1').then((cache) => {
-      const resourcesToCache = [
-        '/',
-        '/index.html',
-        '/css/resonate.css',
-        '/js/ui.js',
-        '/js/playback.js',
-        '/js/search.js'
-      ];
-
-      return Promise.all(
-        resourcesToCache.map((resource) =>
-          fetch(resource).then((response) => {
-            if (!response.ok) {
-              throw new Error(`Failed to fetch ${resource}: ${response.statusText}`);
-            }
-            return cache.put(resource, response);
-          })
-        )
-      );
-    }).catch((error) => {
-      console.error('Failed to cache resources during install:', error);
-    })
-  );
+  event.waitUntil(precacheStaticFiles());
+  // SkipWaiting is deferred until the client signals playback is idle.
 });
 
 // Activation and cleanup of old caches
@@ -313,6 +283,15 @@ self.addEventListener('activate', (event) => {
       return self.clients.claim();
     })
   );
+});
+
+// Allow clients to trigger safe activation once playback is idle
+self.addEventListener('message', (event) => {
+  if (!event || !event.data) return;
+  if (event.data.type === 'SKIP_WAITING_WHEN_IDLE') {
+    console.log('SW: Received safe skipWaiting signal');
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('fetch', (event) => {
@@ -362,6 +341,95 @@ self.addEventListener('fetch', (event) => {
       return networkFirstExternal(event.request, url);
     })()
   );
+});
+
+// === Background Sync for failed audio downloads ===
+const AUDIO_DB_NAME = 'ResonateAudioCache';
+const AUDIO_DB_VERSION = 9;
+const FAILED_STORE = 'failedDownloads';
+const AUDIO_CACHE_NAME = 'audio-cache-v1';
+
+function openAudioDb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(AUDIO_DB_NAME, AUDIO_DB_VERSION);
+    req.onerror = () => reject(req.error);
+    req.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains(FAILED_STORE)) {
+        db.createObjectStore(FAILED_STORE, { keyPath: 'url' });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+  });
+}
+
+async function withStore(mode, fn) {
+  const db = await openAudioDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction([FAILED_STORE], mode);
+    const store = tx.objectStore(FAILED_STORE);
+    fn(store, resolve, reject);
+    tx.oncomplete = () => db.close();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+function getAllFailedDownloads() {
+  return withStore('readonly', (store, resolve, reject) => {
+    const req = store.getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function deleteFailedDownload(url) {
+  return withStore('readwrite', (store, resolve, reject) => {
+    const req = store.delete(url);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function bumpRetryCount(entry) {
+  return withStore('readwrite', (store, resolve, reject) => {
+    const next = { ...entry, retryCount: (entry.retryCount || 0) + 1, lastAttempt: Date.now() };
+    const req = store.put(next);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function processFailedDownloads() {
+  try {
+    const items = await getAllFailedDownloads();
+    if (!items || items.length === 0) return;
+    const cache = await caches.open(AUDIO_CACHE_NAME);
+
+    for (const item of items) {
+      try {
+        const response = await fetch(item.url, { mode: 'cors' });
+        if (!response || !response.ok) throw new Error(`Retry failed: ${response && response.status}`);
+        await cache.put(item.url, response.clone());
+        await deleteFailedDownload(item.url);
+        console.log('SW: recovered failed download', item.url);
+      } catch (err) {
+        console.warn('SW: failed download retry', item.url, err);
+        if ((item.retryCount || 0) >= 5) {
+          await deleteFailedDownload(item.url);
+        } else {
+          await bumpRetryCount(item);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('SW: processFailedDownloads error', err);
+  }
+}
+
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'retry-failed-downloads') {
+    event.waitUntil(processFailedDownloads());
+  }
 });
 
 self.addEventListener('message', (event) => {
