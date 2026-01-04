@@ -59,9 +59,9 @@
     if (!themeColorMeta) return;
 
     const colors = {
-      'day': '#f5f5f5',
-      'night': '#000000',
-      'energy-saver': '#000000'
+      'day': '#1f7fb8',
+      'night': '#3da9ff',
+      'energy-saver': '#7aa7b8'
     };
 
     themeColorMeta.setAttribute('content', colors[theme] || colors['night']);
@@ -71,8 +71,10 @@
     if (!themeToggleEl) return;
     const label = THEME_LABELS[theme] || 'Theme';
     themeToggleEl.textContent = label;
-    themeToggleEl.setAttribute('aria-label', `Theme: ${label}`);
+    themeToggleEl.setAttribute('aria-label', `Theme: ${label}. Press to cycle through themes.`);
     themeToggleEl.setAttribute('title', `Switch theme (current: ${label})`);
+    // Mantener aria-current sincronizado para indicar tema activo
+    themeToggleEl.setAttribute('aria-current', 'page');
   }
 
   function getNextTheme(current) {
@@ -102,7 +104,6 @@
       applyTheme(next);
       saveTheme(next);
       setToggleLabel(next);
-      showThemeNotification(next);
     });
 
     // Support keyboard activation (Enter/Space)
@@ -115,54 +116,6 @@
 
     // Detect system preference (optional)
     detectSystemPreference();
-  }
-
-  // Mostrar notificación de cambio de tema
-  function showThemeNotification(theme) {
-    const messages = {
-      'day': 'Day mode enabled',
-      'night': 'Night mode enabled - Battery saver',
-      'energy-saver': 'Eco mode enabled - Maximum battery saving'
-    };
-
-    const message = messages[theme] || 'Theme changed';
-    
-    // Buscar el contenedor de mensajes de estado
-    const statusMessages = document.getElementById('status-messages');
-    if (statusMessages) {
-      const notification = document.createElement('div');
-      notification.className = 'theme-notification';
-      notification.textContent = message;
-      notification.style.cssText = `
-        position: fixed;
-        bottom: 20px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: var(--card);
-        color: var(--fg);
-        padding: 12px 24px;
-        border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-        z-index: 10000;
-        opacity: 0;
-        transition: opacity 0.3s ease;
-      `;
-      
-      statusMessages.appendChild(notification);
-      
-      // Animar entrada
-      setTimeout(() => {
-        notification.style.opacity = '1';
-      }, 10);
-      
-      // Remover después de 2 segundos
-      setTimeout(() => {
-        notification.style.opacity = '0';
-        setTimeout(() => {
-          notification.remove();
-        }, 300);
-      }, 2000);
-    }
   }
 
   // Detect system preference
@@ -192,6 +145,13 @@
 
   // Expose global functions if needed
   window.resonateTheme = {
+    applyTheme,
+    getSavedTheme,
+    saveTheme
+  };
+
+  // Exposer ThemeManager para modules como Battery
+  window.ThemeManager = {
     applyTheme,
     getSavedTheme,
     saveTheme

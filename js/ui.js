@@ -4,7 +4,6 @@ const elements = {
   title: document.getElementById('title'),
   creator: document.getElementById('creator'),
   description: document.getElementById('description'),
-    statusMessages: document.getElementById('status-messages'),
     descriptionContainer: document.getElementById('description-container'),
     toggleDescriptionBtn: document.getElementById('toggle-description-btn'),
   progressBar: document.getElementById('progress-bar'),
@@ -79,7 +78,7 @@ function updateDescriptionUI(track) {
 
   if (bestDescription && bestDescription.trim() !== '') {
     elements.descriptionContainer.style.display = 'block';
-    elements.toggleDescriptionBtn.style.display = '';
+    elements.toggleDescriptionBtn.style.display = 'inline-flex';
     elements.toggleDescriptionBtn.textContent = 'Info';
     elements.toggleDescriptionBtn.disabled = false;
     console.log('[updateDescriptionUI] Mostrando botón de descripción');
@@ -99,7 +98,7 @@ function updateDescriptionUI(track) {
   } else {
     console.log('[updateDescriptionUI] Ocultando botón de descripción, no hay descripción disponible');
     elements.descriptionContainer.style.display = 'none';
-    elements.toggleDescriptionBtn.style.display = 'none';
+    if (elements.toggleDescriptionBtn) elements.toggleDescriptionBtn.style.display = 'none';
     if (modal) modal.style.display = 'none';
     if (modalDesc) modalDesc.innerHTML = '';
   }
@@ -830,86 +829,8 @@ function updateFavoriteButton() {
 }
 
 function showStatus(message, type = 'info', duration = null, priority = 'normal', showSpinner = false) {
-  if (!elements.statusMessages) {
-    return;
-  }
-
-  const currentMessage = elements.statusMessages.querySelector('.status-message');
-  const currentPriority = currentMessage ? currentMessage.dataset.priority || 'normal' : 'none';
-
-  // Priority levels: offline > error > warning > info > normal
-  const priorityLevels = { 'offline': 5, 'error': 4, 'warning': 3, 'info': 2, 'normal': 1, 'none': 0 };
-
-  // Don't overwrite higher or equal priority messages
-  if (priorityLevels[currentPriority] >= priorityLevels[priority]) {
-    return;
-  }
-
-  // Fade out existing message before replacing
-  if (currentMessage) {
-    currentMessage.classList.add('fade-out');
-    setTimeout(() => {
-      if (currentMessage.parentNode) {
-        currentMessage.remove();
-      }
-    }, 300);
-  } else {
-    elements.statusMessages.innerHTML = '';
-  }
-
-  const messageEl = document.createElement('div');
-  messageEl.className = `status-message status-${type}`;
-  messageEl.dataset.priority = priority;
-  messageEl.setAttribute('aria-live', 'polite');
-  messageEl.setAttribute('aria-atomic', 'true');
-  messageEl.setAttribute('role', 'alert');
-
-  // Add spinner if requested
-  if (showSpinner) {
-    const spinner = document.createElement('span');
-    spinner.className = 'loader';
-    spinner.style.marginRight = '8px';
-    messageEl.appendChild(spinner);
-  }
-
-  // Add message text
-  const textSpan = document.createElement('span');
-  textSpan.textContent = message;
-  messageEl.appendChild(textSpan);
-
-  elements.statusMessages.appendChild(messageEl);
-
-  // Auto-determine duration
-  let finalDuration = duration;
-  
-  if (finalDuration === null || finalDuration === 0) {
-    if (type === 'error' || type === 'offline') {
-      finalDuration = 5000;
-    } else if (type === 'warning') {
-      finalDuration = 4000;
-    } else if (type === 'info') {
-      finalDuration = 3000;
-    } else {
-      finalDuration = 3000;
-    }
-  }
-
-  setTimeout(() => {
-    if (messageEl.parentNode) {
-      messageEl.classList.add('fade-out');
-      setTimeout(() => {
-        if (messageEl.parentNode) {
-          messageEl.remove();
-          console.log('Message removed after timeout');
-        }
-      }, 300);
-    }
-  }, finalDuration);
-}
-
-// Test function to show a message that auto-hides
-function showTestStatus() {
-  showStatus('Test message - auto-hides in 3 seconds', 'info');
+  // Status messages disabled - no-op function
+  return;
 }
 
 function setArtwork(track, identifier) {
@@ -1691,7 +1612,7 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
       `<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>` +
       `<stop offset='0%' stop-color='#1f2937'/><stop offset='100%' stop-color='#111827'/></linearGradient></defs>` +
       `<rect width='100%' height='100%' fill='url(#g)'/>` +
-      `<g fill='#6ee7b7aa' font-family='sans-serif' font-weight='700'>` +
+      `<g fill='rgba(61, 169, 255, 0.67)' font-family='sans-serif' font-weight='700'>` +
       `<text x='50%' y='48%' dominant-baseline='middle' text-anchor='middle' font-size='22'>No Cover</text>` +
       `<text x='50%' y='66%' dominant-baseline='middle' text-anchor='middle' font-size='12'>${(creator || '').toString().slice(0,24)}</text>` +
       `</g></svg>`
@@ -2694,8 +2615,9 @@ class FavoritesToggle {
 
     const isExpanded = this.isVisible ? 'true' : 'false';
     this.element.setAttribute('aria-expanded', isExpanded);
+    const countText = this.listElement?.querySelectorAll('.track-item').length || 0;
     this.element.setAttribute('aria-label',
-      `Favorites list ${this.isVisible ? 'visible' : 'hidden'}`
+      `View favorites (${countText} saved). ${this.isVisible ? 'Favorites list is visible' : 'Click to view your saved favorites'}`
     );
   }
 
@@ -2809,9 +2731,11 @@ function createStartFavoritesCTA() {
   container.style.pointerEvents = 'auto';
   container.style.zIndex = '9999';
 
+  const accentAlt = getComputedStyle(document.documentElement).getPropertyValue('--accent-alt').trim();
+  const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
   container.innerHTML = `
     <div>
-      <button id="start-favorites-btn" style="background:#6ee7b7; color:#000; border:none; padding:8px 12px; font-size:14px; border-radius:12px; cursor:pointer;">Play favorites</button>
+      <button id="start-favorites-btn" style="background:${accentAlt}; color:${bg}; border:none; padding:8px 12px; font-size:14px; border-radius:12px; cursor:pointer;">Play favorites</button>
       <button id="start-favorites-close" aria-label="Close" style="background:transparent; border:none; color:#666; font-size:16px; cursor:pointer;">✕</button>
     </div>
   `;
@@ -3033,10 +2957,8 @@ function displaySearchHistory() {
     historyItem.className = 'search-history-item';
 
     historyItem.innerHTML = `
-      <div class="history-content">
-        <span class="history-query">${query}</span>
-        <button class="history-remove" data-index="${index}" title="Remove">✕</button>
-      </div>
+      <span class="history-query">${query}</span>
+      <button class="history-remove btn-tertiary" data-index="${index}" title="Remove">✕</button>
     `;
 
     // Click on query to search

@@ -507,11 +507,19 @@ async function initializeApp() {
   }
 
   if (elements.currentTrackShare) {
-    elements.currentTrackShare.addEventListener('click', async () => {
+    const handleShare = async () => {
       if (state.currentTrack && state.currentTrack.id) {
         await shareTrack(state.currentTrack.id, state.currentTrack.title);
       } else {
         showStatus('Nothing to share right now', 'warning');
+      }
+    };
+
+    elements.currentTrackShare.addEventListener('click', handleShare);
+    elements.currentTrackShare.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter' || ev.key === ' ') {
+        ev.preventDefault();
+        handleShare();
       }
     });
   }

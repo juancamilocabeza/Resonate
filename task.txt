@@ -1,0 +1,15 @@
+presentar el tamaño del archivo
+activar share explicando no foto con datos
+activar share sin logo
+activar back para cancelar eventos
+Copy onboarding.
+presentar el tipo de archito
+nuevo logo color del h1
+las ondas de colores
+
+
+CAMBIAR CORAZON
+span en para el tema
+boton aleatorio vs modos
+revisar share
+spin loader

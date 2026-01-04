@@ -21,7 +21,7 @@
   <meta property="twitter:description" content="Enjoy content freely from https://archive.org">
   <meta property="twitter:image" content="https://www.resonateplayer.com/icons/maskable_icon_x512.png">
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="theme-color" content="#6ee7b7">
+  <meta name="theme-color" id="meta-theme-color" content="#3da9ff">
   <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
   <link rel="apple-touch-icon" href="/icons/maskable_icon_x192.png" />
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -37,13 +37,14 @@
         Resonate
       </h1>
       <div class="header-controls">
-        <span id="theme-toggle" class="theme-selector" role="button" tabindex="0" aria-label="Theme toggle" title="Switch theme">
+        <button id="theme-toggle" class="theme-selector" type="button" aria-label="Theme toggle" aria-current="page" title="Switch theme">
           Eco
-        </span>
-        <span id="favorites-toggle" role="button" tabindex="0" aria-label="View favorites" aria-expanded="false" aria-controls="favorites-list" title="Click to view your saved favorites">
+        </button>
+        <button id="favorites-toggle" class="theme-selector" type="button" aria-label="View favorites" aria-expanded="false" aria-controls="favorites-list" aria-live="polite" title="Click to view your saved favorites">
           <span class="favorites-icon">❤️</span>
           <span class="favorites-count" id="favorites-count">0</span>
-        </span>
+        </button>
+        <span id="current-track-share" class="theme-selector" role="button" tabindex="0" aria-label="Share current track" title="Share this track">🔗</span>
       </div>
     </header>
     <div class="discovery-section">
@@ -68,9 +69,8 @@
               <div class="title" id="title"></div>
             </div>
             <div class="creator" id="creator"></div>
-            <button id="current-track-share" class="current-track-share" aria-label="Share current track" title="Share this track">🔗</button>
             <div id="description-container" style="display:none;">
-              <div id="toggle-description-btn" style="display:none;" aria-label="Show track description" title="Show description">Info</div>
+              <button id="toggle-description-btn" class="btn-secondary" type="button" aria-label="Show track description" title="Show description">Info</button>
             </div>
           </div>
           <div class="progress-section">
@@ -87,7 +87,6 @@
             <button id="next-btn" class="next-btn" aria-label="Next">⏭</button>
           </div>
         </div>
-        <div id="status-messages"></div>
       </div>
       <!-- Modal para descripción -->
       <div id="description-modal" class="description-modal" style="display:none;">
@@ -97,8 +96,8 @@
         </div>
       </div>
     </div>
-    <footer class="footer">
-      <div>&copy; 2025 Resonate Player - Early Stage - All rights reserved.</div>
+    <footer class="footer" style="display: flex !important; justify-content: center !important; align-items: center !important; text-align: center !important; width: 100% !important; padding-left: 0 !important; padding-right: 0 !important; opacity: 0.6 !important; font-size: 11px !important; color: var(--muted) !important;">
+      &copy; 2025 Resonate Player - Early Stage - All rights reserved.
     </footer>
   </div>
   <audio id="audio" preload="metadata"></audio>
@@ -112,14 +111,24 @@
   <script src="js/tracklist.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/offline.js"></script>
+  <script src="js/battery.js"></script>
   <script src="js/initialization.js"></script>
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-BM0DX9WY1D"></script>
   <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag() { dataLayer.push(arguments); }
-    gtag('js', new Date());
-    gtag('config', 'G-BM0DX9WY1D');
-    </script>    
+    // Solo cargar Google Analytics en producción
+    if (window.location.hostname !== 'localhost' && !window.location.hostname.startsWith('127.')) {
+      (function() {
+        var script = document.createElement('script');
+        script.async = true;
+        script.src = 'https://www.googletagmanager.com/gtag/js?id=G-BM0DX9WY1D';
+        document.head.appendChild(script);
+      })();
+      
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      gtag('js', new Date());
+      gtag('config', 'G-BM0DX9WY1D');
+    }
+  </script>    
   </body>
 </html>
 <!--2025 Resonate Player - All rights reserved-->
