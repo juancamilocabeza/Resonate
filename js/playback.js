@@ -372,17 +372,14 @@ class AlbumContextHandler extends BaseContextHandler {
       }, RetryStrategy.NETWORK);
     } else {
       // Album finished
-      if (repeatMode === RepeatMode.CONTEXT) {
-        // Replay album from beginning
+      if (repeatMode === RepeatMode.CONTEXT || repeatMode === RepeatMode.ALL) {
+        // Replay album from beginning (loop current context)
         const firstTrack = await this.getFirstTrack();
         if (firstTrack) {
           await this.retryManager.executeWithRetry(async () => {
             await playAudioTrackOptimized(firstTrack, currentAlbumId, 0, firstTrack.totalTracks);
           }, RetryStrategy.NETWORK);
         }
-      } else if (repeatMode === RepeatMode.ALL) {
-        // Continue with next context (e.g., next search result)
-        this.continueToNextContext();
       } else {
         showStatus('Your album playback is complete', 'info', 2000);
       }
@@ -554,8 +551,8 @@ class SearchContextHandler extends BaseContextHandler {
         }
       }, RetryStrategy.NETWORK);
     } else {
-      if (repeatMode === RepeatMode.CONTEXT) {
-        // Restart search results
+      if (repeatMode === RepeatMode.CONTEXT || repeatMode === RepeatMode.ALL) {
+        // Restart search results (loop current context)
         const context = playbackManager.contextData.search;
         if (context && context.items && context.items.length > 0) {
           context.currentIndex = 0;
@@ -717,6 +714,63 @@ window.getPlaybackConfigStatus = function() {
 window.playbackStateManager = playbackStateManager;
 window.enhancedPlaybackController = enhancedPlaybackController;
 window.RepeatMode = RepeatMode;
+
+function getModeButtonLabel(mode) {
+  switch (mode) {
+    case RepeatMode.ALL:
+      return 'Loop';
+    case RepeatMode.ONE:
+      return 'Repeat one';
+    case RepeatMode.OFF:
+      return 'Off';
+    case RepeatMode.CONTEXT:
+      return 'Loop';
+    case RepeatMode.INFINITE:
+      return 'Infinite';
+    default:
+      return 'Loop';
+  }
+}
+
+function updateModeButton() {
+  if (!window.elements || !window.elements.modeBtn) return;
+
+  const repeatMode = playbackStateManager && typeof playbackStateManager.getRepeatMode === 'function'
+    ? playbackStateManager.getRepeatMode()
+    : (state && state.repeatMode ? state.repeatMode : RepeatMode.ALL);
+
+  const label = getModeButtonLabel(repeatMode);
+  window.elements.modeBtn.title = `Repeat: ${label}`;
+  window.elements.modeBtn.setAttribute('aria-label', `Repeat mode: ${label}`);
+}
+
+function cycleRepeatMode() {
+  const current = playbackStateManager && typeof playbackStateManager.getRepeatMode === 'function'
+    ? playbackStateManager.getRepeatMode()
+    : (state && state.repeatMode ? state.repeatMode : RepeatMode.ALL);
+
+  let next = RepeatMode.ALL;
+  if (current === RepeatMode.OFF) next = RepeatMode.ALL;
+  else if (current === RepeatMode.ALL) next = RepeatMode.ONE;
+  else if (current === RepeatMode.ONE) next = RepeatMode.OFF;
+  else next = RepeatMode.ALL;
+
+  if (playbackStateManager) {
+    playbackStateManager.setRepeatMode(next);
+  }
+  if (state) {
+    state.repeatMode = next;
+  }
+  try {
+    saveRepeatMode(next);
+  } catch {}
+
+  updateModeButton();
+  safeShowStatus(`Repeat: ${getModeButtonLabel(next)}`, 'info', 1500);
+}
+
+window.updateModeButton = updateModeButton;
+window.cycleRepeatMode = cycleRepeatMode;
 
 // Fetch with timeout for network operations
 async function fetchWithTimeout(resource, options = {}, timeout = 8000) {
@@ -1898,8 +1952,7 @@ function loadRepeatMode() {
   try {
     const saved = localStorage.getItem('resonate_repeat_mode');
     if (saved && ['all', 'context', 'one', 'infinite', 'off'].includes(saved)) {
-      // Treat 'off' as 'context' so playback stays continuous.
-      state.repeatMode = saved === 'off' ? 'context' : saved;
+      state.repeatMode = saved;
     }
   } catch (e) {
     state.repeatMode = 'all'; // Default
@@ -1908,6 +1961,8 @@ function loadRepeatMode() {
   if (playbackStateManager) {
     playbackStateManager.setRepeatMode(state.repeatMode);
   }
+
+  updateModeButton();
 }
 
 function saveRepeatMode(mode) {

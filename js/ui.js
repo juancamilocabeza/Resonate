@@ -6,6 +6,7 @@ const elements = {
   description: document.getElementById('description'),
     descriptionContainer: document.getElementById('description-container'),
     toggleDescriptionBtn: document.getElementById('toggle-description-btn'),
+    modeBtn: document.getElementById('mode-btn'),
   progressBar: document.getElementById('progress-bar'),
   progressSection: document.querySelector('.progress-section'),
   progress: document.getElementById('progress'),
@@ -1905,7 +1906,10 @@ function updatePlayButtonState() {
     const buttons = playerContent.querySelectorAll('button');
     if (buttons) {
       buttons.forEach(button => {
-        if (button) button.disabled = state.favorites.length === 0;
+        if (!button) return;
+        // Mode should remain available even with no favorites.
+        if (button.id === 'mode-btn') return;
+        button.disabled = state.favorites.length === 0;
       });
     }
   }
@@ -1922,6 +1926,7 @@ function updatePlayButtonState() {
     if (elements.nextBtn) elements.nextBtn.title = 'Search to get started';
     if (elements.favoriteBtn) elements.favoriteBtn.title = 'Search to get started';
     if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.title = 'Search to get started';
+    if (elements.modeBtn) elements.modeBtn.disabled = false;
 
     // Disable favorites controls
     if (elements.favoritesToggle) elements.favoritesToggle.classList.add('disabled');
@@ -1938,7 +1943,8 @@ function updatePlayButtonState() {
     if (elements.prevBtn) elements.prevBtn.title = 'Previous track';
     if (elements.nextBtn) elements.nextBtn.title = 'Next track';
     if (elements.favoriteBtn) elements.favoriteBtn.title = 'Remove favorite';
-    if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.title = 'Shuffle favorites';
+    if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.title = 'Shuffle';
+    if (elements.modeBtn) elements.modeBtn.disabled = false;
 
     // Enable favorites controls
     if (elements.favoritesToggle) elements.favoritesToggle.classList.remove('disabled');
@@ -1963,7 +1969,10 @@ function enableControlsForSearchResults() {
 
     // The shuffle button works with current results
     if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.disabled = false;
-    if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.title = 'Shuffle results';
+    if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.title = 'Shuffle';
+
+    // Mode is independent of favorites
+    if (elements.modeBtn) elements.modeBtn.disabled = false;
   }
 }
 
@@ -3205,31 +3214,6 @@ window.loadFavorites = loadFavorites;
 window.saveFavorites = saveFavorites;
 window.loadVolume = loadVolume;
 window.saveVolume = saveVolume;
-// ...existing code...
-if (elements.shuffleFavoritesBtn) {
-  elements.shuffleFavoritesBtn.addEventListener('click', () => {
-    // Ciclo de modos: Off → Repeat All → Repeat One → Shuffle → Shuffle+Repeat → Off
-    const config = window.getPlaybackConfigStatus ? window.getPlaybackConfigStatus() : { repeat: 'context', shuffle: false };
-    let next = { repeat: 'off', shuffle: false };
-    if (config.repeat === 'off' && !config.shuffle) {
-      next = { repeat: 'all', shuffle: false };
-    } else if (config.repeat === 'all' && !config.shuffle) {
-      next = { repeat: 'one', shuffle: false };
-    } else if (config.repeat === 'one' && !config.shuffle) {
-      next = { repeat: 'off', shuffle: true };
-    } else if (config.repeat === 'off' && config.shuffle) {
-      next = { repeat: 'all', shuffle: true };
-    } else if (config.repeat === 'all' && config.shuffle) {
-      next = { repeat: 'off', shuffle: false };
-    }
-    // Actualizar PlaybackStateManager
-    if (window.playbackStateManager) {
-      window.playbackStateManager.setRepeatMode(next.repeat);
-      window.playbackStateManager.setShuffleMode(next.shuffle);
-    }
-    // No status UI update needed
-  });
-}
 // ...existing code...
 window.saveMutedState = saveMutedState;
 window.showStatus = showStatus;

@@ -568,7 +568,24 @@ async function initializeApp() {
     });
   }
 
+  // Sync persisted shuffle mode (PlaybackStateManager) into UI state.
+  if (window.playbackStateManager && typeof window.playbackStateManager.getShuffleMode === 'function') {
+    state.shuffleFavorites = window.playbackStateManager.getShuffleMode();
+  }
   updateShuffleButton();
+
+  if (typeof window.updateModeButton === 'function') {
+    window.updateModeButton();
+  }
+
+  if (elements.modeBtn) {
+    elements.modeBtn.addEventListener('click', () => {
+      window.logger?.info('Repeat mode toggle clicked', 'UI');
+      if (typeof window.cycleRepeatMode === 'function') {
+        window.cycleRepeatMode();
+      }
+    });
+  }
 
   if (elements.repeatBtn) {
     elements.repeatBtn.addEventListener('click', () => {

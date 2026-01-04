@@ -601,9 +601,11 @@ h3 {
   width: 100%;
   margin: 12px auto 18px auto;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  gap: var(--spacing-sm);
   align-items: center;
   justify-content: center;
+  flex-wrap: wrap;
 }
 
 .description {
