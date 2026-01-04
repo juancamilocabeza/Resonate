@@ -1339,7 +1339,7 @@ function togglePlay() {
     }
 
     audio.play().then(() => {
-      if (elements.playBtn) elements.playBtn.textContent = '| |';
+      if (elements.playBtn) elements.playBtn.textContent = '⏸';
       safeShowStatus('Music is playing now', 'info');
 
       // Actualizar Media Session

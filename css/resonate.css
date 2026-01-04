@@ -89,6 +89,7 @@
   --error: #ff5555;
   --success: #2ecc71;
   --warning: #ffb84d;
+  --control-fg: var(--fg);
 
   /* UI Components */
   --card: #262d35;
@@ -165,6 +166,7 @@
   --btn-active: #0a0a0a;
   --result-hover: rgba(var(--primary-rgb), 0.08);
   --item-hover: rgba(255, 255, 255, 0.08);
+  --control-fg: var(--fg);
 }
 
 /* ===== TEMA DÍA - Colores claros optimizados ===== */
@@ -189,6 +191,7 @@
   --result-hover: rgba(var(--primary-rgb), 0.1);
   --item-hover: rgba(0, 0, 0, 0.08);
   --neutral: #374151;
+  --control-fg: #333333;
   
   /* Sombras ajustadas para modo día */
   --shadow-light: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -260,6 +263,7 @@
   --result-hover: rgba(var(--primary-rgb), 0.06);
   --item-hover: rgba(255, 255, 255, 0.05);
   --neutral: #909090;
+  --control-fg: var(--fg);
 }
 
 /* Reduce animaciones en modo ahorro de energía */
@@ -873,11 +877,22 @@ button:hover:not(:disabled) {
   transition: var(--transition-default);
 }
 
+button:focus-visible:not(:disabled):not(.play-btn):not(.play-btn-favorite) {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
 button:focus:not(:disabled):not(.play-btn):not(.play-btn-favorite) {
   outline-offset: 2px;
 }
 
 /* Focus styles for play button */
+.play-btn:focus-visible,
+.play-btn-favorite:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
 .play-btn:focus,
 .play-btn-favorite:focus {
   outline: 2px solid var(--accent);
@@ -885,8 +900,10 @@ button:focus:not(:disabled):not(.play-btn):not(.play-btn-favorite) {
 }
 
 button:disabled {
-  opacity: 0.5;
+  opacity: 0.55;
   cursor: not-allowed;
+  outline: 1px solid rgba(var(--primary-rgb), 0.2);
+  outline-offset: 2px;
 }
 
 button:active:not(:disabled) {
@@ -912,7 +929,7 @@ button:active:not(:disabled) {
   
   /* Background & Color */
   background: var(--btn) !important;
-  color: #fff;
+  color: var(--control-fg);
   box-shadow: none !important;
   
   /* Typography */
@@ -958,18 +975,28 @@ button:active:not(:disabled) {
 /* Navigation buttons */
 .prev-btn,
 .next-btn {
-  min-width: 80px;
+  min-width: 70px;
   font-size: 20px;
+  color: var(--control-fg);
 }
 
-.prev-btn:hover,
-.next-btn:hover {
-  transform: translateX(var(--spacing-sm));
+.prev-btn:hover:not(:disabled),
+.next-btn:hover:not(:disabled) {
+  transform: translateY(-3px);
+  background: var(--card);
+  box-shadow: 0 8px 24px rgba(var(--primary-rgb), 0.12);
 }
 
-.prev-btn:active,
-.next-btn:active {
-  transform: scale(0.95);
+.prev-btn:focus-visible:not(:disabled),
+.next-btn:focus-visible:not(:disabled) {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.prev-btn:active:not(:disabled),
+.next-btn:active:not(:disabled) {
+  transform: scale(0.92);
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 
 /* Favorite button */
@@ -977,6 +1004,7 @@ button:active:not(:disabled) {
 .additional-btn {
   width: 80px;
   font-size: 20px;
+  color: var(--control-fg);
 }
 
 .favorite-item:hover {
@@ -988,7 +1016,6 @@ button:active:not(:disabled) {
 .favorite-item:active {
   background: rgba(var(--primary-rgb), 0.08);
 }
-}
 
 .favorite-btn.active:hover {
   background: rgba(255, 107, 107, 0.25);
@@ -999,6 +1026,12 @@ button:active:not(:disabled) {
   width: 80px;
   font-size: 20px;
   outline: none !important;
+  color: var(--control-fg);
+}
+
+.shuffle-favorites-btn:focus-visible {
+  outline: 2px solid var(--primary) !important;
+  outline-offset: 2px !important;
 }
 
 .shuffle-favorites-btn:focus {
@@ -3179,6 +3212,7 @@ select:focus {
 .loader-container { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 16px 20px; min-width: 140px; background: var(--card); border: 1px solid rgba(var(--primary-rgb), 0.2); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
 .loader-spinner { width: var(--loader-size, 40px); height: var(--loader-size, 40px); border-radius: 50%; border: var(--loader-border-width, 4px) solid rgba(var(--primary-rgb), 0.2); border-top: var(--loader-border-width, 4px) solid var(--primary); animation: spin var(--loader-duration, 2s) linear infinite; }
 .loader-progress { font-size: 14px; font-weight: 700; letter-spacing: 0.6px; color: var(--fg); text-shadow: 0 2px 8px rgba(0,0,0,0.4); text-align: center; min-width: 48px; }
+.loader-message { font-size: 12px; font-weight: 400; text-align: center; line-height: 1.4; max-width: 280px; margin-top: 4px; opacity: 0.85; color: var(--muted); }
 .loader { width: var(--loader-size, 24px); height: var(--loader-size, 24px); border-radius: 50%; border: var(--loader-border-width, 2px) solid rgba(var(--primary-rgb), 0.2); border-top: var(--loader-border-width, 2px) solid var(--primary); animation: spin var(--loader-duration, 2s) linear infinite; }
 .search-loading { display: inline-flex; align-items: center; gap: 10px; padding: 10px 12px; color: var(--muted); }
 .loader-text { color: var(--muted); font-size: 13px; }
@@ -3195,8 +3229,9 @@ select:focus {
 .tracks-container .tlv2-creator { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tracks-container .tlv2-right { display: inline-flex; align-items: center; gap: 8px; }
 .tracks-container .tlv2-duration { font-size: 12px; color: var(--muted); }
-.tracks-container .tlv2-action { background: transparent; border: none; color: var(--fg); cursor: pointer; padding: 4px 6px; border-radius: 6px; }
+.tracks-container .tlv2-action { background: transparent; border: none; color: var(--control-fg); cursor: pointer; padding: 4px 6px; border-radius: 6px; transition: var(--transition-default); }
 .tracks-container .tlv2-action:hover { background: rgba(255,255,255,0.08); }
+.tracks-container .tlv2-action:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .tracks-container .tlv2-fav.active { color: #e11d48; }
 .tracks-container .tlv2-offline { font-size: 12px; color: var(--muted); }
 .tracks-container .tlv2-download { font-size: 13px; }

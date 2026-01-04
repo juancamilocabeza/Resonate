@@ -42,7 +42,6 @@ const Loaders = (() => {
       minWidth: "48px",
     },
     messageText: {
-      color: "#d1d5db",
       fontSize: "12px",
       fontWeight: "400",
       textAlign: "center",
@@ -99,12 +98,10 @@ const Loaders = (() => {
 
     const progressEl = document.createElement("div");
     progressEl.className = "loader-progress";
-    Object.assign(progressEl.style, defaultStyles.progressText);
     progressEl.textContent = "0%";
 
     const messageEl = document.createElement("div");
     messageEl.className = "loader-message";
-    Object.assign(messageEl.style, defaultStyles.messageText);
     messageEl.textContent = "Resonate is ensuring audio quality for an offline experience";
 
     container.appendChild(loader);

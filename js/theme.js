@@ -41,10 +41,8 @@
     // Remove previous themes
     document.documentElement.removeAttribute('data-theme');
     
-    // Apply new theme if not default
-    if (theme !== 'night') {
-      document.documentElement.setAttribute('data-theme', theme);
-    }
+    // Apply new theme (all themes including night)
+    document.documentElement.setAttribute('data-theme', theme);
     
     // Update theme-color meta tag
     updateThemeColor(theme);
@@ -59,7 +57,7 @@
     if (!themeColorMeta) return;
 
     const colors = {
-      'day': '#1f7fb8',
+      'day': '#10b981',
       'night': '#3da9ff',
       'energy-saver': '#7aa7b8'
     };
