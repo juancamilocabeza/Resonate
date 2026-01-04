@@ -78,7 +78,6 @@ function updateDescriptionUI(track) {
     : (track?.description || track?._albumDescription || '');
 
   if (bestDescription && bestDescription.trim() !== '') {
-    elements.descriptionContainer.style.display = 'block';
     elements.toggleDescriptionBtn.style.display = 'inline-flex';
     elements.toggleDescriptionBtn.textContent = 'Info';
     elements.toggleDescriptionBtn.disabled = false;
@@ -98,7 +97,6 @@ function updateDescriptionUI(track) {
     }
   } else {
     console.log('[updateDescriptionUI] Ocultando botón de descripción, no hay descripción disponible');
-    elements.descriptionContainer.style.display = 'none';
     if (elements.toggleDescriptionBtn) elements.toggleDescriptionBtn.style.display = 'none';
     if (modal) modal.style.display = 'none';
     if (modalDesc) modalDesc.innerHTML = '';
@@ -167,7 +165,8 @@ const state = {
   isAndroid: /Android/.test(navigator.userAgent),
   expandedAlbums: new Set(),
   shuffleFavorites: false,
-  repeatMode: 'all', // 'all', 'one', 'off'
+  // Repeat mode is managed by PlaybackStateManager; default is Loop.
+  repeatMode: 'all', // 'off', 'all'(Loop), 'one'
   networkOnline: true,
   networkType: 'online',
   // URL currently assigned to the <audio> element (may be a normal URL or a blob: URL)

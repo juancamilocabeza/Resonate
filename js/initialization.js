@@ -459,7 +459,7 @@ async function initializeApp() {
 
   if (elements.shuffleFavoritesBtn) {
     elements.shuffleFavoritesBtn.addEventListener('click', () => {
-      window.logger.info('Shuffle favorites toggle clicked', 'UI');
+      window.logger.info('Shuffle toggle clicked', 'UI');
       toggleShuffleFavorites();
     });
   }

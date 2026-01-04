@@ -15,6 +15,15 @@ const RepeatMode = {
   OFF: 'off'            // No repeat
 };
 
+function normalizeRepeatMode(mode) {
+  // Keep backward compatibility with historical values.
+  if (mode === RepeatMode.CONTEXT) return RepeatMode.ALL;
+  // The Mode button only supports Off/Loop/One; treat legacy INFINITE as Loop.
+  if (mode === RepeatMode.INFINITE) return RepeatMode.ALL;
+  if (mode === RepeatMode.ALL || mode === RepeatMode.ONE || mode === RepeatMode.OFF) return mode;
+  return RepeatMode.OFF;
+}
+
 const PLAYBACK_CONSTANTS = {
   DEFAULT_QUEUE_SIZE: 6,
   PREFETCH_TIMEOUT_MS: 45000,
@@ -82,12 +91,14 @@ const RetryStrategy = {
 class PlaybackStateManager {
   constructor() {
     // Cargar configuración persistente
-    let repeat = RepeatMode.CONTEXT;
+    // Default should follow the current context until it is exhausted.
+    // (Loop/Infinite are explicit user choices.)
+    let repeat = RepeatMode.ALL;
     let shuffle = false;
     try {
       const config = JSON.parse(localStorage.getItem('playbackConfig'));
       if (config) {
-        if (Object.values(RepeatMode).includes(config.repeat)) repeat = config.repeat;
+        if (Object.values(RepeatMode).includes(config.repeat)) repeat = normalizeRepeatMode(config.repeat);
         if (typeof config.shuffle === 'boolean') shuffle = config.shuffle;
       }
       if (localStorage.getItem('resonate_shuffle_enabled') !== null) {
@@ -110,8 +121,9 @@ class PlaybackStateManager {
   }
 
   setRepeatMode(mode) {
-    if (Object.values(RepeatMode).includes(mode)) {
-      this.state.modes.repeat = mode;
+    const normalized = normalizeRepeatMode(mode);
+    if (Object.values(RepeatMode).includes(normalized)) {
+      this.state.modes.repeat = normalized;
       this.saveConfig();
     }
   }
@@ -358,35 +370,35 @@ class AlbumContextHandler extends BaseContextHandler {
       return;
     }
 
-    if (repeatMode === RepeatMode.OFF) {
-      showStatus('Album finished, ready for next', 'info', 2000);
-      return;
-    }
-
-    // Try to get next track in album
-    const nextTrack = await this.getNextTrack();
+    const shouldLoop = repeatMode === RepeatMode.ALL;
+    const nextTrack = await this.getNextTrack(shouldLoop);
     if (nextTrack) {
       await this.retryManager.executeWithRetry(async () => {
         await playAudioTrackOptimized(nextTrack, currentAlbumId, nextTrack.trackIndex, nextTrack.totalTracks);
         this.stateManager.recordSuccess();
       }, RetryStrategy.NETWORK);
-    } else {
-      // Album finished
-      if (repeatMode === RepeatMode.CONTEXT || repeatMode === RepeatMode.ALL) {
-        // Replay album from beginning (loop current context)
-        const firstTrack = await this.getFirstTrack();
-        if (firstTrack) {
-          await this.retryManager.executeWithRetry(async () => {
-            await playAudioTrackOptimized(firstTrack, currentAlbumId, 0, firstTrack.totalTracks);
-          }, RetryStrategy.NETWORK);
-        }
-      } else {
-        showStatus('Your album playback is complete', 'info', 2000);
+      return;
+    }
+
+    // Album finished
+    if (repeatMode === RepeatMode.OFF) {
+      showStatus('Your album playback is complete', 'info', 2000);
+      return;
+    }
+
+    if (shouldLoop) {
+      const firstTrack = await this.getFirstTrack();
+      if (firstTrack) {
+        await this.retryManager.executeWithRetry(async () => {
+          await playAudioTrackOptimized(firstTrack, currentAlbumId, 0, firstTrack.totalTracks);
+        }, RetryStrategy.NETWORK);
       }
+    } else {
+      showStatus('Your album playback is complete', 'info', 2000);
     }
   }
 
-  async getNextTrack() {
+  async getNextTrack(allowLoop = false) {
     const context = playbackManager.contextData.album;
     if (!context || !context.items || context.items.length === 0) return null;
 
@@ -394,7 +406,14 @@ class AlbumContextHandler extends BaseContextHandler {
     if (isShuffle) {
       context.currentIndex = Math.floor(Math.random() * context.items.length);
     } else {
-      context.currentIndex = (context.currentIndex + 1) % context.items.length;
+      if (typeof context.currentIndex !== 'number') context.currentIndex = 0;
+      const nextIndex = context.currentIndex + 1;
+      if (nextIndex >= context.items.length) {
+        if (!allowLoop) return null;
+        context.currentIndex = 0;
+      } else {
+        context.currentIndex = nextIndex;
+      }
     }
 
     return context.items[context.currentIndex];
@@ -441,10 +460,7 @@ class FavoritesContextHandler extends BaseContextHandler {
       return;
     }
 
-    if (repeatMode === RepeatMode.OFF) {
-      showStatus('Favorites done. Search for more music', 'info', 2000);
-      return;
-    }
+    const shouldLoop = repeatMode === RepeatMode.ALL;
 
     // Precarga favoritas (mínimo 10) antes de continuar
     if (typeof window.audioCache === 'object' && window.audioCache && Array.isArray(state.favorites)) {
@@ -452,7 +468,7 @@ class FavoritesContextHandler extends BaseContextHandler {
     }
 
     // Try to get next track from queue or context
-    const nextTrack = await this.getNextTrack();
+    const nextTrack = await this.getNextTrack(shouldLoop);
     if (nextTrack) {
       await this.retryManager.executeWithRetry(async () => {
         await playAudioTrackOptimized(nextTrack, nextTrack.id, nextTrack.trackIndex, nextTrack.totalTracks);
@@ -460,8 +476,13 @@ class FavoritesContextHandler extends BaseContextHandler {
       }, RetryStrategy.CACHE);
     } else {
       // No more tracks
-      if (repeatMode === RepeatMode.ALL || repeatMode === RepeatMode.CONTEXT || repeatMode === RepeatMode.INFINITE) {
-        // Restart favorites
+      if (repeatMode === RepeatMode.OFF) {
+        showStatus('Favorites finished. Find more tracks', 'info', 2000);
+        return;
+      }
+
+      if (shouldLoop) {
+        // Restart favorites (loop current context)
         loadPlaybackQueue('favorites', state.favorites, 0);
         const firstTrack = state.playbackQueue.shift();
         if (firstTrack) {
@@ -469,13 +490,14 @@ class FavoritesContextHandler extends BaseContextHandler {
             await playAudioTrackOptimized(firstTrack, firstTrack.id, firstTrack.trackIndex, firstTrack.totalTracks);
           }, RetryStrategy.CACHE);
         }
-      } else {
-        showStatus('Favorites finished. Find more tracks', 'info', 2000);
+        return;
       }
+
+      showStatus('Favorites finished. Find more tracks', 'info', 2000);
     }
   }
 
-  async getNextTrack() {
+  async getNextTrack(allowLoop = false) {
     // First try from queue
     if (state.playbackQueue.length > 0) {
       const nextTrack = state.playbackQueue.shift();
@@ -497,7 +519,14 @@ class FavoritesContextHandler extends BaseContextHandler {
     if (isShuffle) {
       context.currentIndex = Math.floor(Math.random() * context.items.length);
     } else {
-      context.currentIndex = (context.currentIndex + 1) % context.items.length;
+      if (typeof context.currentIndex !== 'number') context.currentIndex = 0;
+      const nextIndex = context.currentIndex + 1;
+      if (nextIndex >= context.items.length) {
+        if (!allowLoop) return null;
+        context.currentIndex = 0;
+      } else {
+        context.currentIndex = nextIndex;
+      }
     }
 
     const track = context.items[context.currentIndex];
@@ -531,17 +560,14 @@ class SearchContextHandler extends BaseContextHandler {
       return;
     }
 
-    if (repeatMode === RepeatMode.OFF) {
-      showStatus('Current search results finished', 'info', 2000);
-      return;
-    }
+    const shouldLoop = repeatMode === RepeatMode.ALL;
 
     // Precarga resultados de búsqueda (mínimo 10) antes de continuar
     if (typeof window.audioCache === 'object' && window.audioCache && Array.isArray(playbackManager.contextData.search.items)) {
       window.audioCache.preloadSearchResults(playbackManager.contextData.search.items);
     }
 
-    const nextTrack = await this.getNextTrack();
+    const nextTrack = await this.getNextTrack(shouldLoop);
     if (nextTrack) {
       await this.retryManager.executeWithRetry(async () => {
         const files = await fetchOptimizedPlayableFiles(nextTrack.identifier);
@@ -551,8 +577,12 @@ class SearchContextHandler extends BaseContextHandler {
         }
       }, RetryStrategy.NETWORK);
     } else {
-      if (repeatMode === RepeatMode.CONTEXT || repeatMode === RepeatMode.ALL) {
-        // Restart search results (loop current context)
+      if (repeatMode === RepeatMode.OFF) {
+        showStatus('Search complete. Ready for new search', 'info', 2000);
+        return;
+      }
+
+      if (shouldLoop) {
         const context = playbackManager.contextData.search;
         if (context && context.items && context.items.length > 0) {
           context.currentIndex = 0;
@@ -562,13 +592,14 @@ class SearchContextHandler extends BaseContextHandler {
             await playAudioTrackOptimized(files[0], firstItem.identifier);
           }
         }
-      } else {
-        showStatus('Search complete. Ready for new search', 'info', 2000);
+        return;
       }
+
+      showStatus('Search complete. Ready for new search', 'info', 2000);
     }
   }
 
-  async getNextTrack() {
+  async getNextTrack(allowLoop = false) {
     const context = playbackManager.contextData.search;
     if (!context || !context.items || context.items.length === 0) return null;
 
@@ -576,7 +607,14 @@ class SearchContextHandler extends BaseContextHandler {
     if (isShuffle) {
       context.currentIndex = Math.floor(Math.random() * context.items.length);
     } else {
-      context.currentIndex = (context.currentIndex + 1) % context.items.length;
+      if (typeof context.currentIndex !== 'number') context.currentIndex = 0;
+      const nextIndex = context.currentIndex + 1;
+      if (nextIndex >= context.items.length) {
+        if (!allowLoop) return null;
+        context.currentIndex = 0;
+      } else {
+        context.currentIndex = nextIndex;
+      }
     }
 
     return context.items[context.currentIndex];
@@ -601,29 +639,35 @@ class SearchPlaylistContextHandler extends BaseContextHandler {
       return;
     }
 
-    if (repeatMode === RepeatMode.OFF) {
-      showStatus('Your playlist has finished playing', 'info', 2000);
-      return;
-    }
+    const shouldLoop = repeatMode === RepeatMode.ALL;
 
-    const nextTrack = await this.getNextTrack();
+    const nextTrack = await this.getNextTrack(shouldLoop);
     if (nextTrack) {
       await this.retryManager.executeWithRetry(async () => {
         await playAudioTrackOptimized(nextTrack, nextTrack.id, 0, 1);
         this.stateManager.recordSuccess();
       }, RetryStrategy.NETWORK);
     } else {
-      // Resonate UX: loop playlist (never stop).
-      const context = playbackManager.contextData.searchPlaylist;
-      if (context && context.items && context.items.length > 0) {
-        context.currentIndex = 0;
-        const firstTrack = context.items[0];
-        await playAudioTrackOptimized(firstTrack, firstTrack.id, 0, 1);
+      if (repeatMode === RepeatMode.OFF) {
+        showStatus('Your playlist has finished playing', 'info', 2000);
+        return;
       }
+
+      if (shouldLoop) {
+        const context = playbackManager.contextData.searchPlaylist;
+        if (context && context.items && context.items.length > 0) {
+          context.currentIndex = 0;
+          const firstTrack = context.items[0];
+          await playAudioTrackOptimized(firstTrack, firstTrack.id, 0, 1);
+        }
+        return;
+      }
+
+      showStatus('Your playlist has finished playing', 'info', 2000);
     }
   }
 
-  async getNextTrack() {
+  async getNextTrack(allowLoop = false) {
     const context = playbackManager.contextData.searchPlaylist;
     if (!context || !context.items || context.items.length === 0) return null;
 
@@ -631,7 +675,14 @@ class SearchPlaylistContextHandler extends BaseContextHandler {
     if (isShuffle) {
       context.currentIndex = Math.floor(Math.random() * context.items.length);
     } else {
-      context.currentIndex = (context.currentIndex + 1) % context.items.length;
+      if (typeof context.currentIndex !== 'number') context.currentIndex = 0;
+      const nextIndex = context.currentIndex + 1;
+      if (nextIndex >= context.items.length) {
+        if (!allowLoop) return null;
+        context.currentIndex = 0;
+      } else {
+        context.currentIndex = nextIndex;
+      }
     }
 
     return context.items[context.currentIndex];
@@ -720,15 +771,11 @@ function getModeButtonLabel(mode) {
     case RepeatMode.ALL:
       return 'Loop';
     case RepeatMode.ONE:
-      return 'Repeat one';
+      return 'One';
     case RepeatMode.OFF:
       return 'Off';
-    case RepeatMode.CONTEXT:
-      return 'Loop';
-    case RepeatMode.INFINITE:
-      return 'Infinite';
     default:
-      return 'Loop';
+      return 'Off';
   }
 }
 
@@ -737,9 +784,10 @@ function updateModeButton() {
 
   const repeatMode = playbackStateManager && typeof playbackStateManager.getRepeatMode === 'function'
     ? playbackStateManager.getRepeatMode()
-    : (state && state.repeatMode ? state.repeatMode : RepeatMode.ALL);
+    : (state && state.repeatMode ? state.repeatMode : RepeatMode.OFF);
 
-  const label = getModeButtonLabel(repeatMode);
+  const label = getModeButtonLabel(normalizeRepeatMode(repeatMode));
+  window.elements.modeBtn.textContent = label;
   window.elements.modeBtn.title = `Repeat: ${label}`;
   window.elements.modeBtn.setAttribute('aria-label', `Repeat mode: ${label}`);
 }
@@ -747,13 +795,16 @@ function updateModeButton() {
 function cycleRepeatMode() {
   const current = playbackStateManager && typeof playbackStateManager.getRepeatMode === 'function'
     ? playbackStateManager.getRepeatMode()
-    : (state && state.repeatMode ? state.repeatMode : RepeatMode.ALL);
+    : (state && state.repeatMode ? state.repeatMode : RepeatMode.OFF);
 
-  let next = RepeatMode.ALL;
-  if (current === RepeatMode.OFF) next = RepeatMode.ALL;
-  else if (current === RepeatMode.ALL) next = RepeatMode.ONE;
-  else if (current === RepeatMode.ONE) next = RepeatMode.OFF;
-  else next = RepeatMode.ALL;
+  const normalizedCurrent = normalizeRepeatMode(current);
+
+  // Off -> Loop -> One -> Off
+  let next = RepeatMode.OFF;
+  if (normalizedCurrent === RepeatMode.OFF) next = RepeatMode.ALL;
+  else if (normalizedCurrent === RepeatMode.ALL) next = RepeatMode.ONE;
+  else if (normalizedCurrent === RepeatMode.ONE) next = RepeatMode.OFF;
+  else next = RepeatMode.OFF;
 
   if (playbackStateManager) {
     playbackStateManager.setRepeatMode(next);
@@ -1424,16 +1475,20 @@ function loadPlaybackQueue(context, items, startIndex = 0) {
     return;
   }
 
-  // Filter out items with invalid or undefined URLs
-  const validItems = items.filter(item => item && item.url && typeof item.url === 'string' && !item.url.includes('/undefined') && item.url.trim() !== '' && (item.url.endsWith('.mp3') || item.url.endsWith('.ogg')));
+  // Filter out items with invalid or undefined URLs.
+  // NOTE: Do not require specific extensions here; archive.org URLs can include query strings
+  // (e.g. .mp3?download=1) which would incorrectly fail an endsWith('.mp3') check.
+  const validItems = items.filter(item => item && item.url && typeof item.url === 'string' && !item.url.includes('/undefined') && item.url.trim() !== '');
 
   if (validItems.length === 0) {
     // No valid items to load into FIFO
     return;
   }
 
-  // Unificar: para álbumes, favoritos y búsqueda, cargar toda la lista para reproducción continua
-  if (context === 'favorites' || context === 'search' || context === 'album') {
+  // Unificar: para álbumes, favoritos, playlist y búsqueda, cargar toda la lista para reproducción continua
+  const useFullList = context === 'favorites' || context === 'search' || context === 'album' || context === 'searchPlaylist';
+
+  if (useFullList) {
     if (state.shuffleFavorites) {
       // Modo aleatorio: reproducir toda la lista mezclada
       const shuffledAll = [...validItems].sort(() => Math.random() - 0.5);
@@ -1463,6 +1518,37 @@ function loadPlaybackQueue(context, items, startIndex = 0) {
 
   // Prefetch just the immediate next track in context
   intelligentPrefetchNextTracks(validItems, startIndex);
+}
+
+function regenerateQueueFromCurrentContext(currentTrackUrl) {
+  const context = playbackManager.getCurrentContext();
+  if (!context) return;
+
+  let items = null;
+  let queueContext = context;
+
+  if (context === 'favorites') {
+    items = Array.isArray(state.favorites) ? state.favorites : [];
+  } else if (context === 'album') {
+    const albumCtx = playbackManager.contextData.album;
+    items = albumCtx && Array.isArray(albumCtx.items) ? albumCtx.items : [];
+  } else if (context === 'searchPlaylist') {
+    const playlistCtx = playbackManager.contextData.searchPlaylist;
+    items = playlistCtx && Array.isArray(playlistCtx.items) ? playlistCtx.items : [];
+  } else {
+    // Search/genre contexts don't have direct audio URLs for FIFO.
+    return;
+  }
+
+  if (!items || items.length === 0) return;
+
+  let startIndex = 0;
+  if (currentTrackUrl) {
+    const idx = items.findIndex(t => t && t.url && t.url === currentTrackUrl);
+    if (idx >= 0) startIndex = (idx + 1) % items.length;
+  }
+
+  loadPlaybackQueue(queueContext, items, startIndex);
 }
 
 // Force playback by determining context and playing
@@ -1519,7 +1605,6 @@ async function playFromFavoritesQueue(specificTrack = null) {
         }
       }
     };
-    // Hook para cambios en favoritos (asume que se usa un setter o evento personalizado)
     if (window.addEventListener) {
       window.addEventListener('favoritesChanged', updateFavoritesQueue);
     }
@@ -1740,6 +1825,45 @@ async function playNextInContext(maxRetries = 3) {
       }
     }
 
+    // If FIFO is exhausted, regenerate it from the current context (loop).
+    if (state.playbackQueue.length === 0) {
+      regenerateQueueFromCurrentContext(currentTrackUrl);
+    }
+
+    // Retry FIFO playback after regeneration.
+    if (state.playbackQueue.length > 0) {
+      let guard = 0;
+      while (state.playbackQueue.length > 0 && guard < 12) {
+        const peek = state.playbackQueue[0];
+        if (peek && currentTrackUrl && peek.url && peek.url === currentTrackUrl) {
+          state.playbackQueue.shift();
+          guard++;
+          continue;
+        }
+
+        const actualNextTrack = state.playbackQueue.shift();
+        if (!actualNextTrack) break;
+
+        if (state.currentTrack && state.currentTrack.url && state.currentTrack.url !== actualNextTrack.url) {
+          state.playbackHistory.push(state.currentTrack);
+        }
+
+        try {
+          await playAudioTrackOptimized(actualNextTrack, actualNextTrack.id, actualNextTrack.trackIndex, actualNextTrack.totalTracks);
+          return;
+        } catch (error) {
+          console.error('Error reproduciendo desde cola regenerada:', error);
+          guard++;
+          if (maxRetries > 0) {
+            showStatus('Track issue detected, trying next', 'error', 1500);
+            maxRetries--;
+            continue;
+          }
+          continue;
+        }
+      }
+    }
+
     // No stop conditions: always continue by looping through context.
 
     const nextItem = playbackManager.getNextTrack();
@@ -1907,19 +2031,10 @@ async function playPreviousInContext() {
 
 // Enhanced repeat mode functions
 function toggleRepeatMode() {
-  // Resonate UX: never stop at end; keep loop-based repeat modes only.
-  const modes = ['context', 'one', 'infinite', 'all'];
-  const currentIndex = modes.indexOf(state.repeatMode);
-  state.repeatMode = modes[(currentIndex + 1) % modes.length];
-  saveRepeatMode(state.repeatMode);
-
-  // Update playback state manager
-  if (playbackStateManager) {
-    playbackStateManager.setRepeatMode(state.repeatMode);
+  // Backward-compatible alias. Prefer window.cycleRepeatMode().
+  if (typeof window.cycleRepeatMode === 'function') {
+    window.cycleRepeatMode();
   }
-
-  updateRepeatBtn();
-  showStatus(`Repeat mode changed successfully`, 'info', 2000);
 }
 
 function getRepeatModeDisplayName(mode) {
@@ -1952,10 +2067,10 @@ function loadRepeatMode() {
   try {
     const saved = localStorage.getItem('resonate_repeat_mode');
     if (saved && ['all', 'context', 'one', 'infinite', 'off'].includes(saved)) {
-      state.repeatMode = saved;
+      state.repeatMode = normalizeRepeatMode(saved);
     }
   } catch (e) {
-    state.repeatMode = 'all'; // Default
+    state.repeatMode = RepeatMode.ALL; // Default
   }
 
   if (playbackStateManager) {
@@ -1992,11 +2107,27 @@ function setupListenTracking() {
   let endedHandlerExecuted = false;
   let errorHandlerExecuted = false;
   let isTransitioning = false;
+  let transitionUnlockId = null;
+
+  const scheduleTransitionUnlock = () => {
+    if (transitionUnlockId) clearTimeout(transitionUnlockId);
+    // If the next track never reaches 'play' (e.g. load/play failure),
+    // release the transition lock so auto-advance can retry.
+    transitionUnlockId = setTimeout(() => {
+      isTransitioning = false;
+      endedHandlerExecuted = false;
+      errorHandlerExecuted = false;
+    }, 8000);
+  };
 
   window.elements.audio.addEventListener('play', () => {
     endedHandlerExecuted = false;
     errorHandlerExecuted = false;
     isTransitioning = false;
+    if (transitionUnlockId) {
+      clearTimeout(transitionUnlockId);
+      transitionUnlockId = null;
+    }
     if (state.currentTrack) {
       state.currentTrackListenStart = Date.now();
     }
@@ -2062,6 +2193,7 @@ function setupListenTracking() {
     }
 
     signalServiceWorkerSafeActivation();
+    scheduleTransitionUnlock();
   });
 
   // If a track errors and never reaches 'ended', skip forward to keep continuous playback.
@@ -2086,6 +2218,8 @@ function setupListenTracking() {
         playNextInContext().catch((e) => logPlayback('warn', 'Skip failed', e));
       }
     }, 800);
+
+    scheduleTransitionUnlock();
   });
 
   window.elements.audio.addEventListener('pause', () => {
@@ -2232,7 +2366,7 @@ function toggleShuffleFavorites() {
   if (state.shuffleFavorites) {
     // Activar modo aleatorio
     if (context === 'favorites' && state.favorites.length > 0) {
-      showStatus('Shuffling your favorites now', 'info', 2000);
+      showStatus('Shuffling favorites', 'info', 2000);
       loadPlaybackQueue('favorites', state.favorites, 0);
       if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.loadFavoritesQueue === 'function') {
         audioCache.loadFavoritesQueue(state.favorites, true);

@@ -857,7 +857,8 @@ async function playSpecificSearchTrack(track, albumId, trackIndex, totalTracks) 
         st2.contextRepeatCount[albumId] = 0;
       }
       // Load FIFO queue with album tracks
-      window.loadPlaybackQueue?.('album', files, trackIndex);
+      // Start FIFO after the selected track to avoid replaying it on auto-advance.
+      window.loadPlaybackQueue?.('album', files, trackIndex + 1);
     }
     if (window.Loaders) window.Loaders.hideLoader();
     
