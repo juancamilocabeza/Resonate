@@ -574,29 +574,6 @@ async function initializeApp() {
   }
   updateShuffleButton();
 
-  if (typeof window.updateModeButton === 'function') {
-    window.updateModeButton();
-  }
-
-  if (elements.modeBtn) {
-    elements.modeBtn.addEventListener('click', () => {
-      window.logger?.info('Repeat mode toggle clicked', 'UI');
-      if (typeof window.cycleRepeatMode === 'function') {
-        window.cycleRepeatMode();
-      }
-    });
-  }
-
-  if (elements.repeatBtn) {
-    elements.repeatBtn.addEventListener('click', () => {
-      window.logger.info('Repeat mode toggle clicked', 'UI');
-      toggleRepeatMode();
-    });
-    updateRepeatBtn();
-  }
-
-  loadRepeatMode();
-
   // Inicializar PWA
   setupPWAInstall();
   setupOfflineFunctionality();

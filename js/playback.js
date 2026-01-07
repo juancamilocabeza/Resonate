@@ -90,15 +90,12 @@ const RetryStrategy = {
 // Playback state manager
 class PlaybackStateManager {
   constructor() {
-    // Cargar configuración persistente
-    // Default should follow the current context until it is exhausted.
-    // (Loop/Infinite are explicit user choices.)
-    let repeat = RepeatMode.ALL;
+    // Repeat/mode toggle removed from UX; keep continuous playback by default.
+    const repeat = RepeatMode.ALL;
     let shuffle = false;
     try {
       const config = JSON.parse(localStorage.getItem('playbackConfig'));
       if (config) {
-        if (Object.values(RepeatMode).includes(config.repeat)) repeat = normalizeRepeatMode(config.repeat);
         if (typeof config.shuffle === 'boolean') shuffle = config.shuffle;
       }
       if (localStorage.getItem('resonate_shuffle_enabled') !== null) {
@@ -120,12 +117,10 @@ class PlaybackStateManager {
     this.state.current = { track, context, contextId };
   }
 
-  setRepeatMode(mode) {
-    const normalized = normalizeRepeatMode(mode);
-    if (Object.values(RepeatMode).includes(normalized)) {
-      this.state.modes.repeat = normalized;
-      this.saveConfig();
-    }
+  setRepeatMode() {
+    // Repeat/mode toggle removed from UX; keep continuous playback.
+    this.state.modes.repeat = RepeatMode.ALL;
+    this.saveConfig();
   }
 
   setShuffleMode(enabled) {
@@ -137,7 +132,6 @@ class PlaybackStateManager {
   saveConfig() {
     try {
       localStorage.setItem('playbackConfig', JSON.stringify({
-        repeat: this.state.modes.repeat,
         shuffle: this.state.modes.shuffle
       }));
     } catch {}
@@ -145,7 +139,7 @@ class PlaybackStateManager {
 
   getPlaybackConfigStatus() {
     return {
-      repeat: this.state.modes.repeat,
+      repeat: RepeatMode.ALL,
       shuffle: this.state.modes.shuffle
     };
   }
@@ -183,7 +177,7 @@ class PlaybackStateManager {
   }
 
   getRepeatMode() {
-    return this.state.modes.repeat;
+    return RepeatMode.ALL;
   }
 
   getShuffleMode() {
@@ -764,64 +758,6 @@ window.getPlaybackConfigStatus = function() {
 };
 window.playbackStateManager = playbackStateManager;
 window.enhancedPlaybackController = enhancedPlaybackController;
-window.RepeatMode = RepeatMode;
-
-function getModeButtonLabel(mode) {
-  switch (mode) {
-    case RepeatMode.ALL:
-      return 'Loop';
-    case RepeatMode.ONE:
-      return 'One';
-    case RepeatMode.OFF:
-      return 'Off';
-    default:
-      return 'Off';
-  }
-}
-
-function updateModeButton() {
-  if (!window.elements || !window.elements.modeBtn) return;
-
-  const repeatMode = playbackStateManager && typeof playbackStateManager.getRepeatMode === 'function'
-    ? playbackStateManager.getRepeatMode()
-    : (state && state.repeatMode ? state.repeatMode : RepeatMode.OFF);
-
-  const label = getModeButtonLabel(normalizeRepeatMode(repeatMode));
-  window.elements.modeBtn.textContent = label;
-  window.elements.modeBtn.title = `Repeat: ${label}`;
-  window.elements.modeBtn.setAttribute('aria-label', `Repeat mode: ${label}`);
-}
-
-function cycleRepeatMode() {
-  const current = playbackStateManager && typeof playbackStateManager.getRepeatMode === 'function'
-    ? playbackStateManager.getRepeatMode()
-    : (state && state.repeatMode ? state.repeatMode : RepeatMode.OFF);
-
-  const normalizedCurrent = normalizeRepeatMode(current);
-
-  // Off -> Loop -> One -> Off
-  let next = RepeatMode.OFF;
-  if (normalizedCurrent === RepeatMode.OFF) next = RepeatMode.ALL;
-  else if (normalizedCurrent === RepeatMode.ALL) next = RepeatMode.ONE;
-  else if (normalizedCurrent === RepeatMode.ONE) next = RepeatMode.OFF;
-  else next = RepeatMode.OFF;
-
-  if (playbackStateManager) {
-    playbackStateManager.setRepeatMode(next);
-  }
-  if (state) {
-    state.repeatMode = next;
-  }
-  try {
-    saveRepeatMode(next);
-  } catch {}
-
-  updateModeButton();
-  safeShowStatus(`Repeat: ${getModeButtonLabel(next)}`, 'info', 1500);
-}
-
-window.updateModeButton = updateModeButton;
-window.cycleRepeatMode = cycleRepeatMode;
 
 // Fetch with timeout for network operations
 async function fetchWithTimeout(resource, options = {}, timeout = 8000) {
@@ -2026,65 +1962,6 @@ async function playPreviousInContext() {
   } catch (error) {
     console.error('Error al reproducir pista anterior:', error);
     setTimeout(() => playPreviousInContext(), 1000);
-  }
-}
-
-// Enhanced repeat mode functions
-function toggleRepeatMode() {
-  // Backward-compatible alias. Prefer window.cycleRepeatMode().
-  if (typeof window.cycleRepeatMode === 'function') {
-    window.cycleRepeatMode();
-  }
-}
-
-function getRepeatModeDisplayName(mode) {
-  const names = {
-    all: 'Repeat context',
-    context: 'Repeat context infinitely',
-    one: 'Repeat track',
-    infinite: 'Infinite mix',
-    off: 'No repeat'
-  };
-  return names[mode] || 'Repeat context';
-}
-
-function updateRepeatBtn() {
-  if (!window.elements.repeatBtn) return;
-
-  const icons = {
-    all: '🔁',      // Repeat context
-    context: '🔄',  // Repeat context infinitely
-    one: '🔂',      // Repeat one
-    infinite: '🔀', // Mix infinitely
-    off: '➡️'       // No repeat
-  };
-
-  window.elements.repeatBtn.textContent = icons[state.repeatMode] || '🔁';
-  window.elements.repeatBtn.title = `Repeat mode: ${getRepeatModeDisplayName(state.repeatMode)}`;
-}
-
-function loadRepeatMode() {
-  try {
-    const saved = localStorage.getItem('resonate_repeat_mode');
-    if (saved && ['all', 'context', 'one', 'infinite', 'off'].includes(saved)) {
-      state.repeatMode = normalizeRepeatMode(saved);
-    }
-  } catch (e) {
-    state.repeatMode = RepeatMode.ALL; // Default
-  }
-
-  if (playbackStateManager) {
-    playbackStateManager.setRepeatMode(state.repeatMode);
-  }
-
-  updateModeButton();
-}
-
-function saveRepeatMode(mode) {
-  try {
-    localStorage.setItem('resonate_repeat_mode', mode);
-  } catch (e) {
-    logPlayback('warn', 'Error saving repeat mode', e);
   }
 }
 
