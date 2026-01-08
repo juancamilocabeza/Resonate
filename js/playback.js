@@ -52,6 +52,59 @@ function safeShowStatus(message, type, duration, variant, showLoader) {
   }
 }
 
+function isAutoplayBlockedError(error) {
+  try {
+    const name = (error && error.name) ? String(error.name) : '';
+    if (name === 'NotAllowedError' || name === 'AbortError') return true;
+
+    const msg = (error && error.message) ? String(error.message) : String(error || '');
+    // Best-effort: browsers vary in messaging when autoplay is blocked.
+    return /notallowederror|play\(\) failed|user gesture|autoplay/i.test(msg);
+  } catch {
+    return false;
+  }
+}
+
+function isSharedLinkAutoplayAttempt() {
+  try {
+    return !!(window.state && window.state.sharedLinkAutoplay === true);
+  } catch {
+    return false;
+  }
+}
+
+function showAutoplayCta(message = 'Tap Play to start') {
+  try {
+    const text = (message && String(message).trim()) ? String(message).trim() : 'Tap Play to start';
+
+    let container = document.getElementById('status-messages');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'status-messages';
+      document.body.appendChild(container);
+    }
+
+    const el = document.createElement('div');
+    el.className = 'status-message status-info';
+    el.textContent = text;
+    container.appendChild(el);
+
+    // Auto-dismiss (best effort). Keep it visible long enough to be noticed.
+    window.setTimeout(() => {
+      try {
+        el.classList.add('fade-out');
+        window.setTimeout(() => {
+          try { el.remove(); } catch {}
+        }, 350);
+      } catch {
+        try { el.remove(); } catch {}
+      }
+    }, 6000);
+  } catch {
+    // ignore
+  }
+}
+
 function logPlayback(level, message, error) {
   try {
     if (window.logger && typeof window.logger.playback === 'function') {
@@ -1228,6 +1281,16 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
 
         resolve(true);
       }).catch(error => {
+        // Shared links: if autoplay is blocked, keep the track ready and show a CTA.
+        if (isSharedLinkAutoplayAttempt() && isAutoplayBlockedError(error)) {
+          try {
+            if (elements.playBtn) elements.playBtn.textContent = '▶';
+          } catch {}
+          showAutoplayCta('Tap Play to start');
+          resolve(false);
+          return;
+        }
+
         // Handle playback error
         cleanup();
         reject(error);
@@ -1392,7 +1455,11 @@ function togglePlay() {
         navigator.mediaSession.playbackState = 'playing';
       }
     }).catch(error => {
-      safeShowStatus('Playback encountered an error', 'error');
+      if (isAutoplayBlockedError(error)) {
+        showAutoplayCta('Tap Play to start');
+      } else {
+        safeShowStatus('Playback encountered an error', 'error');
+      }
       logPlayback('warn', 'Playback play() failed', error);
     });
   } else {

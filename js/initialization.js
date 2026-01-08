@@ -343,7 +343,22 @@ async function playSharedContent(identifier, startTrackIndex = null) {
 
       // Start playing the selected track
       if (tracksWithMetadata.length > 0) {
-        await playAudioTrackOptimized(tracksWithMetadata[startIndex], identifier, startIndex, tracksWithMetadata.length);
+        const prevSharedAutoplay = window.state && Object.prototype.hasOwnProperty.call(window.state, 'sharedLinkAutoplay')
+          ? window.state.sharedLinkAutoplay
+          : undefined;
+        try {
+          window.state = window.state || {};
+          window.state.sharedLinkAutoplay = true;
+          await playAudioTrackOptimized(tracksWithMetadata[startIndex], identifier, startIndex, tracksWithMetadata.length);
+        } finally {
+          try {
+            if (prevSharedAutoplay === undefined) {
+              delete window.state.sharedLinkAutoplay;
+            } else {
+              window.state.sharedLinkAutoplay = prevSharedAutoplay;
+            }
+          } catch {}
+        }
       }
 
     } else {
@@ -358,7 +373,22 @@ async function playSharedContent(identifier, startTrackIndex = null) {
       showStatus('Now playing your shared track', 'info', 3000);
 
       // Use existing playback function
-      await playAudioTrackOptimized(track, identifier);
+      const prevSharedAutoplay = window.state && Object.prototype.hasOwnProperty.call(window.state, 'sharedLinkAutoplay')
+        ? window.state.sharedLinkAutoplay
+        : undefined;
+      try {
+        window.state = window.state || {};
+        window.state.sharedLinkAutoplay = true;
+        await playAudioTrackOptimized(track, identifier);
+      } finally {
+        try {
+          if (prevSharedAutoplay === undefined) {
+            delete window.state.sharedLinkAutoplay;
+          } else {
+            window.state.sharedLinkAutoplay = prevSharedAutoplay;
+          }
+        } catch {}
+      }
     }
 
   } catch (error) {
