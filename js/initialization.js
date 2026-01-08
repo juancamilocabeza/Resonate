@@ -164,7 +164,7 @@ function scheduleFavoritesQueuePreparation() {
 }
 
 // Function to update meta tags for shared link previews
-async function updateMetaTagsForSharedLink(identifier) {
+async function updateMetaTagsForSharedLink(identifier, trackIndex = null) {
   try {
     // Fetch basic metadata from archive.org
     const response = await fetch(`https://archive.org/metadata/${identifier}`);
@@ -173,35 +173,66 @@ async function updateMetaTagsForSharedLink(identifier) {
     }
 
     const metadata = await response.json();
-    const title = metadata.metadata?.title || 'Shared content';
-    const creator = metadata.metadata?.creator || 'Resonate Player';
+    const albumTitle = metadata.metadata?.title || 'Shared content';
+    const albumCreator = metadata.metadata?.creator || 'Resonate Player';
+
+    let resolvedTitle = albumTitle;
+    let resolvedCreator = albumCreator;
+
+    // If a track index is provided, try to resolve the specific track title/creator.
+    // Best-effort only: meta tags should still work even if this fails.
+    const idx = typeof trackIndex === 'number' && isFinite(trackIndex) && trackIndex >= 0 ? Math.floor(trackIndex) : null;
+    if (idx !== null) {
+      try {
+        const files = await fetchOptimizedPlayableFiles(identifier);
+        if (Array.isArray(files) && files.length > 1 && idx < files.length) {
+          const track = files[idx];
+          const tTitle = track && track.title ? track.title : `Track ${idx + 1}`;
+          const tCreator = track && track.creator ? track.creator : albumCreator;
+          const tAlbum = (track && (track.albumTitle || track.album)) ? (track.albumTitle || track.album) : albumTitle;
+
+          // Match in-app now-playing convention for album tracks.
+          resolvedTitle = `${tAlbum} — ${tTitle}`;
+          resolvedCreator = tCreator;
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
 
     // Update meta tags for social media sharing
     const baseUrl = window.location.origin;
-    const shareUrl = `${baseUrl}${window.location.pathname}?play=${encodeURIComponent(identifier)}`;
+    const shareUrl = (() => {
+      const base = `${baseUrl}${window.location.pathname}`;
+      const params = new URLSearchParams();
+      params.set('play', identifier);
+      const idx = typeof trackIndex === 'number' && isFinite(trackIndex) && trackIndex >= 0 ? Math.floor(trackIndex) : null;
+      if (idx !== null) params.set('t', String(idx));
+      return `${base}?${params.toString()}`;
+    })();
     const imageUrl = `https://archive.org/services/img/${identifier}`;
 
     // Update page title
-    document.title = `${title} - ${creator} | Resonate Player`;
+    document.title = `${resolvedTitle} - ${resolvedCreator} | Resonate Player`;
 
     // Update Open Graph tags
-    updateMetaTag('property', 'og:title', `${title} - ${creator}`);
-    updateMetaTag('property', 'og:description', `Listen to "${title}" by ${creator} on Resonate Player. Free music from archive.org.`);
+    updateMetaTag('property', 'og:title', `${resolvedTitle} - ${resolvedCreator}`);
+    updateMetaTag('property', 'og:description', `Listen to "${resolvedTitle}" by ${resolvedCreator} on Resonate Player. Free music from archive.org.`);
     updateMetaTag('property', 'og:image', imageUrl);
     updateMetaTag('property', 'og:url', shareUrl);
     updateMetaTag('property', 'og:type', 'music.song');
 
     // Update Twitter Card tags
     updateMetaTag('property', 'twitter:card', 'summary_large_image');
-    updateMetaTag('property', 'twitter:title', `${title} - ${creator}`);
-    updateMetaTag('property', 'twitter:description', `Listen to "${title}" by ${creator} on Resonate Player. Free music from archive.org.`);
+    updateMetaTag('property', 'twitter:title', `${resolvedTitle} - ${resolvedCreator}`);
+    updateMetaTag('property', 'twitter:description', `Listen to "${resolvedTitle}" by ${resolvedCreator} on Resonate Player. Free music from archive.org.`);
     updateMetaTag('property', 'twitter:image', imageUrl);
     updateMetaTag('property', 'twitter:url', shareUrl);
 
     // Update basic meta description
-    updateMetaTag('name', 'description', `Listen to "${title}" by ${creator} on Resonate Player. Free music from archive.org.`);
+    updateMetaTag('name', 'description', `Listen to "${resolvedTitle}" by ${resolvedCreator} on Resonate Player. Free music from archive.org.`);
 
-    console.log('Meta tags updated for shared link:', { title, creator, imageUrl, shareUrl });
+    console.log('Meta tags updated for shared link:', { title: resolvedTitle, creator: resolvedCreator, imageUrl, shareUrl, trackIndex: idx });
 
   } catch (error) {
     console.warn('Error updating meta tags for shared link:', error);
@@ -217,6 +248,9 @@ async function handleSharedLink() {
   try {
     const urlParams = new URLSearchParams(window.location.search);
     const playIdentifier = urlParams.get('play');
+    const trackIndexParam = urlParams.get('t');
+    const parsedTrackIndex = trackIndexParam !== null ? parseInt(trackIndexParam, 10) : null;
+    const trackIndex = Number.isFinite(parsedTrackIndex) && parsedTrackIndex >= 0 ? parsedTrackIndex : null;
 
     if (playIdentifier) {
       console.log('Shared link detected, playing:', playIdentifier);
@@ -224,7 +258,7 @@ async function handleSharedLink() {
 
       // Update meta tags for social media previews immediately
       try {
-        await updateMetaTagsForSharedLink(playIdentifier);
+        await updateMetaTagsForSharedLink(playIdentifier, trackIndex);
       } catch (error) {
         console.warn('Error updating meta tags for shared link:', error);
       }
@@ -232,12 +266,13 @@ async function handleSharedLink() {
       // Clear the URL parameter to avoid re-triggering
       const url = new URL(window.location);
       url.searchParams.delete('play');
+      url.searchParams.delete('t');
       window.history.replaceState({}, '', url);
 
       // Wait a bit for the app to be fully initialized
       setTimeout(async () => {
         try {
-          await playSharedContent(playIdentifier);
+          await playSharedContent(playIdentifier, trackIndex);
         } catch (error) {
           console.error('Error playing shared content:', error);
           safeShowStatus('Failed to load the shared track', 'error');
@@ -250,7 +285,7 @@ async function handleSharedLink() {
 }
 
 // Function to play content from shared link
-async function playSharedContent(identifier) {
+async function playSharedContent(identifier, startTrackIndex = null) {
   try {
     // Fetch the playable files for this identifier
     const files = await fetchOptimizedPlayableFiles(identifier);
@@ -262,6 +297,14 @@ async function playSharedContent(identifier) {
     // Determine if this is an album (multiple tracks) or single track
     const isAlbum = files.length > 1;
 
+    const startIndex = (() => {
+      if (!(typeof startTrackIndex === 'number' && Number.isFinite(startTrackIndex))) return 0;
+      const idx = Math.floor(startTrackIndex);
+      if (idx < 0) return 0;
+      if (idx >= files.length) return 0;
+      return idx;
+    })();
+
     if (isAlbum) {
       // Handle album sharing - load all tracks into playlist
       console.log(`Shared album detected: ${files.length} tracks`);
@@ -269,7 +312,7 @@ async function playSharedContent(identifier) {
       // Create album metadata
       const albumData = {
         id: identifier,
-        title: files[0].title || 'Shared album',
+        title: files[0].album || identifier || 'Shared album',
         creator: files[0].creator || 'Unknown',
         tracks: files.length
       };
@@ -283,14 +326,24 @@ async function playSharedContent(identifier) {
         totalTracks: files.length
       }));
 
-      // Load album tracks into playback queue
-      await loadPlaybackQueue('shared-album', tracksWithMetadata, 0);
+      // Ensure album context is set so auto-advance stays within this album.
+      try {
+        if (window.playbackManager && typeof window.playbackManager.setAlbumPlaylist === 'function') {
+          window.playbackManager.setAlbumPlaylist(identifier, tracksWithMetadata, startIndex);
+        }
+      } catch {}
+
+      // Keep FIFO queue aligned as a fallback (start *after* the current track).
+      try {
+        const queueStart = tracksWithMetadata.length > 1 ? (startIndex + 1) % tracksWithMetadata.length : 0;
+        await loadPlaybackQueue('album', tracksWithMetadata, queueStart);
+      } catch {}
 
       safeShowStatus('Your shared album is ready to play', 'info', 3000);
 
-      // Start playing the first track
+      // Start playing the selected track
       if (tracksWithMetadata.length > 0) {
-        await playAudioTrackOptimized(tracksWithMetadata[0], identifier);
+        await playAudioTrackOptimized(tracksWithMetadata[startIndex], identifier, startIndex, tracksWithMetadata.length);
       }
 
     } else {
@@ -509,7 +562,11 @@ async function initializeApp() {
   if (elements.currentTrackShare) {
     const handleShare = async () => {
       if (state.currentTrack && state.currentTrack.id) {
-        await shareTrack(state.currentTrack.id, state.currentTrack.title);
+        const albumTitleForShare = state.currentTrack.albumTitle || state.currentTrack.album || '';
+        const trackIndexForShare = (state.currentTrack.totalTracks || 1) > 1 && typeof state.currentTrack.trackIndex === 'number'
+          ? state.currentTrack.trackIndex
+          : null;
+        await shareTrack(state.currentTrack.id, state.currentTrack.title, state.currentTrack.creator, albumTitleForShare, 'track', trackIndexForShare);
       } else {
         showStatus('Nothing to share right now', 'warning');
       }

@@ -47,12 +47,19 @@
       // Buscar descripción a nivel de álbum/resultado si falta en el track
       let albumDescription = '';
       let resultDescription = '';
+      let albumTitleForShare = '';
       if (tracksContainer && tracksContainer.closest('.search-result')) {
         const resultData = tracksContainer.closest('.search-result').__resultData;
         if (resultData) {
           if (resultData.description) albumDescription = resultData.description;
           if (resultData.description) resultDescription = resultData.description;
+          if (typeof resultData.title === 'string') albumTitleForShare = resultData.title;
         }
+      }
+
+      if (!albumTitleForShare) {
+        const first = files[0];
+        if (first && typeof first.album === 'string') albumTitleForShare = first.album;
       }
 
       // ...existing code...
@@ -119,11 +126,6 @@
           offlineBadge.textContent = 'Offline';
         }
 
-        const playBtn = document.createElement('button');
-        playBtn.className = 'tlv2-action tlv2-play';
-        playBtn.title = 'Play';
-        playBtn.textContent = '▶';
-
         const favBtn = document.createElement('button');
         favBtn.className = 'tlv2-action tlv2-fav';
         const nowFav = typeof window.isTrackFavorite === 'function' ? window.isTrackFavorite(track) : false;
@@ -139,7 +141,6 @@
         info.appendChild(offlineBadge);
 
         right.appendChild(duration);
-        right.appendChild(playBtn);
         right.appendChild(favBtn);
         right.appendChild(downloadBtn);
         right.appendChild(shareBtn);
@@ -148,39 +149,28 @@
         row.appendChild(info);
         row.appendChild(right);
 
+        const playFromRow = () => {
+          try {
+            if (favContext) {
+              if (typeof window.playFromFavoritesQueue === 'function') {
+                window.playFromFavoritesQueue(track);
+              }
+            } else {
+              if (typeof window.playSpecificSearchTrack === 'function') {
+                window.playSpecificSearchTrack(track, albumId, index, files.length);
+              }
+            }
+          } catch {}
+        };
+
+        // Tap-to-play anywhere in the row except buttons
+        row.addEventListener('click', (e) => {
+          if (e.target && e.target.closest && e.target.closest('button')) return;
+          e.stopPropagation();
+          playFromRow();
+        });
+
         // Events
-        playBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          try {
-            if (favContext) {
-              // In favorites, use queue-based playback
-              if (typeof window.playFromFavoritesQueue === 'function') {
-                window.playFromFavoritesQueue(track);
-              }
-            } else {
-              // In search results, use specific track playback
-              if (typeof window.playSpecificSearchTrack === 'function') {
-                window.playSpecificSearchTrack(track, albumId, index, files.length);
-              }
-            }
-          } catch {}
-        });
-
-        info.addEventListener('click', (e) => {
-          e.stopPropagation();
-          try {
-            if (favContext) {
-              if (typeof window.playFromFavoritesQueue === 'function') {
-                window.playFromFavoritesQueue(track);
-              }
-            } else {
-              if (typeof window.playSpecificSearchTrack === 'function') {
-                window.playSpecificSearchTrack(track, albumId, index, files.length);
-              }
-            }
-          } catch {}
-        });
-
         favBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           try {
@@ -223,7 +213,9 @@
           e.stopPropagation();
           try {
             if (typeof window.shareTrack === 'function') {
-              window.shareTrack(track.id || albumId, track.title);
+              const shareAlbumTitle = (track && typeof track.album === 'string' ? track.album : '') || albumTitleForShare;
+              const shareTrackIndex = (track && typeof track.trackIndex === 'number') ? track.trackIndex : index;
+              window.shareTrack(track.id || albumId, track.title, track.creator, shareAlbumTitle, 'track', shareTrackIndex);
             }
           } catch {}
         });

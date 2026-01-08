@@ -1143,15 +1143,19 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
   audioEl.pause();
   audioEl.currentTime = 0;
 
-  if (totalTracks > 1) {
-    const titleText = `${track.title || 'Untitled'}`;
+  {
+    const trackTitle = track.title || 'Untitled';
+    const isAlbumTrack = totalTracks > 1;
+    const albumTitle = (track.albumTitle || track.album || '').toString().trim();
+    const titleText = (isAlbumTrack && albumTitle && albumTitle.toLowerCase() !== trackTitle.toLowerCase())
+      ? `${albumTitle} — ${trackTitle}`
+      : trackTitle;
+
     window.elements.title.textContent = titleText;
     window.updateTitleTicker(titleText);
-    window.elements.creator.textContent = `${track.creator || 'Unknown'} (${trackIndex + 1}/${totalTracks})`;
-  } else {
-    window.elements.title.textContent = track.title;
-    window.updateTitleTicker(track.title);
-    window.elements.creator.textContent = track.creator;
+    window.elements.creator.textContent = isAlbumTrack
+      ? `${track.creator || 'Unknown'} (${trackIndex + 1}/${totalTracks})`
+      : (track.creator || 'Unknown');
   }
 
   // Mostrar/ocultar descripción usando UI avanzada

@@ -905,10 +905,17 @@ function updateMediaSessionMetadata(track, identifier) {
   if (!('mediaSession' in navigator)) return;
 
   try {
+    const trackTitle = track.title || 'Untitled';
+    const albumTitle = (track.albumTitle || track.album || identifier || '').toString().trim();
+    const isAlbumTrack = ((track.totalTracks || 1) > 1) || !!track.isAlbumTrack;
+    const displayTitle = (isAlbumTrack && albumTitle && albumTitle.toLowerCase() !== trackTitle.toLowerCase())
+      ? `${albumTitle} — ${trackTitle}`
+      : trackTitle;
+
     navigator.mediaSession.metadata = new MediaMetadata({
-      title: track.title || 'Untitled',
+      title: displayTitle,
       artist: track.creator || 'Unknown',
-      album: track.album || identifier
+      album: albumTitle
     });
 
     updateMediaPositionState();
@@ -1374,35 +1381,39 @@ function createFavoriteInfo(result) {
   return infoDiv;
 }
 
-function createFavoriteActions(result, hasFavoriteTrack) {
+function createFavoriteActions(result, hasFavoriteTrack, options = {}) {
+  const { showPlay = true } = options;
   const actionsDiv = document.createElement('div');
   actionsDiv.className = 'favorite-actions';
 
   // Play button
-  const playBtn = document.createElement('button');
-  playBtn.className = '';
-  playBtn.title = 'Play';
-  playBtn.textContent = '▶';
+  let playBtn = null;
+  if (showPlay) {
+    playBtn = document.createElement('button');
+    playBtn.className = 'button';
+    playBtn.title = 'Play';
+    playBtn.textContent = '▶';
+    actionsDiv.appendChild(playBtn);
+  }
 
   // Favorite button
   const favoriteBtn = document.createElement('button');
-  favoriteBtn.className = ` ${hasFavoriteTrack ? 'active' : ''}`;
+  favoriteBtn.className = `button result-favorite ${hasFavoriteTrack ? 'active' : ''}`;
   favoriteBtn.title = hasFavoriteTrack ? 'Remove from favorites' : 'Add to favorites';
   favoriteBtn.textContent = hasFavoriteTrack ? '❤️' : '🩶';
 
   // Share button
   const shareBtn = document.createElement('button');
-  shareBtn.className = 'result-share';
+  shareBtn.className = 'button result-share';
   shareBtn.title = 'Share';
   shareBtn.textContent = '🔗';
 
   // Expand button (for albums)
   const expandBtn = document.createElement('button');
-  expandBtn.className = ''; // Keep existing class for styling
+  expandBtn.className = 'button result-expand';
   expandBtn.title = 'View album tracks';
   expandBtn.textContent = '▼';
 
-  actionsDiv.appendChild(playBtn);
   actionsDiv.appendChild(favoriteBtn);
   actionsDiv.appendChild(shareBtn);
   actionsDiv.appendChild(expandBtn);
@@ -1462,10 +1473,9 @@ function createSearchResultElement(result, globalIndex) {
 
   // Build structure using helper functions for favorites layout
   const infoDiv = createFavoriteInfo(result);
-  const { actionsDiv, playBtn, favoriteBtn, shareBtn, expandBtn } = createFavoriteActions(result, hasFavoriteTrack);
+  const { actionsDiv, favoriteBtn, shareBtn, expandBtn } = createFavoriteActions(result, hasFavoriteTrack, { showPlay: false });
 
   // Add ARIA labels to buttons
-  playBtn.setAttribute('aria-label', `Play ${result.title || 'Untitled'}`);
   favoriteBtn.setAttribute('aria-label', hasFavoriteTrack ? 'Remove from favorites' : 'Add to favorites');
   shareBtn.setAttribute('aria-label', `Share ${result.title || 'Untitled'}`);
   expandBtn.setAttribute('aria-label', 'Show album tracks');
@@ -1483,25 +1493,23 @@ function createSearchResultElement(result, globalIndex) {
   // Load album info in background
   loadAlbumInfoBackground(result.identifier, resultEl);
 
-  // Event listeners
-  playBtn.addEventListener('click', async (e) => {
+  // Play UX: click cover or title/info area
+  const playFromSearchResult = async (e) => {
     e.stopPropagation();
-    const title = result.title || 'Untitled';
-    showStatus(`Loading your track`, 'info');
+    showStatus('Getting track ready', 'info');
     await window.playOptimizedSearchResult(result, globalIndex, state.searchResults);
-  });
+  };
+
+  coverContainer.style.cursor = 'pointer';
+  coverContainer.addEventListener('click', playFromSearchResult);
 
   shareBtn.addEventListener('click', async (e) => {
     e.stopPropagation();
-    await shareTrack(result.identifier, result.title);
+    const shareKind = result.isTrackList ? 'track' : 'album';
+    await shareTrack(result.identifier, result.title, result.creator, null, shareKind);
   });
 
-  infoDiv.addEventListener('click', async (e) => {
-    if (e.target.closest('.result-buttons')) return;
-    const title = result.title || 'Untitled';
-    showStatus(`Getting track ready`, 'info');
-    await window.playOptimizedSearchResult(result, globalIndex, state.searchResults);
-  });
+  infoDiv.addEventListener('click', playFromSearchResult);
 
   favoriteBtn.addEventListener('click', async (e) => {
     e.stopPropagation();
@@ -1626,28 +1634,18 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
   const isAlbum = !item.isTrackList && ( !!item.isAlbum || (typeof item.trackCount === 'number' && item.trackCount > 1) || !!item.isAlbumTrack );
   chipType.textContent = isAlbum ? 'Album' : 'Single';
   chips.appendChild(chipType);
+
+  if (item.trackCount) {
+    const chipTrackCount = document.createElement('span');
+    chipTrackCount.className = 'chip chip-quiet';
+    chipTrackCount.textContent = `${item.trackCount} tracks`;
+    chips.appendChild(chipTrackCount);
+  }
   media.appendChild(chips);
 
   // Body
   const body = document.createElement('div');
   body.className = 'card-body';
-
-  const metaOverlay = document.createElement('div');
-  metaOverlay.className = 'result-meta-overlay';
-
-  const chipTypeOverlay = document.createElement('span');
-  chipTypeOverlay.className = 'chip';
-  chipTypeOverlay.textContent = isAlbum ? 'Album' : 'Single';
-  metaOverlay.appendChild(chipTypeOverlay);
-
-  if (item.trackCount) {
-    const chipTrackCount = document.createElement('span');
-    chipTrackCount.className = 'chip';
-    chipTrackCount.textContent = `${item.trackCount} tracks`;
-    metaOverlay.appendChild(chipTrackCount);
-  }
-
-  body.appendChild(metaOverlay);
 
   const t = document.createElement('div');
   t.className = 'card-title';
@@ -1658,20 +1656,20 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
   // Actions
   const actions = document.createElement('div');
   actions.className = 'card-actions';
-  const playBtn = document.createElement('button');
-  playBtn.className = 'card-btn play';
-  playBtn.title = 'Play';
-  playBtn.textContent = '▶';
   const favBtn = document.createElement('button');
   favBtn.className = 'card-btn favorite';
   favBtn.textContent = isAlbum ? '🩶' : '🩶';
+  const shareBtn = document.createElement('button');
+  shareBtn.className = 'card-btn share';
+  shareBtn.title = 'Share';
+  shareBtn.textContent = '🔗';
   const expandBtn = document.createElement('button');
   expandBtn.className = 'card-btn expand';
   expandBtn.title = '▼';
   expandBtn.textContent = '▼';
   expandBtn.style.display = isAlbum ? 'flex' : 'none';
-  actions.appendChild(playBtn);
   actions.appendChild(favBtn);
+  actions.appendChild(shareBtn);
   actions.appendChild(expandBtn);
 
   card.appendChild(media);
@@ -1683,12 +1681,18 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
 
   // Event wiring
   if (context === 'search') {
-    // Play
-    playBtn.addEventListener('click', (e) => {
+    // Play UX: click cover or title
+    const playFromCard = async (e) => {
       e.stopPropagation();
       showStatus('Loading your track', 'info');
-      window.playOptimizedSearchResult?.(item, globalIndex, state.searchResults);
-    });
+      await window.playOptimizedSearchResult?.(item, globalIndex, state.searchResults);
+    };
+
+    media.style.cursor = 'pointer';
+    t.style.cursor = 'pointer';
+    media.addEventListener('click', playFromCard);
+    t.addEventListener('click', playFromCard);
+
     // Favorite
     favBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -1729,14 +1733,46 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
       }
       toggleAlbumTracks(identifier, tracksContainer, expandBtn);
     });
+
+    // Share
+    shareBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      try {
+        const shareKind = isAlbum ? 'album' : 'track';
+        await shareTrack(identifier, title, creator, null, shareKind);
+      } catch {}
+    });
   } else {
     // favorites context
-    // Integrate with existing delegation; set attributes
-    playBtn.setAttribute('data-id', identifier);
     const isAlbumFavorite = Array.isArray(item.tracks) ? item.tracks.length > 1 : isAlbum;
-    playBtn.setAttribute('data-is-album', String(isAlbumFavorite));
     // Mark card type for CSS layout tweaks
     card.classList.add(isAlbumFavorite ? 'album' : 'single');
+
+    // Tap-to-play: click cover or title
+    const playFromFavoriteCard = async (e) => {
+      e.stopPropagation();
+      try {
+        if (isAlbumFavorite) {
+          if (typeof window.playAlbumFromFavorites === 'function') {
+            window.playAlbumFromFavorites(identifier);
+          } else if (typeof playAlbumFromFavorites === 'function') {
+            playAlbumFromFavorites(identifier);
+          }
+        } else {
+          const favoriteTrack = Array.isArray(item.tracks) && item.tracks.length ? item.tracks[0] : item;
+          if (typeof window.playFromFavoritesQueue === 'function') {
+            window.playFromFavoritesQueue(favoriteTrack);
+          } else if (typeof playFromFavoritesQueue === 'function') {
+            playFromFavoritesQueue(favoriteTrack);
+          }
+        }
+      } catch {}
+    };
+
+    media.style.cursor = 'pointer';
+    t.style.cursor = 'pointer';
+    media.addEventListener('click', playFromFavoriteCard);
+    t.addEventListener('click', playFromFavoriteCard);
 
     favBtn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -1755,9 +1791,19 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
         tracksContainer = document.createElement('div');
         tracksContainer.className = 'tracks-container';
         tracksContainer.style.display = 'none';
-        const parent = containerForFavorites(); parent.insertBefore(tracksContainer, card.nextSibling);
+        const parent = card.parentNode;
+        if (parent) parent.insertBefore(tracksContainer, card.nextSibling);
       }
       toggleAlbumTracks(identifier, tracksContainer, expandBtn);
+    });
+
+    // Share
+    shareBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      try {
+        const shareKind = isAlbumFavorite ? 'album' : 'track';
+        shareTrack(identifier, title, creator, null, shareKind);
+      } catch {}
     });
   }
 
@@ -1825,13 +1871,29 @@ function displayAlbumTracks(albumId, tracksContainer) {
         const trackItem = document.createElement('div');
         trackItem.className = 'track-item';
 
+        const isFavoritesContext = tracksContainer.closest('#favorites-list') !== null;
+
+        const playFromTrackRow = () => {
+          if (isFavoritesContext) {
+            console.log('🎵 Track clicked in favorites context - calling playFromFavoritesQueue with track:', track.title);
+            if (typeof window.playFromFavoritesQueue === 'function') {
+              window.playFromFavoritesQueue(track);
+            } else if (typeof playFromFavoritesQueue === 'function') {
+              playFromFavoritesQueue(track);
+            }
+          } else {
+            if (typeof window.playSpecificSearchTrack === 'function') {
+              window.playSpecificSearchTrack(track, albumId, index, files.length);
+            }
+          }
+        };
+
         const isFavorite = isTrackFavorite(track);
         const trackNumber = track.trackNumber || index + 1;
 
         trackItem.innerHTML = `
           <div class="track-actions">
             <span class="track-number">${trackNumber}</span>
-            <button class="track-play" data-url="${track.url}" data-title="${track.title}" data-id="${albumId}" data-is-album="false">▶</button>
             <button class="track-favorite ${isFavorite ? 'active' : ''}">${isFavorite ? '❤️' : '🩶'}</button>
             <button class="track-share" title="Share">🔗</button>
           </div>
@@ -1840,24 +1902,6 @@ function displayAlbumTracks(albumId, tracksContainer) {
             <div class="track-creator">${track.creator || 'Unknown'}</div>
           </div>
         `;
-
-        const playBtn = trackItem.querySelector('.track-play');
-        playBtn.addEventListener('click', (e) => {
-          e.stopPropagation(); // Evitar que el clic se propague al resultado principal
-          
-          // Detectar si estamos en favoritos o en resultados de búsqueda
-          const isFavoritesContext = tracksContainer.closest('#favorites-list') !== null;
-          
-          if (isFavoritesContext) {
-            // Si estamos en favoritos, usar la función que oculta los favoritos
-            // Pasar el track específico para reproducir el correcto
-            console.log('🎵 Track clicked in favorites context - calling playFromFavoritesQueue with track:', track.title);
-            playFromFavoritesQueue(track);
-          } else {
-            // Si estamos en resultados, usar la función normal de búsqueda
-            window.playSpecificSearchTrack(track, albumId, index, files.length);
-          }
-        });
 
         const favoriteBtn = trackItem.querySelector('.track-favorite');
         favoriteBtn.addEventListener('click', (e) => {
@@ -1868,11 +1912,11 @@ function displayAlbumTracks(albumId, tracksContainer) {
           favoriteBtn.textContent = isNowFavorite ? '❤️' : '🩶';
         });
 
-        // Listener para la información de la pista (área de texto)
-        const trackInfo = trackItem.querySelector('.track-item-info');
-        trackInfo.addEventListener('click', (e) => {
-          e.stopPropagation(); // Evitar que el clic se propague al resultado principal
-          playSpecificTrack(track, albumId, index, files.length);
+        // Tap-to-play: click anywhere in the row except buttons
+        trackItem.addEventListener('click', (e) => {
+          if (e.target && e.target.closest && e.target.closest('button')) return;
+          e.stopPropagation();
+          playFromTrackRow();
         });
 
         // Share button listener
@@ -1880,7 +1924,8 @@ function displayAlbumTracks(albumId, tracksContainer) {
         if (shareBtn) {
           shareBtn.addEventListener('click', (e) => {
             e.stopPropagation(); // Evitar que el clic se propague al resultado principal
-            shareTrack(track.id || albumId, track.title);
+            const albumTitleForShare = track.album || (files[0] && files[0].album) || '';
+            shareTrack(track.id || albumId, track.title, track.creator, albumTitleForShare, 'track', index);
           });
         }
 
@@ -2263,8 +2308,16 @@ function loadSavedPlaybackState() {
 
       // Restore the track information (but don't start playing yet)
       state.currentTrack = savedState.track;
-      elements.title.textContent = state.currentTrack.title;
-      window.updateTitleTicker(state.currentTrack.title);
+      {
+        const trackTitle = state.currentTrack.title || 'Untitled';
+        const isAlbumTrack = (state.currentTrack.totalTracks || 1) > 1 || !!state.currentTrack.isAlbumTrack;
+        const albumTitle = (state.currentTrack.albumTitle || state.currentTrack.album || '').toString().trim();
+        const titleText = (isAlbumTrack && albumTitle && albumTitle.toLowerCase() !== trackTitle.toLowerCase())
+          ? `${albumTitle} — ${trackTitle}`
+          : trackTitle;
+        elements.title.textContent = titleText;
+        window.updateTitleTicker(titleText);
+      }
       elements.creator.textContent = state.currentTrack.totalTracks > 1 ?
         `${state.currentTrack.creator || 'Unknown'} (${state.currentTrack.trackIndex + 1}/${state.currentTrack.totalTracks})` :
         `${state.currentTrack.creator || 'Unknown'}`;
@@ -2321,222 +2374,54 @@ function updateFavoritesList() {
     favoritesByAlbum[albumId].tracks.push(favorite);
   });
 
-  if (state.viewMode === 'grid') {
-    // Transform into items for card renderer
-    const items = Object.keys(favoritesByAlbum).map(albumId => ({
-      identifier: albumId,
-      title: favoritesByAlbum[albumId].albumTitle || 'Untitled',
-      creator: favoritesByAlbum[albumId].albumCreator || 'Unknown',
-      trackCount: favoritesByAlbum[albumId].tracks.length,
-      isAlbum: favoritesByAlbum[albumId].tracks.length > 1,
-      tracks: favoritesByAlbum[albumId].tracks
-    }));
+  // Favorites UI: Solo grid (no list mode)
+  const items = Object.keys(favoritesByAlbum).map(albumId => ({
+    identifier: albumId,
+    title: favoritesByAlbum[albumId].albumTitle || 'Untitled',
+    creator: favoritesByAlbum[albumId].albumCreator || 'Unknown',
+    trackCount: favoritesByAlbum[albumId].tracks.length,
+    isAlbum: favoritesByAlbum[albumId].tracks.length > 1,
+    tracks: favoritesByAlbum[albumId].tracks
+  }));
 
-    renderCardGrid(favoritesList, items, 'favorites', true);
-  } else {
-    // Legacy list rendering (original implementation)
-    Object.keys(favoritesByAlbum).forEach(albumId => {
-      const albumData = favoritesByAlbum[albumId];
-      const isAlbum = albumData.tracks.length > 1;
-
-      const albumItem = document.createElement('div');
-      albumItem.className = 'favorite-item';
-      albumItem.setAttribute('role', 'listitem');
-      albumItem.setAttribute('aria-label', `${albumData.albumTitle || 'Untitled'} by ${albumData.albumCreator || 'Unknown'}${isAlbum ? ` - ${albumData.tracks.length} tracks` : ''}`);
-
-      if (state.currentTrack && (
-        state.currentTrack.albumId === albumId ||
-        state.currentTrack.id === albumId ||
-        (isAlbum && albumData.tracks.some(track => track.url === state.currentTrack.url))
-      )) {
-        albumItem.classList.add('now-playing');
-        albumItem.setAttribute('aria-current', 'true');
-      }
-
-      const coverContainer = document.createElement('div');
-      coverContainer.className = 'result-cover';
-
-      const img = new Image();
-      img.alt = 'Album cover';
-      img.style.width = '100%';
-      img.style.height = '100%';
-      img.style.objectFit = 'cover';
-      img.style.borderRadius = '6px';
-
-      const archiveCoverUrl = `https://archive.org/services/img/${albumId}`;
-      img.onload = () => { coverContainer.appendChild(img); };
-      const lazyLoadCover = (entries, observer) => {
-        entries.forEach(entry => { if (entry.isIntersecting) { img.src = archiveCoverUrl; observer.unobserve(entry.target); } });
-      };
-      const observer = new IntersectionObserver(lazyLoadCover, { rootMargin: '50px' });
-      observer.observe(coverContainer);
-
-      const mockResult = { title: albumData.albumTitle || 'Untitled', creator: albumData.albumCreator || 'Unknown', identifier: albumId };
-      const infoDiv = createFavoriteInfo(mockResult);
-      const metaElement = infoDiv.querySelector('.result-meta');
-      if (metaElement && isAlbum) metaElement.innerHTML = `<span class="album-indicator">${albumData.tracks.length} tracks</span>`;
-      const { actionsDiv, playBtn, favoriteBtn, shareBtn, expandBtn } = createFavoriteActions(mockResult, true);
-      playBtn.setAttribute('data-id', albumId);
-      playBtn.setAttribute('data-is-album', isAlbum);
-      playBtn.title = 'Play';
-      favoriteBtn.setAttribute('data-id', albumId);
-      expandBtn.setAttribute('data-id', albumId);
-      expandBtn.style.display = isAlbum ? 'inline-block' : 'none';
-      albumItem.appendChild(coverContainer);
-      albumItem.appendChild(infoDiv);
-      albumItem.appendChild(actionsDiv);
-      albumItem.addEventListener('click', (e) => {
-        const isPlayButton = e.target.tagName === 'BUTTON' && e.target.title === 'Play' && e.target.textContent.trim() === '▶';
-        if (!isPlayButton) e.stopPropagation();
-      });
-      shareBtn.addEventListener('click', (e) => { e.stopPropagation(); shareTrack(albumId, albumData.albumTitle); });
-      favoriteBtn.addEventListener('click', (e) => { e.stopPropagation(); const albumId = favoriteBtn.getAttribute('data-id'); state.favorites = state.favorites.filter(fav => fav.albumId !== albumId); saveFavorites(); updateFavoritesList(); updateFavoriteButton(); showStatus('Favorite was removed', 'info'); });
-      expandBtn.addEventListener('click', (e) => { e.stopPropagation(); let tracksContainer = albumItem.nextElementSibling; if (!tracksContainer || !tracksContainer.classList.contains('tracks-container')) { tracksContainer = document.createElement('div'); tracksContainer.className = 'tracks-container'; tracksContainer.style.display = 'none'; favoritesList.insertBefore(tracksContainer, albumItem.nextSibling); } toggleAlbumTracks(albumId, tracksContainer, expandBtn); });
-      favoritesList.appendChild(albumItem);
-    });
-  }
+  renderCardGrid(favoritesList, items, 'favorites', true);
 }
 
 // Inicializar el listener de event delegation para los botones play en favoritos
 // Se llama una sola vez en la inicialización de la app
 function initializeFavoritesPlayListener() {
-  const favoritesList = elements.favoritesList;
-  if (!favoritesList) {
-    console.warn('❌ favoritesList element not found');
-    return;
-  }
-  
-  console.log('🎯 Initializing favorites play button listener with event delegation');
-  
-  // Event listener en CAPTURE PHASE para ejecutarse ANTES que otros listeners en elementos hijos
-  favoritesList.addEventListener('click', handleFavoritesPlayClick, true);
-  console.log('✅ Event listener added to favoritesList (CAPTURE PHASE)');
+  // Favorites grid uses tap-to-play (cover/title). No play buttons to delegate.
+  return;
 }
 
 // Handler global para clicks en botones play de favoritos (event delegation)
 function handleFavoritesPlayClick(e) {
-  console.log('handleFavoritesPlayClick triggered - event target:', e.target.tagName, e.target.textContent);
-  
-  let button = e.target;
-  
-  // Si el click fue en un elemento dentro del botón (ej: SVG, span), buscar el botón padre
-  if (button.tagName !== 'BUTTON') {
-    button = button.closest('button');
-    if (!button) {
-      console.log('⚠️ Click not on a button or within a button element');
-      return;
-    }
-  }
-  
-  // IMPORTANTE: Ignorar clics dentro de track items (pistas expandidas)
-  // Estos tienen su propio listener directo que maneja la reproducción
-  if (button.closest('.track-item')) {
-    console.log('⚠️ Click was inside a track-item - letting the direct listener handle it');
-    return;
-  }
-  
-  // Verificar si es un botón play verificando:
-  // 1. Que sea un botón
-  // 2. Que tenga atributos data-id y data-is-album (que lo identifican como botón play en favoritos)
-  // 3. Que el textContent sea "▶"
-  const hasPlayDataAttributes = button.hasAttribute('data-id') && button.hasAttribute('data-is-album');
-  const isPlaySymbol = button.textContent.trim() === '▶';
-  
-  if (button.tagName === 'BUTTON' && hasPlayDataAttributes && isPlaySymbol) {
-    console.log('✅ VALID PLAY BUTTON CLICK DETECTED');
-    e.preventDefault();
-    e.stopPropagation();
-    
-    const isAlbum = button.getAttribute('data-is-album') === 'true';
-    const id = button.getAttribute('data-id');
-    
-    console.log('📊 Button data - isAlbum:', isAlbum, 'id:', id);
-    
-    if (isAlbum) {
-      console.log('🎵 Calling playAlbumFromFavorites for album:', id);
-      if (typeof playAlbumFromFavorites === 'function') {
-        playAlbumFromFavorites(id);
-      } else {
-        console.error('❌ playAlbumFromFavorites is NOT a function!');
-      }
-    } else {
-      console.log('🎵 Calling playFromFavoritesQueue for single track');
-      // Para single tracks, encontrar el track correcto en favoritos
-      // y pasarlo a la función
-      if (typeof playFromFavoritesQueue === 'function') {
-        // Si el botón está dentro de un track item expandido, el track objeto está disponible
-        // en el contexto del listener que agregó. Pero aquí en event delegation,
-        // necesitamos encontrarlo basado en data-id (que es el albumId)
-        // El track estaría en state.favorites con ese albumId
-        const favoriteTrack = state.favorites.find(fav => fav.albumId === id || fav.id === id);
-        if (favoriteTrack) {
-          console.log('Found favorite track:', favoriteTrack.title, '- passing to playFromFavoritesQueue');
-          playFromFavoritesQueue(favoriteTrack);
-        } else {
-          console.warn('Favorite track not found for id:', id, '- playing from queue start');
-          playFromFavoritesQueue();
-        }
-      } else {
-        console.error('❌ playFromFavoritesQueue is NOT a function!');
-      }
-    }
-  } else {
-    console.log('⚠️ Click was not on a play button - has data attrs:', hasPlayDataAttributes, 'is play symbol:', isPlaySymbol, 'tagName:', button.tagName);
-  }
+  // Favorites grid uses tap-to-play (cover/title). No play buttons to delegate.
+  return;
 }
 
-/**
- * FavoritesToggle - Componente para manejar el toggle de la lista de favoritos
- * Maneja la visibilidad, accesibilidad y estado del toggle de favoritos
- */
 class FavoritesToggle {
-  constructor() {
-    this.element = elements.favoritesToggle;
-    this.listElement = elements.favoritesList;
+  constructor(element = elements.favoritesToggle, listElement = elements.favoritesList) {
+    this.element = element;
+    this.listElement = listElement;
     this.isVisible = false;
     this.isDisabled = false;
 
-    this.init();
-  }
+    this.handleClick = this.handleClick.bind(this);
+    this.handleKeydown = this.handleKeydown.bind(this);
 
-  /**
-   * Inicializa el componente
-   */
-  init() {
-    if (!this.element) {
-      console.warn('FavoritesToggle: Element not found');
-      return;
+    if (this.element) {
+      this.element.addEventListener('click', this.handleClick);
+      this.element.addEventListener('keydown', this.handleKeydown);
     }
 
     this.updateAriaAttributes();
-    this.bindEvents();
   }
 
-  /**
-   * Vincula los eventos necesarios
-   */
-  bindEvents() {
-    this.element.addEventListener('click', this.handleClick.bind(this));
-    this.element.addEventListener('keydown', this.handleKeydown.bind(this));
-  }
-
-  /**
-   * Maneja el clic en el toggle
-   */
   handleClick(event) {
-    event.preventDefault();
-    event.stopPropagation();
-
     if (this.isDisabled) return;
-
-    // Ocultar resultados de búsqueda si están activos
-    if (state.searchActive) {
-      hideSearchResults();
-    }
-
+    event.preventDefault();
     this.toggle();
-
-    // Log para debugging
     window.logger?.info(`Favorites toggle ${this.isVisible ? 'opened' : 'closed'}`, 'UI');
   }
 
@@ -3025,33 +2910,69 @@ function removeFromSearchHistory(index) {
   }
 }
 
-// Update Open Graph meta tags for rich previews
-function updateMetaTags(track, identifier) {
-  if (!track || !identifier) return;
+function normalizeTrackTitle(title) {
+  const t = typeof title === 'string' ? title.trim() : '';
+  return t ? t : 'Track';
+}
 
-  const baseUrl = window.location.origin;
-  const shareUrl = `${baseUrl}${window.location.pathname}?play=${encodeURIComponent(identifier)}`;
+function normalizeTrackCreator(creator) {
+  const c = typeof creator === 'string' ? creator.trim() : '';
+  return c ? c : '';
+}
+
+function buildShareUrl(identifier, trackIndex = null) {
+  const base = `${window.location.origin}${window.location.pathname}`;
+  const params = new URLSearchParams();
+  params.set('play', identifier);
+
+  const idx = typeof trackIndex === 'number' && isFinite(trackIndex) && trackIndex >= 0 ? Math.floor(trackIndex) : null;
+  if (idx !== null) {
+    params.set('t', String(idx));
+  }
+
+  return `${base}?${params.toString()}`;
+}
+
+function applyTrackMetaTagsForIdentifier(identifier, title, creator = '', trackIndex = null) {
+  if (!identifier) return;
+
+  const normalizedTitle = normalizeTrackTitle(title);
+  const normalizedCreator = normalizeTrackCreator(creator);
+  const shareUrl = buildShareUrl(identifier, trackIndex);
   const imageUrl = `https://archive.org/services/img/${identifier}`;
 
-  // Update title and description
-  document.title = `${track.title} - ${track.creator} | Resonate Player`;
+  const displayTitle = normalizedCreator ? `${normalizedTitle} - ${normalizedCreator}` : normalizedTitle;
+  const description = normalizedCreator
+    ? `Listen to "${normalizedTitle}" by ${normalizedCreator} on Resonate Player. Free music from archive.org.`
+    : `Listen to "${normalizedTitle}" on Resonate Player. Free music from archive.org.`;
 
-  // Update Open Graph tags
-  updateMetaTag('property', 'og:title', `${track.title} - ${track.creator}`);
-  updateMetaTag('property', 'og:description', `Listen to "${track.title}" by ${track.creator} on Resonate Player. Free music from archive.org.`);
+  document.title = `${displayTitle} | Resonate Player`;
+
+  // Open Graph
+  updateMetaTag('property', 'og:title', displayTitle);
+  updateMetaTag('property', 'og:description', description);
   updateMetaTag('property', 'og:image', imageUrl);
   updateMetaTag('property', 'og:url', shareUrl);
+  updateMetaTag('property', 'og:type', 'music.song');
 
-  // Update Twitter tags
-  updateMetaTag('property', 'twitter:title', `${track.title} - ${track.creator}`);
-  updateMetaTag('property', 'twitter:description', `Listen to "${track.title}" by ${track.creator} on Resonate Player. Free music from archive.org.`);
+  // Twitter
+  updateMetaTag('property', 'twitter:card', 'summary_large_image');
+  updateMetaTag('property', 'twitter:title', displayTitle);
+  updateMetaTag('property', 'twitter:description', description);
   updateMetaTag('property', 'twitter:image', imageUrl);
   updateMetaTag('property', 'twitter:url', shareUrl);
 
-  // Update basic meta description
-  updateMetaTag('name', 'description', `Listen to "${track.title}" by ${track.creator} on Resonate Player. Free music from archive.org.`);
+  // Basic meta
+  updateMetaTag('name', 'description', description);
 
-  console.log('Meta tags updated for sharing:', { title: track.title, creator: track.creator, imageUrl, shareUrl });
+  console.log('Meta tags updated for sharing:', { title: normalizedTitle, creator: normalizedCreator, imageUrl, shareUrl });
+}
+
+// Update Open Graph meta tags for rich previews
+function updateMetaTags(track, identifier) {
+  if (!track || !identifier) return;
+  const trackIndex = typeof track.trackIndex === 'number' && isFinite(track.trackIndex) ? track.trackIndex : null;
+  applyTrackMetaTagsForIdentifier(identifier, track.title, track.creator, trackIndex);
 }
 
 // Helper function to update or create meta tags
@@ -3069,16 +2990,91 @@ function updateMetaTag(attrName, attrValue, content) {
 }
 
 // Share functionality
-async function shareTrack(identifier, title = 'Track') {
-  const shareUrl = `${window.location.origin}${window.location.pathname}?play=${encodeURIComponent(identifier)}`;
-  const shortTitle = `"${title}"`;
-  const shareTitle = `You might like this!\n${shortTitle}`;
-  const shareText = `${shareTitle}\n\nEnjoy it freely on Resonate Player`;
+async function shareTrack(identifier, title = 'Track', creator = null, albumTitle = null, kind = 'track', trackIndex = null) {
+  if (!identifier) {
+    showStatus('Nothing to share right now', 'warning');
+    return;
+  }
 
-  console.log('Attempting to share:', { shareUrl, shareTitle, shareText });
+  const shareKind = kind === 'album' ? 'album' : 'track';
 
-  // Update Open Graph meta tags for rich previews
-  updateMetaTagsForSharing(identifier, title);
+  const normalizedTrackTitle = normalizeTrackTitle(title);
+
+  let resolvedCreator = creator;
+  if (resolvedCreator === null || resolvedCreator === undefined) {
+    try {
+      if (window.state && window.state.currentTrack && window.state.currentTrack.id === identifier) {
+        resolvedCreator = window.state.currentTrack.creator;
+      }
+    } catch {}
+  }
+  resolvedCreator = normalizeTrackCreator(resolvedCreator);
+
+  let resolvedAlbumTitle = albumTitle;
+  if (resolvedAlbumTitle === null || resolvedAlbumTitle === undefined) {
+    try {
+      if (window.state && window.state.currentTrack && window.state.currentTrack.id === identifier) {
+        resolvedAlbumTitle = window.state.currentTrack.albumTitle || window.state.currentTrack.album || '';
+      }
+    } catch {}
+  }
+  const normalizedAlbumTitle = typeof resolvedAlbumTitle === 'string' ? resolvedAlbumTitle.trim() : '';
+  const includeAlbumTitle = !!(
+    normalizedAlbumTitle &&
+    normalizedAlbumTitle.toLowerCase() !== normalizedTrackTitle.toLowerCase()
+  );
+
+  let resolvedTrackIndex = trackIndex;
+  if (resolvedTrackIndex === null || resolvedTrackIndex === undefined) {
+    try {
+      if (shareKind === 'track' && includeAlbumTitle && window.state && window.state.currentTrack && window.state.currentTrack.id === identifier) {
+        resolvedTrackIndex = window.state.currentTrack.trackIndex;
+      }
+    } catch {}
+  }
+  if (!(typeof resolvedTrackIndex === 'number' && isFinite(resolvedTrackIndex) && resolvedTrackIndex >= 0)) {
+    resolvedTrackIndex = null;
+  }
+
+  const shareUrlTrackIndex = (shareKind === 'track' && includeAlbumTitle) ? resolvedTrackIndex : null;
+
+  const shareUrl = buildShareUrl(identifier, shareUrlTrackIndex);
+  const shareDataTitle = shareKind === 'album'
+    ? normalizedTrackTitle
+    : (includeAlbumTitle ? `${normalizedAlbumTitle} — ${normalizedTrackTitle}` : normalizedTrackTitle);
+
+  const textParts = [];
+  if (shareKind === 'album') {
+    textParts.push('You might like this album!');
+    textParts.push(`"${normalizedTrackTitle}"`);
+  } else {
+    textParts.push('You might like this!');
+    textParts.push(`"${normalizedTrackTitle}"`);
+    if (includeAlbumTitle) textParts.push(normalizedAlbumTitle);
+  }
+
+  if (resolvedCreator) textParts.push(resolvedCreator);
+  textParts.push('Enjoy it freely on Resonate Player');
+  const shareText = textParts.join('\n\n');
+
+  console.log('Attempting to share:', {
+    shareUrl,
+    title: shareDataTitle,
+    shareText,
+    creator: resolvedCreator,
+    albumTitle: normalizedAlbumTitle,
+    kind: shareKind,
+    trackIndex: shareUrlTrackIndex
+  });
+
+  // Keep meta tags in sync for rich previews
+  applyTrackMetaTagsForIdentifier(identifier, shareDataTitle, resolvedCreator, shareUrlTrackIndex);
+
+  if (!navigator.share) {
+    console.log('Web Share API no disponible');
+    showStatus('Sharing not available', 'warning', 4000);
+    return;
+  }
 
   // Try to get cover image for sharing
   let coverFile = null;
@@ -3087,57 +3083,78 @@ async function shareTrack(identifier, title = 'Track') {
     console.log('Cover image obtained for sharing');
   } catch (error) {
     console.warn('Could not get cover image:', error.message);
-    // Continue without image
   }
 
-  // Try Web Share API first (for mobile and supported browsers)
-  if (navigator.share) {
-    try {
-      console.log('Usando Web Share API con mensaje enriquecido');
+  const isShareCancelled = (err) => {
+    return !!(err && (err.name === 'AbortError' || err.name === 'NotAllowedError'));
+  };
 
-      const shareData = {
-        title: shareTitle,
-        text: shareText,
-        url: shareUrl
-      };
+  const isLikelyFileShareUnsupported = (err) => {
+    if (!err) return false;
+    const name = typeof err.name === 'string' ? err.name : '';
+    if (name === 'TypeError' || name === 'NotSupportedError' || name === 'DataError') return true;
 
-      // Add image if available and supported
-      if (coverFile && navigator.canShare && navigator.canShare({ files: [coverFile] })) {
-        shareData.files = [coverFile];
-        console.log('Incluyendo imagen de portada en el compartir');
-      }
+    const message = typeof err.message === 'string' ? err.message : '';
+    return /\b(files?|file)\b/i.test(message) || /canShare/i.test(message);
+  };
 
-      await navigator.share(shareData);
-      console.log('Web Share API exitoso');
-      showStatus('Track shared successfully', 'info', 6000);
-      return;
-    } catch (error) {
-      console.log('Web Share API falló:', error.message);
-      // User cancelled or error - fallback to clipboard
-      // Continue to fallback, don't show error message yet
-    }
-  } else {
-    console.log('Web Share API no disponible');
-  }
-
-  // Fallback: Copy to clipboard
   try {
-    console.log('Intentando copiar al portapapeles');
-    await navigator.clipboard.writeText(shareText);
-    console.log('Portapapeles exitoso');
-    showStatus('Share link copied', 'info', 6000);
-  } catch (clipboardError) {
-    console.error('Clipboard API falló:', clipboardError.message);
-    // Last resort: show URL for manual copying
-    try {
-      // Try to show a simple alert with the URL
-      alert(`Copy this link to share:\n\n${shareUrl}`);
-      showStatus('Share link in popup', 'info', 6000);
-    } catch (alertError) {
-      // If alert also fails, show in status
-      console.error('Alert también falló:', alertError.message);
-      showStatus('Here is your share link', 'warning', 10000);
+    console.log('Usando Web Share API con mensaje enriquecido');
+
+    const baseShareData = {
+      title: shareDataTitle,
+      text: shareText,
+      url: shareUrl
+    };
+
+    // Aggressive behavior: if we have a cover file, try sharing it even when
+    // navigator.canShare({ files }) is missing or returns false.
+    if (coverFile) {
+      try {
+        console.log('Attempting to include cover image in share');
+        await navigator.share({ ...baseShareData, files: [coverFile] });
+        console.log('Web Share API exitoso (with cover file)');
+        showStatus('Track shared successfully', 'info', 6000);
+        return;
+      } catch (errorWithFile) {
+        if (isShareCancelled(errorWithFile)) {
+          return;
+        }
+
+        // If file sharing isn't supported, retry once without the cover.
+        if (isLikelyFileShareUnsupported(errorWithFile)) {
+          try {
+            console.log('File share unsupported, retrying without cover');
+            await navigator.share(baseShareData);
+            console.log('Web Share API exitoso (without cover)');
+            showStatus('Track shared successfully', 'info', 6000);
+            return;
+          } catch (errorWithoutFile) {
+            if (isShareCancelled(errorWithoutFile)) {
+              return;
+            }
+            console.log('Web Share API falló:', errorWithoutFile && errorWithoutFile.message ? errorWithoutFile.message : errorWithoutFile);
+            showStatus('Sharing not available', 'warning', 4000);
+            return;
+          }
+        }
+
+        console.log('Web Share API falló:', errorWithFile && errorWithFile.message ? errorWithFile.message : errorWithFile);
+        showStatus('Sharing not available', 'warning', 4000);
+        return;
+      }
     }
+
+    await navigator.share(baseShareData);
+    console.log('Web Share API exitoso');
+    showStatus('Track shared successfully', 'info', 6000);
+  } catch (error) {
+    // If user cancels, don't spam.
+    if (isShareCancelled(error)) {
+      return;
+    }
+    console.log('Web Share API falló:', error && error.message ? error.message : error);
+    showStatus('Sharing not available', 'warning', 4000);
   }
 }
 
@@ -3148,51 +3165,31 @@ async function getCoverImageForSharing(identifier) {
   try {
     const response = await fetch(coverUrl);
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+      console.warn('Cover image request failed:', response.status, identifier);
+      return null;
     }
 
     const blob = await response.blob();
 
+    if (!blob || !blob.size) {
+      return null;
+    }
+
     // Create File from Blob
     const filename = `cover-${identifier}.jpg`;
-    return new File([blob], filename, { type: blob.type });
+    const blobType = blob && typeof blob.type === 'string' ? blob.type : '';
+    const fileType = blobType && blobType.startsWith('image/') ? blobType : 'image/jpeg';
+    return new File([blob], filename, { type: fileType });
   } catch (error) {
-    console.error('Error obteniendo imagen de portada:', error);
-    throw error;
+    // Best-effort only: sharing should still work without the cover.
+    console.warn('Cover image fetch failed (continuing without image):', error && error.message ? error.message : error);
+    return null;
   }
 }
 
-// Update meta tags for rich sharing (Open Graph, Twitter Cards)
-function updateMetaTagsForSharing(identifier, title) {
-  const baseUrl = window.location.origin;
-  const shareUrl = `${baseUrl}${window.location.pathname}?play=${encodeURIComponent(identifier)}`;
-  const imageUrl = `https://archive.org/services/img/${identifier}`;
-
-  // Update page title
-  document.title = `${title} | Resonate Player`;
-
-  // Update Open Graph tags
-  updateMetaTag('property', 'og:title', `${title}`);
-  updateMetaTag('property', 'og:description', `Listen to "${title}" on Resonate Player. Free music from archive.org.`);
-  updateMetaTag('property', 'og:image', imageUrl);
-  updateMetaTag('property', 'og:url', shareUrl);
-  updateMetaTag('property', 'og:type', 'music.song');
-
-  // Update Twitter Card tags
-  updateMetaTag('property', 'twitter:card', 'summary_large_image');
-  updateMetaTag('property', 'twitter:title', `${title}`);
-  updateMetaTag('property', 'twitter:description', `Listen to "${title}" on Resonate Player. Free music from archive.org.`);
-  updateMetaTag('property', 'twitter:image', imageUrl);
-  updateMetaTag('property', 'twitter:url', shareUrl);
-
-  // Update basic meta description
-  updateMetaTag('name', 'description', `Listen to "${title}" by ${creator} on Resonate Player. Free music from archive.org.`);
-
-  console.log('Meta tags updated for sharing with cover:', {
-    title: `${title} - ${creator}`,
-    imageUrl,
-    shareUrl
-  });
+// Back-compat wrapper: older callers used this for share previews
+function updateMetaTagsForSharing(identifier, title, creator = '') {
+  applyTrackMetaTagsForIdentifier(identifier, title, creator);
 }
 
 // Initialize UI toggles
