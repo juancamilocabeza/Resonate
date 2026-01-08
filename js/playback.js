@@ -77,6 +77,12 @@ function showAutoplayCta(message = 'Tap Play to start') {
   try {
     const text = (message && String(message).trim()) ? String(message).trim() : 'Tap Play to start';
 
+    // Ensure the user can actually press Play.
+    try {
+      const elements = getElementsSafe();
+      if (elements.playBtn) elements.playBtn.disabled = false;
+    } catch {}
+
     let container = document.getElementById('status-messages');
     if (!container) {
       container = document.createElement('div');
@@ -1193,6 +1199,11 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
     throw new Error('Audio element not available');
   }
 
+  // If we have a track ready (even if autoplay might be blocked), allow the user to press Play.
+  try {
+    if (elements.playBtn) elements.playBtn.disabled = false;
+  } catch {}
+
   audioEl.pause();
   audioEl.currentTime = 0;
 
@@ -1285,6 +1296,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
         if (isSharedLinkAutoplayAttempt() && isAutoplayBlockedError(error)) {
           try {
             if (elements.playBtn) elements.playBtn.textContent = '▶';
+            if (elements.playBtn) elements.playBtn.disabled = false;
           } catch {}
           showAutoplayCta('Tap Play to start');
           resolve(false);

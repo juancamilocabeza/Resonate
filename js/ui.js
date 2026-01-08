@@ -984,7 +984,11 @@ function setupSearchOnEnter() {
 
         });
       } else {
-        hideSearchResults();
+        // If empty, show search history immediately
+        performCompleteCleanup();
+        displaySearchHistory();
+        state.searchActive = true;
+        hideFavoritesList();
       }
     }
   });
@@ -1021,21 +1025,30 @@ function setupSearchFocusBehavior() {
   elements.searchInput.addEventListener('input', (e) => {
     const currentQuery = e.target.value.trim();
 
-    // Detectar si el usuario está borrando
-    if (currentQuery.length < lastSearchQuery.length) {
+    // Only clear when the input becomes empty
+    if (currentQuery === '') {
       isCleaning = true;
 
-      // Realizar limpieza completa inmediatamente
+      // Clear search state and show history immediately
       performCompleteCleanup();
-    }
-    else {
-      isCleaning = false;
-      displaySearchResults();
+      displaySearchHistory();
+      state.searchActive = true;
+      hideFavoritesList();
 
-      // Auto-hide favorites when search is active
-      if (currentQuery.length > 0) {
-        hideFavoritesList();
-      }
+      lastSearchQuery = currentQuery;
+      return;
+    }
+
+    isCleaning = false;
+    hideFavoritesList();
+
+    // If the user edits the query (without executing a search), hide the panel to avoid stale results.
+    // If the text matches the last executed query, re-show existing results (no network).
+    if (state.searchResults.length > 0 && currentQuery === state.currentSearchQuery) {
+      elements.searchResults.classList.add('active');
+      state.searchActive = true;
+    } else {
+      hideSearchResults();
     }
 
     lastSearchQuery = currentQuery;
@@ -1044,14 +1057,23 @@ function setupSearchFocusBehavior() {
   // También limpiar cuando el usuario pegue texto (podría ser una modificación)
   elements.searchInput.addEventListener('paste', () => {
     setTimeout(() => {
-      performCompleteCleanup();
+      const currentQuery = elements.searchInput.value.trim();
+      if (currentQuery === '') {
+        performCompleteCleanup();
+        displaySearchHistory();
+        state.searchActive = true;
+        hideFavoritesList();
+      }
     }, 50);
   });
 
   // Limpiar cuando se use el botón "x" nativo del input en algunos navegadores
   elements.searchInput.addEventListener('search', () => {
-    if (elements.searchInput.value === '') {
+    if (elements.searchInput.value.trim() === '') {
       performCompleteCleanup();
+      displaySearchHistory();
+      state.searchActive = true;
+      hideFavoritesList();
     }
   });
 }
@@ -1068,9 +1090,6 @@ function performCompleteCleanup() {
   state.isLoadingMore = false;
   state.searchActive = false;
 
-  // Limpiar el DOM
-  elements.searchResultsList.innerHTML = '';
-
   // Limpiar timeouts
   if (state.searchTimeout) {
     clearTimeout(state.searchTimeout);
@@ -1079,9 +1098,10 @@ function performCompleteCleanup() {
 
   // Limpiar cualquier observador de lazy loading
   const lazyObserver = elements.searchResultsList.querySelector('.lazy-load-observer');
-  if (lazyObserver) {
-    lazyObserver.remove();
-  }
+  if (lazyObserver) lazyObserver.remove();
+
+  // Limpiar el DOM
+  elements.searchResultsList.innerHTML = '';
 
   console.log('Cleanup complete: search results hidden and state reset');
 }
@@ -1117,41 +1137,6 @@ function navigateSearchResults(direction) {
   if (nextResult) {
     nextResult.classList.add('focused');
     nextResult.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }
-}
-
-function hideSearchResults() {
-  // Verificar si había resultados para ocultar antes de limpiar y registrar
-  const hadActiveResults = elements.searchResults && elements.searchResults.classList.contains('active');
-
-  // Ocultar visualmente los resultados
-  elements.searchResults.classList.remove('active');
-  state.searchActive = false;
-
-  // Limpiar el estado de búsqueda
-  state.searchResults = [];
-  state.currentSearchQuery = '';
-  state.currentSearchPage = 0;
-  state.currentSearchHasMore = false;
-
-  // Limpiar el DOM
-  elements.searchResultsList.innerHTML = '';
-
-  // Limpiar cualquier timeout pendiente
-  if (state.searchTimeout) {
-    clearTimeout(state.searchTimeout);
-    state.searchTimeout = null;
-  }
-
-  // Remover cualquier observador de lazy loading
-  const lazyObserver = elements.searchResultsList.querySelector('.lazy-load-observer');
-  if (lazyObserver) {
-    lazyObserver.remove();
-  }
-
-  // Solo registrar si efectivamente había resultados activos naturales (no siempre).
-  if (hadActiveResults) {
-    console.log('Search results hidden and cleared');
   }
 }
 
