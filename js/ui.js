@@ -246,6 +246,21 @@ function initializePreloadFavoritesToggle() {
 loadFavoritesPreloadPreference();
 
 // Favorites management
+function isSupportedAudioUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  const trimmed = url.trim();
+  if (!trimmed) return false;
+
+  // Accept URLs with query strings/fragments (e.g. .mp3?download=1)
+  try {
+    const u = new URL(trimmed, window.location.href);
+    const p = (u.pathname || '').toLowerCase();
+    return p.endsWith('.ogg') || p.endsWith('.mp3');
+  } catch {
+    return /\.(ogg|mp3)(\?|#|$)/i.test(trimmed);
+  }
+}
+
 function loadFavorites() {
   try {
     window.logger.info('Loading favorites from localStorage...', 'UI');
@@ -260,8 +275,7 @@ function loadFavorites() {
       const originalCount = parsedFavorites.length;
       parsedFavorites = parsedFavorites.filter(fav => {
         if (!fav.url) return false;
-        const url = fav.url.toLowerCase();
-        return url.endsWith('.ogg') || url.endsWith('.mp3');
+        return isSupportedAudioUrl(fav.url);
       });
       if (parsedFavorites.length < originalCount) {
         // Save filtered favorites back to localStorage
@@ -378,25 +392,26 @@ function loadVolume() {
       const volume = parseFloat(savedVolume);
       if (!isNaN(volume) && volume >= 0 && volume <= 1) {
         state.currentVolume = volume;
-        elements.audio.volume = volume;
+        if (elements.audio) elements.audio.volume = volume;
         if (elements.volumeSlider) {
           elements.volumeSlider.value = volume;
         }
       }
     }
 
-    if (savedMuted === 'true') {
-      elements.audio.muted = true;
-      updateVolumeIcon();
-    } else {
-      elements.audio.muted = false;
+    if (elements.audio) {
+      if (savedMuted === 'true') {
+        elements.audio.muted = true;
+      } else {
+        elements.audio.muted = false;
+      }
     }
 
     updateVolumeIcon();
   } catch (e) {
-    window.logger.warn(`Error loading volume settings: ${e.message}`, 'UI');
+    window.logger?.warn(`Error loading volume settings: ${e.message}`, 'UI');
     // Set default volume
-    elements.audio.volume = 0.7;
+    if (elements.audio) elements.audio.volume = 0.7;
     if (elements.volumeSlider) {
       elements.volumeSlider.value = 0.7;
     }
@@ -409,7 +424,7 @@ function saveVolume(volume) {
     localStorage.setItem('resonate_volume', volume.toString());
     state.currentVolume = volume;
   } catch (e) {
-    window.logger.warn(`Error saving volume: ${e.message}`, 'UI');
+    window.logger?.warn(`Error saving volume: ${e.message}`, 'UI');
   }
 }
 
@@ -417,7 +432,7 @@ function saveMutedState(muted) {
   try {
     localStorage.setItem('resonate_muted', muted.toString());
   } catch (e) {
-    window.logger.warn(`Error saving mute state: ${e.message}`, 'UI');
+    window.logger?.warn(`Error saving mute state: ${e.message}`, 'UI');
   }
 }
 
@@ -471,9 +486,8 @@ function toggleFavorite(track) {
   if (!track || !track.url) return;
       // Limpieza automática de favoritos huérfanos:
       // Elimina favoritos cuyo archivo no existe en la caché local (ni en Cache API ni IndexedDB).
-  // Only allow .ogg and .mp3 files to be favorited
-  const urlLower = track.url.toLowerCase();
-  if (!urlLower.endsWith('.ogg') && !urlLower.endsWith('.mp3')) {
+  // Only allow .ogg and .mp3 files to be favorited (including URLs with query strings)
+  if (!isSupportedAudioUrl(track.url)) {
     showStatus('Only .ogg and .mp3 are supported', 'error');
     return;
   }
@@ -1951,8 +1965,8 @@ function updatePlayButtonState() {
     if (elements.favoriteBtn) elements.favoriteBtn.title = 'Search to get started';
     if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.title = 'Search to get started';
 
-    // Disable favorites controls
-    if (elements.favoritesToggle) elements.favoritesToggle.classList.add('disabled');
+    // Keep favorites toggle usable so users can open the panel and see the empty-state message.
+    if (elements.favoritesToggle) elements.favoritesToggle.classList.remove('disabled');
     if (elements.playAllFavoritesBtn) elements.playAllFavoritesBtn.classList.add('disabled');
   } else {
     // Habilitar los controles relevantes cuando haya favoritos
@@ -2406,6 +2420,17 @@ class FavoritesToggle {
   handleClick(event) {
     if (this.isDisabled) return;
     event.preventDefault();
+
+    // Make panels mutually exclusive: opening favorites should close search.
+    // (hideSearchResults also closes favorites, so call it before toggling.)
+    try {
+      if (typeof hideSearchResults === 'function') {
+        hideSearchResults();
+      } else if (typeof window.hideSearchResults === 'function') {
+        window.hideSearchResults();
+      }
+    } catch {}
+
     this.toggle();
     window.logger?.info(`Favorites toggle ${this.isVisible ? 'opened' : 'closed'}`, 'UI');
   }
@@ -2449,29 +2474,21 @@ class FavoritesToggle {
    * Oculta la lista de favoritos
    */
   hide() {
-    console.log('FavoritesToggle.hide() called - current isVisible:', this.isVisible);
     this.isVisible = false;
-    console.log('Set isVisible to false');
     this.updateVisibility();
-    console.log('Called updateVisibility()');
     this.updateAriaAttributes();
-    console.log('FavoritesToggle.hide() completed');
   }
 
   /**
    * Actualiza la visibilidad de los elementos
    */
   updateVisibility() {
-    console.log('updateVisibility() called - isVisible:', this.isVisible);
     if (this.isVisible) {
-      console.log('Adding active class');
       this.listElement?.classList.add('active');
       this.element?.classList.add('active');
     } else {
-      console.log('Removing active class');
       this.listElement?.classList.remove('active');
       this.element?.classList.remove('active');
-      console.log('Active class removed - listElement has active:', this.listElement?.classList.contains('active'));
     }
   }
 
@@ -2520,6 +2537,21 @@ class FavoritesToggle {
 
 // Instancia global del componente
 let favoritesToggleInstance = null;
+
+// Make the component available across scripts and provide an idempotent initializer.
+// Some startup paths (or future refactors) can otherwise leave the toggle unbound.
+window.FavoritesToggle = FavoritesToggle;
+window.ensureFavoritesToggleInitialized = function ensureFavoritesToggleInitialized() {
+  try {
+    if (favoritesToggleInstance) return favoritesToggleInstance;
+    if (!elements.favoritesToggle || !elements.favoritesList) return null;
+    favoritesToggleInstance = new FavoritesToggle(elements.favoritesToggle, elements.favoritesList);
+    return favoritesToggleInstance;
+  } catch (e) {
+    try { console.warn('Failed to initialize FavoritesToggle:', e); } catch {}
+    return null;
+  }
+};
 
 /**
  * Función legacy para compatibilidad hacia atrás
@@ -2906,7 +2938,12 @@ function normalizeTrackCreator(creator) {
 }
 
 function buildShareUrl(identifier, trackIndex = null) {
-  const base = `${window.location.origin}${window.location.pathname}`;
+  const baseUrl = new URL(window.location.href);
+  baseUrl.hash = '';
+  baseUrl.search = '';
+  // Canonicalize common entrypoints so shared links are stable.
+  baseUrl.pathname = baseUrl.pathname.replace(/index\.html$/i, '');
+
   const params = new URLSearchParams();
   params.set('play', identifier);
 
@@ -2915,7 +2952,8 @@ function buildShareUrl(identifier, trackIndex = null) {
     params.set('t', String(idx));
   }
 
-  return `${base}?${params.toString()}`;
+  baseUrl.search = params.toString();
+  return baseUrl.toString();
 }
 
 function applyTrackMetaTagsForIdentifier(identifier, title, creator = '', trackIndex = null) {
@@ -3179,6 +3217,14 @@ function updateMetaTagsForSharing(identifier, title, creator = '') {
 
 // Initialize UI toggles
 initializePreloadFavoritesToggle();
+
+// Bind favorites toggle immediately (idempotent). This prevents cases where the
+// app starts partially (or init order changes) and the favorites button has no handler.
+try {
+  if (typeof window.ensureFavoritesToggleInitialized === 'function') {
+    window.ensureFavoritesToggleInitialized();
+  }
+} catch {}
 
 // Expose critical functions globally for cross-module access
 window.loadFavorites = loadFavorites;

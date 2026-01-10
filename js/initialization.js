@@ -201,14 +201,18 @@ async function updateMetaTagsForSharedLink(identifier, trackIndex = null) {
     }
 
     // Update meta tags for social media sharing
-    const baseUrl = window.location.origin;
     const shareUrl = (() => {
-      const base = `${baseUrl}${window.location.pathname}`;
+      const baseUrl = new URL(window.location.href);
+      baseUrl.hash = '';
+      baseUrl.search = '';
+      baseUrl.pathname = baseUrl.pathname.replace(/index\.html$/i, '');
+
       const params = new URLSearchParams();
       params.set('play', identifier);
       const idx = typeof trackIndex === 'number' && isFinite(trackIndex) && trackIndex >= 0 ? Math.floor(trackIndex) : null;
       if (idx !== null) params.set('t', String(idx));
-      return `${base}?${params.toString()}`;
+      baseUrl.search = params.toString();
+      return baseUrl.toString();
     })();
     const imageUrl = `https://archive.org/services/img/${identifier}`;
 
@@ -256,6 +260,10 @@ async function handleSharedLink() {
       console.log('Shared link detected, playing:', playIdentifier);
       safeShowStatus('Preparing to load your shared track', 'info');
 
+      const cleanedUrl = new URL(window.location.href);
+      cleanedUrl.searchParams.delete('play');
+      cleanedUrl.searchParams.delete('t');
+
       // Update meta tags for social media previews immediately
       try {
         await updateMetaTagsForSharedLink(playIdentifier, trackIndex);
@@ -263,19 +271,22 @@ async function handleSharedLink() {
         console.warn('Error updating meta tags for shared link:', error);
       }
 
-      // Clear the URL parameter to avoid re-triggering
-      const url = new URL(window.location);
-      url.searchParams.delete('play');
-      url.searchParams.delete('t');
-      window.history.replaceState({}, '', url);
-
       // Wait a bit for the app to be fully initialized
       setTimeout(async () => {
+        let sharedPlaybackStarted = false;
         try {
           await playSharedContent(playIdentifier, trackIndex);
+          sharedPlaybackStarted = true;
         } catch (error) {
           console.error('Error playing shared content:', error);
           safeShowStatus('Failed to load the shared track', 'error');
+        } finally {
+          // Only clear the shared-link params once playback started successfully.
+          if (sharedPlaybackStarted) {
+            try {
+              window.history.replaceState({}, '', cleanedUrl);
+            } catch {}
+          }
         }
       }, INIT_TIMING.SHARED_LINK_PLAY_DELAY_MS);
     }
@@ -417,9 +428,12 @@ async function initializeApp() {
   scheduleFavoritesPreloadOnce();
 
   // Inicializar el componente FavoritesToggle
-  if (typeof FavoritesToggle !== 'undefined') {
-    favoritesToggleInstance = new FavoritesToggle();
+  if (typeof window.ensureFavoritesToggleInitialized === 'function') {
+    window.ensureFavoritesToggleInitialized();
     window.logger.info('FavoritesToggle component initialized', 'UI');
+  } else if (typeof FavoritesToggle !== 'undefined') {
+    favoritesToggleInstance = new FavoritesToggle();
+    window.logger.info('FavoritesToggle component initialized (fallback)', 'UI');
   } else {
     window.logger.warn('FavoritesToggle class not available', 'UI');
   }
@@ -637,9 +651,23 @@ async function initializeApp() {
   }
 
   document.addEventListener('click', (e) => {
-    if (!elements.searchInput.contains(e.target) &&
-      !elements.searchResults.contains(e.target)) {
-      hideSearchResults();
+    try {
+      const target = e.target;
+      const clickedInsideSearch =
+        (elements.searchInput && target && elements.searchInput.contains(target)) ||
+        (elements.searchResults && target && elements.searchResults.contains(target));
+
+      // Clicking the favorites toggle/list should not trigger the global close logic.
+      // Otherwise, the same click that opens favorites can bubble here and immediately close it.
+      const clickedInsideFavorites =
+        (elements.favoritesToggle && target && elements.favoritesToggle.contains(target)) ||
+        (elements.favoritesList && target && elements.favoritesList.contains(target));
+
+      if (!clickedInsideSearch && !clickedInsideFavorites) {
+        hideSearchResults();
+      }
+    } catch {
+      // Best-effort: if anything is missing, don't hard-crash the click handler.
     }
   });
 

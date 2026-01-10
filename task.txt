@@ -13,3 +13,8 @@ span en para el tema
 boton aleatorio vs modos
 revisar share
 spin loader
+
+organizar listas de albunes
+refactor autosave
+clic en buscador listas resultados sin enter
+modo noche por default

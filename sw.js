@@ -1,8 +1,8 @@
 // sw.js - Enhanced Service Worker for audio and metadata caching
 const CACHE_NAMES = {
-  APP: 'resonate-v12',
-  STATIC: 'static-v12',
-  METADATA: 'metadata-v12'
+  APP: 'resonate-v15',
+  STATIC: 'static-v15',
+  METADATA: 'metadata-v15'
 };
 
 // Critical files for caching
@@ -258,7 +258,9 @@ async function networkFirstExternal(request, url) {
 self.addEventListener('install', (event) => {
   console.log('SW: Installing service worker');
   event.waitUntil(precacheStaticFiles());
-  // SkipWaiting is deferred until the client signals playback is idle.
+  // Activate the updated worker immediately so clients don't get stuck on stale UI assets.
+  // (If playback is active, the app can still control refresh behavior.)
+  self.skipWaiting();
 });
 
 // Activation and cleanup of old caches
@@ -327,6 +329,38 @@ self.addEventListener('fetch', (event) => {
       // Serve our existing SVG favicon to avoid 404s and repeated network noise.
       if (url.pathname === '/favicon.ico') {
         return Response.redirect('/icons/favicon.svg', 302);
+      }
+
+      // App-shell routing for navigations (including deep links like /?play=...)
+      // Serve a stable cached HTML document regardless of query params.
+      const isNavigationRequest = event.request.mode === 'navigate' || event.request.destination === 'document';
+      if (isNavigationRequest && isSameOrigin(url)) {
+        const shellPath = '/index.html';
+        try {
+          const cachedShell =
+            (await caches.match(shellPath, { ignoreSearch: true })) ||
+            (await caches.match('/', { ignoreSearch: true }));
+          if (cachedShell) return cachedShell;
+        } catch {
+          // ignore cache lookup failures
+        }
+
+        try {
+          const networkShell = await fetch(shellPath, { cache: 'no-cache' });
+          if (networkShell && networkShell.ok) {
+            try {
+              const cache = await caches.open(CACHE_NAMES.STATIC);
+              await cache.put(shellPath, networkShell.clone());
+            } catch {
+              // ignore cache put failures
+            }
+            return networkShell;
+          }
+        } catch {
+          // ignore
+        }
+
+        return offlineHtmlResponse('Offline', 'Unable to load app', 'Please check your connection and reload.');
       }
 
       // CACHE-FIRST strategy for our static assets
