@@ -2421,15 +2421,19 @@ class FavoritesToggle {
     if (this.isDisabled) return;
     event.preventDefault();
 
+    const willOpenFavorites = !this.isVisible;
+
     // Make panels mutually exclusive: opening favorites should close search.
     // (hideSearchResults also closes favorites, so call it before toggling.)
-    try {
-      if (typeof hideSearchResults === 'function') {
-        hideSearchResults();
-      } else if (typeof window.hideSearchResults === 'function') {
-        window.hideSearchResults();
-      }
-    } catch {}
+    if (willOpenFavorites) {
+      try {
+        if (typeof hideSearchResults === 'function') {
+          hideSearchResults();
+        } else if (typeof window.hideSearchResults === 'function') {
+          window.hideSearchResults();
+        }
+      } catch {}
+    }
 
     this.toggle();
     window.logger?.info(`Favorites toggle ${this.isVisible ? 'opened' : 'closed'}`, 'UI');
