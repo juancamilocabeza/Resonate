@@ -1385,29 +1385,69 @@ async function resumeSavedPlayback() {
   state.userInteracted = true;
 
   try {
-    // Restore volume and mute settings
-    if (savedState.volume !== undefined && window.elements.audio) {
-      window.elements.audio.volume = savedState.volume;
-      if (window.elements.volumeSlider) {
-        window.elements.volumeSlider.value = savedState.volume;
+    // Volume/mute should always come from persisted preferences (resonate_volume/resonate_muted).
+    // Best-effort: apply preferences before resuming.
+    try {
+      if (typeof window.loadVolume === 'function') {
+        window.loadVolume();
       }
-      state.currentVolume = savedState.volume;
-    }
-    if (savedState.muted !== undefined && window.elements.audio) {
-      window.elements.audio.muted = savedState.muted;
-      updateVolumeIcon();
-    }
+    } catch {}
 
     showStatus(`Resuming from where you left off`, 'info');
 
-    // Play the track
-    await playAudioTrackOptimized(savedState.track, savedState.track.id, savedState.track.trackIndex, savedState.track.totalTracks);
+    const trackForResume = {
+      ...(savedState.track || {}),
+      // Rehydrate descriptions for the Info modal.
+      description: savedState.trackDescription || (savedState.track && savedState.track.description) || '',
+      _albumDescription: savedState.itemDescription || (savedState.track && savedState.track._albumDescription) || '',
+      // Ensure title is present even if the minimal snapshot lacked it.
+      title: (savedState.trackTitle || (savedState.track && savedState.track.title) || 'Untitled')
+    };
 
-    // Set the saved position
-    if (savedState.currentTime && window.elements.audio && window.elements.audio.duration) {
-      window.elements.audio.currentTime = savedState.currentTime;
-      updateProgressBar();
+    // STRICT resume coherence: if snapshot doesn't match the track we are about to load, abort and clear.
+    try {
+      const savedTrackId = savedState && savedState.track ? savedState.track.id : null;
+      const savedTrackUrl = savedState && savedState.trackUrlCanonical ? String(savedState.trackUrlCanonical) : '';
+      const candidateUrl = trackForResume && trackForResume.url ? new URL(String(trackForResume.url), window.location.href).href : '';
+
+      const idMismatch = savedTrackId && trackForResume && trackForResume.id && String(savedTrackId) !== String(trackForResume.id);
+      const urlMismatch = savedTrackUrl && candidateUrl && savedTrackUrl !== candidateUrl;
+
+      if (idMismatch || urlMismatch) {
+        state.savedPlaybackState = null;
+        try { localStorage.removeItem('resonate_playback_state'); } catch {}
+        showStatus("Couldn't resume last track (stale state)", 'info', 3500);
+        return;
+      }
+    } catch {
+      // If strict validation fails unexpectedly, prefer safety: clear and abort.
+      state.savedPlaybackState = null;
+      try { localStorage.removeItem('resonate_playback_state'); } catch {}
+      showStatus("Couldn't resume last track (stale state)", 'info', 3500);
+      return;
     }
+
+    // Play the track
+    await playAudioTrackOptimized(
+      trackForResume,
+      (trackForResume && trackForResume.id) ? trackForResume.id : (savedState.track && savedState.track.id),
+      (trackForResume && typeof trackForResume.trackIndex === 'number') ? trackForResume.trackIndex : 0,
+      (trackForResume && typeof trackForResume.totalTracks === 'number') ? trackForResume.totalTracks : 1
+    );
+
+    // Set the saved position (allow 0).
+    try {
+      const audio = window.elements && window.elements.audio ? window.elements.audio : null;
+      const t = Number(savedState.currentTime);
+      if (audio && Number.isFinite(t) && t >= 0) {
+        const duration = Number(audio.duration);
+        const target = Number.isFinite(duration) && duration > 0
+          ? Math.min(Math.max(0, t), Math.max(0, duration - 0.25))
+          : Math.max(0, t);
+        audio.currentTime = target;
+        updateProgressBar();
+      }
+    } catch {}
 
     // Clear the saved state since we resumed it
     state.savedPlaybackState = null;

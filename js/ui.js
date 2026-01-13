@@ -2132,6 +2132,8 @@ function setupConnectivityMonitoring() {
 
 // Page visibility and playback resume management
 function setupPageVisibilityHandling() {
+  if (window._resonatePageVisibilityInit) return;
+  window._resonatePageVisibilityInit = true;
   // Listen for visibility changes
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
@@ -2140,11 +2142,82 @@ function setupPageVisibilityHandling() {
     }
   });
 
+  // Page Lifecycle API: save state when the page is frozen (best-effort, supported on some browsers).
+  // This helps on mobile/PWA when the OS suspends the page without firing other lifecycle events.
+  try {
+    document.addEventListener('freeze', () => {
+      savePlaybackState();
+    });
+  } catch {
+    // ignore
+  }
+
   // Also save state when page unloads
   window.addEventListener('beforeunload', savePlaybackState);
 
   // Also save state when PWA might be closed (pagehide is better for mobile)
   window.addEventListener('pagehide', savePlaybackState);
+}
+
+// Periodic autosave while playing (covers abrupt closes where lifecycle events might not fire)
+function setupPlaybackAutosave() {
+  if (window._resonatePlaybackAutosaveInit) return;
+  window._resonatePlaybackAutosaveInit = true;
+
+  const AUTOSAVE_INTERVAL_MS = 15000;
+  let timerId = null;
+  let lastSavedAt = 0;
+
+  const shouldSkipTick = () => {
+    try {
+      if (!elements.audio) return true;
+      if (elements.audio.paused) return true;
+      if (!elements.audio.src) return true;
+      if (!state || !state.currentTrack) return true;
+
+      // Avoid saving during track transitions: require audio src to match the current loaded url when available.
+      const audioSrc = canonicalizeUrlCandidate(elements.audio.currentSrc || elements.audio.src || '');
+      const currentUrl = canonicalizeUrlCandidate(state.currentAudioUrl || '');
+      if (currentUrl && audioSrc && audioSrc !== currentUrl) return true;
+
+      return false;
+    } catch {
+      return true;
+    }
+  };
+
+  const tick = () => {
+    try {
+      if (shouldSkipTick()) return;
+      const now = Date.now();
+      if (now - lastSavedAt < AUTOSAVE_INTERVAL_MS - 250) return;
+      lastSavedAt = now;
+      savePlaybackState();
+    } catch {}
+  };
+
+  const start = () => {
+    if (timerId) return;
+    lastSavedAt = 0;
+    timerId = window.setInterval(tick, AUTOSAVE_INTERVAL_MS);
+  };
+
+  const stop = () => {
+    if (!timerId) return;
+    window.clearInterval(timerId);
+    timerId = null;
+  };
+
+  if (!elements.audio) return;
+  elements.audio.addEventListener('play', start);
+  elements.audio.addEventListener('pause', () => {
+    try { savePlaybackState(); } catch {}
+    stop();
+  });
+  elements.audio.addEventListener('ended', () => {
+    try { savePlaybackState(); } catch {}
+    stop();
+  });
 }
 
 // Offline functionality setup
@@ -2271,14 +2344,121 @@ async function syncOfflineData() {
 }
 
 // Save current playback state to localStorage
+function normalizePlaybackDescription(value) {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) {
+    try {
+      return value.map(v => (typeof v === 'string' ? v : JSON.stringify(v))).join('\n\n');
+    } catch {
+      return '';
+    }
+  }
+
+  try {
+    if (typeof value === 'object') {
+      const candidate = value.value || value.text || value.html;
+      if (typeof candidate === 'string') return candidate;
+    }
+    return JSON.stringify(value);
+  } catch {
+    return '';
+  }
+}
+
+function canonicalizeUrlCandidate(value) {
+  if (!value) return '';
+  try {
+    return new URL(String(value), window.location.href).href;
+  } catch {
+    return String(value);
+  }
+}
+
+async function hydrateSavedPlaybackItemDescription(savedState, identifier, trackTitleForUi) {
+  try {
+    if (!savedState || !identifier) return;
+    if (typeof fetch !== 'function') return;
+
+    const response = await fetch(`https://archive.org/metadata/${encodeURIComponent(identifier)}`);
+    if (!response.ok) return;
+
+    const metadata = await response.json();
+    const descRaw = metadata && metadata.metadata ? metadata.metadata.description : '';
+    const itemDescription = normalizePlaybackDescription(descRaw).trim();
+    if (!itemDescription) return;
+
+    // Update in-memory state
+    savedState.itemDescription = itemDescription;
+    if (state.savedPlaybackState) state.savedPlaybackState.itemDescription = itemDescription;
+    if (state.currentTrack && !state.currentTrack._albumDescription) {
+      state.currentTrack._albumDescription = itemDescription;
+    }
+
+    // Persist without extending TTL (keep original timestamp)
+    try {
+      localStorage.setItem('resonate_playback_state', JSON.stringify(savedState));
+    } catch {}
+
+    // Rehydrate description UI
+    try {
+      if (window.updateDescriptionUI) {
+        window.updateDescriptionUI({
+          title: trackTitleForUi || (state.currentTrack && state.currentTrack.title) || 'Untitled',
+          description: (savedState && savedState.trackDescription) ? savedState.trackDescription : '',
+          _albumDescription: itemDescription
+        });
+      }
+    } catch {}
+  } catch (e) {
+    window.logger?.warn(`Failed to hydrate item description: ${e.message}`, 'UI');
+  }
+}
+
 function savePlaybackState() {
   if (state.currentTrack && elements.audio && elements.audio.src) {
+    const trackTitle = state.currentTrack.title || 'Untitled';
+    const itemDescription = normalizePlaybackDescription(state.currentTrack._albumDescription || '').trim();
+    const trackDescription = normalizePlaybackDescription(state.currentTrack.description || '').trim();
+
+    const trackUrlCanonical = canonicalizeUrlCandidate(state.currentTrack.url || '');
+    const audioSrcAtSave = canonicalizeUrlCandidate(elements.audio.currentSrc || elements.audio.src || '');
+    const currentAudioUrlCanonical = canonicalizeUrlCandidate(state.currentAudioUrl || '');
+    const audioSrcKindAtSave = audioSrcAtSave && audioSrcAtSave.startsWith('blob:') ? 'blob' : 'url';
+
+    // Strict coherence: do not persist if we're mid-transition and audio src doesn't match the loaded audio url.
+    // This prevents snapshotting "new track metadata + old audio time" (or the opposite).
+    if (currentAudioUrlCanonical && audioSrcAtSave && currentAudioUrlCanonical !== audioSrcAtSave) {
+      return;
+    }
+
+    // Keep a compact, stable snapshot. Do not duplicate large track payloads.
+    const trackSnapshot = {
+      id: state.currentTrack.id,
+      url: state.currentTrack.url,
+      title: state.currentTrack.title,
+      creator: state.currentTrack.creator,
+      albumId: state.currentTrack.albumId || state.currentTrack.id,
+      albumTitle: state.currentTrack.albumTitle || state.currentTrack.album || '',
+      album: state.currentTrack.album || '',
+      trackIndex: typeof state.currentTrack.trackIndex === 'number' ? state.currentTrack.trackIndex : 0,
+      totalTracks: typeof state.currentTrack.totalTracks === 'number' ? state.currentTrack.totalTracks : 1,
+      isAlbumTrack: !!state.currentTrack.isAlbumTrack,
+      file: state.currentTrack.file,
+      name: state.currentTrack.name
+    };
+
+    const currentTime = Number(elements.audio.currentTime);
     const playbackState = {
-      track: state.currentTrack,
-      currentTime: elements.audio.currentTime,
-      volume: elements.audio.volume,
-      muted: elements.audio.muted,
-      wasPlaying: !elements.audio.paused,
+      v: 2,
+      track: trackSnapshot,
+      trackTitle,
+      itemDescription,
+      trackDescription,
+      trackUrlCanonical,
+      audioSrcAtSave,
+      audioSrcKindAtSave,
+      currentTime: Number.isFinite(currentTime) ? currentTime : 0,
       timestamp: Date.now()
     };
 
@@ -2298,15 +2478,58 @@ function loadSavedPlaybackState() {
     const savedStateStr = localStorage.getItem('resonate_playback_state');
     if (!savedStateStr) return null;
 
-    const savedState = JSON.parse(savedStateStr);
-    const age = Date.now() - (savedState.timestamp || 0);
+    const parsed = JSON.parse(savedStateStr);
+    const timestamp = parsed && parsed.timestamp ? parsed.timestamp : 0;
+    const age = Date.now() - timestamp;
     const maxAge = 24 * 60 * 60 * 1000; // 24 hours
 
-    if (age < maxAge && savedState.track && savedState.currentTime !== undefined) {
+    if (age < maxAge && parsed && parsed.track && parsed.currentTime !== undefined) {
+      // Migrate legacy snapshots (v1) to v2 in-memory without extending TTL.
+      const savedState = (parsed.v === 2)
+        ? parsed
+        : {
+          v: 2,
+          track: parsed.track,
+          trackTitle: (parsed.trackTitle || (parsed.track && parsed.track.title) || 'Untitled'),
+          itemDescription: normalizePlaybackDescription(
+            parsed.itemDescription || (parsed.track && (parsed.track._albumDescription || parsed.track.description)) || ''
+          ).trim(),
+          trackDescription: normalizePlaybackDescription(
+            parsed.trackDescription || (parsed.track && parsed.track.description) || ''
+          ).trim(),
+          trackUrlCanonical: canonicalizeUrlCandidate((parsed.track && parsed.track.url) || ''),
+          audioSrcAtSave: canonicalizeUrlCandidate((parsed.track && parsed.track.url) || ''),
+          audioSrcKindAtSave: 'url',
+          currentTime: parsed.currentTime,
+          timestamp
+        };
+
+      // Backfill missing strict-coherence fields for already-v2 snapshots.
+      if (!savedState.trackDescription) {
+        savedState.trackDescription = normalizePlaybackDescription((savedState.track && savedState.track.description) || '').trim();
+      }
+      if (!savedState.trackUrlCanonical) {
+        savedState.trackUrlCanonical = canonicalizeUrlCandidate((savedState.track && savedState.track.url) || '');
+      }
+      if (!savedState.audioSrcAtSave) {
+        // Best-effort: older snapshots didn't persist the audio src; use canonical track url.
+        savedState.audioSrcAtSave = savedState.trackUrlCanonical;
+      }
+      if (!savedState.audioSrcKindAtSave) {
+        savedState.audioSrcKindAtSave = (savedState.audioSrcAtSave && String(savedState.audioSrcAtSave).startsWith('blob:')) ? 'blob' : 'url';
+      }
+
       state.savedPlaybackState = savedState;
 
       // Restore the track information (but don't start playing yet)
-      state.currentTrack = savedState.track;
+      state.currentTrack = { ...savedState.track };
+      if (savedState.trackTitle && !state.currentTrack.title) state.currentTrack.title = savedState.trackTitle;
+      if (savedState.itemDescription && !state.currentTrack._albumDescription) {
+        state.currentTrack._albumDescription = savedState.itemDescription;
+      }
+      if (savedState.trackDescription && !state.currentTrack.description) {
+        state.currentTrack.description = savedState.trackDescription;
+      }
       {
         const trackTitle = state.currentTrack.title || 'Untitled';
         const isAlbumTrack = (state.currentTrack.totalTracks || 1) > 1 || !!state.currentTrack.isAlbumTrack;
@@ -2317,11 +2540,34 @@ function loadSavedPlaybackState() {
         elements.title.textContent = titleText;
         window.updateTitleTicker(titleText);
       }
-      elements.creator.textContent = state.currentTrack.totalTracks > 1 ?
-        `${state.currentTrack.creator || 'Unknown'} (${state.currentTrack.trackIndex + 1}/${state.currentTrack.totalTracks})` :
-        `${state.currentTrack.creator || 'Unknown'}`;
+      const totalTracks = Number.isFinite(state.currentTrack.totalTracks) ? state.currentTrack.totalTracks : 1;
+      const trackIndex = Number.isFinite(state.currentTrack.trackIndex) ? state.currentTrack.trackIndex : 0;
+      elements.creator.textContent = totalTracks > 1
+        ? `${state.currentTrack.creator || 'Unknown'} (${trackIndex + 1}/${totalTracks})`
+        : `${state.currentTrack.creator || 'Unknown'}`;
       setArtwork(state.currentTrack, state.currentTrack.id);
       updateFavoriteButton();
+
+      // Rehydrate description UI from snapshot (itemDescription + trackTitle)
+      try {
+        if (window.updateDescriptionUI) {
+          window.updateDescriptionUI({
+            title: savedState.trackTitle || state.currentTrack.title || 'Untitled',
+            description: savedState.trackDescription || '',
+            _albumDescription: savedState.itemDescription || ''
+          });
+        }
+      } catch {}
+
+      // Persist migrated shape (best-effort) without extending TTL.
+      try {
+        localStorage.setItem('resonate_playback_state', JSON.stringify(savedState));
+      } catch {}
+
+      // If favorites produced a minimal track without description, hydrate description lightly.
+      if (!savedState.itemDescription && state.currentTrack && state.currentTrack.id) {
+        hydrateSavedPlaybackItemDescription(savedState, state.currentTrack.id, savedState.trackTitle);
+      }
 
       showStatus('Resuming your last track', 'info', 5000);
       return savedState;
@@ -3256,6 +3502,7 @@ window.displaySearchHistory = displaySearchHistory;
 window.clearSearchHistory = clearSearchHistory;
 window.removeFromSearchHistory = removeFromSearchHistory;
 window.loadSavedPlaybackState = loadSavedPlaybackState;
+window.setupPlaybackAutosave = setupPlaybackAutosave;
 window.state = state;
 window.elements = elements;
 window.SEARCH_CONFIG = SEARCH_CONFIG;

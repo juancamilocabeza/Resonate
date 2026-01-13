@@ -451,6 +451,13 @@ async function initializeApp() {
   // Cargar estado de reproducción guardado (última sesión)
   loadSavedPlaybackState();
 
+  // Apply volume/mute preferences (independent from playback snapshot TTL)
+  try {
+    if (typeof window.loadVolume === 'function') {
+      window.loadVolume();
+    }
+  } catch {}
+
   // Handle shared links (play parameter)
   await handleSharedLink();
 
@@ -461,6 +468,11 @@ async function initializeApp() {
 
   if (typeof setupPageVisibilityHandling === 'function') {
     setupPageVisibilityHandling();
+  }
+
+  // Periodic autosave while playing (best-effort)
+  if (typeof setupPlaybackAutosave === 'function') {
+    setupPlaybackAutosave();
   }
 
   if (typeof setupListenTracking === 'function') {
