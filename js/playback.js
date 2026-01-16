@@ -146,6 +146,291 @@ const RetryStrategy = {
   DECODE: { maxRetries: 1, backoff: 'none', baseDelay: 0 }
 };
 
+// Persistent shuffle deck ("baraja")
+// Goal: one coherent shuffle order per context, persisted across reloads.
+const SHUFFLE_DECK_STORAGE_KEY = 'resonate_shuffle_decks_v1';
+const SHUFFLE_DECK_VERSION = 1;
+const SHUFFLE_DECK_MAX_CONTEXTS = 12;
+
+function safeLocalStorageGet(key) {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+
+function safeLocalStorageSet(key, value) {
+  try { localStorage.setItem(key, value); } catch {}
+}
+
+function fnv1aHash(input) {
+  const str = String(input || '');
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    hash ^= str.charCodeAt(i);
+    hash = (hash * 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, '0');
+}
+
+function canonicalizeUrl(url) {
+  if (!url || typeof url !== 'string') return '';
+  try {
+    return new URL(url, window.location.href).href;
+  } catch {
+    return String(url).trim();
+  }
+}
+
+function mulberry32(seed) {
+  let t = (seed >>> 0) || 0;
+  return function() {
+    t += 0x6D2B79F5;
+    let x = t;
+    x = Math.imul(x ^ (x >>> 15), x | 1);
+    x ^= x + Math.imul(x ^ (x >>> 7), x | 61);
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function deterministicShuffle(array, seed) {
+  const rng = mulberry32(seed);
+  const a = Array.isArray(array) ? array.slice() : [];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    const tmp = a[i];
+    a[i] = a[j];
+    a[j] = tmp;
+  }
+  return a;
+}
+
+function generateSeed32() {
+  try {
+    const buf = new Uint32Array(1);
+    crypto.getRandomValues(buf);
+    return buf[0] >>> 0;
+  } catch {
+    return (Date.now() >>> 0) ^ ((Math.floor(performance.now()) >>> 0) || 0);
+  }
+}
+
+function uniqStrings(items) {
+  const out = [];
+  const seen = new Set();
+  for (const it of items || []) {
+    const s = String(it || '');
+    if (!s) continue;
+    if (seen.has(s)) continue;
+    seen.add(s);
+    out.push(s);
+  }
+  return out;
+}
+
+function getContextKeyForDeck(contextType, itemKeys, contextId = null) {
+  const keys = Array.isArray(itemKeys) ? itemKeys : [];
+  const sig = fnv1aHash(keys.slice().sort().join('|') + `|${keys.length}`);
+
+  if (contextType === 'album') {
+    const albumId = (contextId != null ? contextId : (playbackManager && typeof playbackManager.getCurrentAlbumId === 'function' ? playbackManager.getCurrentAlbumId() : null))
+      || (state && state.currentTrack ? (state.currentTrack.albumId || state.currentTrack.id) : null)
+      || 'unknown';
+    return `album:${String(albumId)}`;
+  }
+
+  if (contextType === 'search') {
+    // Search results are ephemeral; key by result-set signature.
+    return `search:${sig}`;
+  }
+
+  if (contextType === 'searchPlaylist') {
+    return `searchPlaylist:${sig}`;
+  }
+
+  // favorites or others: stable key.
+  return String(contextType || 'unknown');
+}
+
+function getItemKeyForDeck(contextType, item) {
+  if (!item) return '';
+  if (contextType === 'search') {
+    return item && item.identifier ? String(item.identifier) : '';
+  }
+
+  // album/favorites/searchPlaylist use actual audio URLs
+  if (item && item.url) return canonicalizeUrl(item.url);
+  if (item && item.id) return String(item.id);
+  return '';
+}
+
+function loadShuffleDeckMap() {
+  const raw = safeLocalStorageGet(SHUFFLE_DECK_STORAGE_KEY);
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return (parsed && typeof parsed === 'object') ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveShuffleDeckMap(map) {
+  const obj = (map && typeof map === 'object') ? map : {};
+  safeLocalStorageSet(SHUFFLE_DECK_STORAGE_KEY, JSON.stringify(obj));
+}
+
+function pruneShuffleDeckMap(map) {
+  const entries = Object.entries(map || {});
+  if (entries.length <= SHUFFLE_DECK_MAX_CONTEXTS) return map;
+
+  entries.sort((a, b) => {
+    const ta = (a[1] && typeof a[1].updatedAt === 'number') ? a[1].updatedAt : 0;
+    const tb = (b[1] && typeof b[1].updatedAt === 'number') ? b[1].updatedAt : 0;
+    return tb - ta;
+  });
+
+  const trimmed = entries.slice(0, SHUFFLE_DECK_MAX_CONTEXTS);
+  return Object.fromEntries(trimmed);
+}
+
+function ensureShuffleDeck(contextType, items, options = {}) {
+  const list = Array.isArray(items) ? items : [];
+  const itemKeys = uniqStrings(list.map((it) => getItemKeyForDeck(contextType, it)).filter(Boolean));
+  const listSig = fnv1aHash(itemKeys.slice().sort().join('|') + `|${itemKeys.length}`);
+  const contextId = options.contextId != null ? options.contextId : null;
+  const contextKey = getContextKeyForDeck(contextType, itemKeys, contextId);
+
+  const map = loadShuffleDeckMap();
+  let deck = map[contextKey];
+  const now = Date.now();
+
+  const needsRebuild = !deck || deck.version !== SHUFFLE_DECK_VERSION || !Array.isArray(deck.order) || deck.listSig !== listSig;
+  const seed = (deck && typeof deck.seed === 'number') ? (deck.seed >>> 0) : generateSeed32();
+
+  if (needsRebuild) {
+    const order = deterministicShuffle(itemKeys, seed);
+    deck = {
+      version: SHUFFLE_DECK_VERSION,
+      seed,
+      order,
+      index: 0,
+      listSig,
+      updatedAt: now
+    };
+  } else {
+    // Sync to current set, preserving order as much as possible.
+    const set = new Set(itemKeys);
+    const existing = Array.isArray(deck.order) ? deck.order : [];
+    const kept = existing.filter(k => set.has(k));
+    const keptSet = new Set(kept);
+    const additions = itemKeys.filter(k => !keptSet.has(k));
+    const shuffledAdditions = additions.length ? deterministicShuffle(additions, seed ^ 0x9e3779b9) : [];
+
+    deck.order = kept.concat(shuffledAdditions);
+    deck.listSig = listSig;
+    deck.seed = seed;
+    deck.index = Math.max(0, Math.min(Number(deck.index) || 0, deck.order.length));
+    deck.updatedAt = now;
+  }
+
+  // Optional anchoring
+  const currentKey = options.currentKey ? String(options.currentKey) : '';
+  const preferredNextKey = options.preferredNextKey ? String(options.preferredNextKey) : '';
+
+  if (options.anchorCurrent === true && currentKey) {
+    const pos = deck.order.indexOf(currentKey);
+    if (pos >= 0) {
+      deck.index = pos + 1;
+    }
+  } else if (!currentKey && preferredNextKey) {
+    const pos = deck.order.indexOf(preferredNextKey);
+    if (pos >= 0) {
+      deck.index = pos;
+    }
+  }
+
+  // End-of-deck: start a new cycle.
+  if (deck.index >= deck.order.length) {
+    deck.index = 0;
+  }
+
+  map[contextKey] = deck;
+  saveShuffleDeckMap(pruneShuffleDeckMap(map));
+
+  return { contextKey, itemKeys, deck };
+}
+
+function shuffleDeckConsumeKey(contextKey, playedKey) {
+  if (!contextKey || !playedKey) return;
+  const map = loadShuffleDeckMap();
+  const deck = map[contextKey];
+  if (!deck || !Array.isArray(deck.order)) return;
+
+  const key = String(playedKey);
+  const idx = Number(deck.index) || 0;
+  const now = Date.now();
+
+  if (deck.order[idx] === key) {
+    deck.index = idx + 1;
+  } else {
+    const pos = deck.order.indexOf(key);
+    if (pos >= 0 && pos >= idx) {
+      deck.index = pos + 1;
+    }
+  }
+
+  if (deck.index >= deck.order.length) deck.index = 0;
+  deck.updatedAt = now;
+  map[contextKey] = deck;
+  saveShuffleDeckMap(pruneShuffleDeckMap(map));
+}
+
+function shuffleDeckGetRemainingItems(contextType, items, options = {}) {
+  const { contextKey, deck } = ensureShuffleDeck(contextType, items, options);
+  const byKey = new Map();
+  for (const it of (items || [])) {
+    const k = getItemKeyForDeck(contextType, it);
+    if (k) byKey.set(k, it);
+  }
+
+  const idx = Number(deck.index) || 0;
+  const keys = (Array.isArray(deck.order) ? deck.order : []).slice(idx);
+  return {
+    contextKey,
+    remainingItems: keys.map(k => byKey.get(k)).filter(Boolean)
+  };
+}
+
+function getActiveDeckContextInfo() {
+  const contextType = playbackManager && typeof playbackManager.getCurrentContext === 'function'
+    ? playbackManager.getCurrentContext()
+    : null;
+  if (!contextType) return null;
+
+  if (contextType === 'favorites') {
+    return { contextType, items: Array.isArray(state.favorites) ? state.favorites : [], contextId: null };
+  }
+
+  if (contextType === 'album') {
+    const albumId = playbackManager && typeof playbackManager.getCurrentAlbumId === 'function' ? playbackManager.getCurrentAlbumId() : null;
+    const albumCtx = playbackManager && playbackManager.contextData ? playbackManager.contextData.album : null;
+    const items = albumCtx && Array.isArray(albumCtx.items) ? albumCtx.items : [];
+    return { contextType, items, contextId: albumId };
+  }
+
+  if (contextType === 'search') {
+    const ctx = playbackManager && playbackManager.contextData ? playbackManager.contextData.search : null;
+    const items = ctx && Array.isArray(ctx.items) ? ctx.items : [];
+    return { contextType, items, contextId: null };
+  }
+
+  if (contextType === 'searchPlaylist') {
+    const ctx = playbackManager && playbackManager.contextData ? playbackManager.contextData.searchPlaylist : null;
+    const items = ctx && Array.isArray(ctx.items) ? ctx.items : [];
+    return { contextType, items, contextId: null };
+  }
+
+  return null;
+}
+
 // Playback state manager
 class PlaybackStateManager {
   constructor() {
@@ -346,13 +631,34 @@ class ContinuousPlaybackManager {
 
     const context = this.contextData[this.currentContext];
 
-    // Apply shuffle based on shuffleFavorites state for all contexts (album, favorites, search, searchPlaylist)
-    if ((this.currentContext === 'album' || this.currentContext === 'favorites' || this.currentContext === 'search' || this.currentContext === 'searchPlaylist') && state.shuffleFavorites) {
-      context.currentIndex = Math.floor(Math.random() * context.items.length);
-    } else {
-      context.currentIndex = (context.currentIndex + 1) % context.items.length;
+    const isDeckShuffle = (this.currentContext === 'album' || this.currentContext === 'favorites' || this.currentContext === 'search' || this.currentContext === 'searchPlaylist')
+      && state.shuffleFavorites;
+
+    if (isDeckShuffle) {
+      const currentKey = (() => {
+        if (this.currentContext === 'search') {
+          const id = state && state.currentTrack ? (state.currentTrack.albumId || state.currentTrack.id) : null;
+          return id ? String(id) : '';
+        }
+        const url = state && state.currentTrack ? state.currentTrack.url : '';
+        return url ? canonicalizeUrl(url) : '';
+      })();
+
+      const { contextKey, deck } = ensureShuffleDeck(this.currentContext, context.items, {
+        currentKey,
+        contextId: this.currentContext === 'album' ? this.getCurrentAlbumId() : null
+      });
+
+      const nextKey = Array.isArray(deck.order) ? deck.order[Number(deck.index) || 0] : '';
+      const nextIdx = nextKey
+        ? context.items.findIndex(it => getItemKeyForDeck(this.currentContext, it) === nextKey)
+        : -1;
+
+      if (nextIdx >= 0) context.currentIndex = nextIdx;
+      return nextIdx >= 0 ? context.items[nextIdx] : null;
     }
 
+    context.currentIndex = (context.currentIndex + 1) % context.items.length;
     return context.items[context.currentIndex];
   }
 
@@ -391,8 +697,36 @@ class ContinuousPlaybackManager {
     }
 
     const context = this.contextData[this.currentContext];
-    context.currentIndex = (context.currentIndex - 1 + context.items.length) % context.items.length;
 
+    const isDeckShuffle = (this.currentContext === 'album' || this.currentContext === 'favorites' || this.currentContext === 'search' || this.currentContext === 'searchPlaylist')
+      && state.shuffleFavorites;
+
+    if (isDeckShuffle) {
+      const currentKey = (() => {
+        if (this.currentContext === 'search') {
+          const id = state && state.currentTrack ? (state.currentTrack.albumId || state.currentTrack.id) : null;
+          return id ? String(id) : '';
+        }
+        const url = state && state.currentTrack ? state.currentTrack.url : '';
+        return url ? canonicalizeUrl(url) : '';
+      })();
+
+      const { deck } = ensureShuffleDeck(this.currentContext, context.items, {
+        currentKey,
+        contextId: this.currentContext === 'album' ? this.getCurrentAlbumId() : null
+      });
+
+      const order = Array.isArray(deck.order) ? deck.order : [];
+      const pos = currentKey ? order.indexOf(currentKey) : -1;
+      if (order.length > 0 && pos >= 0) {
+        const prevKey = order[(pos - 1 + order.length) % order.length];
+        const prevIdx = context.items.findIndex(it => getItemKeyForDeck(this.currentContext, it) === prevKey);
+        if (prevIdx >= 0) context.currentIndex = prevIdx;
+        return prevIdx >= 0 ? context.items[prevIdx] : null;
+      }
+    }
+
+    context.currentIndex = (context.currentIndex - 1 + context.items.length) % context.items.length;
     return context.items[context.currentIndex];
   }
 }
@@ -457,7 +791,14 @@ class AlbumContextHandler extends BaseContextHandler {
 
     const isShuffle = this.stateManager.getShuffleMode();
     if (isShuffle) {
-      context.currentIndex = Math.floor(Math.random() * context.items.length);
+      const albumId = this.stateManager.getCurrentContextId();
+      const currentKey = state && state.currentTrack && state.currentTrack.url ? canonicalizeUrl(state.currentTrack.url) : '';
+      const { deck } = ensureShuffleDeck('album', context.items, { currentKey, contextId: albumId });
+      const nextKey = Array.isArray(deck.order) ? deck.order[Number(deck.index) || 0] : '';
+      const idx = nextKey
+        ? context.items.findIndex(it => getItemKeyForDeck('album', it) === nextKey)
+        : -1;
+      context.currentIndex = idx >= 0 ? idx : (context.currentIndex || 0);
     } else {
       if (typeof context.currentIndex !== 'number') context.currentIndex = 0;
       const nextIndex = context.currentIndex + 1;
@@ -570,7 +911,13 @@ class FavoritesContextHandler extends BaseContextHandler {
 
     const isShuffle = this.stateManager.getShuffleMode();
     if (isShuffle) {
-      context.currentIndex = Math.floor(Math.random() * context.items.length);
+      const currentKey = state && state.currentTrack && state.currentTrack.url ? canonicalizeUrl(state.currentTrack.url) : '';
+      const { deck } = ensureShuffleDeck('favorites', context.items, { currentKey });
+      const nextKey = Array.isArray(deck.order) ? deck.order[Number(deck.index) || 0] : '';
+      const idx = nextKey
+        ? context.items.findIndex(it => getItemKeyForDeck('favorites', it) === nextKey)
+        : -1;
+      context.currentIndex = idx >= 0 ? idx : (context.currentIndex || 0);
     } else {
       if (typeof context.currentIndex !== 'number') context.currentIndex = 0;
       const nextIndex = context.currentIndex + 1;
@@ -658,7 +1005,13 @@ class SearchContextHandler extends BaseContextHandler {
 
     const isShuffle = this.stateManager.getShuffleMode();
     if (isShuffle) {
-      context.currentIndex = Math.floor(Math.random() * context.items.length);
+      const currentKey = state && state.currentTrack ? String(state.currentTrack.albumId || state.currentTrack.id || '') : '';
+      const { deck } = ensureShuffleDeck('search', context.items, { currentKey });
+      const nextKey = Array.isArray(deck.order) ? deck.order[Number(deck.index) || 0] : '';
+      const idx = nextKey
+        ? context.items.findIndex(it => getItemKeyForDeck('search', it) === nextKey)
+        : -1;
+      context.currentIndex = idx >= 0 ? idx : (context.currentIndex || 0);
     } else {
       if (typeof context.currentIndex !== 'number') context.currentIndex = 0;
       const nextIndex = context.currentIndex + 1;
@@ -726,7 +1079,13 @@ class SearchPlaylistContextHandler extends BaseContextHandler {
 
     const isShuffle = this.stateManager.getShuffleMode();
     if (isShuffle) {
-      context.currentIndex = Math.floor(Math.random() * context.items.length);
+      const currentKey = state && state.currentTrack && state.currentTrack.url ? canonicalizeUrl(state.currentTrack.url) : '';
+      const { deck } = ensureShuffleDeck('searchPlaylist', context.items, { currentKey });
+      const nextKey = Array.isArray(deck.order) ? deck.order[Number(deck.index) || 0] : '';
+      const idx = nextKey
+        ? context.items.findIndex(it => getItemKeyForDeck('searchPlaylist', it) === nextKey)
+        : -1;
+      context.currentIndex = idx >= 0 ? idx : (context.currentIndex || 0);
     } else {
       if (typeof context.currentIndex !== 'number') context.currentIndex = 0;
       const nextIndex = context.currentIndex + 1;
@@ -1125,28 +1484,37 @@ async function loadAudioWithCache(track) {
   }
 }
 
-// Prefetch only the immediate next track (no fan-out of 5)
-async function intelligentPrefetchNextTracks(allItems, currentIndex) {
-  if (!allItems || !state.networkOnline) return;
-
-  const nextIdx = (currentIndex + 1) % allItems.length;
-  const track = allItems[nextIdx];
-
-  if (track && track.url && typeof audioCache !== 'undefined' && audioCache) {
-    audioCache.prefetchAudio(track.url, false).catch(error => {
-      console.debug(`Failed to prefetch next track:`, error.message);
-    });
-  }
-}
-
 function preloadNextTrack() {
   try {
-    if (!state || !state.playbackQueue || state.playbackQueue.length === 0) return;
-    const nextTrack = state.playbackQueue[0];
-    if (!nextTrack || !nextTrack.url) return;
+    if (!state) return;
     if (typeof audioCache === 'undefined' || !audioCache || typeof audioCache.prefetchAudio !== 'function') return;
-    // Precargar solo la siguiente pista con prioridad baja
-    audioCache.prefetchAudio(nextTrack.url, false).catch((err) => logPlayback('debug', 'Failed to prefetch next track', err));
+
+    // Ensure queue exists; when it's low/empty try to regenerate from the current context.
+    try {
+      if ((!state.playbackQueue || state.playbackQueue.length < 2) && state.currentTrack && state.currentTrack.url) {
+        regenerateQueueFromCurrentContext(state.currentTrack.url);
+      }
+    } catch {
+      // ignore
+    }
+
+    // Preload the next 2 tracks from the FIFO queue (works for shuffle too, because the FIFO is already shuffled).
+    const queue = Array.isArray(state.playbackQueue) ? state.playbackQueue : [];
+    const upcoming = queue.slice(0, 2).filter(t => t && t.url);
+    for (const track of upcoming) {
+      audioCache.prefetchAudio(track.url, false).catch((err) => logPlayback('debug', 'Failed to prefetch upcoming track', err));
+    }
+
+    // Also prefetch the immediate previous candidate (top of history) to make Prev feel instant.
+    try {
+      const history = Array.isArray(state.playbackHistory) ? state.playbackHistory : [];
+      const prevCandidate = history.length > 0 ? history[history.length - 1] : null;
+      if (prevCandidate && prevCandidate.url) {
+        audioCache.prefetchAudio(prevCandidate.url, false).catch((err) => logPlayback('debug', 'Failed to prefetch previous candidate', err));
+      }
+    } catch {
+      // ignore
+    }
   } catch (e) {
     // Never let prefetch break playback
   }
@@ -1266,6 +1634,24 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
       if (window.Loaders) window.Loaders.hideLoader();
       
       audio.play().then(async () => {
+        // Mark this track as consumed in the persistent shuffle deck (only once playback actually starts).
+        try {
+          if (state && state.shuffleFavorites) {
+            const info = getActiveDeckContextInfo();
+            if (info && Array.isArray(info.items) && info.items.length > 0 && state.currentTrack) {
+              const playedKey = getItemKeyForDeck(info.contextType, info.contextType === 'search'
+                ? { identifier: state.currentTrack.albumId || state.currentTrack.id }
+                : { url: state.currentTrack.url });
+
+              const { contextKey } = ensureShuffleDeck(info.contextType, info.items, {
+                currentKey: playedKey,
+                contextId: info.contextId
+              });
+              shuffleDeckConsumeKey(contextKey, playedKey);
+            }
+          }
+        } catch {}
+
         if (totalTracks > 1) {
           safeShowStatus('Now playing album track with numbers', 'info');
         } else {
@@ -1287,7 +1673,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
           }
         }
 
-        // Preload only the next track to avoid excessive downloads
+        // Preload next 2 tracks (FIFO) + previous candidate (history)
         preloadNextTrack();
 
         resolve(true);
@@ -1549,9 +1935,29 @@ function loadPlaybackQueue(context, items, startIndex = 0) {
 
   if (useFullList) {
     if (state.shuffleFavorites) {
-      // Modo aleatorio: reproducir toda la lista mezclada
-      const shuffledAll = [...validItems].sort(() => Math.random() - 0.5);
-      state.playbackQueue = shuffledAll.slice();
+      // Modo aleatorio: reproducir la lista en orden de "deck" persistente (sin repetición hasta agotar).
+      const currentKey = (() => {
+        if (context === 'search') {
+          const id = state && state.currentTrack ? (state.currentTrack.albumId || state.currentTrack.id) : null;
+          return id ? String(id) : '';
+        }
+        const url = state && state.currentTrack ? state.currentTrack.url : '';
+        return url ? canonicalizeUrl(url) : '';
+      })();
+
+      const preferredNextKey = (!currentKey && Number.isFinite(startIndex) && startIndex > 0 && validItems[startIndex])
+        ? getItemKeyForDeck(context, validItems[startIndex])
+        : '';
+      const contextId = context === 'album' && playbackManager && typeof playbackManager.getCurrentAlbumId === 'function'
+        ? playbackManager.getCurrentAlbumId()
+        : null;
+
+      const { remainingItems } = shuffleDeckGetRemainingItems(context, validItems, {
+        currentKey,
+        preferredNextKey,
+        contextId
+      });
+      state.playbackQueue = remainingItems.slice();
     } else {
       // Modo secuencial: reproducir toda la lista desde startIndex
       for (let i = 0; i < validItems.length; i++) {
@@ -1568,15 +1974,19 @@ function loadPlaybackQueue(context, items, startIndex = 0) {
     }
   }
 
-  // Preload only the first item in queue to minimize parallel fetches
+  // Prefetch first (high priority) and second (low priority) items in the FIFO queue
   if (state.networkOnline && state.playbackQueue.length > 0) {
     if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.prefetchAudio === 'function') {
-      audioCache.prefetchAudio(state.playbackQueue[0].url, true).catch((err) => logPlayback('debug', 'Failed to prefetch first queue item', err));
+      const first = state.playbackQueue[0];
+      const second = state.playbackQueue.length > 1 ? state.playbackQueue[1] : null;
+      if (first && first.url) {
+        audioCache.prefetchAudio(first.url, true).catch((err) => logPlayback('debug', 'Failed to prefetch first queue item', err));
+      }
+      if (second && second.url) {
+        audioCache.prefetchAudio(second.url, false).catch((err) => logPlayback('debug', 'Failed to prefetch second queue item', err));
+      }
     }
   }
-
-  // Prefetch just the immediate next track in context
-  intelligentPrefetchNextTracks(validItems, startIndex);
 }
 
 function regenerateQueueFromCurrentContext(currentTrackUrl) {
@@ -1595,7 +2005,7 @@ function regenerateQueueFromCurrentContext(currentTrackUrl) {
     const playlistCtx = playbackManager.contextData.searchPlaylist;
     items = playlistCtx && Array.isArray(playlistCtx.items) ? playlistCtx.items : [];
   } else {
-    // Search/genre contexts don't have direct audio URLs for FIFO.
+    // Search contexts don't have direct audio URLs for FIFO.
     return;
   }
 
@@ -1792,7 +2202,7 @@ function setupPreloadedPlayback(tracks, startIndex = 0) {
   // Crear una lista de reproducción precargada
   const preloadedPlaylist = tracks.map(track => ({
     ...track,
-    id: track.id || `preloaded-${Math.random().toString(36).substr(2, 9)}`
+    id: track.id || `preloaded-${fnv1aHash(track && track.url ? canonicalizeUrl(track.url) : JSON.stringify(track || {})).slice(0, 12)}`
   }));
 
   // Configurar el contexto de reproducción precargado
@@ -1847,6 +2257,22 @@ async function playNextInContext(maxRetries = 3) {
         }
       }
       // If album context is empty/missing, fall through to other strategies.
+    }
+
+    // If user previously went backwards (Prev), honor the forward stack before drawing from FIFO/deck.
+    if (Array.isArray(state.playbackForward) && state.playbackForward.length > 0) {
+      const forwardTrack = state.playbackForward.pop();
+      if (forwardTrack && forwardTrack.url) {
+        if (state.currentTrack && state.currentTrack.url && state.currentTrack.url !== forwardTrack.url) {
+          state.playbackHistory.push(state.currentTrack);
+        }
+        try {
+          await playAudioTrackOptimized(forwardTrack, forwardTrack.id, forwardTrack.trackIndex, forwardTrack.totalTracks);
+          return;
+        } catch {
+          // If forward item fails, keep going with normal selection.
+        }
+      }
     }
 
     // Always play from FIFO queue if tracks available (with bounded duplicate-skip)
@@ -1928,7 +2354,7 @@ async function playNextInContext(maxRetries = 3) {
     const nextItem = playbackManager.getNextTrack();
 
     try {
-      if (context === 'genre' || context === 'search') {
+      if (context === 'search') {
         const files = await fetchOptimizedPlayableFiles(nextItem.identifier);
         if (files && files.length > 0) {
           // If next search item is an album, switch into album context so the album itself loops.
@@ -2002,10 +2428,9 @@ async function playPreviousInContext() {
   if (state.playbackHistory.length > 0) {
     const previousTrack = state.playbackHistory.pop();
 
-    // Poner la pista actual de vuelta en la cola FIFO
-    if (state.currentTrack) {
-      state.playbackQueue.unshift(state.currentTrack);
-    }
+    // Support "Next after Prev" without corrupting the FIFO (especially in shuffle mode).
+    if (!Array.isArray(state.playbackForward)) state.playbackForward = [];
+    if (state.currentTrack) state.playbackForward.push(state.currentTrack);
 
     try {
       await playAudioTrackOptimized(previousTrack, previousTrack.id, previousTrack.trackIndex, previousTrack.totalTracks);
@@ -2019,11 +2444,37 @@ async function playPreviousInContext() {
   if (!context || !playbackManager.contextData[context].items.length) return;
 
   let ctx = playbackManager.contextData[context];
-  ctx.currentIndex = (ctx.currentIndex - 1 + ctx.items.length) % ctx.items.length;
+
+  // If shuffle is enabled, try to go back following the deck order.
+  if (state.shuffleFavorites) {
+    try {
+      const currentKey = context === 'search'
+        ? (state && state.currentTrack ? String(state.currentTrack.albumId || state.currentTrack.id || '') : '')
+        : (state && state.currentTrack && state.currentTrack.url ? canonicalizeUrl(state.currentTrack.url) : '');
+      const contextId = context === 'album' && typeof playbackManager.getCurrentAlbumId === 'function' ? playbackManager.getCurrentAlbumId() : null;
+
+      const { deck } = ensureShuffleDeck(context, ctx.items, { currentKey, contextId });
+      const order = Array.isArray(deck.order) ? deck.order : [];
+      const pos = currentKey ? order.indexOf(currentKey) : -1;
+      if (order.length > 0 && pos >= 0) {
+        const prevKey = order[(pos - 1 + order.length) % order.length];
+        const prevIdx = ctx.items.findIndex(it => getItemKeyForDeck(context, it) === prevKey);
+        if (prevIdx >= 0) ctx.currentIndex = prevIdx;
+      }
+    } catch {
+      // fallback to sequential index
+    }
+  } else {
+    ctx.currentIndex = (ctx.currentIndex - 1 + ctx.items.length) % ctx.items.length;
+  }
+
   const prevItem = ctx.items[ctx.currentIndex];
 
+  if (!Array.isArray(state.playbackForward)) state.playbackForward = [];
+  if (state.currentTrack) state.playbackForward.push(state.currentTrack);
+
   try {
-    if (context === 'genre' || context === 'search') {
+    if (context === 'search') {
       const files = await fetchOptimizedPlayableFiles(prevItem.identifier);
       if (files && files.length > 0) {
         const track = files[0];
@@ -2363,39 +2814,64 @@ function toggleShuffleFavorites() {
 
   const context = playbackManager.getCurrentContext() || (state.favorites && state.favorites.length > 0 ? 'favorites' : 'search');
 
+  // Any time we flip shuffle, clear the forward stack to avoid surprising jumps.
+  state.playbackForward = [];
+
+  const resolveContextItems = () => {
+    if (context === 'favorites') return Array.isArray(state.favorites) ? state.favorites : [];
+    if (context === 'album') {
+      const albumCtx = playbackManager && playbackManager.contextData ? playbackManager.contextData.album : null;
+      return albumCtx && Array.isArray(albumCtx.items) ? albumCtx.items : [];
+    }
+    if (context === 'search') {
+      const searchCtx = playbackManager && playbackManager.contextData ? playbackManager.contextData.search : null;
+      return (searchCtx && Array.isArray(searchCtx.items) ? searchCtx.items : (Array.isArray(state.searchResults) ? state.searchResults : []));
+    }
+    if (context === 'searchPlaylist') {
+      const playlistCtx = playbackManager && playbackManager.contextData ? playbackManager.contextData.searchPlaylist : null;
+      return playlistCtx && Array.isArray(playlistCtx.items) ? playlistCtx.items : [];
+    }
+    return [];
+  };
+
+  const items = resolveContextItems();
+  const contextId = context === 'album' && typeof playbackManager.getCurrentAlbumId === 'function' ? playbackManager.getCurrentAlbumId() : null;
+  const currentKey = (() => {
+    if (!state || !state.currentTrack) return '';
+    if (context === 'search') return String(state.currentTrack.albumId || state.currentTrack.id || '');
+    return state.currentTrack.url ? canonicalizeUrl(state.currentTrack.url) : '';
+  })();
+
   if (state.shuffleFavorites) {
     // Activar modo aleatorio
-    if (context === 'favorites' && state.favorites.length > 0) {
-      showStatus('Shuffling favorites', 'info', 2000);
-      loadPlaybackQueue('favorites', state.favorites, 0);
-      if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.loadFavoritesQueue === 'function') {
-        audioCache.loadFavoritesQueue(state.favorites, true);
+    showStatus('Shuffle mode is now on', 'info', 2000);
+
+    // Anchor the persisted deck to the currently playing item (so Next is stable and has no repeats).
+    try {
+      if (items && items.length > 0) {
+        ensureShuffleDeck(context, items, { currentKey, contextId, anchorCurrent: true });
       }
-    } else if (context === 'search' && state.searchResults && state.searchResults.length > 0) {
-      showStatus('Shuffling search results', 'info', 2000);
-      loadPlaybackQueue('search', state.searchResults, 0);
-      if (state.networkOnline) {
-        if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.preloadTracks === 'function') {
-          audioCache.preloadTracks(state.playbackQueue, true);
-        }
+    } catch {}
+
+    // Rebuild FIFO only for URL-based contexts.
+    if ((context === 'favorites' || context === 'album' || context === 'searchPlaylist') && items.length > 0) {
+      loadPlaybackQueue(context, items, 0);
+      if (context === 'favorites' && typeof audioCache !== 'undefined' && audioCache && typeof audioCache.loadFavoritesQueue === 'function') {
+        audioCache.loadFavoritesQueue(items, true);
       }
-    } else {
-      showStatus('Shuffle mode is now on', 'info', 2000);
     }
   } else {
     // Desactivar modo aleatorio: volver a modo secuencial
-    if (context === 'favorites' && state.favorites.length > 0) {
-      showStatus('Shuffle is off. Sequential playback', 'info', 2000);
-      const ctx = playbackManager.contextData['favorites'] || { currentIndex: 0, items: state.favorites };
-      const currentIndex = typeof ctx.currentIndex === 'number' ? ctx.currentIndex : 0;
-      loadPlaybackQueue('favorites', ctx.items.length ? ctx.items : state.favorites, currentIndex + 1);
-    } else if (context === 'search' && state.searchResults && state.searchResults.length > 0) {
-      showStatus('Playing search results in order', 'info', 2000);
-      const ctx = playbackManager.contextData['search'] || { currentIndex: 0, items: state.searchResults };
-      const currentIndex = typeof ctx.currentIndex === 'number' ? ctx.currentIndex : 0;
-      loadPlaybackQueue('search', ctx.items.length ? ctx.items : state.searchResults, currentIndex + 1);
-    } else {
-      showStatus('Sequential mode. Shuffle is off', 'info', 2000);
+    showStatus('Sequential mode. Shuffle is off', 'info', 2000);
+
+    if ((context === 'favorites' || context === 'album' || context === 'searchPlaylist') && items.length > 0) {
+      // Rebuild FIFO starting after the current track (avoid immediate duplicate).
+      let startIndex = 0;
+      if (currentKey) {
+        const idx = items.findIndex(it => getItemKeyForDeck(context, it) === currentKey);
+        if (idx >= 0) startIndex = (idx + 1) % items.length;
+      }
+      loadPlaybackQueue(context, items, startIndex);
     }
   }
 

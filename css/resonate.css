@@ -1154,20 +1154,6 @@ button:active:not(:disabled) {
   border-radius: 8px;
 }
 
-/* ===== GENRES SECTION ===== */
-.genre-section {
-  margin: 6px 0;
-  flex-shrink: 0;
-  width: 100%;
-  padding: 0 5px;
-}
-
-.genre-label {
-  color: var(--muted);
-  font-size: 13px;
-  margin-bottom: 5px;
-}
-
 select {
   width: 100%;
   height: 38px;
@@ -1182,48 +1168,6 @@ select {
 
 select:focus {
   outline: 2px solid var(--accent);
-}
-
-.genre-buttons-section {
-  margin: 15px 0 20px 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: center;
-  max-width: 100%;
-  padding: 0 5px;
-}
-
-.genre-btn {
-  flex: 0 0 auto;
-  height: 44px;
-  background: var(--btn);
-  color: var(--muted);
-  border: 1px solid rgba(136, 136, 136, 0.2);
-  border-radius: 5px;
-  font-size: 13px;
-  cursor: pointer;
-  transition: var(--transition-default);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 500;
-  white-space: nowrap;
-  padding: 0 12px;
-}
-
-.genre-btn:hover {
-  background: rgba(var(--primary-rgb), 0.08);
-  border-color: var(--primary);
-  transform: translateY(-0.5px);
-}
-
-.genre-btn:active,
-.genre-btn.active {
-  transform: scale(0.96);
-  background: var(--accent);
-  color: var(--bg);
-  border-color: var(--accent);
 }
 
 /* ===== FAVORITES SECTION ===== */
@@ -2302,63 +2246,6 @@ body.offline-mode .share-track-button {
 
 .start-button:active {
   transform: scale(0.97);
-}
-
-/* ===== NEW SECTIONS ===== */
-.genres-section {
-  width: 100%;
-  padding: 0 15px;
-}
-
-.genres-section h3 {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--accent);
-  /*margin-bottom: 16px;*/
-  text-align: center;
-}
-
-.genre-buttons-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
-  /*margin-top: 16px;*/
-}
-
-.genre-btn {
-  height: 44px;
-  font-size: 14px;
-  border-radius: 8px;
-  font-weight: 500;
-  background: var(--btn);
-  color: var(--muted);
-  border: 1px solid rgba(136, 136, 136, 0.2);
-  cursor: pointer;
-  transition: var(--transition-default);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.genre-btn:hover {
-  background: rgba(var(--primary-rgb), 0.08);
-  border-color: var(--primary);
-  transform: translateY(-0.5px);
-}
-
-.genre-btn:active {
-  transform: scale(0.96);
-  background: var(--accent);
-  color: var(--bg);
-}
-
-.genre-btn.active {
-  background: var(--accent);
-  color: var(--bg);
-  border-color: var(--accent);
 }
 
 /* ===== FAVORITES TAB ===== */
