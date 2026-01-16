@@ -1216,6 +1216,13 @@ function displaySearchResults(searchData, clearExisting = true) {
 
   // Habilitar controles si hay resultados de búsqueda
   enableControlsForSearchResults();
+
+  // Background prefetch: keep 2 pages ahead for infinite scroll
+  try {
+    if (typeof window.prefetchNextSearchPages === 'function') {
+      window.prefetchNextSearchPages(state.currentSearchQuery, state.currentSearchPage, state.currentSearchHasMore, 2);
+    }
+  } catch {}
 }
 
 function setupLazyLoadingObserver() {

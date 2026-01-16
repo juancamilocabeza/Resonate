@@ -22,6 +22,19 @@ const searchControllers = {
   activeMetadata: new Map()
 };
 
+// In-flight de-duplication + background prefetch controllers
+const searchInFlight = {
+  pages: new Map(),
+  metadata: new Map(),
+  pagePrefetchControllers: new Map(),
+  prefetchQuery: '',
+  prefetchGeneration: 0
+};
+
+function getSearchCacheKey(query, page) {
+  return `search:${query}:${page}`;
+}
+
 function getSearchStateRef() {
   return window.state || (typeof state !== 'undefined' ? state : null);
 }
@@ -84,12 +97,17 @@ function setSearchErrorMessage(message) {
   }
 }
 
-async function performOptimizedSearch(query, page = 0) {
+async function performOptimizedSearch(query, page = 0, options = {}) {
   const normalizedQuery = (query || '').trim();
   if (!normalizedQuery) {
     setSearchActiveUI(false);
     return { results: [], hasMore: false };
   }
+
+  const abortPrevious = options.abortPrevious !== false;
+  const showLoader = options.showLoader !== false;
+  const activateUI = options.activateUI !== false;
+
   // Prevent search when offline
   const st = getSearchStateRef();
   if (!(st && st.networkOnline)) {
@@ -98,189 +116,213 @@ async function performOptimizedSearch(query, page = 0) {
     setSearchActiveUI(false);
     return { results: [], hasMore: false };
   }
-  const cacheKey = `search:${query}:${page}`;
+  const cacheKey = getSearchCacheKey(query, page);
   const cached = window.enhancedCache && window.enhancedCache.get('search', cacheKey);
   if (cached) {
     return cached;
   }
-  
-  // Abort previous search if exists
-  if (searchControllers.currentSearch) {
-    searchControllers.currentSearch.abort();
-    logSearch('Previous search aborted', 'debug', 'NETWORK');
+
+  const inFlight = searchInFlight.pages.get(cacheKey);
+  if (inFlight) {
+    return inFlight;
   }
-  
-  // Create new AbortController for this search
-  searchControllers.currentSearch = new AbortController();
-  const signal = searchControllers.currentSearch.signal;
-  
-  setSearchActiveUI(true);
-  if (window.Loaders) {
-    window.Loaders.showLoader({ type: 'spinner', showProgress: false });
-  }
-  try {
-    // Optimized query compatible with Archive.org API
-    // Multi-phase search strategy for better relevance
-    const baseQuery = `(${query}) AND mediatype:audio`;
-    // Phase strategy: search title AND creator first, then general
-    // Improves relevance without using incompatible syntax
-    const searchPhases = [
-      `title:(${query}) AND creator:(${query})`, // Exact match in both
-      `title:(${query})`, // Then only in title
-      `creator:(${query})`, // Then only in creator
-      baseQuery // Finally general search
-    ];
-    // Build OR query to cover all phases
-    const optimizedQuery = searchPhases.join(' OR ');
-    const encodedQuery = encodeURIComponent(optimizedQuery);
-    const resultsPerPage = getSearchConfigNumber('resultsPerPage', SEARCH_DEFAULTS.resultsPerPage);
-    const timeout = getSearchConfigNumber('timeout', SEARCH_DEFAULTS.timeout);
-    const url = `https://archive.org/advancedsearch.php?q=${encodedQuery}&fl[]=identifier,title,creator,description&rows=${resultsPerPage}&page=${page + 1}&output=json&sort[]=downloads+desc`;
-    const fetchFn = getSearchFetchFn();
-    const response = await fetchFn(url, {
-      signal,
-      timeout,
-      headers: {
-        'Accept': 'application/json'
+
+  const searchPromise = (async () => {
+    let ownsController = false;
+    let signal = options.signal;
+
+    // Abort previous search if exists (foreground only)
+    if (!signal) {
+      if (abortPrevious && searchControllers.currentSearch) {
+        searchControllers.currentSearch.abort();
+        logSearch('Previous search aborted', 'debug', 'NETWORK');
       }
-    });
-    if (!(response && response.ok)) throw new Error('Network error');
-    const data = await response.json();
-    const results = (data.response && data.response.docs) ? data.response.docs : [];
-    // Post-process results for improved relevance in client
-    const processedResults = results.map(item => ({
-      identifier: item.identifier,
-      title: item.title || 'Untitled',
-      creator: item.creator || 'Unknown',
-      description: item.description || '', // Ensure description is included
-      // Heuristic: mark explicit "track list" items to be rendered as singles
-      isTrackList: (() => {
-        const t = normalizeString(item.title || '');
-        const d = normalizeString(item.description || '');
-        const cues = [
-          'track list', 'tracklist', 'lista de temas', 'lista de canciones', 'track-list'
-        ];
-        return cues.some(c => t.includes(c) || d.includes(c));
-      })(),
-      isAlbum: null,
-      trackCount: null,
-      relevanceScore: calculateRelevanceScore(item, query)
-    }));
-    // Sort by calculated relevance score (if many results)
-    if (processedResults.length > 1) {
-      processedResults.sort((a, b) => b.relevanceScore - a.relevanceScore);
+
+      // Create new AbortController for this search
+      searchControllers.currentSearch = new AbortController();
+      signal = searchControllers.currentSearch.signal;
+      ownsController = true;
     }
-    // Filter out non-playable items by checking optimized playable files
-    // Limit concurrent metadata fetches to avoid excessive parallel downloads
-    const enrichedResults = [];
-    const batchSize = SEARCH_LIMITS.metadataBatchSize; // Process metadata in small batches
-    
-    for (let i = 0; i < processedResults.length; i += batchSize) {
-      const batch = processedResults.slice(i, i + batchSize);
-      const batchPromises = batch.map(async (item) => {
-        try {
-          const files = await fetchOptimizedPlayableFiles(item.identifier);
-          const count = Array.isArray(files) ? files.length : 0;
-          if (count > 0) {
-            return {
-              ...item,
-              // Respect explicit track-list flag: render as single even if multiple files
-              isAlbum: item.isTrackList ? false : (count > 1),
-              trackCount: count
-            };
-          }
-          return null;
-        } catch (e) {
-          // On error fetching metadata, skip the item to avoid presenting non-playables
-          return null;
-        }
-      });
-      const batchResults = (await Promise.all(batchPromises)).filter(Boolean);
-      enrichedResults.push(...batchResults);
+
+    if (activateUI) {
+      setSearchActiveUI(true);
     }
-    // Apply priority ordering: Single > Album; Exact contains > Typo-similar > others
-    prioritizeResults(enrichedResults, query);
-    const hasMore = results.length === resultsPerPage;
-    const searchResult = {
-      results: enrichedResults,
-      hasMore,
-      total: (data.response && data.response.numFound) ? data.response.numFound : 0
-    };
-    if (window.enhancedCache) window.enhancedCache.set('search', cacheKey, searchResult);
-    return searchResult;
-  } catch (error) {
-    logSearch(error, 'error', 'NETWORK');
-    // Fallback: try simple query if optimized fails
+    if (showLoader && window.Loaders) {
+      window.Loaders.showLoader({ type: 'spinner', showProgress: false });
+    }
     try {
-      const simpleQuery = encodeURIComponent(`(${query}) AND mediatype:audio`);
+      // Optimized query compatible with Archive.org API
+      // Multi-phase search strategy for better relevance
+      const baseQuery = `(${query}) AND mediatype:audio`;
+      // Phase strategy: search title AND creator first, then general
+      // Improves relevance without using incompatible syntax
+      const searchPhases = [
+        `title:(${query}) AND creator:(${query})`, // Exact match in both
+        `title:(${query})`, // Then only in title
+        `creator:(${query})`, // Then only in creator
+        baseQuery // Finally general search
+      ];
+      // Build OR query to cover all phases
+      const optimizedQuery = searchPhases.join(' OR ');
+      const encodedQuery = encodeURIComponent(optimizedQuery);
       const resultsPerPage = getSearchConfigNumber('resultsPerPage', SEARCH_DEFAULTS.resultsPerPage);
       const timeout = getSearchConfigNumber('timeout', SEARCH_DEFAULTS.timeout);
-      const fallbackUrl = `https://archive.org/advancedsearch.php?q=${simpleQuery}&fl[]=identifier,title,creator&rows=${resultsPerPage}&page=${page + 1}&output=json&sort[]=downloads+desc`;
-      const fetchFn2 = getSearchFetchFn();
-      const fallbackResponse = await fetchFn2(fallbackUrl, {
+      const url = `https://archive.org/advancedsearch.php?q=${encodedQuery}&fl[]=identifier,title,creator,description&rows=${resultsPerPage}&page=${page + 1}&output=json&sort[]=downloads+desc`;
+      const fetchFn = getSearchFetchFn();
+      const response = await fetchFn(url, {
         signal,
-        timeout
-      });
-      if (fallbackResponse && fallbackResponse.ok) {
-        const fallbackData = await fallbackResponse.json();
-        const fallbackResults = (fallbackData.response && fallbackData.response.docs) ? fallbackData.response.docs : [];
-        const processedFallbackResults = fallbackResults.map(item => ({
-          identifier: item.identifier,
-          title: item.title || 'Untitled',
-          creator: item.creator || 'Unknown',
-          description: '',
-          isAlbum: null,
-          trackCount: null,
-          relevanceScore: 0.5 // Neutral score for fallback results
-        }));
-        // Filter out non-playable items in fallback path too
-        const enrichedFallback = [];
-        const batchSize = SEARCH_LIMITS.metadataBatchSize; // Process metadata in small batches
-        
-        for (let i = 0; i < processedFallbackResults.length; i += batchSize) {
-          const batch = processedFallbackResults.slice(i, i + batchSize);
-          const batchPromises = batch.map(async (item) => {
-            try {
-              const files = await fetchOptimizedPlayableFiles(item.identifier);
-              const count = Array.isArray(files) ? files.length : 0;
-              if (count > 0) {
-                return {
-                  ...item,
-                  isAlbum: count > 1,
-                  trackCount: count
-                };
-              }
-              return null;
-            } catch (e) {
-              return null;
-            }
-          });
-          const batchResults = (await Promise.all(batchPromises)).filter(Boolean);
-          enrichedFallback.push(...batchResults);
+        timeout,
+        headers: {
+          'Accept': 'application/json'
         }
-        // Apply priority ordering to fallback results as well
-        prioritizeResults(enrichedFallback, query);
-        const searchResult = {
-          results: enrichedFallback,
-          hasMore: fallbackResults.length === resultsPerPage,
-          total: (fallbackData.response && fallbackData.response.numFound) ? fallbackData.response.numFound : 0
-        };
-        if (window.enhancedCache) window.enhancedCache.set('search', cacheKey, searchResult);
-        return searchResult;
+      });
+      if (!(response && response.ok)) throw new Error('Network error');
+      const data = await response.json();
+      const results = (data.response && data.response.docs) ? data.response.docs : [];
+      // Post-process results for improved relevance in client
+      const processedResults = results.map(item => ({
+        identifier: item.identifier,
+        title: item.title || 'Untitled',
+        creator: item.creator || 'Unknown',
+        description: item.description || '', // Ensure description is included
+        // Heuristic: mark explicit "track list" items to be rendered as singles
+        isTrackList: (() => {
+          const t = normalizeString(item.title || '');
+          const d = normalizeString(item.description || '');
+          const cues = [
+            'track list', 'tracklist', 'lista de temas', 'lista de canciones', 'track-list'
+          ];
+          return cues.some(c => t.includes(c) || d.includes(c));
+        })(),
+        isAlbum: null,
+        trackCount: null,
+        relevanceScore: calculateRelevanceScore(item, query)
+      }));
+      // Sort by calculated relevance score (if many results)
+      if (processedResults.length > 1) {
+        processedResults.sort((a, b) => b.relevanceScore - a.relevanceScore);
       }
-    } catch (fallbackError) {
-      logSearch(fallbackError, 'error', 'NETWORK');
+      // Filter out non-playable items by checking optimized playable files
+      // Limit concurrent metadata fetches to avoid excessive parallel downloads
+      const enrichedResults = [];
+      const batchSize = SEARCH_LIMITS.metadataBatchSize; // Process metadata in small batches
+
+      for (let i = 0; i < processedResults.length; i += batchSize) {
+        const batch = processedResults.slice(i, i + batchSize);
+        const batchPromises = batch.map(async (item) => {
+          try {
+            const files = await fetchOptimizedPlayableFiles(item.identifier);
+            const count = Array.isArray(files) ? files.length : 0;
+            if (count > 0) {
+              return {
+                ...item,
+                // Respect explicit track-list flag: render as single even if multiple files
+                isAlbum: item.isTrackList ? false : (count > 1),
+                trackCount: count
+              };
+            }
+            return null;
+          } catch (e) {
+            // On error fetching metadata, skip the item to avoid presenting non-playables
+            return null;
+          }
+        });
+        const batchResults = (await Promise.all(batchPromises)).filter(Boolean);
+        enrichedResults.push(...batchResults);
+      }
+      // Apply priority ordering: Single > Album; Exact contains > Typo-similar > others
+      prioritizeResults(enrichedResults, query);
+      const hasMore = results.length === resultsPerPage;
+      const searchResult = {
+        results: enrichedResults,
+        hasMore,
+        total: (data.response && data.response.numFound) ? data.response.numFound : 0
+      };
+      if (window.enhancedCache) window.enhancedCache.set('search', cacheKey, searchResult);
+      return searchResult;
+    } catch (error) {
+      logSearch(error, 'error', 'NETWORK');
+      // Fallback: try simple query if optimized fails
+      try {
+        const simpleQuery = encodeURIComponent(`(${query}) AND mediatype:audio`);
+        const resultsPerPage = getSearchConfigNumber('resultsPerPage', SEARCH_DEFAULTS.resultsPerPage);
+        const timeout = getSearchConfigNumber('timeout', SEARCH_DEFAULTS.timeout);
+        const fallbackUrl = `https://archive.org/advancedsearch.php?q=${simpleQuery}&fl[]=identifier,title,creator&rows=${resultsPerPage}&page=${page + 1}&output=json&sort[]=downloads+desc`;
+        const fetchFn2 = getSearchFetchFn();
+        const fallbackResponse = await fetchFn2(fallbackUrl, {
+          signal,
+          timeout
+        });
+        if (fallbackResponse && fallbackResponse.ok) {
+          const fallbackData = await fallbackResponse.json();
+          const fallbackResults = (fallbackData.response && fallbackData.response.docs) ? fallbackData.response.docs : [];
+          const processedFallbackResults = fallbackResults.map(item => ({
+            identifier: item.identifier,
+            title: item.title || 'Untitled',
+            creator: item.creator || 'Unknown',
+            description: '',
+            isAlbum: null,
+            trackCount: null,
+            relevanceScore: 0.5 // Neutral score for fallback results
+          }));
+          // Filter out non-playable items in fallback path too
+          const enrichedFallback = [];
+          const batchSize = SEARCH_LIMITS.metadataBatchSize; // Process metadata in small batches
+
+          for (let i = 0; i < processedFallbackResults.length; i += batchSize) {
+            const batch = processedFallbackResults.slice(i, i + batchSize);
+            const batchPromises = batch.map(async (item) => {
+              try {
+                const files = await fetchOptimizedPlayableFiles(item.identifier);
+                const count = Array.isArray(files) ? files.length : 0;
+                if (count > 0) {
+                  return {
+                    ...item,
+                    isAlbum: count > 1,
+                    trackCount: count
+                  };
+                }
+                return null;
+              } catch (e) {
+                return null;
+              }
+            });
+            const batchResults = (await Promise.all(batchPromises)).filter(Boolean);
+            enrichedFallback.push(...batchResults);
+          }
+          // Apply priority ordering to fallback results as well
+          prioritizeResults(enrichedFallback, query);
+          const searchResult = {
+            results: enrichedFallback,
+            hasMore: fallbackResults.length === resultsPerPage,
+            total: (fallbackData.response && fallbackData.response.numFound) ? fallbackData.response.numFound : 0
+          };
+          if (window.enhancedCache) window.enhancedCache.set('search', cacheKey, searchResult);
+          return searchResult;
+        }
+      } catch (fallbackError) {
+        logSearch(fallbackError, 'error', 'NETWORK');
+      }
+      if (activateUI) {
+        setSearchErrorMessage('Error in search. Try other terms.');
+      }
+      return { results: [], hasMore: false };
+    } finally {
+      if (showLoader && window.Loaders) {
+        window.Loaders.hideLoader();
+      }
+      // Clean up controller after search completes or is aborted (foreground-only)
+      if (ownsController && searchControllers.currentSearch) {
+        searchControllers.currentSearch = null;
+      }
     }
-    setSearchErrorMessage('Error in search. Try other terms.');
-    return { results: [], hasMore: false };
+  })();
+
+  searchInFlight.pages.set(cacheKey, searchPromise);
+  try {
+    return await searchPromise;
   } finally {
-    if (window.Loaders) {
-      window.Loaders.hideLoader();
-    }
-    // Clean up controller after search completes or is aborted
-    if (searchControllers.currentSearch) {
-      searchControllers.currentSearch = null;
-    }
+    searchInFlight.pages.delete(cacheKey);
   }
 }
 
@@ -423,28 +465,41 @@ async function fetchOptimizedPlayableFiles(identifier) {
   if (cached) {
     return cached;
   }
-  
-  // Create AbortController for this metadata fetch
-  const controller = new AbortController();
-  searchControllers.activeMetadata.set(identifier, controller);
-  
-  const url = `https://archive.org/metadata/${identifier}`;
-  try {
-    // Force longer timeout for metadata fetching
-    const fetchFn = getSearchFetchFn();
-    const metadataTimeout = getSearchConfigNumber('metadataTimeout', SEARCH_DEFAULTS.metadataTimeout);
-    const response = await fetchFn(url, { 
-      signal: controller.signal,
-      timeout: metadataTimeout 
-    });
-    if (!(response && response.ok)) throw new Error('Error fetching metadata');
-    const metadata = await response.json();
-    if (!(metadata && metadata.files)) {
-      throw new Error('Invalid metadata');
+
+  const inFlight = searchInFlight.metadata.get(identifier);
+  if (inFlight) {
+    return inFlight;
+  }
+
+  const metadataPromise = (async () => {
+    // If there's already a controller for this identifier, abort it and replace.
+    const existingController = searchControllers.activeMetadata.get(identifier);
+    if (existingController) {
+      try { existingController.abort(); } catch {}
+      searchControllers.activeMetadata.delete(identifier);
     }
-    let audioFiles = metadata.files.filter(file =>
-      isPlayableAudioFile(file)
-    );
+  
+    // Create AbortController for this metadata fetch
+    const controller = new AbortController();
+    searchControllers.activeMetadata.set(identifier, controller);
+
+    const url = `https://archive.org/metadata/${identifier}`;
+    try {
+      // Force longer timeout for metadata fetching
+      const fetchFn = getSearchFetchFn();
+      const metadataTimeout = getSearchConfigNumber('metadataTimeout', SEARCH_DEFAULTS.metadataTimeout);
+      const response = await fetchFn(url, { 
+        signal: controller.signal,
+        timeout: metadataTimeout 
+      });
+      if (!(response && response.ok)) throw new Error('Error fetching metadata');
+      const metadata = await response.json();
+      if (!(metadata && metadata.files)) {
+        throw new Error('Invalid metadata');
+      }
+      let audioFiles = metadata.files.filter(file =>
+        isPlayableAudioFile(file)
+      );
     // Sort remaining files by format priority with network-aware sizing
     const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
     const effectiveType = connection && connection.effectiveType ? connection.effectiveType : '';
@@ -479,18 +534,26 @@ async function fetchOptimizedPlayableFiles(identifier) {
       // Finally sort by size
       return aSize - bSize;
     });
-    if (audioFiles.length === 0) {
-      return [];
+      if (audioFiles.length === 0) {
+        return [];
+      }
+      const playableFiles = createPlayableFiles(audioFiles, identifier, metadata);
+      if (window.enhancedCache) window.enhancedCache.set('metadata', identifier, playableFiles);
+      return playableFiles;
+    } catch (error) {
+      logSearch(error, 'error', 'NETWORK');
+      throw error;
+    } finally {
+      // Clean up controller after metadata fetch completes or is aborted
+      searchControllers.activeMetadata.delete(identifier);
     }
-    const playableFiles = createPlayableFiles(audioFiles, identifier, metadata);
-    if (window.enhancedCache) window.enhancedCache.set('metadata', identifier, playableFiles);
-    return playableFiles;
-  } catch (error) {
-    logSearch(error, 'error', 'NETWORK');
-    throw error;
+  })();
+
+  searchInFlight.metadata.set(identifier, metadataPromise);
+  try {
+    return await metadataPromise;
   } finally {
-    // Clean up controller after metadata fetch completes or is aborted
-    searchControllers.activeMetadata.delete(identifier);
+    searchInFlight.metadata.delete(identifier);
   }
 }
 
@@ -660,6 +723,16 @@ function abortAllSearchOperations() {
       searchControllers.activeMetadata.clear();
       logSearch(`${searchControllers.activeMetadata.size} metadata fetches aborted`, 'debug', 'NETWORK');
     }
+
+    // Abort all background page prefetch fetches
+    if (searchInFlight.pagePrefetchControllers.size > 0) {
+      searchInFlight.pagePrefetchControllers.forEach((controller) => {
+        try { controller.abort(); } catch {}
+      });
+      searchInFlight.pagePrefetchControllers.clear();
+    }
+    searchInFlight.pages.clear();
+    searchInFlight.metadata.clear();
     
     // Hide loader
     if (window.Loaders) {
@@ -1048,6 +1121,79 @@ async function prefetchNextSearchResults(allResults, currentIndex) {
   }
 }
 
+function prefetchNextSearchPages(query, currentPage, hasMore, count = 2) {
+  const normalizedQuery = (query || '').trim();
+  if (!normalizedQuery) return;
+
+  const st = getSearchStateRef();
+  const online = (st && st.networkOnline !== undefined) ? st.networkOnline : (typeof navigator !== 'undefined' ? navigator.onLine !== false : true);
+  if (!online) return;
+
+  if (!hasMore) return;
+  const safePage = Number.isFinite(currentPage) ? currentPage : 0;
+  const pages = [];
+  for (let i = 1; i <= Math.max(1, count); i++) {
+    pages.push(safePage + i);
+  }
+
+  if (searchInFlight.prefetchQuery !== normalizedQuery) {
+    searchInFlight.prefetchQuery = normalizedQuery;
+    searchInFlight.prefetchGeneration++;
+
+    // Cancel any in-flight prefetch controllers from other queries
+    const prefix = `search:${normalizedQuery}:`;
+    const controllerKeysToAbort = [];
+    for (const key of searchInFlight.pagePrefetchControllers.keys()) {
+      if (!key.startsWith(prefix)) controllerKeysToAbort.push(key);
+    }
+    controllerKeysToAbort.forEach((key) => {
+      const controller = searchInFlight.pagePrefetchControllers.get(key);
+      if (controller) {
+        try { controller.abort(); } catch {}
+      }
+      searchInFlight.pagePrefetchControllers.delete(key);
+    });
+  }
+
+  const generation = searchInFlight.prefetchGeneration;
+
+  const schedule = (task) => {
+    if (typeof requestIdleCallback === 'function') {
+      requestIdleCallback(() => task(), { timeout: 1500 });
+    } else {
+      setTimeout(task, 0);
+    }
+  };
+
+  schedule(async () => {
+    for (const page of pages) {
+      if (generation !== searchInFlight.prefetchGeneration) return;
+      const cacheKey = getSearchCacheKey(normalizedQuery, page);
+
+      const cached = window.enhancedCache && window.enhancedCache.get('search', cacheKey);
+      if (cached) continue;
+      if (searchInFlight.pages.has(cacheKey)) continue;
+
+      const controller = new AbortController();
+      searchInFlight.pagePrefetchControllers.set(cacheKey, controller);
+      try {
+        const result = await performOptimizedSearch(normalizedQuery, page, {
+          abortPrevious: false,
+          showLoader: false,
+          activateUI: false,
+          signal: controller.signal
+        });
+        // If the next page indicates no more results, don't keep fetching further.
+        if (!result || !result.hasMore) break;
+      } catch {
+        // Silent fail (background)
+      } finally {
+        searchInFlight.pagePrefetchControllers.delete(cacheKey);
+      }
+    }
+  });
+}
+
 window.performOptimizedSearch = performOptimizedSearch;
 window.playOptimizedSearchResult = playOptimizedSearchResult;
 window.playSpecificSearchTrack = playSpecificSearchTrack;
@@ -1055,3 +1201,4 @@ window.playAlbumFromFavorites = playAlbumFromFavorites;
 window.playOptimizedFavorite = playOptimizedFavorite;
 window.playRandomSearchResults = playRandomSearchResults;
 window.abortAllSearchOperations = abortAllSearchOperations;
+window.prefetchNextSearchPages = prefetchNextSearchPages;
