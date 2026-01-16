@@ -2,7 +2,16 @@
 const CACHE_NAMES = {
   APP: 'resonate-v15',
   STATIC: 'static-v15',
-  METADATA: 'metadata-v15'
+  METADATA: 'metadata-v15',
+  SEARCH: 'search-v15'
+};
+
+// Must be defined before activate/fetch handlers so it can be preserved.
+const AUDIO_CACHE_NAME = 'audio-cache-v1';
+
+const RUNTIME_CACHE_LIMITS = {
+  SEARCH_MAX_ENTRIES: 80,
+  METADATA_MAX_ENTRIES: 300
 };
 
 // Critical files for caching
@@ -75,6 +84,82 @@ function isAudioRequest(request, url) {
 
 function isMetadataRequest(url) {
   return isArchiveOrg(url) && url.pathname.includes('/metadata/');
+}
+
+function isArchiveSearchRequest(url) {
+  return isArchiveOrg(url) && url.pathname === '/advancedsearch.php';
+}
+
+async function trimCache(cacheName, maxEntries) {
+  try {
+    const cache = await caches.open(cacheName);
+    const keys = await cache.keys();
+    if (!keys || keys.length <= maxEntries) return;
+    const toDelete = keys.length - maxEntries;
+    for (let i = 0; i < toDelete; i++) {
+      await cache.delete(keys[i]);
+    }
+  } catch {
+    // ignore trim failures
+  }
+}
+
+async function cacheFirstWithBackgroundUpdateExternal(event, request, cacheName, maxEntries) {
+  const cache = await caches.open(cacheName);
+
+  try {
+    const cachedResponse = await cache.match(request);
+    if (cachedResponse) {
+      // Update in background while serving the cached response immediately.
+      event.waitUntil(
+        (async () => {
+          try {
+            const networkResponse = await fetch(request);
+            if (!networkResponse || !networkResponse.ok || networkResponse.type === 'error' || networkResponse.type === 'opaque') return;
+
+            const contentType = networkResponse.headers && networkResponse.headers.get
+              ? (networkResponse.headers.get('Content-Type') || '')
+              : '';
+
+            // Only cache JSON-like responses to avoid storing error HTML pages.
+            if (contentType && !contentType.includes('application/json')) return;
+
+            await cache.put(request, networkResponse.clone());
+            if (typeof maxEntries === 'number' && maxEntries > 0) {
+              await trimCache(cacheName, maxEntries);
+            }
+          } catch {
+            // ignore background update failures
+          }
+        })()
+      );
+
+      return cachedResponse;
+    }
+  } catch {
+    // ignore cache match failures
+  }
+
+  // No cached response: go to network and cache if usable.
+  const networkResponse = await fetch(request);
+  if (networkResponse && networkResponse.ok && networkResponse.type !== 'error' && networkResponse.type !== 'opaque') {
+    const contentType = networkResponse.headers && networkResponse.headers.get
+      ? (networkResponse.headers.get('Content-Type') || '')
+      : '';
+
+    if (!contentType || contentType.includes('application/json')) {
+      try {
+        await cache.put(request, networkResponse.clone());
+        if (typeof maxEntries === 'number' && maxEntries > 0) {
+          await trimCache(cacheName, maxEntries);
+        }
+      } catch {
+        // ignore cache put failures
+      }
+    }
+  }
+
+  return networkResponse;
 }
 
 function offlineHtmlResponse(title, heading, bodyText) {
@@ -274,7 +359,9 @@ self.addEventListener('activate', (event) => {
           if (
             cacheName !== CACHE_NAMES.APP &&
             cacheName !== CACHE_NAMES.STATIC &&
-            cacheName !== CACHE_NAMES.METADATA
+            cacheName !== CACHE_NAMES.METADATA &&
+            cacheName !== CACHE_NAMES.SEARCH &&
+            cacheName !== AUDIO_CACHE_NAME
           ) {
             console.log('SW: Deleting old cache:', cacheName);
             return caches.delete(cacheName);
@@ -372,6 +459,43 @@ self.addEventListener('fetch', (event) => {
         return isAppShell ? cacheFirstWithBackgroundUpdate(event.request) : cacheFirst(event.request);
       }
 
+      // Runtime cache for archive.org JSON endpoints (search + metadata)
+      if (isArchiveSearchRequest(url)) {
+        try {
+          return await cacheFirstWithBackgroundUpdateExternal(event, event.request, CACHE_NAMES.SEARCH, RUNTIME_CACHE_LIMITS.SEARCH_MAX_ENTRIES);
+        } catch (err) {
+          // Cache fallback
+          try {
+            const cache = await caches.open(CACHE_NAMES.SEARCH);
+            const cached = await cache.match(event.request);
+            if (cached) return cached;
+          } catch {}
+
+          return new Response(
+            JSON.stringify({ error: 'offline', message: 'Search results not available offline' }),
+            { status: 503, statusText: 'Service Unavailable - Offline', headers: { 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+
+      if (isMetadataRequest(url)) {
+        try {
+          return await cacheFirstWithBackgroundUpdateExternal(event, event.request, CACHE_NAMES.METADATA, RUNTIME_CACHE_LIMITS.METADATA_MAX_ENTRIES);
+        } catch (err) {
+          // Cache fallback
+          try {
+            const cache = await caches.open(CACHE_NAMES.METADATA);
+            const cached = await cache.match(event.request);
+            if (cached) return cached;
+          } catch {}
+
+          return new Response(
+            JSON.stringify({ error: 'offline', message: 'Metadata not available offline' }),
+            { status: 503, statusText: 'Service Unavailable - Offline', headers: { 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+
       // NETWORK_FIRST strategy for archive.org resources
       return networkFirstExternal(event.request, url);
     })()
@@ -382,7 +506,6 @@ self.addEventListener('fetch', (event) => {
 const AUDIO_DB_NAME = 'ResonateAudioCache';
 const AUDIO_DB_VERSION = 9;
 const FAILED_STORE = 'failedDownloads';
-const AUDIO_CACHE_NAME = 'audio-cache-v1';
 
 function openAudioDb() {
   return new Promise((resolve, reject) => {
@@ -472,7 +595,8 @@ self.addEventListener('message', (event) => {
     // Keep app-shell cache; clear data caches.
     Promise.allSettled([
       caches.delete(CACHE_NAMES.APP),
-      caches.delete(CACHE_NAMES.METADATA)
+      caches.delete(CACHE_NAMES.METADATA),
+      caches.delete(CACHE_NAMES.SEARCH)
     ]).then(() => {
       if (event.ports && event.ports[0]) {
         event.ports[0].postMessage({ success: true });
