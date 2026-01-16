@@ -864,6 +864,50 @@ class ContinuousPlaybackManager {
 
 const playbackManager = new ContinuousPlaybackManager();
 
+async function restorePlaybackQueueFromSnapshot(snapshot) {
+  try {
+    const snap = snapshot && typeof snapshot === 'object' ? snapshot : null;
+    const context = snap && snap.context ? String(snap.context) : '';
+    if (!context) return false;
+
+    const clampIndex = (idx, length) => {
+      const i = Number(idx);
+      if (!Number.isFinite(i)) return 0;
+      const max = Math.max(0, Number(length || 0) - 1);
+      return Math.max(0, Math.min(max, Math.floor(i)));
+    };
+
+    if (context === 'favorites') {
+      const items = (state && Array.isArray(state.favorites)) ? state.favorites : [];
+      if (!items.length) return false;
+      playbackManager.setContext('favorites', items, clampIndex(snap.currentIndex, items.length));
+      return true;
+    }
+
+    if (context === 'album') {
+      const albumId = snap.albumId != null ? String(snap.albumId) : (state && state.currentTrack ? String(state.currentTrack.albumId || state.currentTrack.id || '') : '');
+      if (!albumId) return false;
+
+      if (typeof fetchOptimizedPlayableFiles !== 'function') return false;
+      const tracks = await fetchOptimizedPlayableFiles(albumId);
+      if (!Array.isArray(tracks) || tracks.length === 0) return false;
+      playbackManager.setAlbumPlaylist(albumId, tracks, clampIndex(snap.currentIndex, tracks.length));
+      return true;
+    }
+
+    // Best-effort only: search/searchPlaylist contexts are often ephemeral.
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+try {
+  window.restorePlaybackQueueFromSnapshot = restorePlaybackQueueFromSnapshot;
+} catch {
+  // ignore
+}
+
 // Initialize new playback system
 const playbackStateManager = new PlaybackStateManager();
 

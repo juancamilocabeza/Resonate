@@ -6,6 +6,19 @@ const CACHE_NAMES = {
   SEARCH: 'search-v15'
 };
 
+function deriveSwVersion() {
+  try {
+    const candidates = [CACHE_NAMES.STATIC, CACHE_NAMES.APP, CACHE_NAMES.METADATA, CACHE_NAMES.SEARCH].filter(Boolean);
+    const raw = String(candidates[0] || '').trim();
+    const m = raw.match(/-v(\d+)/i) || raw.match(/\bv(\d+)\b/i);
+    return m ? String(m[1]) : (raw || 'unknown');
+  } catch {
+    return 'unknown';
+  }
+}
+
+const SW_VERSION = deriveSwVersion();
+
 // Must be defined before activate/fetch handlers so it can be preserved.
 const AUDIO_CACHE_NAME = 'audio-cache-v1';
 
@@ -343,9 +356,8 @@ async function networkFirstExternal(request, url) {
 self.addEventListener('install', (event) => {
   console.log('SW: Installing service worker');
   event.waitUntil(precacheStaticFiles());
-  // Activate the updated worker immediately so clients don't get stuck on stale UI assets.
-  // (If playback is active, the app can still control refresh behavior.)
-  self.skipWaiting();
+  // Mode B (prompt): do not activate automatically.
+  // The page will call SKIP_WAITING / SKIP_WAITING_WHEN_IDLE after the user approves.
 });
 
 // Activation and cleanup of old caches
@@ -373,15 +385,6 @@ self.addEventListener('activate', (event) => {
       return self.clients.claim();
     })
   );
-});
-
-// Allow clients to trigger safe activation once playback is idle
-self.addEventListener('message', (event) => {
-  if (!event || !event.data) return;
-  if (event.data.type === 'SKIP_WAITING_WHEN_IDLE') {
-    console.log('SW: Received safe skipWaiting signal');
-    self.skipWaiting();
-  }
 });
 
 self.addEventListener('fetch', (event) => {
@@ -591,6 +594,30 @@ self.addEventListener('sync', (event) => {
 });
 
 self.addEventListener('message', (event) => {
+  if (!event || !event.data) return;
+
+  // Version info for UI (current/waiting comparisons)
+  if (event.data && event.data.type === 'GET_VERSION') {
+    const payload = { version: SW_VERSION, cacheNames: CACHE_NAMES };
+    try {
+      if (event.ports && event.ports[0]) {
+        event.ports[0].postMessage(payload);
+      } else if (event.source && typeof event.source.postMessage === 'function') {
+        event.source.postMessage({ type: 'VERSION', ...payload });
+      }
+    } catch {
+      // ignore
+    }
+    return;
+  }
+
+  // Allow clients to trigger safe activation once playback is idle
+  if (event.data.type === 'SKIP_WAITING_WHEN_IDLE') {
+    console.log('SW: Received safe skipWaiting signal');
+    self.skipWaiting();
+    return;
+  }
+
   if (event.data && event.data.type === 'CLEAR_CACHE') {
     // Keep app-shell cache; clear data caches.
     Promise.allSettled([

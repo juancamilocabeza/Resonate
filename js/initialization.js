@@ -451,6 +451,32 @@ async function initializeApp() {
   // Cargar estado de reproducción guardado (última sesión)
   loadSavedPlaybackState();
 
+  // Restore queue/context (best-effort) so Next/Prev keeps continuity after reload.
+  try {
+    const url = new URL(window.location.href);
+    const hasSharedPlay = !!url.searchParams.get('play');
+    if (!hasSharedPlay && window.state && window.state.savedPlaybackQueueSnapshot && typeof window.restorePlaybackQueueFromSnapshot === 'function') {
+      await window.restorePlaybackQueueFromSnapshot(window.state.savedPlaybackQueueSnapshot);
+    }
+  } catch {}
+
+  // If this load is the result of applying a SW update, try to resume playback automatically.
+  try {
+    const isUpdateReload = sessionStorage.getItem('resonate_update_reload') === '1';
+    if (isUpdateReload) {
+      sessionStorage.removeItem('resonate_update_reload');
+      const shouldAutoResume = !!(window.state && window.state.savedPlaybackState && window.state.savedPlaybackState.wasPlaying);
+      if (shouldAutoResume) {
+        setTimeout(() => {
+          try {
+            // togglePlay() will resumeSavedPlayback() if a snapshot exists.
+            togglePlay();
+          } catch {}
+        }, 250);
+      }
+    }
+  } catch {}
+
   // Apply volume/mute preferences (independent from playback snapshot TTL)
   try {
     if (typeof window.loadVolume === 'function') {

@@ -3112,6 +3112,16 @@ body.offline-mode .share-track-button {
   background: var(--accent);
 }
 
+/* ===== SW UPDATE BANNER (Mode B) ===== */
+.sw-update-banner .pwa-install-btn.sw-update-apply-btn {
+  background: var(--accent);
+  color: #000;
+}
+
+.sw-update-banner .pwa-install-btn.sw-update-apply-btn:hover {
+  background: var(--accent-alt);
+}
+
 .pwa-close-btn {
   background: transparent;
   border: none;

@@ -2171,7 +2171,7 @@ function setupPlaybackAutosave() {
   if (window._resonatePlaybackAutosaveInit) return;
   window._resonatePlaybackAutosaveInit = true;
 
-  const AUTOSAVE_INTERVAL_MS = 15000;
+  const AUTOSAVE_INTERVAL_MS = 10000;
   let timerId = null;
   let lastSavedAt = 0;
 
@@ -2456,6 +2456,38 @@ function savePlaybackState() {
     };
 
     const currentTime = Number(elements.audio.currentTime);
+
+    const queueSnapshot = (() => {
+      try {
+        if (typeof playbackManager === 'undefined' || !playbackManager) return null;
+        if (typeof playbackManager.getCurrentContext !== 'function') return null;
+
+        const context = playbackManager.getCurrentContext();
+        if (!context) return null;
+
+        const ctx = playbackManager.contextData && playbackManager.contextData[context]
+          ? playbackManager.contextData[context]
+          : null;
+
+        const currentIndex = ctx && typeof ctx.currentIndex === 'number' && isFinite(ctx.currentIndex)
+          ? ctx.currentIndex
+          : null;
+
+        const albumId = (context === 'album' && typeof playbackManager.getCurrentAlbumId === 'function')
+          ? playbackManager.getCurrentAlbumId()
+          : null;
+
+        return {
+          v: 1,
+          context: String(context),
+          currentIndex,
+          albumId: albumId != null ? String(albumId) : null
+        };
+      } catch {
+        return null;
+      }
+    })();
+
     const playbackState = {
       v: 2,
       track: trackSnapshot,
@@ -2466,6 +2498,8 @@ function savePlaybackState() {
       audioSrcAtSave,
       audioSrcKindAtSave,
       currentTime: Number.isFinite(currentTime) ? currentTime : 0,
+      wasPlaying: !!(elements.audio && !elements.audio.paused),
+      queue: queueSnapshot,
       timestamp: Date.now()
     };
 
@@ -2527,6 +2561,7 @@ function loadSavedPlaybackState() {
       }
 
       state.savedPlaybackState = savedState;
+      state.savedPlaybackQueueSnapshot = savedState && savedState.queue ? savedState.queue : null;
 
       // Restore the track information (but don't start playing yet)
       state.currentTrack = { ...savedState.track };
@@ -2582,12 +2617,499 @@ function loadSavedPlaybackState() {
       // Expired, remove it
       localStorage.removeItem('resonate_playback_state');
       state.savedPlaybackState = null;
+      state.savedPlaybackQueueSnapshot = null;
     }
   } catch (error) {
     console.warn('Error loading saved playback state:', error);
     state.savedPlaybackState = null;
+    state.savedPlaybackQueueSnapshot = null;
   }
   return null;
+}
+
+// --- Service Worker Auto-Update (Mode B: prompt) ---
+const SW_UPDATE_CHANNEL_NAME = 'resonate_sw_update_v1';
+const SW_UPDATE_SESSION_DISMISS_KEY = 'resonate_sw_update_banner_dismissed';
+const SW_UPDATE_LEADER_KEY = 'resonate_sw_update_leader_v1';
+const SW_UPDATE_LEADER_TTL_MS = 12000;
+const SW_UPDATE_PENDING_RELOAD_KEY = 'resonate_sw_update_pending_reload';
+const SW_UPDATE_RELOAD_MARKER_KEY = 'resonate_update_reload';
+
+function getResonateVersionFromMeta() {
+  try {
+    const el = document.querySelector('meta[name="resonate-version"]');
+    const v = el && el.getAttribute ? el.getAttribute('content') : null;
+    const s = (v != null ? String(v) : '').trim();
+    return s || null;
+  } catch {
+    return null;
+  }
+}
+
+function getUpdateTabId() {
+  try {
+    const key = 'resonate_tab_id_v1';
+    const existing = sessionStorage.getItem(key);
+    if (existing) return existing;
+    const id = (crypto && crypto.randomUUID) ? crypto.randomUUID() : `tab_${Math.random().toString(16).slice(2)}_${Date.now()}`;
+    sessionStorage.setItem(key, id);
+    return id;
+  } catch {
+    return `tab_${Math.random().toString(16).slice(2)}_${Date.now()}`;
+  }
+}
+
+const __resonateUpdateTabId = getUpdateTabId();
+
+function canUseBroadcastChannel() {
+  try { return typeof BroadcastChannel === 'function'; } catch { return false; }
+}
+
+function ensureUpdateChannel() {
+  if (window.__resonateSwUpdateChannel) return window.__resonateSwUpdateChannel;
+  try {
+    if (canUseBroadcastChannel()) {
+      window.__resonateSwUpdateChannel = new BroadcastChannel(SW_UPDATE_CHANNEL_NAME);
+      return window.__resonateSwUpdateChannel;
+    }
+  } catch {
+    // ignore
+  }
+  window.__resonateSwUpdateChannel = null;
+  return null;
+}
+
+function broadcastUpdateMessage(msg) {
+  try {
+    const payload = { ...(msg || {}), _from: __resonateUpdateTabId, _ts: Date.now() };
+    const ch = ensureUpdateChannel();
+    if (ch) {
+      ch.postMessage(payload);
+      return;
+    }
+  } catch {
+    // ignore
+  }
+
+  // Fallback: storage event
+  try {
+    localStorage.setItem('resonate_sw_update_broadcast_fallback', JSON.stringify({ ...(msg || {}), _from: __resonateUpdateTabId, _ts: Date.now() }));
+  } catch {
+    // ignore
+  }
+}
+
+function onBroadcastUpdateMessage(handler) {
+  const safeHandler = (data) => {
+    try {
+      if (!data || (data._from && data._from === __resonateUpdateTabId)) return;
+      handler(data);
+    } catch {
+      // ignore
+    }
+  };
+
+  const ch = ensureUpdateChannel();
+  if (ch) {
+    try {
+      ch.addEventListener('message', (ev) => safeHandler(ev && ev.data));
+    } catch {
+      // ignore
+    }
+  }
+
+  try {
+    window.addEventListener('storage', (ev) => {
+      if (!ev || ev.key !== 'resonate_sw_update_broadcast_fallback') return;
+      try {
+        const parsed = ev.newValue ? JSON.parse(ev.newValue) : null;
+        safeHandler(parsed);
+      } catch {
+        // ignore
+      }
+    });
+  } catch {
+    // ignore
+  }
+}
+
+function isUpdateBannerDismissedForSession() {
+  try { return sessionStorage.getItem(SW_UPDATE_SESSION_DISMISS_KEY) === 'true'; } catch { return false; }
+}
+
+function dismissUpdateBannerForSession() {
+  try { sessionStorage.setItem(SW_UPDATE_SESSION_DISMISS_KEY, 'true'); } catch {}
+}
+
+function tryBecomeUpdateLeader() {
+  try {
+    const now = Date.now();
+    const raw = localStorage.getItem(SW_UPDATE_LEADER_KEY);
+    const existing = raw ? JSON.parse(raw) : null;
+    const isStale = !existing || !existing.ts || (now - Number(existing.ts) > SW_UPDATE_LEADER_TTL_MS);
+    if (isStale) {
+      localStorage.setItem(SW_UPDATE_LEADER_KEY, JSON.stringify({ id: __resonateUpdateTabId, ts: now }));
+    }
+    const checkRaw = localStorage.getItem(SW_UPDATE_LEADER_KEY);
+    const check = checkRaw ? JSON.parse(checkRaw) : null;
+    return !!(check && check.id === __resonateUpdateTabId);
+  } catch {
+    // If localStorage is unavailable, degrade to showing in current tab.
+    return true;
+  }
+}
+
+function renewUpdateLeaderLease() {
+  try {
+    const raw = localStorage.getItem(SW_UPDATE_LEADER_KEY);
+    const existing = raw ? JSON.parse(raw) : null;
+    if (!existing || existing.id !== __resonateUpdateTabId) return;
+    localStorage.setItem(SW_UPDATE_LEADER_KEY, JSON.stringify({ id: __resonateUpdateTabId, ts: Date.now() }));
+  } catch {
+    // ignore
+  }
+}
+
+function showServiceWorkerUpdateBanner({ currentVersion = null, newVersion = null } = {}) {
+  if (isUpdateBannerDismissedForSession()) return;
+  if (document.getElementById('sw-update-banner')) return;
+
+  const banner = document.createElement('div');
+  banner.id = 'sw-update-banner';
+  banner.className = 'pwa-install-banner sw-update-banner';
+
+  const versionText = (currentVersion && newVersion)
+    ? `Update available (v${currentVersion} → v${newVersion})`
+    : (newVersion ? `Update available (v${newVersion})` : 'Update available');
+
+  banner.innerHTML = `
+    <div class="pwa-banner-content">
+      <div class="pwa-banner-text">
+        <div class="pwa-banner-buttons">
+          ${versionText}
+          <button class="pwa-install-btn sw-update-apply-btn">Update</button>
+          <button class="pwa-install-btn sw-update-later-btn" style="background: transparent; color: var(--fg); border: 1px solid rgba(255,255,255,0.18)">Later</button>
+          <button class="pwa-close-btn sw-update-close-btn" aria-label="Close">✕</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const applyBtn = banner.querySelector('.sw-update-apply-btn');
+  const laterBtn = banner.querySelector('.sw-update-later-btn');
+  const closeBtn = banner.querySelector('.sw-update-close-btn');
+
+  const hide = (dismiss = false) => {
+    try {
+      if (dismiss) dismissUpdateBannerForSession();
+      banner.classList.remove('active');
+      setTimeout(() => {
+        try { banner.remove(); } catch {}
+      }, 300);
+    } catch {
+      try { banner.remove(); } catch {}
+    }
+  };
+
+  applyBtn?.addEventListener('click', async () => {
+    try {
+      hide(false);
+      await applyServiceWorkerUpdateAcrossTabs();
+    } catch (e) {
+      console.warn('Apply update failed:', e);
+      showStatus('Update failed', 'warning', 3500);
+    }
+  });
+
+  const later = () => {
+    hide(true);
+    broadcastUpdateMessage({ type: 'UPDATE_BANNER_DISMISSED' });
+  };
+
+  laterBtn?.addEventListener('click', later);
+  closeBtn?.addEventListener('click', later);
+
+  document.body.appendChild(banner);
+  setTimeout(() => banner.classList.add('active'), 100);
+
+  // Keep leadership alive while visible so only one tab prompts.
+  const leaseTimer = window.setInterval(() => {
+    if (!document.getElementById('sw-update-banner')) {
+      window.clearInterval(leaseTimer);
+      return;
+    }
+    renewUpdateLeaderLease();
+  }, Math.max(2000, Math.floor(SW_UPDATE_LEADER_TTL_MS / 3)));
+}
+
+function requestWorkerVersion(worker) {
+  return new Promise((resolve) => {
+    try {
+      if (!worker || typeof worker.postMessage !== 'function') return resolve(null);
+      const channel = new MessageChannel();
+      const timeout = window.setTimeout(() => resolve(null), 1200);
+      channel.port1.onmessage = (ev) => {
+        window.clearTimeout(timeout);
+        try {
+          const data = ev && ev.data ? ev.data : null;
+          resolve(data && data.version ? String(data.version) : null);
+        } catch {
+          resolve(null);
+        }
+      };
+      worker.postMessage({ type: 'GET_VERSION' }, [channel.port2]);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+async function computeCurrentAndWaitingVersions(registration) {
+  try {
+    const current = await requestWorkerVersion(navigator.serviceWorker?.controller) || getResonateVersionFromMeta();
+    const waiting = await requestWorkerVersion(registration && registration.waiting ? registration.waiting : null);
+    return { currentVersion: current, newVersion: waiting };
+  } catch {
+    return { currentVersion: getResonateVersionFromMeta(), newVersion: null };
+  }
+}
+
+async function maybeAnnounceUpdateReady(registration) {
+  try {
+    if (!registration || !registration.waiting) return;
+    const versions = await computeCurrentAndWaitingVersions(registration);
+    broadcastUpdateMessage({ type: 'UPDATE_READY', ...versions });
+
+    if (!tryBecomeUpdateLeader()) return;
+    showServiceWorkerUpdateBanner(versions);
+  } catch {
+    // ignore
+  }
+}
+
+async function applyServiceWorkerUpdateAcrossTabs() {
+  if (!('serviceWorker' in navigator)) return;
+
+  // Save state best-effort so we can resume after reload.
+  try { savePlaybackState(); } catch {}
+
+  try { sessionStorage.setItem(SW_UPDATE_PENDING_RELOAD_KEY, 'true'); } catch {}
+  try { sessionStorage.setItem(SW_UPDATE_RELOAD_MARKER_KEY, '1'); } catch {}
+
+  broadcastUpdateMessage({ type: 'APPLY_UPDATE' });
+
+  const reg = await navigator.serviceWorker.getRegistration('/');
+  if (!reg) {
+    showStatus('No Service Worker registration found', 'warning', 3000);
+    return;
+  }
+
+  const isPlaybackActive = (() => {
+    try {
+      const audio = elements && elements.audio ? elements.audio : null;
+      return !!(audio && !audio.paused);
+    } catch {
+      return false;
+    }
+  })();
+
+  // If update already waiting, activate it.
+  if (reg.waiting) {
+    // If playback is active, avoid interrupting audio; let playback idle trigger activation.
+    if (isPlaybackActive) {
+      showStatus('Update will apply when playback is idle', 'info', 3500);
+      try {
+        const audio = elements && elements.audio ? elements.audio : null;
+        if (audio) {
+          const onIdle = () => {
+            try {
+              audio.removeEventListener('pause', onIdle);
+              audio.removeEventListener('ended', onIdle);
+            } catch {}
+            try {
+              if (typeof signalServiceWorkerSafeActivation === 'function') {
+                signalServiceWorkerSafeActivation();
+              }
+            } catch {}
+          };
+          audio.addEventListener('pause', onIdle, { once: true });
+          audio.addEventListener('ended', onIdle, { once: true });
+        }
+      } catch {}
+      return;
+    }
+
+    try { reg.waiting.postMessage({ type: 'SKIP_WAITING' }); } catch {}
+    return;
+  }
+
+  // Otherwise, ask the browser to check.
+  try {
+    await reg.update();
+  } catch {
+    // ignore
+  }
+
+  // If it is now waiting, activate.
+  if (reg.waiting) {
+    try { reg.waiting.postMessage({ type: 'SKIP_WAITING' }); } catch {}
+    return;
+  }
+
+  // If we're actively playing, allow "safe" activation when idle.
+  try {
+    if (isPlaybackActive) {
+      showStatus('Update will apply when playback is idle', 'info', 3500);
+      try {
+        const audio = elements && elements.audio ? elements.audio : null;
+        if (audio) {
+          const onIdle = () => {
+            try {
+              audio.removeEventListener('pause', onIdle);
+              audio.removeEventListener('ended', onIdle);
+            } catch {}
+            try {
+              if (typeof signalServiceWorkerSafeActivation === 'function') {
+                signalServiceWorkerSafeActivation();
+              }
+            } catch {}
+          };
+          audio.addEventListener('pause', onIdle, { once: true });
+          audio.addEventListener('ended', onIdle, { once: true });
+        }
+      } catch {}
+      return;
+    }
+  } catch {
+    // ignore
+  }
+
+  showStatus('Update is not ready yet', 'info', 2500);
+}
+
+function ensureServiceWorkerControllerChangeReloadHandler() {
+  if (window.__resonateSwControllerChangeHandlerInstalled) return;
+  window.__resonateSwControllerChangeHandlerInstalled = true;
+
+  try {
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      try {
+        const pending = sessionStorage.getItem(SW_UPDATE_PENDING_RELOAD_KEY) === 'true';
+        if (!pending) return;
+        sessionStorage.removeItem(SW_UPDATE_PENDING_RELOAD_KEY);
+        sessionStorage.setItem(SW_UPDATE_RELOAD_MARKER_KEY, '1');
+        window.location.reload();
+      } catch {
+        // ignore
+      }
+    });
+  } catch {
+    // ignore
+  }
+}
+
+function ensureServiceWorkerUpdateCoordinationHandlers() {
+  if (window.__resonateSwUpdateCoordinationInit) return;
+  window.__resonateSwUpdateCoordinationInit = true;
+
+  ensureServiceWorkerControllerChangeReloadHandler();
+
+  onBroadcastUpdateMessage(async (msg) => {
+    if (!msg || !msg.type) return;
+
+    if (msg.type === 'UPDATE_READY') {
+      if (isUpdateBannerDismissedForSession()) return;
+      if (!tryBecomeUpdateLeader()) return;
+      showServiceWorkerUpdateBanner({ currentVersion: msg.currentVersion || null, newVersion: msg.newVersion || null });
+      return;
+    }
+
+    if (msg.type === 'UPDATE_BANNER_DISMISSED') {
+      // Hide if visible in this tab.
+      const banner = document.getElementById('sw-update-banner');
+      if (banner) {
+        try { banner.classList.remove('active'); } catch {}
+        try { banner.remove(); } catch {}
+      }
+      dismissUpdateBannerForSession();
+      return;
+    }
+
+    if (msg.type === 'APPLY_UPDATE') {
+      try { savePlaybackState(); } catch {}
+      try { sessionStorage.setItem(SW_UPDATE_PENDING_RELOAD_KEY, 'true'); } catch {}
+      try { sessionStorage.setItem(SW_UPDATE_RELOAD_MARKER_KEY, '1'); } catch {}
+
+      try {
+        const reg = await navigator.serviceWorker.getRegistration('/');
+        const isPlaybackActive = (() => {
+          try {
+            const audio = elements && elements.audio ? elements.audio : null;
+            return !!(audio && !audio.paused);
+          } catch {
+            return false;
+          }
+        })();
+
+        if (reg && reg.waiting) {
+          if (isPlaybackActive) {
+            try {
+              const audio = elements && elements.audio ? elements.audio : null;
+              if (audio) {
+                const onIdle = () => {
+                  try {
+                    audio.removeEventListener('pause', onIdle);
+                    audio.removeEventListener('ended', onIdle);
+                  } catch {}
+                  try {
+                    if (typeof signalServiceWorkerSafeActivation === 'function') {
+                      signalServiceWorkerSafeActivation();
+                    }
+                  } catch {}
+                };
+                audio.addEventListener('pause', onIdle, { once: true });
+                audio.addEventListener('ended', onIdle, { once: true });
+              }
+            } catch {}
+            return;
+          }
+
+          reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+          return;
+        }
+        if (reg) {
+          try { await reg.update(); } catch {}
+          if (reg.waiting) {
+            if (isPlaybackActive) {
+              try {
+                const audio = elements && elements.audio ? elements.audio : null;
+                if (audio) {
+                  const onIdle = () => {
+                    try {
+                      audio.removeEventListener('pause', onIdle);
+                      audio.removeEventListener('ended', onIdle);
+                    } catch {}
+                    try {
+                      if (typeof signalServiceWorkerSafeActivation === 'function') {
+                        signalServiceWorkerSafeActivation();
+                      }
+                    } catch {}
+                  };
+                  audio.addEventListener('pause', onIdle, { once: true });
+                  audio.addEventListener('ended', onIdle, { once: true });
+                }
+              } catch {}
+              return;
+            }
+
+            try { reg.waiting.postMessage({ type: 'SKIP_WAITING' }); } catch {}
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+  });
 }
 
 function updateFavoritesList() {
@@ -2946,6 +3468,32 @@ async function registerServiceWorker() {
     try {
       const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
       console.log('Service Worker registered with scope:', registration.scope);
+
+      // Update coordination across tabs (Mode B prompt)
+      ensureServiceWorkerUpdateCoordinationHandlers();
+
+      // If an update is already waiting, announce it.
+      try {
+        await maybeAnnounceUpdateReady(registration);
+      } catch {}
+
+      // Watch for future updates.
+      try {
+        registration.addEventListener('updatefound', () => {
+          try {
+            const newWorker = registration.installing;
+            if (!newWorker) return;
+            newWorker.addEventListener('statechange', () => {
+              // When installed with an existing controller, it's waiting.
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                maybeAnnounceUpdateReady(registration);
+              }
+            });
+          } catch {
+            // ignore
+          }
+        });
+      } catch {}
     } catch (error) {
       console.error('Service Worker registration failed:', error);
       if (error.message.includes('Failed to fetch')) {
@@ -3528,10 +4076,12 @@ async function updateServiceWorker() {
     if (!reg) { showStatus('No Service Worker registration found', 'warning', 3000); return; }
     try {
       await reg.update();
+      // Mode B: if update is waiting, show prompt (leader-only)
       if (reg.waiting) {
-        reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        await maybeAnnounceUpdateReady(reg);
+      } else {
+        showStatus('Checking for updates…', 'info', 2500);
       }
-      showStatus('Checking for updates…', 'info', 2500);
     } catch (err) {
       console.warn('Manual SW update error:', err);
       showStatus('Service Worker update failed', 'warning', 3500);
