@@ -539,7 +539,8 @@ async function initializeApp() {
     elements.audio.addEventListener('timeupdate', updateProgressBar);
     elements.audio.addEventListener('loadedmetadata', updateProgressBar);
     elements.audio.addEventListener('play', () => {
-      elements.playBtn.textContent = '| |';
+      // Keep icon consistent with playback.js
+      elements.playBtn.textContent = '⏸';
       // Actualizar Media Session
       if ('mediaSession' in navigator) {
         navigator.mediaSession.playbackState = 'playing';
@@ -557,12 +558,15 @@ async function initializeApp() {
 
     elements.audio.addEventListener('error', (e) => {
       window.logger.error(`Audio error: ${e.target.error?.code} - ${e.target.error?.message}`, 'PLAYBACK');
-      showStatus('Sorry, there was a playback issue', 'error');
 
-      // Restore state on error
-      if (window.state) window.state.isLoading = false;
-      elements.playBtn.disabled = false;
-      elements.playBtn.textContent = '▶';
+      // If playback.js has installed the enhanced auto-skip handler, avoid noisy/duplicated UX.
+      if (!window._resonatePlaybackAutoSkipEnabled) {
+        showStatus('Sorry, there was a playback issue', 'error');
+        // Restore state on error (legacy fallback)
+        if (window.state) window.state.isLoading = false;
+        elements.playBtn.disabled = false;
+        elements.playBtn.textContent = '▶';
+      }
     });
   }
 

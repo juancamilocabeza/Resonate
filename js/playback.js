@@ -152,6 +152,103 @@ const SHUFFLE_DECK_STORAGE_KEY = 'resonate_shuffle_decks_v1';
 const SHUFFLE_DECK_VERSION = 1;
 const SHUFFLE_DECK_MAX_CONTEXTS = 12;
 
+// Auto-skip limiter (in-memory) to prevent skip storms when offline or when a context is broken.
+// Budget is per context key (album id, favorites, search result-set signature, etc.)
+const AUTO_SKIP_MAX_PER_CONTEXT = 4;
+const autoSkipStateByContextKey = new Map();
+
+function computeAutoSkipContextKey() {
+  try {
+    const context = playbackManager && typeof playbackManager.getCurrentContext === 'function'
+      ? playbackManager.getCurrentContext()
+      : null;
+    if (!context) return 'unknown';
+
+    if (context === 'favorites') return 'favorites';
+
+    if (context === 'album') {
+      const albumId = playbackManager && typeof playbackManager.getCurrentAlbumId === 'function'
+        ? playbackManager.getCurrentAlbumId()
+        : null;
+      return `album:${String(albumId || 'unknown')}`;
+    }
+
+    if (context === 'search') {
+      const items = (playbackManager && playbackManager.contextData && playbackManager.contextData.search && Array.isArray(playbackManager.contextData.search.items))
+        ? playbackManager.contextData.search.items
+        : (Array.isArray(state.searchResults) ? state.searchResults : []);
+      const ids = uniqStrings((items || []).map(it => it && it.identifier ? String(it.identifier) : '').filter(Boolean));
+      const sig = fnv1aHash(ids.slice().sort().join('|') + `|${ids.length}`);
+      return `search:${sig}`;
+    }
+
+    if (context === 'searchPlaylist') {
+      const items = (playbackManager && playbackManager.contextData && playbackManager.contextData.searchPlaylist && Array.isArray(playbackManager.contextData.searchPlaylist.items))
+        ? playbackManager.contextData.searchPlaylist.items
+        : [];
+      const keys = uniqStrings((items || []).map(it => getItemKeyForDeck('searchPlaylist', it)).filter(Boolean));
+      const sig = fnv1aHash(keys.slice().sort().join('|') + `|${keys.length}`);
+      return `searchPlaylist:${sig}`;
+    }
+
+    return String(context);
+  } catch {
+    return 'unknown';
+  }
+}
+
+function resetAutoSkipBudgetForCurrentContext() {
+  const key = computeAutoSkipContextKey();
+  if (!key) return;
+  autoSkipStateByContextKey.set(key, { remaining: AUTO_SKIP_MAX_PER_CONTEXT, updatedAt: Date.now() });
+}
+
+function tryConsumeAutoSkipBudget(reason = 'auto-skip') {
+  const key = computeAutoSkipContextKey();
+  if (!key) return { allowed: true, remaining: AUTO_SKIP_MAX_PER_CONTEXT, contextKey: key };
+
+  const existing = autoSkipStateByContextKey.get(key) || { remaining: AUTO_SKIP_MAX_PER_CONTEXT, updatedAt: Date.now() };
+  const remaining = Number.isFinite(existing.remaining) ? existing.remaining : AUTO_SKIP_MAX_PER_CONTEXT;
+
+  if (remaining <= 0) {
+    return { allowed: false, remaining: 0, contextKey: key };
+  }
+
+  const next = { remaining: remaining - 1, updatedAt: Date.now() };
+  autoSkipStateByContextKey.set(key, next);
+  logPlayback('debug', `Auto-skip budget consumed (${reason}): ${key} remaining=${next.remaining}`);
+  return { allowed: true, remaining: next.remaining, contextKey: key };
+}
+
+function handleAutoSkipBudgetExhausted(contextKey) {
+  try {
+    const elements = getElementsSafe();
+    const audio = elements.audio;
+    if (audio) audio.pause();
+    if (elements.playBtn) elements.playBtn.textContent = '▶';
+  } catch {}
+
+  safeShowStatus('Paused: too many skipped tracks in this context', 'error', 4500);
+  safeShowStatus('Reconnect or download tracks for offline playback', 'info', 4500);
+  logPlayback('warn', `Auto-skip budget exhausted for ${contextKey || 'unknown'}`);
+}
+
+function scheduleAutoAdvance(reason, delayMs, advanceFn) {
+  const budget = tryConsumeAutoSkipBudget(reason);
+  if (!budget.allowed) {
+    handleAutoSkipBudgetExhausted(budget.contextKey);
+    return false;
+  }
+
+  const delay = Number.isFinite(Number(delayMs)) ? Math.max(0, Number(delayMs)) : 0;
+  setTimeout(() => {
+    try {
+      (advanceFn || (() => playNextInContext())).call(null);
+    } catch {}
+  }, delay);
+  return true;
+}
+
 function safeLocalStorageGet(key) {
   try { return localStorage.getItem(key); } catch { return null; }
 }
@@ -359,28 +456,62 @@ function ensureShuffleDeck(contextType, items, options = {}) {
 }
 
 function shuffleDeckConsumeKey(contextKey, playedKey) {
-  if (!contextKey || !playedKey) return;
+  if (!contextKey || !playedKey) return { wrapped: false };
   const map = loadShuffleDeckMap();
   const deck = map[contextKey];
-  if (!deck || !Array.isArray(deck.order)) return;
+  if (!deck || !Array.isArray(deck.order)) return { wrapped: false };
 
   const key = String(playedKey);
   const idx = Number(deck.index) || 0;
   const now = Date.now();
 
+  let nextIndex = idx;
   if (deck.order[idx] === key) {
-    deck.index = idx + 1;
+    nextIndex = idx + 1;
   } else {
     const pos = deck.order.indexOf(key);
     if (pos >= 0 && pos >= idx) {
-      deck.index = pos + 1;
+      nextIndex = pos + 1;
     }
   }
 
-  if (deck.index >= deck.order.length) deck.index = 0;
+  const wrapped = nextIndex >= deck.order.length;
+  deck.index = wrapped ? 0 : nextIndex;
+
+  // Reshuffle per cycle: when we consume the last item and wrap back to 0,
+  // generate a new seed + new order (persisted), and avoid repeating the last played track.
+  if (wrapped) {
+    try {
+      const keys = uniqStrings((deck.order || []).map(k => String(k || '')).filter(Boolean)).slice().sort();
+      if (keys.length > 1) {
+        const newSeed = generateSeed32();
+        let newOrder = deterministicShuffle(keys, newSeed);
+
+        if (newOrder[0] === key) {
+          const swapIndex = newOrder.findIndex(k => k !== key);
+          if (swapIndex > 0) {
+            const tmp = newOrder[0];
+            newOrder[0] = newOrder[swapIndex];
+            newOrder[swapIndex] = tmp;
+          }
+        }
+
+        deck.seed = newSeed;
+        deck.order = newOrder;
+        deck.index = 0;
+        deck.cycle = (Number(deck.cycle) || 0) + 1;
+      } else {
+        // Single-item decks can't reshuffle into a different order.
+        deck.index = 0;
+      }
+    } catch {}
+  }
+
   deck.updatedAt = now;
   map[contextKey] = deck;
   saveShuffleDeckMap(pruneShuffleDeckMap(map));
+
+  return { wrapped: Boolean(wrapped), cycle: Number(deck.cycle) || 0 };
 }
 
 function shuffleDeckGetRemainingItems(contextType, items, options = {}) {
@@ -972,7 +1103,15 @@ class SearchContextHandler extends BaseContextHandler {
       await this.retryManager.executeWithRetry(async () => {
         const files = await fetchOptimizedPlayableFiles(nextTrack.identifier);
         if (files && files.length > 0) {
-          await playAudioTrackOptimized(files[0], nextTrack.identifier);
+          // If next search item is an album, switch into album context so the album itself loops.
+          if (files.length > 1) {
+            state.albumOrigin = 'search';
+            playbackManager.setAlbumPlaylist(nextTrack.identifier, files, 0);
+            await playAudioTrackOptimized(files[0], nextTrack.identifier, 0, files.length);
+            loadPlaybackQueue('album', files, 1);
+          } else {
+            await playAudioTrackOptimized(files[0], nextTrack.identifier);
+          }
           this.stateManager.recordSuccess();
         }
       }, RetryStrategy.NETWORK);
@@ -1273,10 +1412,19 @@ async function loadAudioWithCache(track) {
     throw new Error('Audio URL not available');
   }
 
-  // Only allow .ogg and .mp3 files
-  const urlLower = track.url.toLowerCase();
-  if (!urlLower.endsWith('.ogg') && !urlLower.endsWith('.mp3')) {
-    throw new Error('Only .ogg and .mp3 files are allowed');
+  // Only allow .ogg and .mp3 files.
+  // NOTE: allow query strings/fragments (e.g. .mp3?download=1)
+  try {
+    const u = new URL(String(track.url), window.location.href);
+    const p = (u.pathname || '').toLowerCase();
+    if (!p.endsWith('.ogg') && !p.endsWith('.mp3')) {
+      throw new Error('Only .ogg and .mp3 files are allowed');
+    }
+  } catch {
+    const raw = String(track.url || '').trim();
+    if (!/\.(ogg|mp3)(\?|#|$)/i.test(raw)) {
+      throw new Error('Only .ogg and .mp3 files are allowed');
+    }
   }
 
   try {
@@ -1524,6 +1672,9 @@ function preloadNextTrack() {
 
 // Play audio track with UI updates and state management
 async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalTracks = 1, showProgress = true) {
+  // Global loading lock: used by togglePlay/Next/Prev to avoid races.
+  state.isLoading = true;
+
   // Show loader based on context - ONLY playback shows progress
   if (window.Loaders) {
     window.Loaders.showLoader({ type: 'spinner', showProgress: showProgress });
@@ -1557,6 +1708,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
 
   if (!track || !track.url) {
     if (window.Loaders) window.Loaders.hideLoader();
+    state.isLoading = false;
     throw new Error('Track not available');
   }
 
@@ -1564,6 +1716,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
   const audioEl = elements.audio;
   if (!audioEl) {
     if (window.Loaders) window.Loaders.hideLoader();
+    state.isLoading = false;
     throw new Error('Audio element not available');
   }
 
@@ -1647,10 +1800,24 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
                 currentKey: playedKey,
                 contextId: info.contextId
               });
-              shuffleDeckConsumeKey(contextKey, playedKey);
+              const consumed = shuffleDeckConsumeKey(contextKey, playedKey);
+
+              // If we completed a full shuffle cycle and reshuffled, rebuild FIFO to avoid playing
+              // stale queue entries from the previous cycle.
+              if (consumed && consumed.wrapped) {
+                try {
+                  state.playbackQueue = [];
+                  if (info.contextType === 'favorites' || info.contextType === 'album' || info.contextType === 'searchPlaylist') {
+                    regenerateQueueFromCurrentContext(state && state.currentTrack ? state.currentTrack.url : undefined);
+                  }
+                } catch {}
+              }
             }
           }
         } catch {}
+
+        // Successful playback start: reset auto-skip budget for this context.
+        try { resetAutoSkipBudgetForCurrentContext(); } catch {}
 
         if (totalTracks > 1) {
           safeShowStatus('Now playing album track with numbers', 'info');
@@ -1676,6 +1843,8 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
         // Preload next 2 tracks (FIFO) + previous candidate (history)
         preloadNextTrack();
 
+        state.isLoading = false;
+
         resolve(true);
       }).catch(error => {
         // Shared links: if autoplay is blocked, keep the track ready and show a CTA.
@@ -1685,12 +1854,14 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
             if (elements.playBtn) elements.playBtn.disabled = false;
           } catch {}
           showAutoplayCta('Tap Play to start');
+          state.isLoading = false;
           resolve(false);
           return;
         }
 
         // Handle playback error
         cleanup();
+        state.isLoading = false;
         reject(error);
       });
     };
@@ -1699,6 +1870,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
       cleanup();
       if (window.Loaders) window.Loaders.hideLoader();
       const errMsg = (e && e.target && e.target.error && e.target.error.message) ? e.target.error.message : 'Source not supported';
+      state.isLoading = false;
       reject(new Error(`Audio error: ${errMsg}`));
     };
 
@@ -1745,6 +1917,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
       .catch(error => {
         if (window.Loaders) window.Loaders.hideLoader();
         cleanup();
+        state.isLoading = false;
         reject(error);
       });
   });
@@ -1760,6 +1933,20 @@ function playPrevious() {
 async function playNext() {
   state.userInteracted = true;
   showStatus('Skipping to next track now', 'info');
+
+  // Keep manual Next consistent with auto-advance by using the enhanced handlers.
+  try {
+    const currentContext = playbackManager.getCurrentContext();
+    const contextId = currentContext === 'album' ? playbackManager.getCurrentAlbumId() : null;
+    if (currentContext) {
+      enhancedPlaybackController.setContext(currentContext, contextId);
+      await enhancedPlaybackController.handleTrackEnd();
+      return;
+    }
+  } catch (err) {
+    logPlayback('debug', 'Enhanced manual Next failed; falling back', err);
+  }
+
   await playNextInContext();
 }
 
@@ -2178,9 +2365,9 @@ async function playFromFavoritesQueue(specificTrack = null) {
       safeShowStatus('This track isn\'t cached offline. Try reconnecting or add more favorites.', 'error', 3000);
       // Try next track in queue if available
       if (state.playbackQueue.length > 0) {
-        setTimeout(() => {
+        scheduleAutoAdvance('favoritesqueue-offline-uncached', 2000, () => {
           playFromFavoritesQueue().catch((err) => logPlayback('warn', 'Retry playFromFavoritesQueue failed', err));
-        }, 2000);
+        });
         return;
       } else {
         safeShowStatus('All offline tracks have finished. Add more favorites or check your connection.', 'error', 4000);
@@ -2215,6 +2402,7 @@ function setupPreloadedPlayback(tracks, startIndex = 0) {
 async function playNextInContext(maxRetries = 3) {
   // PREVENT MULTIPLE EXECUTION
   if (state.isLoading) return;
+  state.isLoading = true;
 
   // Only replace in FIFO queue if song played completely, not on manual next button
   const currentTrackUrl = (state.currentTrack && state.currentTrack.url) ? state.currentTrack.url : undefined;
@@ -2249,10 +2437,17 @@ async function playNextInContext(maxRetries = 3) {
           console.error('Error playing album track:', error);
           if (maxRetries > 0) {
             showStatus('Skipping this problematic track', 'error', 1500);
+            const budget = tryConsumeAutoSkipBudget('album-track-error');
+            if (!budget.allowed) {
+              handleAutoSkipBudgetExhausted(budget.contextKey);
+              return;
+            }
             return playNextInContext(maxRetries - 1);
           }
           // Never stop; try again from next.
-          setTimeout(() => playNextInContext(3), 1000);
+          scheduleAutoAdvance('album-track-error', 1000, () => {
+            playNextInContext(3).catch((e) => logPlayback('warn', 'Auto-advance retry failed', e));
+          });
           return;
         }
       }
@@ -2302,6 +2497,11 @@ async function playNextInContext(maxRetries = 3) {
           if (maxRetries > 0) {
             showStatus('Track issue detected, trying next', 'error', 1500);
             maxRetries--;
+            const budget = tryConsumeAutoSkipBudget('fifo-track-error');
+            if (!budget.allowed) {
+              handleAutoSkipBudgetExhausted(budget.contextKey);
+              return;
+            }
             continue;
           }
           // Never stop; keep trying.
@@ -2342,6 +2542,11 @@ async function playNextInContext(maxRetries = 3) {
           if (maxRetries > 0) {
             showStatus('Track issue detected, trying next', 'error', 1500);
             maxRetries--;
+            const budget = tryConsumeAutoSkipBudget('fifo-regenerated-track-error');
+            if (!budget.allowed) {
+              handleAutoSkipBudgetExhausted(budget.contextKey);
+              return;
+            }
             continue;
           }
           continue;
@@ -2374,7 +2579,9 @@ async function playNextInContext(maxRetries = 3) {
         // Use cache for favorites
         if (!nextItem.url) {
           console.error('Favorite without valid URL:', nextItem);
-          setTimeout(() => playNextInContext(), 1000);
+          scheduleAutoAdvance('favorite-missing-url', 1000, () => {
+            playNextInContext().catch((e) => logPlayback('warn', 'Retry after missing URL failed', e));
+          });
           return;
         }
 
@@ -2392,7 +2599,9 @@ async function playNextInContext(maxRetries = 3) {
         if (!track.url || track.url === '') {
           console.error('URL de audio vacía en favorito:', track);
           showStatus('Audio link isn\'t available', 'error', 2000);
-          setTimeout(() => playNextInContext(), 1000);
+          scheduleAutoAdvance('favorite-empty-url', 1000, () => {
+            playNextInContext().catch((e) => logPlayback('warn', 'Retry after empty URL failed', e));
+          });
           return;
         }
 
@@ -2400,7 +2609,9 @@ async function playNextInContext(maxRetries = 3) {
         const cached = typeof audioCache !== 'undefined' && audioCache && typeof audioCache.get === 'function' ? await audioCache.get(track.url, true) : null;
         if (!cached && !state.networkOnline) {
           // Transparente: saltar sin mostrar error
-          setTimeout(() => playNextInContext(), 100);
+          scheduleAutoAdvance('offline-uncached-favorite', 100, () => {
+            playNextInContext().catch((e) => logPlayback('warn', 'Offline skip failed', e));
+          });
           return;
         }
 
@@ -2414,7 +2625,9 @@ async function playNextInContext(maxRetries = 3) {
       console.error('Error playing next track:', error);
 
       // Transparente: siempre intentar la siguiente pista sin mostrar error
-      setTimeout(() => playNextInContext(), 100);
+      scheduleAutoAdvance('play-next-error', 100, () => {
+        playNextInContext().catch((e) => logPlayback('warn', 'Retry playNextInContext failed', e));
+      });
     }
   } catch (error) {
     console.error('Error crítico en playNextInContext:', error);
@@ -2554,6 +2767,11 @@ function updateProgressBar() {
 // Enhanced track listening statistics and playback control
 function setupListenTracking() {
   if (!window.elements.audio) return;
+
+  // Idempotent setup: initialization may call setupListenTracking once, but guards help avoid duplicates.
+  if (window._resonateListenTrackingAttached) return;
+  window._resonateListenTrackingAttached = true;
+  window._resonatePlaybackAutoSkipEnabled = true;
   
   let endedHandlerExecuted = false;
   let errorHandlerExecuted = false;
@@ -2582,6 +2800,9 @@ function setupListenTracking() {
     if (state.currentTrack) {
       state.currentTrackListenStart = Date.now();
     }
+
+    // New user/system playback started; restore auto-skip budget for this context.
+    try { resetAutoSkipBudgetForCurrentContext(); } catch {}
   });
 
   window.elements.audio.addEventListener('ended', async () => {
@@ -2634,9 +2855,9 @@ function setupListenTracking() {
         await enhancedPlaybackController.handleTrackEnd();
       } catch (err) {
         logPlayback('warn', 'Enhanced track end handling failed', err);
-        setTimeout(() => {
+        scheduleAutoAdvance('enhanced-ended-fallback', 500, () => {
           playNextInContext().catch((e) => logPlayback('warn', 'Fallback playNextInContext failed', e));
-        }, 500);
+        });
       }
     } else {
       // Resonate UX: never stop when context is missing.
@@ -2657,10 +2878,11 @@ function setupListenTracking() {
       showStatus('Track error. Skipping...', 'error', 2000);
     } catch {}
 
-    setTimeout(() => {
+    scheduleAutoAdvance('audio-error', 800, () => {
       const currentContext = playbackManager.getCurrentContext();
       if (currentContext) {
-        enhancedPlaybackController.setContext(currentContext);
+        const contextId = currentContext === 'album' ? playbackManager.getCurrentAlbumId() : null;
+        enhancedPlaybackController.setContext(currentContext, contextId);
         enhancedPlaybackController.handleTrackEnd().catch((err) => {
           logPlayback('warn', 'Error-skip handler failed', err);
           playNextInContext().catch((e) => logPlayback('warn', 'Fallback skip failed', e));
@@ -2668,7 +2890,7 @@ function setupListenTracking() {
       } else {
         playNextInContext().catch((e) => logPlayback('warn', 'Skip failed', e));
       }
-    }, 800);
+    });
 
     scheduleTransitionUnlock();
   });
