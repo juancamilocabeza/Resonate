@@ -2634,6 +2634,72 @@ const SW_UPDATE_LEADER_KEY = 'resonate_sw_update_leader_v1';
 const SW_UPDATE_LEADER_TTL_MS = 12000;
 const SW_UPDATE_PENDING_RELOAD_KEY = 'resonate_sw_update_pending_reload';
 const SW_UPDATE_RELOAD_MARKER_KEY = 'resonate_update_reload';
+const SW_UPDATE_AUTO_APPLY_ONCE_KEY = 'resonate_sw_update_auto_applied';
+const SW_UPDATE_LAST_CHECK_KEY = 'resonate_sw_update_last_check_v1';
+
+const SW_UPDATE_CHECK_THROTTLE_MS = 60 * 1000;
+const SW_UPDATE_PERIODIC_CHECK_PWA_MS = 10 * 60 * 1000;
+const SW_UPDATE_PERIODIC_CHECK_BROWSER_MS = 30 * 60 * 1000;
+const SW_UPDATE_PLAYBACK_QUERY_TIMEOUT_MS = 700;
+
+// Force autoupdate: apply updates automatically when ready.
+// Safety: if playback is active, activation/reload is deferred until idle.
+const SW_FORCE_AUTOUPDATE = true;
+
+function isPlaybackActiveInThisWindow() {
+  try {
+    const audio = elements && elements.audio ? elements.audio : null;
+    return !!(audio && !audio.paused);
+  } catch {
+    return false;
+  }
+}
+
+function getAutoAppliedSwVersionForSession() {
+  try {
+    const raw = sessionStorage.getItem(SW_UPDATE_AUTO_APPLY_ONCE_KEY);
+    const s = (raw != null ? String(raw) : '').trim();
+    return s || null;
+  } catch {
+    return null;
+  }
+}
+
+function markAutoAppliedSwVersionForSession(version) {
+  try {
+    if (!version) return;
+    sessionStorage.setItem(SW_UPDATE_AUTO_APPLY_ONCE_KEY, String(version));
+  } catch {
+    // ignore
+  }
+}
+
+function wasAutoAppliedForVersion(version) {
+  if (!version) return false;
+  try {
+    return getAutoAppliedSwVersionForSession() === String(version);
+  } catch {
+    return false;
+  }
+}
+
+function getLastSwUpdateCheckTs() {
+  try {
+    const raw = localStorage.getItem(SW_UPDATE_LAST_CHECK_KEY);
+    const n = raw ? Number(raw) : 0;
+    return Number.isFinite(n) ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function setLastSwUpdateCheckTs(ts) {
+  try {
+    localStorage.setItem(SW_UPDATE_LAST_CHECK_KEY, String(Number(ts) || Date.now()));
+  } catch {
+    // ignore
+  }
+}
 
 function getResonateVersionFromMeta() {
   try {
@@ -2881,110 +2947,153 @@ async function maybeAnnounceUpdateReady(registration) {
     broadcastUpdateMessage({ type: 'UPDATE_READY', ...versions });
 
     if (!tryBecomeUpdateLeader()) return;
+
+    if (SW_FORCE_AUTOUPDATE) {
+      // Trigger coordinated apply across tabs (best-effort).
+      // Note: do NOT gate on "auto-applied" here; another window may not have the waiting SW yet.
+      await applyServiceWorkerUpdateAcrossTabs({ expectedNewVersion: versions.newVersion || null });
+      return;
+    }
+
     showServiceWorkerUpdateBanner(versions);
   } catch {
     // ignore
   }
 }
 
-async function applyServiceWorkerUpdateAcrossTabs() {
-  if (!('serviceWorker' in navigator)) return;
+async function queryPlaybackStateAcrossWindows(timeoutMs = SW_UPDATE_PLAYBACK_QUERY_TIMEOUT_MS) {
+  // Ensure the coordination handler is installed so we can receive PLAYBACK_STATE messages.
+  try { ensureServiceWorkerUpdateCoordinationHandlers(); } catch {}
 
-  // Save state best-effort so we can resume after reload.
-  try { savePlaybackState(); } catch {}
-
-  try { sessionStorage.setItem(SW_UPDATE_PENDING_RELOAD_KEY, 'true'); } catch {}
-  try { sessionStorage.setItem(SW_UPDATE_RELOAD_MARKER_KEY, '1'); } catch {}
-
-  broadcastUpdateMessage({ type: 'APPLY_UPDATE' });
-
-  const reg = await navigator.serviceWorker.getRegistration('/');
-  if (!reg) {
-    showStatus('No Service Worker registration found', 'warning', 3000);
-    return;
-  }
-
-  const isPlaybackActive = (() => {
+  const reqId = (() => {
     try {
-      const audio = elements && elements.audio ? elements.audio : null;
-      return !!(audio && !audio.paused);
+      return (crypto && crypto.randomUUID) ? crypto.randomUUID() : `req_${Math.random().toString(16).slice(2)}_${Date.now()}`;
     } catch {
-      return false;
+      return `req_${Math.random().toString(16).slice(2)}_${Date.now()}`;
     }
   })();
 
-  // If update already waiting, activate it.
-  if (reg.waiting) {
-    // If playback is active, avoid interrupting audio; let playback idle trigger activation.
-    if (isPlaybackActive) {
-      showStatus('Update will apply when playback is idle', 'info', 3500);
-      try {
-        const audio = elements && elements.audio ? elements.audio : null;
-        if (audio) {
-          const onIdle = () => {
-            try {
-              audio.removeEventListener('pause', onIdle);
-              audio.removeEventListener('ended', onIdle);
-            } catch {}
-            try {
-              if (typeof signalServiceWorkerSafeActivation === 'function') {
-                signalServiceWorkerSafeActivation();
-              }
-            } catch {}
-          };
-          audio.addEventListener('pause', onIdle, { once: true });
-          audio.addEventListener('ended', onIdle, { once: true });
-        }
-      } catch {}
-      return;
-    }
+  const query = {
+    reqId,
+    states: new Map([[__resonateUpdateTabId, isPlaybackActiveInThisWindow()]]),
+    createdAt: Date.now()
+  };
 
-    try { reg.waiting.postMessage({ type: 'SKIP_WAITING' }); } catch {}
-    return;
-  }
+  window.__resonateSwPlaybackQuery = query;
+  broadcastUpdateMessage({ type: 'QUERY_PLAYBACK_STATE', reqId });
 
-  // Otherwise, ask the browser to check.
+  await new Promise((resolve) => window.setTimeout(resolve, Math.max(100, Number(timeoutMs) || 0)));
+
   try {
-    await reg.update();
-  } catch {
-    // ignore
-  }
-
-  // If it is now waiting, activate.
-  if (reg.waiting) {
-    try { reg.waiting.postMessage({ type: 'SKIP_WAITING' }); } catch {}
-    return;
-  }
-
-  // If we're actively playing, allow "safe" activation when idle.
-  try {
-    if (isPlaybackActive) {
-      showStatus('Update will apply when playback is idle', 'info', 3500);
-      try {
-        const audio = elements && elements.audio ? elements.audio : null;
-        if (audio) {
-          const onIdle = () => {
-            try {
-              audio.removeEventListener('pause', onIdle);
-              audio.removeEventListener('ended', onIdle);
-            } catch {}
-            try {
-              if (typeof signalServiceWorkerSafeActivation === 'function') {
-                signalServiceWorkerSafeActivation();
-              }
-            } catch {}
-          };
-          audio.addEventListener('pause', onIdle, { once: true });
-          audio.addEventListener('ended', onIdle, { once: true });
-        }
-      } catch {}
-      return;
+    const active = window.__resonateSwPlaybackQuery;
+    if (active && active.reqId === reqId) {
+      window.__resonateSwPlaybackQuery = null;
+      const playing = new Set();
+      for (const [tabId, isPlaying] of active.states.entries()) {
+        if (isPlaying) playing.add(tabId);
+      }
+      return playing;
     }
   } catch {
     // ignore
   }
 
-  showStatus('Update is not ready yet', 'info', 2500);
+  // Fallback: local only.
+  return new Set(isPlaybackActiveInThisWindow() ? [__resonateUpdateTabId] : []);
+}
+
+function ensureSwIdleNotifierOnce() {
+  try {
+    if (window.__resonateSwIdleNotifierInstalled) return;
+    window.__resonateSwIdleNotifierInstalled = true;
+  } catch {
+    // ignore
+  }
+
+  const audio = elements && elements.audio ? elements.audio : null;
+  if (!audio || typeof audio.addEventListener !== 'function') return;
+
+  const notifyIdle = () => {
+    try {
+      if (!window.__resonateSwShouldNotifyIdle) return;
+      window.__resonateSwShouldNotifyIdle = false;
+      broadcastUpdateMessage({ type: 'WINDOW_IDLE', tabId: __resonateUpdateTabId, ts: Date.now() });
+    } catch {
+      // ignore
+    }
+  };
+
+  audio.addEventListener('pause', notifyIdle);
+  audio.addEventListener('ended', notifyIdle);
+}
+
+async function applyServiceWorkerUpdateAcrossTabs({ expectedNewVersion = null } = {}) {
+  if (!('serviceWorker' in navigator)) return;
+
+  try {
+    try {
+      if (window.__resonateSwApplyInProgress) return;
+      window.__resonateSwApplyInProgress = true;
+    } catch {
+      // ignore
+    }
+
+    try { ensureServiceWorkerUpdateCoordinationHandlers(); } catch {}
+
+    // Save state best-effort so we can resume after reload.
+    try { savePlaybackState(); } catch {}
+
+    try { sessionStorage.setItem(SW_UPDATE_PENDING_RELOAD_KEY, 'true'); } catch {}
+    try { sessionStorage.setItem(SW_UPDATE_RELOAD_MARKER_KEY, '1'); } catch {}
+
+    broadcastUpdateMessage({ type: 'APPLY_UPDATE', expectedNewVersion: expectedNewVersion || null });
+
+    const reg = await navigator.serviceWorker.getRegistration('/');
+    if (!reg) {
+      showStatus('No Service Worker registration found', 'warning', 3000);
+      return;
+    }
+
+    const tryActivateWaitingWorker = async () => {
+      if (!reg || !reg.waiting) return false;
+
+      const waitingVersion = expectedNewVersion || (await requestWorkerVersion(reg.waiting));
+      if (waitingVersion && wasAutoAppliedForVersion(waitingVersion)) {
+        return true;
+      }
+
+      const playingTabs = await queryPlaybackStateAcrossWindows();
+      if (playingTabs && playingTabs.size > 0) {
+        // Defer activation until all windows are idle.
+        try { window.__resonateSwShouldNotifyIdle = true; } catch {}
+        ensureSwIdleNotifierOnce();
+        broadcastUpdateMessage({ type: 'UPDATE_ACTIVATION_DEFERRED', expectedNewVersion: waitingVersion || null, ts: Date.now() });
+        showStatus('Update will apply when playback is idle', 'info', 3500);
+        return true;
+      }
+
+      if (waitingVersion) markAutoAppliedSwVersionForSession(waitingVersion);
+      try { reg.waiting.postMessage({ type: 'SKIP_WAITING' }); } catch {}
+      return true;
+    };
+
+    // If update already waiting, try to activate it.
+    if (await tryActivateWaitingWorker()) return;
+
+    // Otherwise, ask the browser to check.
+    try {
+      await reg.update();
+    } catch {
+      // ignore
+    }
+
+    // If it is now waiting, try to activate it.
+    if (await tryActivateWaitingWorker()) return;
+
+    showStatus('Update is not ready yet', 'info', 2500);
+  } finally {
+    try { window.__resonateSwApplyInProgress = false; } catch {}
+  }
 }
 
 function ensureServiceWorkerControllerChangeReloadHandler() {
@@ -3017,10 +3126,73 @@ function ensureServiceWorkerUpdateCoordinationHandlers() {
   onBroadcastUpdateMessage(async (msg) => {
     if (!msg || !msg.type) return;
 
+    if (msg.type === 'QUERY_PLAYBACK_STATE') {
+      try {
+        broadcastUpdateMessage({
+          type: 'PLAYBACK_STATE',
+          reqId: msg.reqId || null,
+          tabId: __resonateUpdateTabId,
+          isPlaying: isPlaybackActiveInThisWindow(),
+          ts: Date.now()
+        });
+      } catch {
+        // ignore
+      }
+      return;
+    }
+
+    if (msg.type === 'PLAYBACK_STATE') {
+      try {
+        const q = window.__resonateSwPlaybackQuery;
+        if (!q || !q.reqId || !msg.reqId || q.reqId !== msg.reqId) return;
+        const tabId = msg.tabId ? String(msg.tabId) : null;
+        if (!tabId) return;
+        q.states.set(tabId, !!msg.isPlaying);
+      } catch {
+        // ignore
+      }
+      return;
+    }
+
     if (msg.type === 'UPDATE_READY') {
-      if (isUpdateBannerDismissedForSession()) return;
       if (!tryBecomeUpdateLeader()) return;
+
+      if (SW_FORCE_AUTOUPDATE) {
+        await applyServiceWorkerUpdateAcrossTabs({ expectedNewVersion: msg.newVersion || null });
+        return;
+      }
+
+      if (isUpdateBannerDismissedForSession()) return;
       showServiceWorkerUpdateBanner({ currentVersion: msg.currentVersion || null, newVersion: msg.newVersion || null });
+      return;
+    }
+
+    if (msg.type === 'UPDATE_ACTIVATION_DEFERRED') {
+      // If this window is playing, arm an idle notifier so the leader can retry activation.
+      try {
+        const isPlaying = isPlaybackActiveInThisWindow();
+        if (isPlaying) {
+          window.__resonateSwShouldNotifyIdle = true;
+          ensureSwIdleNotifierOnce();
+        }
+      } catch {
+        // ignore
+      }
+      return;
+    }
+
+    if (msg.type === 'WINDOW_IDLE') {
+      // When any window becomes idle, the leader retries activation (throttled).
+      try {
+        if (!tryBecomeUpdateLeader()) return;
+        const now = Date.now();
+        const last = Number(window.__resonateSwLastIdleRetryTs || 0);
+        if (now - last < 500) return;
+        window.__resonateSwLastIdleRetryTs = now;
+        await applyServiceWorkerUpdateAcrossTabs({ expectedNewVersion: msg.expectedNewVersion || null });
+      } catch {
+        // ignore
+      }
       return;
     }
 
@@ -3040,69 +3212,20 @@ function ensureServiceWorkerUpdateCoordinationHandlers() {
       try { sessionStorage.setItem(SW_UPDATE_PENDING_RELOAD_KEY, 'true'); } catch {}
       try { sessionStorage.setItem(SW_UPDATE_RELOAD_MARKER_KEY, '1'); } catch {}
 
+      // Only a leader should activate the waiting worker. Others just prepare for reload.
       try {
-        const reg = await navigator.serviceWorker.getRegistration('/');
-        const isPlaybackActive = (() => {
-          try {
-            const audio = elements && elements.audio ? elements.audio : null;
-            return !!(audio && !audio.paused);
-          } catch {
-            return false;
-          }
-        })();
-
-        if (reg && reg.waiting) {
-          if (isPlaybackActive) {
-            try {
-              const audio = elements && elements.audio ? elements.audio : null;
-              if (audio) {
-                const onIdle = () => {
-                  try {
-                    audio.removeEventListener('pause', onIdle);
-                    audio.removeEventListener('ended', onIdle);
-                  } catch {}
-                  try {
-                    if (typeof signalServiceWorkerSafeActivation === 'function') {
-                      signalServiceWorkerSafeActivation();
-                    }
-                  } catch {}
-                };
-                audio.addEventListener('pause', onIdle, { once: true });
-                audio.addEventListener('ended', onIdle, { once: true });
-              }
-            } catch {}
-            return;
-          }
-
-          reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-          return;
+        if (isPlaybackActiveInThisWindow()) {
+          window.__resonateSwShouldNotifyIdle = true;
+          ensureSwIdleNotifierOnce();
         }
-        if (reg) {
-          try { await reg.update(); } catch {}
-          if (reg.waiting) {
-            if (isPlaybackActive) {
-              try {
-                const audio = elements && elements.audio ? elements.audio : null;
-                if (audio) {
-                  const onIdle = () => {
-                    try {
-                      audio.removeEventListener('pause', onIdle);
-                      audio.removeEventListener('ended', onIdle);
-                    } catch {}
-                    try {
-                      if (typeof signalServiceWorkerSafeActivation === 'function') {
-                        signalServiceWorkerSafeActivation();
-                      }
-                    } catch {}
-                  };
-                  audio.addEventListener('pause', onIdle, { once: true });
-                  audio.addEventListener('ended', onIdle, { once: true });
-                }
-              } catch {}
-              return;
-            }
 
-            try { reg.waiting.postMessage({ type: 'SKIP_WAITING' }); } catch {}
+        if (tryBecomeUpdateLeader()) {
+          await applyServiceWorkerUpdateAcrossTabs({ expectedNewVersion: msg.expectedNewVersion || null });
+        } else {
+          // Best-effort: warm the update check so waiting is ready when the leader activates.
+          const reg = await navigator.serviceWorker.getRegistration('/');
+          if (reg) {
+            try { await reg.update(); } catch {}
           }
         }
       } catch {
@@ -3110,6 +3233,85 @@ function ensureServiceWorkerUpdateCoordinationHandlers() {
       }
     }
   });
+}
+
+async function checkForServiceWorkerUpdates(reason = '') {
+  if (!('serviceWorker' in navigator)) return;
+  try { ensureServiceWorkerUpdateCoordinationHandlers(); } catch {}
+
+  try {
+    try {
+      if (window.__resonateSwUpdateCheckInProgress) return;
+      window.__resonateSwUpdateCheckInProgress = true;
+    } catch {
+      // ignore
+    }
+
+    // Throttle across all windows (localStorage) and prefer a single leader.
+    try {
+      const now = Date.now();
+      const last = getLastSwUpdateCheckTs();
+      if (last && now - last < SW_UPDATE_CHECK_THROTTLE_MS) return;
+      if (!tryBecomeUpdateLeader()) return;
+      setLastSwUpdateCheckTs(now);
+    } catch {
+      // ignore
+    }
+
+    try {
+      const reg = await navigator.serviceWorker.getRegistration('/');
+      if (!reg) return;
+      await reg.update();
+      await maybeAnnounceUpdateReady(reg);
+    } catch (e) {
+      // ignore
+    }
+  } finally {
+    try { window.__resonateSwUpdateCheckInProgress = false; } catch {}
+  }
+}
+
+function ensureServiceWorkerUpdateCheckHandlers() {
+  if (window.__resonateSwUpdateCheckHandlersInstalled) return;
+  window.__resonateSwUpdateCheckHandlersInstalled = true;
+
+  // PWA/standalone often doesn't navigate, so add resume/focus checks.
+  try {
+    window.addEventListener('focus', () => checkForServiceWorkerUpdates('focus'));
+  } catch {}
+
+  try {
+    window.addEventListener('pageshow', () => checkForServiceWorkerUpdates('pageshow'));
+  } catch {}
+
+  try {
+    document.addEventListener('visibilitychange', () => {
+      try {
+        if (!document.hidden) checkForServiceWorkerUpdates('visible');
+      } catch {}
+    });
+  } catch {}
+
+  try {
+    window.addEventListener('online', () => checkForServiceWorkerUpdates('online'));
+  } catch {}
+
+  try {
+    const interval = (typeof isRunningAsPWA === 'function' && isRunningAsPWA())
+      ? SW_UPDATE_PERIODIC_CHECK_PWA_MS
+      : SW_UPDATE_PERIODIC_CHECK_BROWSER_MS;
+
+    window.setInterval(() => {
+      try {
+        if (document.hidden) return;
+        checkForServiceWorkerUpdates('periodic');
+      } catch {
+        // ignore
+      }
+    }, Math.max(60 * 1000, Number(interval) || SW_UPDATE_PERIODIC_CHECK_BROWSER_MS));
+  } catch {
+    // ignore
+  }
 }
 
 function updateFavoritesList() {
@@ -3472,9 +3674,17 @@ async function registerServiceWorker() {
       // Update coordination across tabs (Mode B prompt)
       ensureServiceWorkerUpdateCoordinationHandlers();
 
+      // PWA-friendly update checks (focus/pageshow/visibility/periodic)
+      ensureServiceWorkerUpdateCheckHandlers();
+
       // If an update is already waiting, announce it.
       try {
         await maybeAnnounceUpdateReady(registration);
+      } catch {}
+
+      // Also proactively check for updates on startup (throttled).
+      try {
+        await checkForServiceWorkerUpdates('startup');
       } catch {}
 
       // Watch for future updates.
