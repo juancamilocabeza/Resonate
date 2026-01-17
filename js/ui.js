@@ -261,7 +261,9 @@ try {
 window.SEARCH_UI_CONFIG = window.SEARCH_UI_CONFIG || {
   // Better mobile UX: keep keyboard open after searching so users can refine.
   closeKeyboardOnSubmit: false,
-  keyboardOpenThresholdPx: 80
+  keyboardOpenThresholdPx: 80,
+  // Mobile UX: if there is search history, first tap shows it without opening the keyboard.
+  suppressKeyboardWhenHistory: true
 };
 
 function ensureSearchInputControllerBound() {
@@ -269,8 +271,26 @@ function ensureSearchInputControllerBound() {
   if (!input || input.dataset.searchControllerBound === 'true') return;
   input.dataset.searchControllerBound = 'true';
 
-  const config = window.SEARCH_UI_CONFIG || { closeKeyboardOnSubmit: false, keyboardOpenThresholdPx: 80 };
+  const config = window.SEARCH_UI_CONFIG || { closeKeyboardOnSubmit: false, keyboardOpenThresholdPx: 80, suppressKeyboardWhenHistory: true };
   let isCleaning = false;
+  let suppressNextFocus = false;
+
+  const isCoarsePointer = (() => {
+    try {
+      return Boolean(window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches);
+    } catch {
+      return false;
+    }
+  })();
+
+  const hasSearchHistory = () => {
+    try {
+      const history = loadSearchHistory();
+      return Array.isArray(history) && history.length > 0;
+    } catch {
+      return false;
+    }
+  };
 
   const updateSearchClearButton = () => {
     const btn = elements.searchClear;
@@ -318,10 +338,30 @@ function ensureSearchInputControllerBound() {
     });
   }
 
-  // Tap on the input should always bring back the panel (especially when already focused).
-  input.addEventListener('pointerdown', () => {
+  // Tap on the input should bring back the panel.
+  // On coarse-pointer devices, if search history exists and the panel is closed, open history without focusing the input
+  // to avoid auto-opening the on-screen keyboard.
+  input.addEventListener('pointerdown', (e) => {
     if (isCleaning) return;
+
     const currentQuery = (input.value || '').trim();
+    const panelOpen = Boolean(elements.searchResults && elements.searchResults.classList.contains('active'));
+
+    if (isCoarsePointer && config.suppressKeyboardWhenHistory && currentQuery === '' && !panelOpen && hasSearchHistory()) {
+      suppressNextFocus = true;
+      try {
+        e.preventDefault();
+        e.stopPropagation();
+      } catch {}
+
+      displaySearchHistory();
+      state.searchActive = true;
+      hideFavoritesList();
+      setSearchOpenState(true);
+      scheduleSearchInsetsBurst();
+      return;
+    }
+
     if (currentQuery === '') {
       displaySearchHistory();
       state.searchActive = true;
@@ -333,6 +373,15 @@ function ensureSearchInputControllerBound() {
 
   input.addEventListener('focus', () => {
     if (isCleaning) return;
+
+    // If we intentionally opened history without focus (mobile UX), immediately blur.
+    if (suppressNextFocus) {
+      suppressNextFocus = false;
+      try { input.blur(); } catch {}
+      setKeyboardOpenState(false);
+      return;
+    }
+
     setKeyboardOpenState(true);
 
     const currentQuery = (input.value || '').trim();
@@ -4110,7 +4159,10 @@ function setupPWAInstall() {
   // There is no reliable cross-browser "is installed" API, so we use heuristics.
   try {
     window.addEventListener('appinstalled', () => {
-      try { localStorage.setItem('resonate_has_run_standalone', 'true'); } catch {}
+      try {
+        localStorage.setItem('resonate_has_run_standalone', 'true');
+        localStorage.setItem('resonate_standalone_last_seen', String(Date.now()));
+      } catch {}
     });
   } catch {}
 
@@ -4191,6 +4243,16 @@ function ensureInstallPromptCapture() {
 
       try { window.__resonateDeferredInstallPrompt = e; } catch {}
 
+      // Mark that the install prompt exists in this session (helps entry-banner heuristics)
+      try { sessionStorage.setItem('resonate_install_prompt_seen', 'true'); } catch {}
+
+      // If an "Open app" banner is visible, switch it to "Install".
+      try {
+        if (typeof window.__resonateEntryBannerSetMode === 'function') {
+          window.__resonateEntryBannerSetMode('install');
+        }
+      } catch {}
+
       // Shared-link pages use a dedicated banner; don't stack two prompts.
       try {
         const sharedLinkActive = (() => {
@@ -4265,12 +4327,32 @@ function maybeShowOpenInAppBannerForSharedLink() {
     try { sessionStorage.setItem('resonate_shared_link_banner_active', 'true'); } catch {}
 
     const installedLikely = (() => {
-      try { return localStorage.getItem('resonate_has_run_standalone') === 'true'; } catch { return false; }
+      try {
+        const hasFlag = localStorage.getItem('resonate_has_run_standalone') === 'true';
+        if (!hasFlag) return false;
+
+        const rawTs = localStorage.getItem('resonate_standalone_last_seen');
+        const ts = rawTs ? parseInt(rawTs, 10) : NaN;
+        if (!Number.isFinite(ts) || ts <= 0) return false;
+
+        // If this is too old, treat it as unknown to avoid false "Open app" after uninstall.
+        const MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
+        return (Date.now() - ts) <= MAX_AGE_MS;
+      } catch {
+        return false;
+      }
     })();
 
     // If an install prompt is available in this session, assume "not installed".
     const installPromptAvailable = (() => {
-      try { return Boolean(window.__resonateDeferredInstallPrompt); } catch { return false; }
+      try {
+        if (Boolean(window.__resonateDeferredInstallPrompt)) return true;
+      } catch {}
+      try {
+        return sessionStorage.getItem('resonate_install_prompt_seen') === 'true';
+      } catch {
+        return false;
+      }
     })();
 
     const isIOS = (() => {
@@ -4285,32 +4367,30 @@ function maybeShowOpenInAppBannerForSharedLink() {
     })();
 
     // Decide which single banner variant to show.
-    // - If installed-likely and there's no install prompt, show "Open app".
-    // - Otherwise, show "Install" guidance.
-    const mode = (installedLikely && !installPromptAvailable) ? 'open' : 'install';
-
-    const titleText = mode === 'open'
-      ? 'Open in the Resonate app'
-      : 'Install Resonate to keep listening';
+    // Default to "Install" unless we are fairly sure the app exists.
+    let mode = (installedLikely && !installPromptAvailable) ? 'open' : 'install';
 
     const subtitleText = 'Faster playback, offline support, and fewer interruptions.';
 
-    const primaryText = mode === 'open'
-      ? 'Open app'
-      : (isIOS && !installPromptAvailable ? 'Add to Home Screen' : 'Install');
+    const getTitleText = (m) => (m === 'open' ? 'Open in the Resonate app' : 'Install Resonate to keep listening');
+    const getPrimaryText = (m) => {
+      if (m === 'open') return 'Open app';
+      return (isIOS && !installPromptAvailable) ? 'Add to Home Screen' : 'Install';
+    };
     const secondaryText = 'Continue in browser';
 
     const banner = document.createElement('div');
     banner.id = 'open-in-app-banner';
     banner.className = 'pwa-install-banner open-in-app-banner';
+    banner.dataset.entryBannerMode = mode;
     banner.innerHTML = `
       <div class="pwa-banner-content">
         <div class="open-in-app-text" role="status" aria-live="polite">
-          <div class="open-in-app-title">${titleText}</div>
+          <div class="open-in-app-title">${getTitleText(mode)}</div>
           <div class="open-in-app-subtitle">${subtitleText}</div>
         </div>
         <div class="open-in-app-actions">
-          <button class="pwa-install-btn open-in-app-btn" type="button">${primaryText}</button>
+          <button class="pwa-install-btn open-in-app-btn" type="button">${getPrimaryText(mode)}</button>
           <button class="pwa-install-btn pwa-install-btn-secondary" type="button">${secondaryText}</button>
           <button class="pwa-close-btn" aria-label="Close" type="button">✕</button>
         </div>
@@ -4318,8 +4398,26 @@ function maybeShowOpenInAppBannerForSharedLink() {
     `;
 
     const primaryBtn = banner.querySelector('.open-in-app-btn');
+    const titleEl = banner.querySelector('.open-in-app-title');
     const secondaryBtn = banner.querySelector('.pwa-install-btn-secondary');
     const closeBtn = banner.querySelector('.pwa-close-btn');
+
+    const setBannerMode = (nextMode) => {
+      try {
+        const nm = nextMode === 'open' ? 'open' : 'install';
+        if (mode === nm) return;
+        mode = nm;
+        try { banner.dataset.entryBannerMode = mode; } catch {}
+        if (titleEl) titleEl.textContent = getTitleText(mode);
+        if (primaryBtn) primaryBtn.textContent = getPrimaryText(mode);
+      } catch {
+        // ignore
+      }
+    };
+
+    // Expose a hook so the install-prompt listener can flip the banner to "Install"
+    // if beforeinstallprompt fires after the banner is rendered.
+    try { window.__resonateEntryBannerSetMode = setBannerMode; } catch {}
 
     if (primaryBtn) {
       primaryBtn.addEventListener('click', () => {
@@ -4349,6 +4447,7 @@ function maybeShowOpenInAppBannerForSharedLink() {
       secondaryBtn.addEventListener('click', () => {
         // Continue in browser just dismisses the banner for this session.
         try { sessionStorage.setItem(dismissKey, 'true'); } catch {}
+        try { window.__resonateEntryBannerSetMode = null; } catch {}
         try { banner.classList.remove('active'); } catch {}
         setTimeout(() => {
           try { banner.remove(); } catch {}
@@ -4359,6 +4458,7 @@ function maybeShowOpenInAppBannerForSharedLink() {
     if (closeBtn) {
       closeBtn.addEventListener('click', () => {
         try { sessionStorage.setItem(dismissKey, 'true'); } catch {}
+        try { window.__resonateEntryBannerSetMode = null; } catch {}
         try { banner.classList.remove('active'); } catch {}
         setTimeout(() => {
           try { banner.remove(); } catch {}
@@ -4370,6 +4470,17 @@ function maybeShowOpenInAppBannerForSharedLink() {
     setTimeout(() => {
       try { banner.classList.add('active'); } catch {}
     }, 100);
+
+    // If the prompt arrives a bit later, switch to install automatically.
+    // (Common on Android where beforeinstallprompt fires after initial load.)
+    setTimeout(() => {
+      try {
+        if (mode !== 'open') return;
+        if (Boolean(window.__resonateDeferredInstallPrompt)) {
+          setBannerMode('install');
+        }
+      } catch {}
+    }, 1200);
   } catch {
     // ignore
   }
@@ -4487,7 +4598,10 @@ function isRunningAsPWA() {
   const standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
          window.navigator.standalone === true;
   if (standalone) {
-    try { localStorage.setItem('resonate_has_run_standalone', 'true'); } catch {}
+    try {
+      localStorage.setItem('resonate_has_run_standalone', 'true');
+      localStorage.setItem('resonate_standalone_last_seen', String(Date.now()));
+    } catch {}
   }
   return standalone;
 }
