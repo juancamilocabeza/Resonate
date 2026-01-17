@@ -44,8 +44,9 @@ function setFavoritesPanelInsets() {
     if (!favoritesList || !favoritesList.classList.contains('active')) return;
 
     const searchInput = elements.searchInput;
+    const footer = document.querySelector('.footer');
     const playerSection = document.querySelector('.main-player-section');
-    if (!searchInput || !playerSection) return;
+    if (!searchInput || !(footer || playerSection)) return;
 
     const viewportHeight = Math.max(
       0,
@@ -54,10 +55,10 @@ function setFavoritesPanelInsets() {
     if (!viewportHeight) return;
 
     const inputRect = searchInput.getBoundingClientRect();
-    const playerRect = playerSection.getBoundingClientRect();
+    const bottomAnchorRect = (footer || playerSection).getBoundingClientRect();
 
     const topBase = Math.max(0, Math.round(inputRect.bottom + 10));
-    const bottomBase = Math.max(0, Math.round(viewportHeight - playerRect.top + 10));
+    const bottomBase = Math.max(0, Math.round(viewportHeight - bottomAnchorRect.top + 10));
 
     // Ensure the panel keeps a useful height even if the player is tall.
     const minPanelHeight = Math.max(220, Math.round(viewportHeight * 0.45));
@@ -83,8 +84,9 @@ function setSearchPanelInsets() {
     if (!searchResults || !searchResults.classList.contains('active')) return;
 
     const searchInput = elements.searchInput;
+    const footer = document.querySelector('.footer');
     const playerSection = document.querySelector('.main-player-section');
-    if (!searchInput || !playerSection) return;
+    if (!searchInput || !(footer || playerSection)) return;
 
     const viewportHeight = Math.max(
       0,
@@ -93,10 +95,10 @@ function setSearchPanelInsets() {
     if (!viewportHeight) return;
 
     const inputRect = searchInput.getBoundingClientRect();
-    const playerRect = playerSection.getBoundingClientRect();
+    const bottomAnchorRect = (footer || playerSection).getBoundingClientRect();
 
     const topBase = Math.max(0, Math.round(inputRect.bottom + 10));
-    const bottomBase = Math.max(0, Math.round(viewportHeight - playerRect.top + 10));
+    const bottomBase = Math.max(0, Math.round(viewportHeight - bottomAnchorRect.top + 10));
 
     const minPanelHeight = Math.max(220, Math.round(viewportHeight * 0.45));
     const maxInset = Math.max(0, viewportHeight - 80);
