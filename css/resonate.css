@@ -3135,6 +3135,17 @@ body.offline-mode .share-track-button {
   transition: var(--transition-all-norm);
 }
 
+.pwa-install-btn.pwa-install-btn-secondary {
+  background: transparent;
+  color: var(--fg);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.pwa-install-btn.pwa-install-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateY(-1px);
+}
+
 .pwa-install-btn:hover {
   background: var(--accent-alt);
   transform: translateY(-1px);

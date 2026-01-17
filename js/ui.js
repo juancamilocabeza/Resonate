@@ -2113,19 +2113,29 @@ function displayAlbumTracks(albumId, tracksContainer) {
 }
 
 function updatePlayButtonState() {
-  // Disable/enable all buttons in the player-content div based on favorites count
+  const hasFavorites = !!(state.favorites && state.favorites.length > 0);
+  const hasSearchResults = !!(state.searchResults && state.searchResults.length > 0);
+  const hasSavedResume = !!(state.savedPlaybackState && state.savedPlaybackState.track && (state.savedPlaybackState.track.url || state.savedPlaybackState.track.id));
+  const hasLegacyResume = !!(state.currentTrack && state.currentTrack.url);
+  const hasResume = hasSavedResume || hasLegacyResume;
+
+  // If we have neither favorites, search results, nor a resume snapshot, lock the player.
+  const shouldLockPlayer = !hasFavorites && !hasSearchResults && !hasResume;
+
+  // Apply a baseline disabled state to buttons inside the player content area.
+  // We still override individual controls below for better UX.
   const playerContent = elements.playerContent;
   if (playerContent) {
     const buttons = playerContent.querySelectorAll('button');
     if (buttons) {
       buttons.forEach(button => {
         if (!button) return;
-        button.disabled = state.favorites.length === 0;
+        button.disabled = shouldLockPlayer;
       });
     }
   }
 
-  if (!state.favorites || state.favorites.length === 0) {
+  if (shouldLockPlayer) {
     if (elements.prevBtn) elements.prevBtn.disabled = true;
     if (elements.playBtn) elements.playBtn.disabled = true;
     if (elements.nextBtn) elements.nextBtn.disabled = true;
@@ -2141,7 +2151,7 @@ function updatePlayButtonState() {
     // Keep favorites toggle usable so users can open the panel and see the empty-state message.
     if (elements.favoritesToggle) elements.favoritesToggle.classList.remove('disabled');
     if (elements.playAllFavoritesBtn) elements.playAllFavoritesBtn.classList.add('disabled');
-  } else {
+  } else if (hasFavorites) {
     // Habilitar los controles relevantes cuando haya favoritos
     if (elements.prevBtn) elements.prevBtn.disabled = false;
     if (elements.playBtn) elements.playBtn.disabled = false;
@@ -2158,6 +2168,34 @@ function updatePlayButtonState() {
     // Enable favorites controls
     if (elements.favoritesToggle) elements.favoritesToggle.classList.remove('disabled');
     if (elements.playAllFavoritesBtn) elements.playAllFavoritesBtn.classList.remove('disabled');
+  } else if (hasSearchResults) {
+    // Search context: allow playback even without favorites
+    enableControlsForSearchResults();
+    // Favorites-only controls should remain disabled when there are no favorites.
+    if (elements.playAllFavoritesBtn) elements.playAllFavoritesBtn.disabled = true;
+    if (elements.playAllFavoritesBtn) elements.playAllFavoritesBtn.classList.add('disabled');
+  } else if (hasResume) {
+    // Resume snapshot exists: allow Play (and favoriting) even with an empty favorites list.
+    if (elements.playBtn) elements.playBtn.disabled = false;
+    if (elements.playBtn) elements.playBtn.title = 'Resume last track';
+
+    if (elements.favoriteBtn) elements.favoriteBtn.disabled = false;
+    if (elements.favoriteBtn) elements.favoriteBtn.title = 'Add to favorites';
+
+    // Prev/Next depend on having a restored context; keep them conservative.
+    if (elements.prevBtn) elements.prevBtn.disabled = true;
+    if (elements.nextBtn) elements.nextBtn.disabled = true;
+    if (elements.prevBtn) elements.prevBtn.title = 'Resume to enable navigation';
+    if (elements.nextBtn) elements.nextBtn.title = 'Resume to enable navigation';
+
+    if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.disabled = true;
+    if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.title = 'Shuffle favorites';
+
+    if (elements.playAllFavoritesBtn) elements.playAllFavoritesBtn.disabled = true;
+    if (elements.playAllFavoritesBtn) elements.playAllFavoritesBtn.classList.add('disabled');
+
+    // Keep favorites toggle usable so users can open the panel and see the empty-state message.
+    if (elements.favoritesToggle) elements.favoritesToggle.classList.remove('disabled');
   }
 }
 
@@ -2778,6 +2816,8 @@ function loadSavedPlaybackState() {
       }
 
       showStatus('Resuming your last track', 'info', 5000);
+      // Ensure controls reflect the presence of a resume snapshot (Play should be enabled).
+      try { updatePlayButtonState(); } catch {}
       return savedState;
     } else {
       // Expired, remove it
@@ -3891,26 +3931,123 @@ function setupPWAInstall() {
   if (dismissed) return;
 
   let deferredPrompt;
+  // Expose for other UI surfaces (e.g., shared-link banner)
+  try { window.__resonateDeferredInstallPrompt = null; } catch {}
 
   // Define installPWA function first to ensure it's available
   window.installPWA = async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
+    const prompt = deferredPrompt || window.__resonateDeferredInstallPrompt;
+    if (!prompt) {
+      showStatus("Install isn't available right now. Try your browser menu → Add to Home Screen.", 'info', 6000);
+      return;
+    }
+
+    try {
+      prompt.prompt();
+      const { outcome } = await prompt.userChoice;
       if (outcome === 'accepted') {
         showStatus('Resonate is installing', 'info', 3000);
       }
-      hidePWAInstallBanner();
-      deferredPrompt = null;
+    } catch {
+      // ignore
     }
+
+    hidePWAInstallBanner();
+    deferredPrompt = null;
+    try { window.__resonateDeferredInstallPrompt = null; } catch {}
   };
 
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredPrompt = e;
+    try { window.__resonateDeferredInstallPrompt = e; } catch {}
     showPWAInstallBanner();
   });
 }
+
+function maybeShowOpenInAppBannerForSharedLink() {
+  try {
+    if (isRunningAsPWA()) return;
+    if (document.getElementById('open-in-app-banner')) return;
+    // Avoid stacking multiple top banners.
+    if (document.getElementById('pwa-install-banner')) return;
+    if (document.getElementById('sw-update-banner')) return;
+
+    const url = new URL(window.location.href);
+    const playIdentifier = url.searchParams.get('play');
+    if (!playIdentifier) return;
+
+    const tParam = url.searchParams.get('t');
+    const parsedTrackIndex = tParam !== null ? parseInt(tParam, 10) : null;
+    const trackIndex = Number.isFinite(parsedTrackIndex) && parsedTrackIndex >= 0 ? parsedTrackIndex : null;
+
+    const shareUrl = (typeof window.buildShareUrl === 'function')
+      ? window.buildShareUrl(playIdentifier, trackIndex)
+      : window.location.href;
+
+    // Dismiss policy: per-session to avoid annoyance during navigation.
+    const dismissKey = 'resonate_open_in_app_banner_dismissed';
+    try {
+      if (sessionStorage.getItem(dismissKey) === 'true') return;
+    } catch {}
+
+    const banner = document.createElement('div');
+    banner.id = 'open-in-app-banner';
+    banner.className = 'pwa-install-banner';
+    banner.innerHTML = `
+      <div class="pwa-banner-content">
+        <div class="pwa-banner-text">
+          <div class="pwa-banner-buttons">
+            Want the best experience? Open this in the Resonate app.
+            <button class="pwa-install-btn open-in-app-btn">Open in app</button>
+            <button class="pwa-install-btn pwa-install-btn-secondary">Get the app</button>
+            <button class="pwa-close-btn" aria-label="Close">✕</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const openBtn = banner.querySelector('.open-in-app-btn');
+    const installBtn = banner.querySelector('.pwa-install-btn-secondary');
+    const closeBtn = banner.querySelector('.pwa-close-btn');
+
+    if (openBtn) {
+      openBtn.addEventListener('click', () => {
+        // Best-effort: navigating to the canonical app URL is what enables OS link capturing.
+        try { window.location.href = shareUrl; } catch {}
+      });
+    }
+
+    if (installBtn) {
+      installBtn.addEventListener('click', () => {
+        if (typeof window.installPWA === 'function') {
+          window.installPWA();
+        } else {
+          showStatus('To install: open your browser menu → Add to Home Screen', 'info', 6500);
+        }
+      });
+    }
+
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => {
+        try { sessionStorage.setItem(dismissKey, 'true'); } catch {}
+        try { banner.classList.remove('active'); } catch {}
+        setTimeout(() => {
+          try { banner.remove(); } catch {}
+        }, 300);
+      });
+    }
+
+    document.body.appendChild(banner);
+    setTimeout(() => {
+      try { banner.classList.add('active'); } catch {}
+    }, 100);
+  } catch {
+    // ignore
+  }
+}
+
+window.maybeShowOpenInAppBannerForSharedLink = maybeShowOpenInAppBannerForSharedLink;
 
 // Show PWA install banner
 function showPWAInstallBanner() {
@@ -4128,12 +4265,26 @@ function normalizeTrackCreator(creator) {
   return c ? c : '';
 }
 
+function getCanonicalShareOrigin() {
+  try {
+    const origin = String(window.location.origin || '').trim();
+    const hostname = String(window.location.hostname || '').trim().toLowerCase();
+    // Production canonicalization: ensure shared links match the PWA install origin.
+    // Keep localhost/dev origins untouched.
+    if (hostname === 'resonateplayer.com') return 'https://www.resonateplayer.com';
+    if (hostname === 'www.resonateplayer.com') return origin;
+    return origin;
+  } catch {
+    return window.location.origin;
+  }
+}
+
 function buildShareUrl(identifier, trackIndex = null) {
-  const baseUrl = new URL(window.location.href);
+  const baseUrl = new URL(getCanonicalShareOrigin());
   baseUrl.hash = '';
   baseUrl.search = '';
-  // Canonicalize common entrypoints so shared links are stable.
-  baseUrl.pathname = baseUrl.pathname.replace(/index\.html$/i, '');
+  // Always share within the PWA scope entrypoint.
+  baseUrl.pathname = '/';
 
   const params = new URLSearchParams();
   params.set('play', identifier);
@@ -4146,6 +4297,9 @@ function buildShareUrl(identifier, trackIndex = null) {
   baseUrl.search = params.toString();
   return baseUrl.toString();
 }
+
+// Expose for other scripts (initialization.js) to reuse a single canonical share-link builder.
+window.buildShareUrl = buildShareUrl;
 
 function applyTrackMetaTagsForIdentifier(identifier, title, creator = '', trackIndex = null) {
   if (!identifier) return;

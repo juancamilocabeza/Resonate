@@ -237,10 +237,17 @@ async function updateMetaTagsForSharedLink(identifier, trackIndex = null) {
 
     // Update meta tags for social media sharing
     const shareUrl = (() => {
-      const baseUrl = new URL(window.location.href);
+      try {
+        if (typeof window.buildShareUrl === 'function') {
+          return window.buildShareUrl(identifier, trackIndex);
+        }
+      } catch {}
+
+      // Fallback: stay within current origin and root scope.
+      const baseUrl = new URL(window.location.origin);
       baseUrl.hash = '';
       baseUrl.search = '';
-      baseUrl.pathname = baseUrl.pathname.replace(/index\.html$/i, '');
+      baseUrl.pathname = '/';
 
       const params = new URLSearchParams();
       params.set('play', identifier);
@@ -293,6 +300,12 @@ async function handleSharedLink() {
 
     if (playIdentifier) {
       console.log('Shared link detected, playing:', playIdentifier);
+      // If opened in browser, guide the user to open/install the PWA.
+      try {
+        if (typeof window.maybeShowOpenInAppBannerForSharedLink === 'function') {
+          window.maybeShowOpenInAppBannerForSharedLink();
+        }
+      } catch {}
       safeShowStatus('Preparing to load your shared track', 'info');
 
       const cleanedUrl = new URL(window.location.href);
