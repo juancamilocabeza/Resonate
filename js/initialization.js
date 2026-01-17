@@ -1111,13 +1111,44 @@ function waitForAllScripts() {
         try {
           const app = document.getElementById('app');
           if (app) {
+            const isSharedLink = (() => {
+              try { return new URL(window.location.href).searchParams.has('play'); } catch { return false; }
+            })();
+            const diagnostics = {
+              uiScriptLoaded: window.uiScriptLoaded,
+              stateAvailable: typeof window.state !== 'undefined',
+              elementsAvailable: typeof window.elements !== 'undefined',
+              showStatusAvailable: typeof window.showStatus !== 'undefined',
+              online: (() => { try { return navigator.onLine; } catch { return true; } })(),
+              swController: (() => { try { return Boolean(navigator.serviceWorker && navigator.serviceWorker.controller); } catch { return false; } })(),
+              url: (() => { try { return String(window.location.href); } catch { return ''; } })()
+            };
+
             app.innerHTML = `
-              <div style="font-family:system-ui;padding:24px;text-align:center;margin-top:48px">
-                <h2>⚠️ App Loading Error</h2>
-                <p>Some resources failed to load. Please check your connection and reload.</p>
-                <button onclick="location.reload()" style="margin-top:16px;padding:12px 24px;font-size:16px;cursor:pointer;background:#007bff;color:white;border:none;border-radius:4px">
-                  Reload App
-                </button>
+              <div style="font-family:system-ui;padding:20px;max-width:520px;margin:0 auto;text-align:left">
+                <h2 style="margin:16px 0 8px 0">Resonate couldn’t load</h2>
+                <p style="margin:0 0 16px 0;line-height:1.5">
+                  This usually happens when a script fails to download (network, ad-blocker, or a cached old version).
+                  ${isSharedLink ? 'Your shared track link is still here — you can retry safely.' : ''}
+                </p>
+
+                <div style="display:flex;gap:10px;flex-wrap:wrap;margin:16px 0">
+                  <button onclick="location.reload()" style="padding:12px 16px;font-size:16px;cursor:pointer;background:#3da9ff;color:white;border:none;border-radius:10px">
+                    Retry
+                  </button>
+                  <button onclick="location.href='/'" style="padding:12px 16px;font-size:16px;cursor:pointer;background:#e5e5e5;color:#111;border:none;border-radius:10px">
+                    Go to home
+                  </button>
+                </div>
+
+                <details style="margin-top:12px">
+                  <summary style="cursor:pointer">Show diagnostics</summary>
+                  <pre style="white-space:pre-wrap;word-break:break-word;background:#111;color:#e5e5e5;padding:12px;border-radius:10px;overflow:auto;margin-top:10px">${JSON.stringify(diagnostics, null, 2)}</pre>
+                </details>
+
+                <p style="margin:16px 0 0 0;color:#666;line-height:1.5">
+                  Tip: if this keeps happening, try disabling ad-blocker for this site, or clear the site data/cache and retry.
+                </p>
               </div>
             `;
             app.style.display = 'block';

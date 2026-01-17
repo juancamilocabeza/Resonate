@@ -3961,43 +3961,41 @@ function setupPWAInstall() {
       const prompt = (() => {
         try { return window.__resonateDeferredInstallPrompt || null; } catch { return null; }
       })();
-    if (!prompt) {
-      const isIOS = (() => {
-        try {
-          const ua = String(navigator.userAgent || '').toLowerCase();
-          const iOS = /iphone|ipad|ipod/.test(ua);
-          const isMS = typeof window.MSStream !== 'undefined';
-          return iOS && !isMS;
-        } catch {
-          return false;
-        }
-      })();
+      if (!prompt) {
+        const isIOS = (() => {
+          try {
+            const ua = String(navigator.userAgent || '').toLowerCase();
+            const iOS = /iphone|ipad|ipod/.test(ua);
+            const isMS = typeof window.MSStream !== 'undefined';
+            return iOS && !isMS;
+          } catch {
+            return false;
+          }
+        })();
 
-      showStatus(
-        isIOS
-          ? "To install: tap Share → Add to Home Screen"
-          : "To install: open your browser menu → Add to Home Screen",
-        'info',
-        6500
-      );
-      return;
-    }
-
-    try {
-      prompt.prompt();
-      const { outcome } = await prompt.userChoice;
-      if (outcome === 'accepted') {
-        showStatus('Resonate is installing', 'info', 3000);
+        showStatus(
+          isIOS
+            ? "To install: tap Share → Add to Home Screen"
+            : "To install: open your browser menu → Add to Home Screen",
+          'info',
+          6500
+        );
+        return;
       }
-    } catch (e) {
-      try { showStatus('Install could not start on this device', 'warning', 5000); } catch {}
-    } catch {
-      // ignore
-    }
 
-    hidePWAInstallBanner();
+      try {
+        prompt.prompt();
+        const { outcome } = await prompt.userChoice;
+        if (outcome === 'accepted') {
+          showStatus('Resonate is installing', 'info', 3000);
+        }
+      } catch {
+        try { showStatus('Install could not start on this device', 'warning', 5000); } catch {}
+      }
+
+      try { hidePWAInstallBanner(); } catch {}
       try { window.__resonateDeferredInstallPrompt = null; } catch {}
-  };
+    };
   }
 
   // One-time prompt capture (safe to call multiple times)
