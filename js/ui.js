@@ -3939,9 +3939,13 @@ function setupPWAInstall() {
   const dismissed = localStorage.getItem('resonate_pwa_banner_dismissed') === 'true';
   if (dismissed) return;
 
-  let deferredPrompt;
+  // Ensure we capture the install prompt even if it fires early.
   // Expose for other UI surfaces (e.g., shared-link banner)
-  try { window.__resonateDeferredInstallPrompt = null; } catch {}
+  try {
+    if (typeof window.__resonateDeferredInstallPrompt === 'undefined') {
+      window.__resonateDeferredInstallPrompt = null;
+    }
+  } catch {}
 
   // Best-effort: remember that the user has (or had) the PWA installed.
   // There is no reliable cross-browser "is installed" API, so we use heuristics.
@@ -3951,9 +3955,12 @@ function setupPWAInstall() {
     });
   } catch {}
 
-  // Define installPWA function first to ensure it's available
-  window.installPWA = async () => {
-    const prompt = deferredPrompt || window.__resonateDeferredInstallPrompt;
+  // Define installPWA early and keep it stable. It always uses the captured prompt.
+  if (typeof window.installPWA !== 'function') {
+    window.installPWA = async () => {
+      const prompt = (() => {
+        try { return window.__resonateDeferredInstallPrompt || null; } catch { return null; }
+      })();
     if (!prompt) {
       const isIOS = (() => {
         try {
@@ -3982,32 +3989,72 @@ function setupPWAInstall() {
       if (outcome === 'accepted') {
         showStatus('Resonate is installing', 'info', 3000);
       }
+    } catch (e) {
+      try { showStatus('Install could not start on this device', 'warning', 5000); } catch {}
     } catch {
       // ignore
     }
 
     hidePWAInstallBanner();
-    deferredPrompt = null;
-    try { window.__resonateDeferredInstallPrompt = null; } catch {}
+      try { window.__resonateDeferredInstallPrompt = null; } catch {}
   };
+  }
 
-  window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    deferredPrompt = e;
-    try { window.__resonateDeferredInstallPrompt = e; } catch {}
+  // One-time prompt capture (safe to call multiple times)
+  ensureInstallPromptCapture();
 
-    // Shared-link pages use a dedicated banner; don't stack two prompts.
-    try {
+  // If the prompt was already captured before setup runs, show the banner now.
+  try {
+    if (window.__resonateDeferredInstallPrompt && !document.getElementById('open-in-app-banner')) {
       const sharedLinkActive = (() => {
         try { return sessionStorage.getItem('resonate_shared_link_banner_active') === 'true'; } catch { return false; }
       })();
-      if (sharedLinkActive || document.getElementById('open-in-app-banner')) {
-        return;
+      if (!sharedLinkActive) {
+        showPWAInstallBanner();
       }
-    } catch {}
+    }
+  } catch {}
+}
 
-    showPWAInstallBanner();
-  });
+// Capture `beforeinstallprompt` as early/reliably as possible.
+// This event can fire before we finish initializing UI, so we hook it once and stash it globally.
+function ensureInstallPromptCapture() {
+  try {
+    if (window.__resonateInstallPromptHooked === true) return;
+    window.__resonateInstallPromptHooked = true;
+  } catch {
+    // If we can't set a sentinel, continue best-effort.
+  }
+
+  try {
+    window.addEventListener('beforeinstallprompt', (e) => {
+      try {
+        e.preventDefault();
+      } catch {}
+
+      try { window.__resonateDeferredInstallPrompt = e; } catch {}
+
+      // Shared-link pages use a dedicated banner; don't stack two prompts.
+      try {
+        const sharedLinkActive = (() => {
+          try { return sessionStorage.getItem('resonate_shared_link_banner_active') === 'true'; } catch { return false; }
+        })();
+        if (sharedLinkActive || document.getElementById('open-in-app-banner')) {
+          return;
+        }
+      } catch {}
+
+      // Only show the generic banner if the user hasn't dismissed it.
+      try {
+        const dismissed = localStorage.getItem('resonate_pwa_banner_dismissed') === 'true';
+        if (dismissed) return;
+      } catch {}
+
+      try { showPWAInstallBanner(); } catch {}
+    });
+  } catch {
+    // ignore
+  }
 }
 
 function maybeShowOpenInAppBannerForSharedLink() {
