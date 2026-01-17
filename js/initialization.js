@@ -52,9 +52,30 @@ function setFooterHeightVar() {
   }
 }
 
+function setVisualViewportInsetsVars() {
+  try {
+    const vv = window.visualViewport;
+    if (!vv) {
+      document.documentElement.style.setProperty('--vv-bottom-inset', `0px`);
+      return;
+    }
+
+    const vvHeight = Number.isFinite(vv.height) ? vv.height : 0;
+    const vvTop = Number.isFinite(vv.offsetTop) ? vv.offsetTop : 0;
+    const layoutH = Number.isFinite(window.innerHeight) ? window.innerHeight : 0;
+
+    // Bottom occlusion area (e.g., browser UI / system bars) not reflected in CSS safe-area insets.
+    const bottomInset = Math.max(0, Math.round(layoutH - (vvHeight + vvTop)));
+    document.documentElement.style.setProperty('--vv-bottom-inset', `${bottomInset}px`);
+  } catch {
+    // ignore
+  }
+}
+
 // Set early and keep updated on viewport changes
 setAppViewportHeightVar();
 setFooterHeightVar();
+setVisualViewportInsetsVars();
 try {
   let scheduled = false;
   const scheduleUpdate = () => {
@@ -64,6 +85,7 @@ try {
       scheduled = false;
       setAppViewportHeightVar();
       setFooterHeightVar();
+      setVisualViewportInsetsVars();
     });
   };
 

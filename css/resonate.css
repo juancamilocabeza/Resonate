@@ -126,7 +126,7 @@
 
   /* Component Sizes - Mobile Optimized */
   /* Mobile cover: responsive to viewport height to avoid clipping controls */
-  --art-size-mobile: clamp(160px, 32vh, 280px);
+  --art-size-mobile: clamp(140px, 28vh, 240px);
   --art-size-tablet: 320px;
   --art-size-desktop: 380px;
   /* Mobile controls: keep accessible tap targets while protecting vertical space */
@@ -342,7 +342,7 @@ body {
   padding-left: 0;
   padding-right: 0;
   /* Reserve space for sticky/fixed footer + safe-area so controls stay reachable */
-  padding-bottom: calc(var(--spacing-md) + env(safe-area-inset-bottom, 0) + var(--footer-height, 44px));
+  padding-bottom: calc(var(--spacing-md) + env(safe-area-inset-bottom, 0) + var(--vv-bottom-inset, 0px) + var(--footer-height, 44px));
   box-sizing: border-box;
   position: relative;
   z-index: 50;
@@ -867,6 +867,7 @@ h3 {
   box-sizing: border-box;
   padding-left: calc(var(--spacing-sm) + env(safe-area-inset-left, 0));
   padding-right: calc(var(--spacing-sm) + env(safe-area-inset-right, 0));
+  padding-bottom: var(--vv-bottom-inset, 0px);
 }
 
 @media (max-width: 400px) {
@@ -2891,7 +2892,7 @@ body.offline-mode .share-track-button {
 */
 @media (max-height: 568px) {
   :root {
-    --art-size-mobile: clamp(160px, 30vh, 210px);
+    --art-size-mobile: clamp(150px, 26vh, 200px);
     --btn-size-mobile: 52px;
     --btn-large-mobile: 64px;
   }
@@ -2958,7 +2959,7 @@ body.offline-mode .share-track-button {
 
 @media (max-height: 430px) {
   :root {
-    --art-size-mobile: clamp(110px, 24vh, 150px);
+    --art-size-mobile: clamp(100px, 20vh, 140px);
     --btn-size-mobile: 44px;
     --btn-large-mobile: 56px;
   }
