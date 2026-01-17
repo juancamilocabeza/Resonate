@@ -303,7 +303,7 @@ body {
   color: var(--fg);
   font: 15px/1.4 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   overflow-x: hidden;
-  overflow-y: hidden;
+  overflow-y: auto;
   -webkit-tap-highlight-color: transparent;
   scroll-behavior: smooth;
 }
@@ -312,9 +312,12 @@ body {
 .app {
   display: flex;
   flex-direction: column;
-  position: relative;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
   height: var(--app-height, 100vh);
-  min-height: var(--app-height, 100vh);
+  min-height: 0;
   overflow-x: hidden;
   overflow-y: hidden;
   justify-content: flex-start;
