@@ -2618,7 +2618,7 @@ body.offline-mode .share-track-button {
   }
 
   /* Search results / recent searches: full width, natural height (scroll handled by .discovery-section) */
-  .search-results {
+  .search-results:not(.active) {
     width: 100%;
     max-width: 1000px;
     margin: 6px auto 0 !important;
@@ -2637,7 +2637,7 @@ body.offline-mode .share-track-button {
     width: 100%;
   }
   
-  .favorites-list {
+  .favorites-list:not(.active) {
     max-width: 1000px;
     margin: 6px auto !important;
     overflow-y: visible;

@@ -55,10 +55,15 @@ function setFavoritesPanelInsets() {
     if (!viewportHeight) return;
 
     const inputRect = searchInput.getBoundingClientRect();
-    const bottomAnchorRect = (footer || playerSection).getBoundingClientRect();
+    const bottomAnchorEl = footer || playerSection;
+    const bottomAnchorRect = bottomAnchorEl.getBoundingClientRect();
+    const footerMarginTop = footer
+      ? (parseFloat(getComputedStyle(footer).marginTop) || 0)
+      : 0;
+    const bottomAnchorTop = footer ? (bottomAnchorRect.top - footerMarginTop) : bottomAnchorRect.top;
 
     const topBase = Math.max(0, Math.round(inputRect.bottom + 10));
-    const bottomBase = Math.max(0, Math.round(viewportHeight - bottomAnchorRect.top + 10));
+    const bottomBase = Math.max(0, Math.round(viewportHeight - bottomAnchorTop + 10));
 
     // Ensure the panel keeps a useful height even if the player is tall.
     const minPanelHeight = Math.max(220, Math.round(viewportHeight * 0.45));
@@ -95,10 +100,15 @@ function setSearchPanelInsets() {
     if (!viewportHeight) return;
 
     const inputRect = searchInput.getBoundingClientRect();
-    const bottomAnchorRect = (footer || playerSection).getBoundingClientRect();
+    const bottomAnchorEl = footer || playerSection;
+    const bottomAnchorRect = bottomAnchorEl.getBoundingClientRect();
+    const footerMarginTop = footer
+      ? (parseFloat(getComputedStyle(footer).marginTop) || 0)
+      : 0;
+    const bottomAnchorTop = footer ? (bottomAnchorRect.top - footerMarginTop) : bottomAnchorRect.top;
 
     const topBase = Math.max(0, Math.round(inputRect.bottom + 10));
-    const bottomBase = Math.max(0, Math.round(viewportHeight - bottomAnchorRect.top + 10));
+    const bottomBase = Math.max(0, Math.round(viewportHeight - bottomAnchorTop + 10));
 
     const minPanelHeight = Math.max(220, Math.round(viewportHeight * 0.45));
     const maxInset = Math.max(0, viewportHeight - 80);
