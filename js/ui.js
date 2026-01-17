@@ -3935,9 +3935,10 @@ function setupPWAInstall() {
     }
   } catch {}
 
-  // Check if user previously dismissed the banner
+  // Check if user previously dismissed the *generic* banner.
+  // Important: even if dismissed, we must still capture the install prompt and
+  // keep window.installPWA working for shared-link and other entry banners.
   const dismissed = localStorage.getItem('resonate_pwa_banner_dismissed') === 'true';
-  if (dismissed) return;
 
   // Ensure we capture the install prompt even if it fires early.
   // Expose for other UI surfaces (e.g., shared-link banner)
@@ -4007,7 +4008,7 @@ function setupPWAInstall() {
       const sharedLinkActive = (() => {
         try { return sessionStorage.getItem('resonate_shared_link_banner_active') === 'true'; } catch { return false; }
       })();
-      if (!sharedLinkActive) {
+      if (!sharedLinkActive && !dismissed) {
         showPWAInstallBanner();
       }
     }
