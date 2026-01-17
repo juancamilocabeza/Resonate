@@ -47,14 +47,28 @@ function setFavoritesPanelInsets() {
     const playerSection = document.querySelector('.main-player-section');
     if (!searchInput || !playerSection) return;
 
-    const viewportHeight = Math.max(0, Math.round(window.innerHeight || 0));
+    const viewportHeight = Math.max(
+      0,
+      Math.round((window.visualViewport && window.visualViewport.height) || window.innerHeight || 0)
+    );
     if (!viewportHeight) return;
 
     const inputRect = searchInput.getBoundingClientRect();
     const playerRect = playerSection.getBoundingClientRect();
 
-    const topPx = Math.max(0, Math.round(inputRect.bottom + 10));
-    const bottomPx = Math.max(0, Math.round(viewportHeight - playerRect.top + 10));
+    const topBase = Math.max(0, Math.round(inputRect.bottom + 10));
+    const bottomBase = Math.max(0, Math.round(viewportHeight - playerRect.top + 10));
+
+    // Ensure the panel keeps a useful height even if the player is tall.
+    const minPanelHeight = Math.max(220, Math.round(viewportHeight * 0.45));
+    const maxInset = Math.max(0, viewportHeight - 80);
+
+    let topPx = Math.min(topBase, maxInset);
+    let bottomPx = Math.min(bottomBase, maxInset);
+
+    if (viewportHeight - topPx - bottomPx < minPanelHeight) {
+      bottomPx = Math.max(0, viewportHeight - topPx - minPanelHeight);
+    }
 
     document.documentElement.style.setProperty('--favorites-panel-top', `${topPx}px`);
     document.documentElement.style.setProperty('--favorites-panel-bottom', `${bottomPx}px`);
@@ -72,14 +86,27 @@ function setSearchPanelInsets() {
     const playerSection = document.querySelector('.main-player-section');
     if (!searchInput || !playerSection) return;
 
-    const viewportHeight = Math.max(0, Math.round(window.innerHeight || 0));
+    const viewportHeight = Math.max(
+      0,
+      Math.round((window.visualViewport && window.visualViewport.height) || window.innerHeight || 0)
+    );
     if (!viewportHeight) return;
 
     const inputRect = searchInput.getBoundingClientRect();
     const playerRect = playerSection.getBoundingClientRect();
 
-    const topPx = Math.max(0, Math.round(inputRect.bottom + 10));
-    const bottomPx = Math.max(0, Math.round(viewportHeight - playerRect.top + 10));
+    const topBase = Math.max(0, Math.round(inputRect.bottom + 10));
+    const bottomBase = Math.max(0, Math.round(viewportHeight - playerRect.top + 10));
+
+    const minPanelHeight = Math.max(220, Math.round(viewportHeight * 0.45));
+    const maxInset = Math.max(0, viewportHeight - 80);
+
+    let topPx = Math.min(topBase, maxInset);
+    let bottomPx = Math.min(bottomBase, maxInset);
+
+    if (viewportHeight - topPx - bottomPx < minPanelHeight) {
+      bottomPx = Math.max(0, viewportHeight - topPx - minPanelHeight);
+    }
 
     document.documentElement.style.setProperty('--search-panel-top', `${topPx}px`);
     document.documentElement.style.setProperty('--search-panel-bottom', `${bottomPx}px`);
