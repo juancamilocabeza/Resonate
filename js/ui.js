@@ -3926,6 +3926,15 @@ async function registerServiceWorker() {
 function setupPWAInstall() {
   if (isRunningAsPWA()) return; // Don't show if already installed
 
+  // If this navigation is a shared link, we use a dedicated banner UX.
+  // Capture the install prompt (if any) but never show the generic install banner.
+  try {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('play')) {
+      try { sessionStorage.setItem('resonate_shared_link_banner_active', 'true'); } catch {}
+    }
+  } catch {}
+
   // Check if user previously dismissed the banner
   const dismissed = localStorage.getItem('resonate_pwa_banner_dismissed') === 'true';
   if (dismissed) return;
@@ -3934,11 +3943,36 @@ function setupPWAInstall() {
   // Expose for other UI surfaces (e.g., shared-link banner)
   try { window.__resonateDeferredInstallPrompt = null; } catch {}
 
+  // Best-effort: remember that the user has (or had) the PWA installed.
+  // There is no reliable cross-browser "is installed" API, so we use heuristics.
+  try {
+    window.addEventListener('appinstalled', () => {
+      try { localStorage.setItem('resonate_has_run_standalone', 'true'); } catch {}
+    });
+  } catch {}
+
   // Define installPWA function first to ensure it's available
   window.installPWA = async () => {
     const prompt = deferredPrompt || window.__resonateDeferredInstallPrompt;
     if (!prompt) {
-      showStatus("Install isn't available right now. Try your browser menu → Add to Home Screen.", 'info', 6000);
+      const isIOS = (() => {
+        try {
+          const ua = String(navigator.userAgent || '').toLowerCase();
+          const iOS = /iphone|ipad|ipod/.test(ua);
+          const isMS = typeof window.MSStream !== 'undefined';
+          return iOS && !isMS;
+        } catch {
+          return false;
+        }
+      })();
+
+      showStatus(
+        isIOS
+          ? "To install: tap Share → Add to Home Screen"
+          : "To install: open your browser menu → Add to Home Screen",
+        'info',
+        6500
+      );
       return;
     }
 
@@ -3961,6 +3995,17 @@ function setupPWAInstall() {
     e.preventDefault();
     deferredPrompt = e;
     try { window.__resonateDeferredInstallPrompt = e; } catch {}
+
+    // Shared-link pages use a dedicated banner; don't stack two prompts.
+    try {
+      const sharedLinkActive = (() => {
+        try { return sessionStorage.getItem('resonate_shared_link_banner_active') === 'true'; } catch { return false; }
+      })();
+      if (sharedLinkActive || document.getElementById('open-in-app-banner')) {
+        return;
+      }
+    } catch {}
+
     showPWAInstallBanner();
   });
 }
@@ -3970,7 +4015,12 @@ function maybeShowOpenInAppBannerForSharedLink() {
     if (isRunningAsPWA()) return;
     if (document.getElementById('open-in-app-banner')) return;
     // Avoid stacking multiple top banners.
-    if (document.getElementById('pwa-install-banner')) return;
+    // If the generic install banner is already showing (race), replace it with the shared-link banner.
+    const installBanner = document.getElementById('pwa-install-banner');
+    if (installBanner) {
+      try { hidePWAInstallBanner(); } catch {}
+      try { installBanner.remove(); } catch {}
+    }
     if (document.getElementById('sw-update-banner')) return;
 
     const url = new URL(window.location.href);
@@ -3997,10 +4047,49 @@ function maybeShowOpenInAppBannerForSharedLink() {
     } catch {}
 
     // Dismiss policy: per-session to avoid annoyance during navigation.
-    const dismissKey = 'resonate_open_in_app_banner_dismissed';
+    const dismissKey = 'resonate_shared_link_banner_dismissed';
     try {
       if (sessionStorage.getItem(dismissKey) === 'true') return;
     } catch {}
+
+    // Mark shared-link banner active to suppress the generic install banner.
+    try { sessionStorage.setItem('resonate_shared_link_banner_active', 'true'); } catch {}
+
+    const installedLikely = (() => {
+      try { return localStorage.getItem('resonate_has_run_standalone') === 'true'; } catch { return false; }
+    })();
+
+    // If an install prompt is available in this session, assume "not installed".
+    const installPromptAvailable = (() => {
+      try { return Boolean(window.__resonateDeferredInstallPrompt); } catch { return false; }
+    })();
+
+    const isIOS = (() => {
+      try {
+        const ua = String(navigator.userAgent || '').toLowerCase();
+        const iOS = /iphone|ipad|ipod/.test(ua);
+        const isMS = typeof window.MSStream !== 'undefined';
+        return iOS && !isMS;
+      } catch {
+        return false;
+      }
+    })();
+
+    // Decide which single banner variant to show.
+    // - If installed-likely and there's no install prompt, show "Open app".
+    // - Otherwise, show "Install" guidance.
+    const mode = (installedLikely && !installPromptAvailable) ? 'open' : 'install';
+
+    const titleText = mode === 'open'
+      ? 'Open in the Resonate app'
+      : 'Install Resonate to keep listening';
+
+    const subtitleText = 'Faster playback, offline support, and fewer interruptions.';
+
+    const primaryText = mode === 'open'
+      ? 'Open app'
+      : (isIOS && !installPromptAvailable ? 'Add to Home Screen' : 'Install');
+    const secondaryText = 'Continue in browser';
 
     const banner = document.createElement('div');
     banner.id = 'open-in-app-banner';
@@ -4008,36 +4097,53 @@ function maybeShowOpenInAppBannerForSharedLink() {
     banner.innerHTML = `
       <div class="pwa-banner-content">
         <div class="open-in-app-text" role="status" aria-live="polite">
-          <div class="open-in-app-title">Open in Resonate</div>
-          <div class="open-in-app-subtitle">Keep listening with a faster player, fewer interruptions, and offline support.</div>
+          <div class="open-in-app-title">${titleText}</div>
+          <div class="open-in-app-subtitle">${subtitleText}</div>
         </div>
         <div class="open-in-app-actions">
-          <button class="pwa-install-btn open-in-app-btn" type="button" aria-label="Open this track in the Resonate app">Open</button>
-          <button class="pwa-install-btn pwa-install-btn-secondary" type="button">Get the app</button>
+          <button class="pwa-install-btn open-in-app-btn" type="button">${primaryText}</button>
+          <button class="pwa-install-btn pwa-install-btn-secondary" type="button">${secondaryText}</button>
           <button class="pwa-close-btn" aria-label="Close" type="button">✕</button>
         </div>
       </div>
     `;
 
-    const openBtn = banner.querySelector('.open-in-app-btn');
-    const installBtn = banner.querySelector('.pwa-install-btn-secondary');
+    const primaryBtn = banner.querySelector('.open-in-app-btn');
+    const secondaryBtn = banner.querySelector('.pwa-install-btn-secondary');
     const closeBtn = banner.querySelector('.pwa-close-btn');
 
-    if (openBtn) {
-      openBtn.addEventListener('click', () => {
-        // Best-effort: navigating to the canonical app URL is what enables OS link capturing.
-        try { showStatus('Opening Resonate…', 'info', 2000); } catch {}
-        try { window.location.replace(shareUrl); } catch {}
+    if (primaryBtn) {
+      primaryBtn.addEventListener('click', () => {
+        if (mode === 'open') {
+          // Best-effort: navigating to the canonical app URL is what enables OS link capturing.
+          try { showStatus('Opening Resonate…', 'info', 2000); } catch {}
+          try { window.location.replace(shareUrl); } catch {}
+          return;
+        }
+
+        // Install mode
+        if (typeof window.installPWA === 'function') {
+          window.installPWA();
+          return;
+        }
+        showStatus(
+          isIOS
+            ? 'To install: tap Share → Add to Home Screen'
+            : 'To install: open your browser menu → Add to Home Screen',
+          'info',
+          6500
+        );
       });
     }
 
-    if (installBtn) {
-      installBtn.addEventListener('click', () => {
-        if (typeof window.installPWA === 'function') {
-          window.installPWA();
-        } else {
-          showStatus('To install: open your browser menu → Add to Home Screen', 'info', 6500);
-        }
+    if (secondaryBtn) {
+      secondaryBtn.addEventListener('click', () => {
+        // Continue in browser just dismisses the banner for this session.
+        try { sessionStorage.setItem(dismissKey, 'true'); } catch {}
+        try { banner.classList.remove('active'); } catch {}
+        setTimeout(() => {
+          try { banner.remove(); } catch {}
+        }, 300);
       });
     }
 
@@ -4066,6 +4172,8 @@ window.maybeShowOpenInAppBannerForSharedLink = maybeShowOpenInAppBannerForShared
 function showPWAInstallBanner() {
   // Check if banner already exists
   if (document.getElementById('pwa-install-banner')) return;
+  // Avoid stacking with shared-link banner.
+  if (document.getElementById('open-in-app-banner')) return;
 
   const banner = document.createElement('div');
   banner.id = 'pwa-install-banner';
@@ -4134,8 +4242,12 @@ function setupPushNotifications() {
 
 // PWA detection
 function isRunningAsPWA() {
-  return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+  const standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
          window.navigator.standalone === true;
+  if (standalone) {
+    try { localStorage.setItem('resonate_has_run_standalone', 'true'); } catch {}
+  }
+  return standalone;
 }
 
 // Search history management

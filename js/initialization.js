@@ -299,6 +299,9 @@ async function handleSharedLink() {
     const trackIndex = Number.isFinite(parsedTrackIndex) && parsedTrackIndex >= 0 ? parsedTrackIndex : null;
 
     if (playIdentifier) {
+      // Mark this navigation as a shared-link session (used to suppress generic install banners).
+      try { sessionStorage.setItem('resonate_shared_link_banner_active', 'true'); } catch {}
+
       console.log('Shared link detected, playing:', playIdentifier);
       // If opened in browser, guide the user to open/install the PWA.
       try {
