@@ -108,7 +108,7 @@ function computeOverlayInsets({
   if (!vpHeight || !inputEl || !anchorEl) return null;
 
   const inputRect = inputEl.getBoundingClientRect();
-  const inputBottomVp = inputRect.bottom - vpTop;
+  const inputBottomVp = Math.max(0, inputRect.bottom - vpTop);
 
   const footerRect = (anchorEl && anchorEl.classList && anchorEl.classList.contains('footer'))
     ? anchorEl.getBoundingClientRect()
@@ -134,6 +134,10 @@ function computeOverlayInsets({
       anchorTopVp = footerStartFallback;
     }
   }
+
+  // Keep measurements inside the visible viewport.
+  if (!Number.isFinite(anchorTopVp)) anchorTopVp = vpHeight;
+  anchorTopVp = Math.max(0, Math.min(anchorTopVp, vpHeight));
 
   const requiredBottomPx = Math.max(0, Math.round(vpHeight - anchorTopVp + gapPx));
   let bottomPx = Math.min(requiredBottomPx, vpHeight);

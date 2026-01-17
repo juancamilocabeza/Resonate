@@ -1678,7 +1678,7 @@ select:focus {
   left: 10px;
   right: 10px;
   top: var(--search-panel-top, 120px);
-  bottom: var(--search-panel-bottom, 200px);
+  bottom: var(--search-panel-bottom, calc(var(--footer-height, 44px) + env(safe-area-inset-bottom, 0) + var(--vv-bottom-inset, 0px) + 10px));
   width: auto;
   max-width: none;
   height: auto;
@@ -1687,6 +1687,8 @@ select:focus {
   opacity: 1;
   background: var(--card);
   z-index: 140;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .search-results-header {
@@ -1734,6 +1736,7 @@ select:focus {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-sm);
+  padding-bottom: calc(var(--spacing-md) + env(safe-area-inset-bottom, 0) + var(--vv-bottom-inset, 0px));
 }
 
 .search-result {
