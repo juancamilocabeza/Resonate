@@ -125,13 +125,15 @@
   --transition-all-norm: all 0.2s ease;
 
   /* Component Sizes - Mobile Optimized */
-  --art-size-mobile: 280px;
+  /* Mobile cover: responsive to viewport height to avoid clipping controls */
+  --art-size-mobile: clamp(160px, 32vh, 280px);
   --art-size-tablet: 320px;
   --art-size-desktop: 380px;
-  --btn-size-mobile: 64px;
+  /* Mobile controls: keep accessible tap targets while protecting vertical space */
+  --btn-size-mobile: 60px;
   --btn-size-tablet: 44px;
   --btn-size-desktop: 40px;
-  --btn-large-mobile: 80px;
+  --btn-large-mobile: 72px;
   --btn-large-tablet: 52px;
   --btn-large-desktop: 50px;
   --search-height-mobile: 48px;
@@ -332,7 +334,7 @@ body {
 
 .main-player-section {
   flex-shrink: 0;
-  padding: var(--spacing-xl) 0;
+  padding: var(--spacing-lg) 0;
   position: relative;
   z-index: 50;
 }
@@ -537,7 +539,7 @@ h3 {
 }
 
 .player-content {
-    gap: 22px;
+    gap: 16px;
     max-width: var(--content-max-width);
   display: flex;
   flex-direction: column;
@@ -553,7 +555,7 @@ h3 {
   width: var(--art-size-mobile);
   height: var(--art-size-mobile);
     gap: 18px;
-    max-width: 280px;
+    max-width: min(90vw, var(--art-size-mobile));
   margin: 0 auto var(--spacing-xl);
   border-radius: 16px;
   overflow: hidden;
@@ -829,25 +831,36 @@ h3 {
    - .shuffle-favorites-btn: Border only when .active
    - .favorites-toggle: Border visibility managed by .disabled state
  */
-.controls {
+.main-player-section .controls {
   display: flex !important;
   flex-direction: row !important;
   justify-content: center;
   align-items: center;
-  gap: clamp(var(--spacing-sm), 6vw, calc(var(--spacing-lg) * 2));
+  /* Keep 5 buttons fitting on 375–390px wide devices (e.g., iPhone X / iPhone 12 Pro) */
+  gap: clamp(6px, 3vw, 18px);
   margin: 8px auto 0 auto;
   flex-shrink: 0;
   flex-wrap: nowrap !important;
   width: 100%;
+  box-sizing: border-box;
+  padding-left: calc(var(--spacing-sm) + env(safe-area-inset-left, 0));
+  padding-right: calc(var(--spacing-sm) + env(safe-area-inset-right, 0));
 }
 
-.controls button {
-  width: 70px;
-  height: 70px;
+@media (max-width: 400px) {
+  .main-player-section .controls {
+    gap: clamp(6px, 2vw, 12px);
+  }
+}
+
+.main-player-section .controls button {
+  width: var(--btn-size-mobile);
+  height: var(--btn-size-mobile);
   flex-shrink: 0;
-  min-width: 70px;
-  min-height: 70px;
+  min-width: var(--btn-size-mobile);
+  min-height: var(--btn-size-mobile);
   position: relative;
+  font-size: 20px;
 }
 
 /* Base button styles */
@@ -927,10 +940,10 @@ button:active:not(:disabled) {
 .play-btn,
 .play-btn-favorite {
   /* Sizing - Fixed size */
-  width: 80px;
-  height: 80px;
-  min-width: 80px;
-  min-height: 80px;
+  width: var(--btn-large-mobile);
+  height: var(--btn-large-mobile);
+  min-width: var(--btn-large-mobile);
+  min-height: var(--btn-large-mobile);
   
   /* Shape & Border */
   border-radius: 50%;
@@ -944,7 +957,7 @@ button:active:not(:disabled) {
   box-shadow: none !important;
   
   /* Typography */
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 900;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
@@ -959,6 +972,15 @@ button:active:not(:disabled) {
   
   /* Animation */
   transition: var(--transition-bounce);
+}
+
+/* Ensure the play button stays larger than the other controls */
+.main-player-section .controls .play-btn,
+.main-player-section .controls .play-btn-favorite {
+  width: var(--btn-large-mobile);
+  height: var(--btn-large-mobile);
+  min-width: var(--btn-large-mobile);
+  min-height: var(--btn-large-mobile);
 }
 
 .play-btn:hover,
@@ -986,7 +1008,7 @@ button:active:not(:disabled) {
 /* Navigation buttons */
 .prev-btn,
 .next-btn {
-  min-width: 70px;
+  min-width: var(--btn-size-mobile);
   font-size: 20px;
   color: var(--control-fg);
 }
@@ -1013,7 +1035,7 @@ button:active:not(:disabled) {
 /* Favorite button */
 .favorite-btn,
 .additional-btn {
-  width: 80px;
+  width: var(--btn-size-mobile);
   font-size: 20px;
   color: var(--control-fg);
 }
@@ -1034,10 +1056,25 @@ button:active:not(:disabled) {
 
 /* Shuffle button */
 .shuffle-favorites-btn {
-  width: 80px;
+  width: var(--btn-size-mobile);
   font-size: 20px;
   outline: none !important;
   color: var(--control-fg);
+}
+
+/* Touch devices can apply :hover in a sticky way; avoid layout shifts that can clip controls */
+@media (hover: none) and (pointer: coarse) {
+  .progress-section:hover,
+  .art:hover,
+  button:hover:not(:disabled),
+  .play-btn:hover,
+  .play-btn-favorite:hover {
+    transform: none;
+  }
+
+  .progress-bar:hover {
+    height: var(--progress-height);
+  }
 }
 
 .shuffle-favorites-btn:focus-visible {
@@ -2403,13 +2440,13 @@ body.offline-mode .share-track-button {
     font-size: 24px;
   }
 
-  .controls {
+  .main-player-section .controls {
     display: flex !important;
     flex-direction: row !important;
     gap: 32px;
   }
 
-  .controls button {
+  .main-player-section .controls button {
     width: 70px;
     height: 70px;
     flex-shrink: 0;
@@ -2550,14 +2587,14 @@ body.offline-mode .share-track-button {
     margin: var(--spacing-md) 0; /* Reduced margins */
   }
 
-  .controls {
+  .main-player-section .controls {
     display: flex !important;
     flex-direction: row !important;
     max-width: 960px;
     gap: 32px;
   }
 
-  .controls button {
+  .main-player-section .controls button {
     width: 70px;
     height: 70px;
   }
@@ -2781,83 +2818,13 @@ body.offline-mode .share-track-button {
     max-width: var(--content-max-width);
   }
 }
-
-  .controls {
-    display: flex !important;
-    flex-direction: row !important;
-    gap: clamp(var(--spacing-sm), 3vw, var(--spacing-md));
-    flex-wrap: nowrap;
-    padding-bottom: calc(var(--spacing-md) + env(safe-area-inset-bottom, 0));
-  }
-
-  .controls button {
-    width: var(--btn-size-mobile);
-    height: var(--btn-size-mobile);
-    min-width: var(--btn-size-mobile);
-    min-height: var(--btn-size-mobile);
-    flex-shrink: 0;
-    font-size: 22px;
-  }
-
-  .play-btn,
-  .play-btn-favorite {
-    width: var(--btn-large-mobile);
-    height: var(--btn-large-mobile);
-    min-width: var(--btn-large-mobile);
-    min-height: var(--btn-large-mobile);
-    font-size: 30px;
-  }
-
-  /* Search styles inherit from base rules */
-
-  .current-track-info {
-    min-height: 48px;
-    padding: 6px 0;
-    gap: 1px;
-  }
-
-  .title {
-    font-size: 20px;
-    line-height: 1.2;
-  }
-
-  .creator {
-    font-size: 15px;
-    line-height: 1.1;
-  }
-
-  .description {
-    font-size: 12px;
-    max-height: 28px;
-    margin: 3px 0 0 0;
-  }
-
-  .qr-code {
-    width: 160px !important;
-    height: 100% !important;
-  }
-
-  .tooltip-content h3 {
-    font-size: 16px !important;
-    margin-bottom: 6px !important;
-    margin-top: 5px !important;
-  }
-
-  .tooltip-content p {
-    font-size: 13px !important;
-    margin-bottom: 12px !important;
-  }
-
-
-
 /* Large phones / small tablets (481px–767px) */
 @media (min-width: 481px) and (max-width: 767px) {
-  .controls {
+  .main-player-section .controls {
     gap: clamp(var(--spacing-md), 4vw, calc(var(--spacing-lg) * 2));
-    padding-bottom: calc(var(--spacing-md) + env(safe-area-inset-bottom, 0));
   }
 
-  .controls button {
+  .main-player-section .controls button {
     width: 72px;
     height: 72px;
     min-width: 72px;
@@ -2872,6 +2839,161 @@ body.offline-mode .share-track-button {
     min-width: 86px;
     min-height: 86px;
     font-size: 30px;
+  }
+}
+
+/* ===== STRICT NO-SCROLL COMPACT RULES (short viewports) =====
+   Placed at the end so they override any later responsive blocks.
+*/
+@media (max-height: 568px) {
+  :root {
+    --art-size-mobile: clamp(160px, 30vh, 210px);
+    --btn-size-mobile: 52px;
+    --btn-large-mobile: 64px;
+  }
+
+  .main-player-section {
+    padding: 10px 0;
+  }
+
+  .player-content {
+    gap: 12px;
+    padding-bottom: 6px;
+  }
+
+  .art {
+    margin: 0 auto 10px;
+  }
+
+  .current-track-info {
+    padding: 10px 0 4px 0;
+    gap: 4px;
+  }
+
+  .title {
+    font-size: 20px;
+    line-height: 1.2;
+  }
+
+  .creator {
+    font-size: 14px;
+    line-height: 1.15;
+  }
+
+  .progress-section {
+    padding: 8px;
+    margin: 0 0 6px 0;
+  }
+
+  .main-player-section .controls {
+    gap: clamp(6px, 2.5vw, 12px);
+    margin-top: 6px;
+  }
+
+  .main-player-section .controls button {
+    width: var(--btn-size-mobile);
+    height: var(--btn-size-mobile);
+    min-width: var(--btn-size-mobile);
+    min-height: var(--btn-size-mobile);
+    font-size: 20px;
+  }
+
+  .play-btn,
+  .play-btn-favorite {
+    width: var(--btn-large-mobile);
+    height: var(--btn-large-mobile);
+    min-width: var(--btn-large-mobile);
+    min-height: var(--btn-large-mobile);
+    font-size: 22px;
+  }
+
+  .progress-bar:hover {
+    height: var(--progress-height);
+  }
+}
+
+@media (max-height: 430px) {
+  :root {
+    --art-size-mobile: clamp(110px, 24vh, 150px);
+    --btn-size-mobile: 44px;
+    --btn-large-mobile: 56px;
+  }
+
+  .main-player-section {
+    padding: 6px 0;
+  }
+
+  .player-content {
+    gap: 8px;
+    padding-bottom: 4px;
+  }
+
+  .art {
+    margin: 0 auto 6px;
+  }
+
+  .current-track-info {
+    padding: 4px 0 2px 0;
+    gap: 2px;
+  }
+
+  .title {
+    font-size: 17px;
+    line-height: 1.15;
+  }
+
+  .creator {
+    font-size: 12px;
+    line-height: 1.1;
+  }
+
+  /* Remove non-critical height consumers to guarantee controls visibility */
+  #description-container {
+    display: none;
+  }
+
+  .current-time,
+  .total-time {
+    display: none;
+  }
+
+  .progress-section {
+    padding: 6px;
+    margin: 0;
+  }
+
+  .main-player-section .controls {
+    gap: clamp(6px, 2vw, 10px);
+    margin-top: 4px;
+  }
+
+  .main-player-section .controls button {
+    width: var(--btn-size-mobile);
+    height: var(--btn-size-mobile);
+    min-width: var(--btn-size-mobile);
+    min-height: var(--btn-size-mobile);
+    font-size: 18px;
+  }
+
+  .play-btn,
+  .play-btn-favorite {
+    width: var(--btn-large-mobile);
+    height: var(--btn-large-mobile);
+    min-width: var(--btn-large-mobile);
+    min-height: var(--btn-large-mobile);
+    font-size: 20px;
+  }
+
+  .progress-bar:hover {
+    height: var(--progress-height);
+  }
+
+  /* Avoid hover scale effects causing clipping in fixed-height layouts */
+  .progress-section:hover,
+  .main-player-section .controls button:hover,
+  .play-btn:hover,
+  .play-btn-favorite:hover {
+    transform: none;
   }
 }
 
