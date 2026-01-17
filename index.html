@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Resonate Player</title>
   <meta name="application-name" content="Resonate Player">
-  <meta name="resonate-version" content="15">
+  <meta name="resonate-version" content="16">
   <meta name="description" content="Enjoy content freely from https://archive.org">
   <meta name="keywords" content="Resonate, player, music, free, online, offline, PWA">
   <meta name="robots" content="index, follow">
@@ -41,8 +41,13 @@
         var needsHttps = window.location.protocol !== 'https:';
         var needsWww = host === 'resonateplayer.com';
         if (needsHttps || needsWww) {
-          var target = 'https://' + canonicalHost + window.location.pathname + window.location.search + window.location.hash;
-          window.location.replace(target);
+          // If coming from apex, tag the navigation so the canonical origin can show
+          // the same banner UX as a shared-link entry.
+          var targetUrl = new URL('https://' + canonicalHost + window.location.pathname + window.location.search + window.location.hash);
+          if (needsWww && !targetUrl.searchParams.has('src')) {
+            targetUrl.searchParams.set('src', 'apex');
+          }
+          window.location.replace(String(targetUrl));
         }
       } catch (e) {
         // ignore

@@ -4070,26 +4070,30 @@ function maybeShowOpenInAppBannerForSharedLink() {
 
     const url = new URL(window.location.href);
     const playIdentifier = url.searchParams.get('play');
-    if (!playIdentifier) return;
+    const entrySource = url.searchParams.get('src');
+    const isApexEntry = entrySource === 'apex';
+    if (!playIdentifier && !isApexEntry) return;
 
     const tParam = url.searchParams.get('t');
     const parsedTrackIndex = tParam !== null ? parseInt(tParam, 10) : null;
     const trackIndex = Number.isFinite(parsedTrackIndex) && parsedTrackIndex >= 0 ? parsedTrackIndex : null;
 
-    const shareUrl = (typeof window.buildShareUrl === 'function')
+    const shareUrl = (playIdentifier && typeof window.buildShareUrl === 'function')
       ? window.buildShareUrl(playIdentifier, trackIndex)
       : window.location.href;
 
     // Best-effort: if we're not already at the canonical shared URL, navigate there.
-    // This helps when the link was opened on a non-canonical host/path.
-    try {
-      const currentNoHash = String(window.location.href || '').split('#')[0];
-      const shareNoHash = String(shareUrl || '').split('#')[0];
-      if (shareNoHash && currentNoHash && shareNoHash !== currentNoHash) {
-        window.location.replace(shareUrl);
-        return;
-      }
-    } catch {}
+    // Only applies for actual shared-link playback entries (play=...).
+    if (playIdentifier) {
+      try {
+        const currentNoHash = String(window.location.href || '').split('#')[0];
+        const shareNoHash = String(shareUrl || '').split('#')[0];
+        if (shareNoHash && currentNoHash && shareNoHash !== currentNoHash) {
+          window.location.replace(shareUrl);
+          return;
+        }
+      } catch {}
+    }
 
     // Dismiss policy: per-session to avoid annoyance during navigation.
     const dismissKey = 'resonate_shared_link_banner_dismissed';
@@ -4097,7 +4101,8 @@ function maybeShowOpenInAppBannerForSharedLink() {
       if (sessionStorage.getItem(dismissKey) === 'true') return;
     } catch {}
 
-    // Mark shared-link banner active to suppress the generic install banner.
+    // Mark banner active to suppress the generic install banner.
+    // Used both for shared links and for tagged apex entries.
     try { sessionStorage.setItem('resonate_shared_link_banner_active', 'true'); } catch {}
 
     const installedLikely = (() => {

@@ -294,9 +294,28 @@ async function handleSharedLink() {
   try {
     const urlParams = new URLSearchParams(window.location.search);
     const playIdentifier = urlParams.get('play');
+    const src = urlParams.get('src');
+    const isApexEntry = src === 'apex';
     const trackIndexParam = urlParams.get('t');
     const parsedTrackIndex = trackIndexParam !== null ? parseInt(trackIndexParam, 10) : null;
     const trackIndex = Number.isFinite(parsedTrackIndex) && parsedTrackIndex >= 0 ? parsedTrackIndex : null;
+
+    // If the user arrived via the apex domain redirect, show the same banner UX as shared links.
+    if (isApexEntry && !playIdentifier) {
+      try { sessionStorage.setItem('resonate_shared_link_banner_active', 'true'); } catch {}
+      try {
+        if (typeof window.maybeShowOpenInAppBannerForSharedLink === 'function') {
+          window.maybeShowOpenInAppBannerForSharedLink();
+        }
+      } catch {}
+
+      // Clean the marker param from the address bar (best-effort) once the banner is shown.
+      try {
+        const cleaned = new URL(window.location.href);
+        cleaned.searchParams.delete('src');
+        window.history.replaceState({}, '', cleaned);
+      } catch {}
+    }
 
     if (playIdentifier) {
       // Mark this navigation as a shared-link session (used to suppress generic install banners).
@@ -314,6 +333,7 @@ async function handleSharedLink() {
       const cleanedUrl = new URL(window.location.href);
       cleanedUrl.searchParams.delete('play');
       cleanedUrl.searchParams.delete('t');
+      // Preserve other params (e.g., src markers) unless we explicitly delete them.
 
       // Update meta tags for social media previews immediately
       try {

@@ -1,9 +1,9 @@
 // sw.js - Enhanced Service Worker for audio and metadata caching
 const CACHE_NAMES = {
-  APP: 'resonate-v15',
-  STATIC: 'static-v15',
-  METADATA: 'metadata-v15',
-  SEARCH: 'search-v15'
+  APP: 'resonate-v16',
+  STATIC: 'static-v16',
+  METADATA: 'metadata-v16',
+  SEARCH: 'search-v16'
 };
 
 function deriveSwVersion() {
@@ -180,6 +180,36 @@ function offlineHtmlResponse(title, heading, bodyText) {
   return new Response(html, { status: 503, headers: { 'Content-Type': 'text/html' } });
 }
 
+function getContentType(response) {
+  try {
+    return String(response && response.headers && response.headers.get ? (response.headers.get('Content-Type') || '') : '');
+  } catch {
+    return '';
+  }
+}
+
+function isCacheableStaticResponse(url, response) {
+  if (!(response && response.ok)) return false;
+  if (!isSameOrigin(url)) return false;
+
+  const ct = getContentType(response).toLowerCase();
+  const path = url && url.pathname ? String(url.pathname).toLowerCase() : '';
+
+  // If the server returns HTML for a JS/CSS/JSON URL (redirect, 404 rewrite, etc.),
+  // caching it would brick the app. Be strict for core asset types.
+  if (path.endsWith('.js')) return ct.includes('javascript');
+  if (path.endsWith('.css')) return ct.includes('text/css');
+  if (path.endsWith('.json')) return ct.includes('application/json');
+  if (path.endsWith('.html') || path === '/' || path === '/index.html') return ct.includes('text/html');
+
+  // For images/icons we can be a bit looser.
+  if (path.endsWith('.svg')) return ct.includes('image/svg');
+  if (path.endsWith('.png')) return ct.includes('image/png');
+  if (path.endsWith('.ico')) return ct.includes('image/') || ct.includes('x-icon');
+
+  return true;
+}
+
 async function precacheStaticFiles() {
   const cache = await caches.open(CACHE_NAMES.STATIC);
   console.log('SW: Caching static files:', STATIC_FILES);
@@ -187,7 +217,10 @@ async function precacheStaticFiles() {
   const cachePromises = STATIC_FILES.map(async (file) => {
     try {
       const response = await fetch(file);
-      if (response.ok) {
+      const url = (() => {
+        try { return new URL(file, self.location.origin); } catch { return null; }
+      })();
+      if (response.ok && url && isCacheableStaticResponse(url, response)) {
         await cache.put(file, response);
         console.log('SW: Cached:', file);
       } else {
@@ -208,7 +241,8 @@ async function cacheFirstWithBackgroundUpdate(request) {
     if (cachedResponse) {
       fetch(request)
         .then((networkResponse) => {
-          if (networkResponse && networkResponse.ok) {
+          const url = getUrl(request);
+          if (url && networkResponse && isCacheableStaticResponse(url, networkResponse)) {
             caches.open(CACHE_NAMES.STATIC).then((cache) => {
               cache.put(request, networkResponse);
             });
@@ -225,7 +259,8 @@ async function cacheFirstWithBackgroundUpdate(request) {
 
   try {
     const networkResponse = await fetch(request);
-    if (networkResponse && networkResponse.ok) {
+    const url = getUrl(request);
+    if (url && networkResponse && isCacheableStaticResponse(url, networkResponse)) {
       const responseClone = networkResponse.clone();
       caches.open(CACHE_NAMES.STATIC)
         .then((cache) => cache.put(request, responseClone))
@@ -255,7 +290,8 @@ async function cacheFirst(request) {
 
   try {
     const networkResponse = await fetch(request);
-    if (networkResponse && networkResponse.ok) {
+    const url = getUrl(request);
+    if (url && networkResponse && isCacheableStaticResponse(url, networkResponse)) {
       const responseClone = networkResponse.clone();
       caches.open(CACHE_NAMES.STATIC)
         .then((cache) => cache.put(request, responseClone))
@@ -430,7 +466,26 @@ self.addEventListener('fetch', (event) => {
           const cachedShell =
             (await caches.match(shellPath, { ignoreSearch: true })) ||
             (await caches.match('/', { ignoreSearch: true }));
-          if (cachedShell) return cachedShell;
+
+          if (cachedShell) {
+            // Important: keep the app shell fresh.
+            // Without revalidation, users can get stuck on an old cached index.html forever.
+            event.waitUntil(
+              (async () => {
+                try {
+                  const networkShell = await fetch(shellPath, { cache: 'no-cache' });
+                  if (networkShell && networkShell.ok) {
+                    const cache = await caches.open(CACHE_NAMES.STATIC);
+                    await cache.put(shellPath, networkShell.clone());
+                  }
+                } catch {
+                  // ignore background update failures
+                }
+              })()
+            );
+
+            return cachedShell;
+          }
         } catch {
           // ignore cache lookup failures
         }
