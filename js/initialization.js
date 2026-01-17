@@ -72,6 +72,68 @@ function setVisualViewportInsetsVars() {
   }
 }
 
+function getViewportUpdateMetrics() {
+  try {
+    const vv = window.visualViewport;
+    const layoutHeight = Number.isFinite(window.innerHeight) ? window.innerHeight : 0;
+    const vvHeight = vv && Number.isFinite(vv.height) ? vv.height : 0;
+    const vvTop = vv && Number.isFinite(vv.offsetTop) ? vv.offsetTop : 0;
+    const appHeight = Math.max(0, Math.round(vvHeight || layoutHeight || 0));
+    const bottomInset = vv ? Math.max(0, Math.round(layoutHeight - (vvHeight + vvTop))) : 0;
+    const footerHeight = (() => {
+      try {
+        const footer = document.querySelector('.footer');
+        if (!footer) return 0;
+        const rect = footer.getBoundingClientRect();
+        return Math.max(0, Math.round((rect && rect.height) || footer.offsetHeight || 0));
+      } catch {
+        return 0;
+      }
+    })();
+
+    return {
+      vv: vv || null,
+      layoutHeight: Math.max(0, Math.round(layoutHeight || 0)),
+      vpTop: Math.max(0, Math.round(vvTop || 0)),
+      vpHeight: appHeight,
+      appHeight,
+      bottomInset,
+      footerHeight
+    };
+  } catch {
+    return {
+      vv: null,
+      layoutHeight: Math.max(0, Math.round(window.innerHeight || 0)),
+      vpTop: 0,
+      vpHeight: Math.max(0, Math.round(window.innerHeight || 0)),
+      appHeight: Math.max(0, Math.round(window.innerHeight || 0)),
+      bottomInset: 0,
+      footerHeight: 0
+    };
+  }
+}
+
+// A tiny dispatcher so other modules can react to viewport/keyboard changes in-sync.
+if (!window._resonateViewportUpdateBus) {
+  window._resonateViewportUpdateBus = {
+    subscribers: new Set()
+  };
+}
+
+window.subscribeViewportUpdates = function subscribeViewportUpdates(cb) {
+  try {
+    if (typeof cb !== 'function') return () => {};
+    window._resonateViewportUpdateBus.subscribers.add(cb);
+    // Best-effort immediate sync.
+    try { cb(getViewportUpdateMetrics()); } catch {}
+    return () => {
+      try { window._resonateViewportUpdateBus.subscribers.delete(cb); } catch {}
+    };
+  } catch {
+    return () => {};
+  }
+};
+
 // Set early and keep updated on viewport changes
 setAppViewportHeightVar();
 setFooterHeightVar();
@@ -86,8 +148,36 @@ try {
       setAppViewportHeightVar();
       setFooterHeightVar();
       setVisualViewportInsetsVars();
+
+      // Keep overlays above the keyboard in the same frame as viewport vars.
+      try {
+        if (typeof window.setSearchPanelInsets === 'function') {
+          window.setSearchPanelInsets();
+        }
+        if (typeof window.setFavoritesPanelInsets === 'function') {
+          window.setFavoritesPanelInsets();
+        }
+      } catch {
+        // ignore
+      }
+
+      // Notify subscribers.
+      try {
+        const metrics = getViewportUpdateMetrics();
+        const subs = window._resonateViewportUpdateBus && window._resonateViewportUpdateBus.subscribers;
+        if (subs && subs.size) {
+          subs.forEach((fn) => {
+            try { fn(metrics); } catch {}
+          });
+        }
+      } catch {
+        // ignore
+      }
     });
   };
+
+  // Allow other modules to trigger an in-sync viewport update.
+  window.requestViewportUpdate = scheduleUpdate;
 
   window.addEventListener('resize', scheduleUpdate, { passive: true });
   window.addEventListener('orientationchange', scheduleUpdate, { passive: true });

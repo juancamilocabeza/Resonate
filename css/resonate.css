@@ -147,6 +147,13 @@
   --loader-size: 24px;
   --loader-border-width: 2px;
   --loader-duration: 2s;
+
+  /* Search input legibility (all themes) */
+  --search-input-bg: var(--btn);
+  --search-input-bg-focus: rgba(61, 70, 79, 0.8);
+  --search-input-fg: var(--fg);
+  --search-input-placeholder: var(--muted);
+  --search-input-caret: var(--fg);
 }
 
 /* ===== TEMA NOCHE - Colores más profundos para OLED ===== */
@@ -193,6 +200,13 @@
   --item-hover: rgba(0, 0, 0, 0.08);
   --neutral: #374151;
   --control-fg: #333333;
+
+  /* Search input: keep focus background light so text stays readable */
+  --search-input-bg: #ffffff;
+  --search-input-bg-focus: #ffffff;
+  --search-input-fg: var(--fg);
+  --search-input-placeholder: var(--muted);
+  --search-input-caret: var(--fg);
   
   /* Sombras ajustadas para modo día */
   --shadow-light: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -1630,12 +1644,13 @@ select:focus {
 .search-input:focus {
   outline: none;
   border-color: var(--primary);
-  background: rgba(61, 70, 79, 0.8);
+  background: var(--search-input-bg-focus, var(--search-input-bg, var(--btn)));
+  color: var(--search-input-fg, var(--fg));
   box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.1);
 }
 
 .search-input::placeholder {
-  color: var(--muted);
+  color: var(--search-input-placeholder, var(--muted));
   font-style: italic;
 }
 
@@ -2688,13 +2703,14 @@ body.offline-mode .share-track-button {
     font-size: 16px;
     width: 100%;
     max-width: none;
-    background: var(--btn);
+    background: var(--search-input-bg, var(--btn));
     border: 2px solid transparent;
-    color: var(--fg);
+    color: var(--search-input-fg, var(--fg));
+    caret-color: var(--search-input-caret, currentColor);
   }
 
   .search-input::placeholder {
-    color: var(--muted);
+    color: var(--search-input-placeholder, var(--muted));
   }
 
   .progress-bar {

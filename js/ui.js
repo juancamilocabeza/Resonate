@@ -59,6 +59,13 @@ function scheduleSearchInsetsBurst() {
   // Some mobile browsers report the final keyboard/viewport size slightly after focus.
   // Burst a few updates to keep the panel visible above the keyboard.
   try {
+    // Keep CSS viewport vars and panel insets in sync.
+    if (typeof window.requestViewportUpdate === 'function') {
+      window.requestViewportUpdate();
+    }
+  } catch {}
+
+  try {
     requestAnimationFrame(setSearchPanelInsets);
   } catch {}
 
@@ -74,7 +81,90 @@ function scheduleSearchInsetsBurst() {
   }
 }
 
-function setFavoritesPanelInsets() {
+function getViewportMetrics() {
+  try {
+    const vv = window.visualViewport;
+    const vpTop = (vv && Number.isFinite(vv.offsetTop)) ? vv.offsetTop : 0;
+    const vpHeight = Math.max(0, Math.round((vv && vv.height) || window.innerHeight || 0));
+    const layoutHeight = Math.max(0, Math.round(window.innerHeight || 0));
+    const bottomInset = vv
+      ? Math.max(0, Math.round(layoutHeight - (((Number.isFinite(vv.height) ? vv.height : 0) + (Number.isFinite(vv.offsetTop) ? vv.offsetTop : 0)))))
+      : 0;
+    return { vv, vpTop, vpHeight, layoutHeight, bottomInset };
+  } catch {
+    return { vv: null, vpTop: 0, vpHeight: Math.max(0, Math.round(window.innerHeight || 0)), layoutHeight: Math.max(0, Math.round(window.innerHeight || 0)), bottomInset: 0 };
+  }
+}
+
+function computeOverlayInsets({
+  inputEl,
+  anchorEl,
+  metrics,
+  gapPx = 10,
+  minPanelHeight = null
+}) {
+  const m = metrics || getViewportMetrics();
+  const { vpTop, vpHeight } = m;
+  if (!vpHeight || !inputEl || !anchorEl) return null;
+
+  const inputRect = inputEl.getBoundingClientRect();
+  const inputBottomVp = inputRect.bottom - vpTop;
+
+  const footerRect = (anchorEl && anchorEl.classList && anchorEl.classList.contains('footer'))
+    ? anchorEl.getBoundingClientRect()
+    : null;
+  const footerHeight = footerRect
+    ? Math.max(0, footerRect.height)
+    : Math.max(0, (anchorEl && anchorEl.offsetHeight) || 0);
+
+  const anchorRect = anchorEl.getBoundingClientRect();
+  let anchorTopVp = anchorRect.top - vpTop;
+
+  // When using a sticky footer, its rect can be reported in odd coordinates in some mobile/PWA layouts.
+  if (footerRect) {
+    const footerStartFallback = vpHeight - footerHeight;
+    const plausibleMin = Math.max(0, footerStartFallback - 120);
+    const plausibleMax = vpHeight + 50;
+
+    if (!Number.isFinite(anchorTopVp) || anchorTopVp < plausibleMin || anchorTopVp > plausibleMax) {
+      anchorTopVp = footerStartFallback;
+    }
+
+    if (Number.isFinite(anchorTopVp) && anchorTopVp < vpHeight * 0.5) {
+      anchorTopVp = footerStartFallback;
+    }
+  }
+
+  const requiredBottomPx = Math.max(0, Math.round(vpHeight - anchorTopVp + gapPx));
+  let bottomPx = Math.min(requiredBottomPx, vpHeight);
+
+  const minHeight = minPanelHeight == null
+    ? Math.max(220, Math.round(vpHeight * 0.45))
+    : Math.max(0, Math.round(minPanelHeight));
+
+  const maxTopPx = Math.max(0, vpHeight - bottomPx);
+  let topPx = Math.max(0, Math.min(Math.round(inputBottomVp + gapPx), maxTopPx));
+
+  const available = vpHeight - topPx - bottomPx;
+  if (available < minHeight) {
+    const maxTopForMin = Math.max(0, vpHeight - bottomPx - minHeight);
+    topPx = Math.min(topPx, maxTopForMin);
+  }
+
+  return { topPx, bottomPx };
+}
+
+function applyOverlayInsetVars({ cssTopVar, cssBottomVar, insets }) {
+  try {
+    if (!insets) return;
+    document.documentElement.style.setProperty(cssTopVar, `${insets.topPx}px`);
+    document.documentElement.style.setProperty(cssBottomVar, `${insets.bottomPx}px`);
+  } catch {
+    // ignore
+  }
+}
+
+function setFavoritesPanelInsets(metricsOverride = null) {
   try {
     const favoritesList = elements.favoritesList;
     if (!favoritesList || !favoritesList.classList.contains('active')) return;
@@ -84,64 +174,20 @@ function setFavoritesPanelInsets() {
     const playerSection = document.querySelector('.main-player-section');
     if (!searchInput || !(footer || playerSection)) return;
 
-    const vv = window.visualViewport;
-    const vpTop = (vv && Number.isFinite(vv.offsetTop)) ? vv.offsetTop : 0;
-    const vpHeight = Math.max(0, Math.round((vv && vv.height) || window.innerHeight || 0));
-    if (!vpHeight) return;
-
-    const gapPx = 10;
-    const inputRect = searchInput.getBoundingClientRect();
-    const inputBottomVp = inputRect.bottom - vpTop;
-
-    // Bottom cap: always stop at the visible start of the footer.
-    // If footer rect is unreliable (can happen with sticky inside fixed/overflow contexts), infer from footer height.
-    const footerRect = footer ? footer.getBoundingClientRect() : null;
-    const footerHeight = footer
-      ? Math.max(0, (footerRect && footerRect.height) || footer.offsetHeight || 0)
-      : 0;
-
+    const metrics = metricsOverride || getViewportMetrics();
     const anchorEl = footer || playerSection;
-    const anchorRect = anchorEl.getBoundingClientRect();
-    let anchorTopVp = anchorRect.top - vpTop;
-
-    if (footer) {
-      const footerStartFallback = vpHeight - footerHeight;
-      const plausibleMin = Math.max(0, footerStartFallback - 120);
-      const plausibleMax = vpHeight + 50;
-
-      // Some mobile/PWA layouts can report sticky footer rects in unexpected coordinates.
-      // If the footer top looks implausible, fall back to "viewport bottom - footer height".
-      if (!Number.isFinite(anchorTopVp) || anchorTopVp < plausibleMin || anchorTopVp > plausibleMax) {
-        anchorTopVp = footerStartFallback;
-      }
-
-      // Extra safety: if the footer appears in the upper half of the viewport, treat as unreliable.
-      if (Number.isFinite(anchorTopVp) && anchorTopVp < vpHeight * 0.5) {
-        anchorTopVp = footerStartFallback;
-      }
-    }
-
-    const requiredBottomPx = Math.max(0, Math.round(vpHeight - anchorTopVp + gapPx));
-    let bottomPx = Math.min(requiredBottomPx, vpHeight);
-
-    const minPanelHeight = Math.max(220, Math.round(vpHeight * 0.45));
-    const maxTopPx = Math.max(0, vpHeight - bottomPx);
-    let topPx = Math.max(0, Math.min(Math.round(inputBottomVp + gapPx), maxTopPx));
-
-    const available = vpHeight - topPx - bottomPx;
-    if (available < minPanelHeight) {
-      const maxTopForMin = Math.max(0, vpHeight - bottomPx - minPanelHeight);
-      topPx = Math.min(topPx, maxTopForMin);
-    }
-
-    document.documentElement.style.setProperty('--favorites-panel-top', `${topPx}px`);
-    document.documentElement.style.setProperty('--favorites-panel-bottom', `${bottomPx}px`);
+    const insets = computeOverlayInsets({ inputEl: searchInput, anchorEl, metrics, gapPx: 10 });
+    applyOverlayInsetVars({
+      cssTopVar: '--favorites-panel-top',
+      cssBottomVar: '--favorites-panel-bottom',
+      insets
+    });
   } catch {
     // ignore
   }
 }
 
-function setSearchPanelInsets() {
+function setSearchPanelInsets(metricsOverride = null) {
   try {
     const searchResults = elements.searchResults;
     if (!searchResults || !searchResults.classList.contains('active')) return;
@@ -151,53 +197,14 @@ function setSearchPanelInsets() {
     const playerSection = document.querySelector('.main-player-section');
     if (!searchInput || !(footer || playerSection)) return;
 
-    const vv = window.visualViewport;
-    const vpTop = (vv && Number.isFinite(vv.offsetTop)) ? vv.offsetTop : 0;
-    const vpHeight = Math.max(0, Math.round((vv && vv.height) || window.innerHeight || 0));
-    if (!vpHeight) return;
-
-    const gapPx = 10;
-    const inputRect = searchInput.getBoundingClientRect();
-    const inputBottomVp = inputRect.bottom - vpTop;
-
-    const footerRect = footer ? footer.getBoundingClientRect() : null;
-    const footerHeight = footer
-      ? Math.max(0, (footerRect && footerRect.height) || footer.offsetHeight || 0)
-      : 0;
-
+    const metrics = metricsOverride || getViewportMetrics();
     const anchorEl = footer || playerSection;
-    const anchorRect = anchorEl.getBoundingClientRect();
-    let anchorTopVp = anchorRect.top - vpTop;
-
-    if (footer) {
-      const footerStartFallback = vpHeight - footerHeight;
-      const plausibleMin = Math.max(0, footerStartFallback - 120);
-      const plausibleMax = vpHeight + 50;
-
-      if (!Number.isFinite(anchorTopVp) || anchorTopVp < plausibleMin || anchorTopVp > plausibleMax) {
-        anchorTopVp = footerStartFallback;
-      }
-
-      if (Number.isFinite(anchorTopVp) && anchorTopVp < vpHeight * 0.5) {
-        anchorTopVp = footerStartFallback;
-      }
-    }
-
-    const requiredBottomPx = Math.max(0, Math.round(vpHeight - anchorTopVp + gapPx));
-    let bottomPx = Math.min(requiredBottomPx, vpHeight);
-
-    const minPanelHeight = Math.max(220, Math.round(vpHeight * 0.45));
-    const maxTopPx = Math.max(0, vpHeight - bottomPx);
-    let topPx = Math.max(0, Math.min(Math.round(inputBottomVp + gapPx), maxTopPx));
-
-    const available = vpHeight - topPx - bottomPx;
-    if (available < minPanelHeight) {
-      const maxTopForMin = Math.max(0, vpHeight - bottomPx - minPanelHeight);
-      topPx = Math.min(topPx, maxTopForMin);
-    }
-
-    document.documentElement.style.setProperty('--search-panel-top', `${topPx}px`);
-    document.documentElement.style.setProperty('--search-panel-bottom', `${bottomPx}px`);
+    const insets = computeOverlayInsets({ inputEl: searchInput, anchorEl, metrics, gapPx: 10 });
+    applyOverlayInsetVars({
+      cssTopVar: '--search-panel-top',
+      cssBottomVar: '--search-panel-bottom',
+      insets
+    });
   } catch {
     // ignore
   }
@@ -205,28 +212,291 @@ function setSearchPanelInsets() {
 
 // Expose for other scripts (search.js) to call when toggling UI
 window.setSearchPanelInsets = setSearchPanelInsets;
+window.setFavoritesPanelInsets = setFavoritesPanelInsets;
 
 try {
-  let favoritesInsetsScheduled = false;
-  const scheduleFavoritesInsetsUpdate = () => {
-    if (favoritesInsetsScheduled) return;
-    favoritesInsetsScheduled = true;
-    requestAnimationFrame(() => {
-      favoritesInsetsScheduled = false;
-      setFavoritesPanelInsets();
-      setSearchPanelInsets();
-    });
-  };
+  if (!window._resonateOverlayInsetsSubscriptionInit) {
+    window._resonateOverlayInsetsSubscriptionInit = true;
 
-  window.addEventListener('resize', scheduleFavoritesInsetsUpdate, { passive: true });
-  window.addEventListener('orientationchange', scheduleFavoritesInsetsUpdate, { passive: true });
+    let insetsScheduled = false;
+    const scheduleInsetsUpdate = (metrics = null) => {
+      if (insetsScheduled) return;
+      insetsScheduled = true;
+      requestAnimationFrame(() => {
+        insetsScheduled = false;
+        setFavoritesPanelInsets(metrics);
+        setSearchPanelInsets(metrics);
 
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', scheduleFavoritesInsetsUpdate, { passive: true });
-    window.visualViewport.addEventListener('scroll', scheduleFavoritesInsetsUpdate, { passive: true });
+        // Keep the keyboard-open class accurate even if browsers skip blur/focus events.
+        try {
+          const activeIsSearch = document.activeElement === elements.searchInput;
+          const m = metrics || getViewportMetrics();
+          const thresholdPx = (window.SEARCH_UI_CONFIG && Number.isFinite(window.SEARCH_UI_CONFIG.keyboardOpenThresholdPx))
+            ? window.SEARCH_UI_CONFIG.keyboardOpenThresholdPx
+            : 80;
+          if (activeIsSearch) {
+            setKeyboardOpenState(m.bottomInset > thresholdPx);
+          }
+        } catch {}
+      });
+    };
+
+    if (typeof window.subscribeViewportUpdates === 'function') {
+      window.subscribeViewportUpdates((metrics) => scheduleInsetsUpdate(metrics));
+    } else {
+      // Fallback for older builds: best-effort listeners.
+      window.addEventListener('resize', () => scheduleInsetsUpdate(null), { passive: true });
+      window.addEventListener('orientationchange', () => scheduleInsetsUpdate(null), { passive: true });
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', () => scheduleInsetsUpdate(null), { passive: true });
+        window.visualViewport.addEventListener('scroll', () => scheduleInsetsUpdate(null), { passive: true });
+      }
+    }
   }
 } catch {
   // ignore
+}
+
+// UI behavior tuning (overridable by other scripts before ui.js runs)
+window.SEARCH_UI_CONFIG = window.SEARCH_UI_CONFIG || {
+  // Better mobile UX: keep keyboard open after searching so users can refine.
+  closeKeyboardOnSubmit: false,
+  keyboardOpenThresholdPx: 80
+};
+
+function ensureSearchInputControllerBound() {
+  const input = elements.searchInput;
+  if (!input || input.dataset.searchControllerBound === 'true') return;
+  input.dataset.searchControllerBound = 'true';
+
+  const config = window.SEARCH_UI_CONFIG || { closeKeyboardOnSubmit: false, keyboardOpenThresholdPx: 80 };
+  let isCleaning = false;
+
+  const updateSearchClearButton = () => {
+    const btn = elements.searchClear;
+    if (!btn) return;
+    const hasValue = Boolean((input.value || '').trim());
+    btn.hidden = !hasValue;
+    btn.disabled = !hasValue;
+  };
+
+  const showHistoryPanel = () => {
+    performCompleteCleanup();
+    displaySearchHistory();
+    state.searchActive = true;
+    hideFavoritesList();
+    setSearchOpenState(true);
+    scheduleSearchInsetsBurst();
+  };
+
+  const openResultsPanelIfAny = () => {
+    hideFavoritesList();
+    setSearchOpenState(Boolean(elements.searchResults && elements.searchResults.classList.contains('active')));
+    scheduleSearchInsetsBurst();
+  };
+
+  if (elements.searchClear && !elements.searchClear.dataset.bound) {
+    elements.searchClear.dataset.bound = 'true';
+    elements.searchClear.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Mark any in-flight search as stale.
+      state.searchRequestId = (state.searchRequestId || 0) + 1;
+
+      input.value = '';
+      updateSearchClearButton();
+
+      showHistoryPanel();
+      setKeyboardOpenState(true);
+
+      try {
+        input.focus({ preventScroll: true });
+      } catch {
+        try { input.focus(); } catch {}
+      }
+    });
+  }
+
+  // Tap on the input should always bring back the panel (especially when already focused).
+  input.addEventListener('pointerdown', () => {
+    if (isCleaning) return;
+    const currentQuery = (input.value || '').trim();
+    if (currentQuery === '') {
+      displaySearchHistory();
+      state.searchActive = true;
+      hideFavoritesList();
+      setSearchOpenState(true);
+    }
+    scheduleSearchInsetsBurst();
+  });
+
+  input.addEventListener('focus', () => {
+    if (isCleaning) return;
+    setKeyboardOpenState(true);
+
+    const currentQuery = (input.value || '').trim();
+    if (currentQuery === '') {
+      displaySearchHistory();
+      state.searchActive = true;
+      hideFavoritesList();
+      setSearchOpenState(true);
+      scheduleSearchInsetsBurst();
+      updateSearchClearButton();
+      return;
+    }
+
+    openResultsPanelIfAny();
+    updateSearchClearButton();
+
+    if (state.searchResults.length > 0 && currentQuery === state.currentSearchQuery) {
+      elements.searchResults.classList.add('active');
+      scheduleSearchInsetsBurst();
+      state.searchActive = true;
+      setSearchOpenState(true);
+    }
+  });
+
+  input.addEventListener('blur', () => {
+    // Keyboard is likely closing; keep the panel state as-is.
+    setKeyboardOpenState(false);
+    updateSearchClearButton();
+    scheduleSearchInsetsBurst();
+  });
+
+  input.addEventListener('input', (e) => {
+    const currentQuery = (e.target.value || '').trim();
+    updateSearchClearButton();
+
+    if (currentQuery === '') {
+      isCleaning = true;
+      showHistoryPanel();
+      return;
+    }
+
+    isCleaning = false;
+    hideFavoritesList();
+
+    if (state.searchResults.length > 0 && currentQuery === state.currentSearchQuery) {
+      elements.searchResults.classList.add('active');
+      scheduleSearchInsetsBurst();
+      state.searchActive = true;
+      setSearchOpenState(true);
+    } else {
+      // Avoid showing stale results while the user is editing.
+      hideSearchResults();
+    }
+  });
+
+  input.addEventListener('paste', () => {
+    setTimeout(() => {
+      const currentQuery = (input.value || '').trim();
+      updateSearchClearButton();
+      if (currentQuery === '') {
+        showHistoryPanel();
+      }
+    }, 50);
+  });
+
+  input.addEventListener('search', () => {
+    if ((input.value || '').trim() === '') {
+      showHistoryPanel();
+    }
+    updateSearchClearButton();
+  });
+
+  input.addEventListener('keydown', (e) => {
+    // Handle Escape key to close results
+    if (e.key === 'Escape') {
+      hideSearchResults();
+      try { input.blur(); } catch {}
+      return;
+    }
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      navigateSearchResults('down');
+      return;
+    }
+
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      navigateSearchResults('up');
+      return;
+    }
+
+    if (e.key === 'Enter') {
+      // If a search result is focused, play it.
+      const focusedResult = elements.searchResultsList
+        ? elements.searchResultsList.querySelector('.search-result.focused')
+        : null;
+      if (focusedResult) {
+        e.preventDefault();
+        const playBtn = focusedResult.querySelector('[class*="play"]');
+        if (playBtn) {
+          playBtn.click();
+          try { input.blur(); } catch {}
+          return;
+        }
+      }
+
+      state.currentSearchPage = 0;
+      state.currentSearchQuery = (input.value || '').trim();
+
+      if (state.currentSearchQuery) {
+        const queryAtDispatch = state.currentSearchQuery;
+        state.searchRequestId = (state.searchRequestId || 0) + 1;
+        const requestId = state.searchRequestId;
+
+        elements.searchResults.classList.add('active');
+        setSearchOpenState(true);
+        scheduleSearchInsetsBurst();
+
+        if (config.closeKeyboardOnSubmit) {
+          try { input.blur(); } catch {}
+        }
+
+        (window.performOptimizedSearch || performOptimizedSearch)(queryAtDispatch, 0).then(result => {
+          if ((state.searchRequestId || 0) !== requestId) return;
+          if (((input.value || '').trim()) !== queryAtDispatch) return;
+          displaySearchResults(result);
+          addToSearchHistory(queryAtDispatch);
+        }).catch(error => {
+          console.error('Search error:', error);
+          showStatus('Search encountered an error', 'error');
+        });
+      } else {
+        showHistoryPanel();
+      }
+    }
+  });
+
+  // Tap outside closes the panel (mobile-friendly)
+  if (!window._resonateSearchOutsideCloseInit) {
+    window._resonateSearchOutsideCloseInit = true;
+    document.addEventListener('pointerdown', (e) => {
+      try {
+        if (!elements.searchResults || !elements.searchResults.classList.contains('active')) return;
+
+        const target = e.target;
+        const container = document.querySelector('.search-container');
+        if (container && container.contains(target)) return;
+        if (elements.searchResults.contains(target)) return;
+        if (elements.favoritesList && elements.favoritesList.contains(target)) return;
+
+        hideSearchResults();
+        try {
+          if (document.activeElement === input) {
+            input.blur();
+          }
+        } catch {}
+      } catch {
+        // ignore
+      }
+    }, { capture: true });
+  }
+
+  updateSearchClearButton();
 }
 
 // Search configuration
@@ -1132,277 +1402,11 @@ function updateMediaSessionMetadata(track, identifier) {
 }
 
 function setupSearchOnEnter() {
-  console.log('Setting up search event listener...');
-  elements.searchInput.addEventListener('keydown', (e) => {
-    console.log('Key pressed:', e.key);
-    
-    // Handle Escape key to close results
-    if (e.key === 'Escape') {
-      console.log('Escape key pressed, closing results...');
-      hideSearchResults();
-      elements.searchInput.blur();
-      return;
-    }
-    
-    // Handle ArrowDown to navigate results
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      navigateSearchResults('down');
-      return;
-    }
-    
-    // Handle ArrowUp to navigate results
-    if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      navigateSearchResults('up');
-      return;
-    }
-    
-    // Handle Enter to search or activate focused result
-    if (e.key === 'Enter') {
-      console.log('Enter key pressed, performing search...');
-      
-      // If a search result is focused, play it
-      const focusedResult = elements.searchResultsList.querySelector('.search-result.focused');
-      if (focusedResult) {
-        e.preventDefault();
-        const playBtn = focusedResult.querySelector('[class*="play"]');
-        if (playBtn) {
-          playBtn.click();
-          return;
-        }
-      }
-      
-      // Otherwise, perform search
-      state.currentSearchPage = 0;
-      state.currentSearchQuery = elements.searchInput.value.trim();
-      console.log('Search query:', state.currentSearchQuery);
-      if (state.currentSearchQuery) {
-
-        const queryAtDispatch = state.currentSearchQuery;
-        state.searchRequestId = (state.searchRequestId || 0) + 1;
-        const requestId = state.searchRequestId;
-
-        elements.searchResults.classList.add('active');
-        setSearchOpenState(true);
-        scheduleSearchInsetsBurst();
-        // Ocultar teclado al lanzar búsqueda
-        elements.searchInput.blur();
-        (window.performOptimizedSearch || performOptimizedSearch)(queryAtDispatch, 0).then(result => {
-          // Ignore stale results (user cleared/changed query or a newer search started)
-          if ((state.searchRequestId || 0) !== requestId) return;
-          if ((elements.searchInput.value || '').trim() !== queryAtDispatch) return;
-          displaySearchResults(result);
-          addToSearchHistory(queryAtDispatch);
-        }).catch(error => {
-          console.error('Search error:', error);
-          showStatus('Search encountered an error', 'error');
-
-        });
-      } else {
-        // If empty, show search history immediately
-        performCompleteCleanup();
-        displaySearchHistory();
-        state.searchActive = true;
-        hideFavoritesList();
-        setSearchOpenState(true);
-        scheduleSearchInsetsBurst();
-      }
-    }
-  });
+  ensureSearchInputControllerBound();
 }
 
 function setupSearchFocusBehavior() {
-  let lastSearchQuery = '';
-  let isCleaning = false;
-
-  const updateSearchClearButton = () => {
-    const btn = elements.searchClear;
-    if (!btn) return;
-    const hasValue = Boolean((elements.searchInput.value || '').trim());
-    btn.hidden = !hasValue;
-    btn.disabled = !hasValue;
-  };
-
-  if (elements.searchClear && !elements.searchClear.dataset.bound) {
-    elements.searchClear.dataset.bound = 'true';
-    elements.searchClear.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-
-      if (!elements.searchInput) return;
-
-      // Mark any in-flight search as stale.
-      state.searchRequestId = (state.searchRequestId || 0) + 1;
-
-      elements.searchInput.value = '';
-      updateSearchClearButton();
-
-      performCompleteCleanup();
-      displaySearchHistory();
-      state.searchActive = true;
-      hideFavoritesList();
-      setSearchOpenState(true);
-      setKeyboardOpenState(true);
-
-      try {
-        elements.searchInput.focus({ preventScroll: true });
-      } catch {
-        try { elements.searchInput.focus(); } catch {}
-      }
-
-      scheduleSearchInsetsBurst();
-    });
-  }
-
-  // Tap on the input should always bring back the panel (especially when already focused).
-  elements.searchInput.addEventListener('pointerdown', () => {
-    if (isCleaning) return;
-    const currentQuery = elements.searchInput.value.trim();
-    if (currentQuery === '') {
-      displaySearchHistory();
-      state.searchActive = true;
-      hideFavoritesList();
-      setSearchOpenState(true);
-    }
-    scheduleSearchInsetsBurst();
-  });
-
-  elements.searchInput.addEventListener('focus', () => {
-    if (isCleaning) return;
-
-    setKeyboardOpenState(true);
-
-    const currentQuery = elements.searchInput.value.trim();
-
-    // Si el input está vacío, mostrar historial
-    if (currentQuery === '') {
-      displaySearchHistory();
-      state.searchActive = true;
-      hideFavoritesList();
-      setSearchOpenState(true);
-      scheduleSearchInsetsBurst();
-      updateSearchClearButton();
-      return;
-    }
-
-    // Si hay texto, solo mostrar resultados existentes si coinciden
-    if (currentQuery.length > 0) {
-      hideFavoritesList();
-      setSearchOpenState(Boolean(elements.searchResults.classList.contains('active')));
-      scheduleSearchInsetsBurst();
-      updateSearchClearButton();
-      if (state.searchResults.length > 0 && currentQuery === state.currentSearchQuery) {
-        elements.searchResults.classList.add('active');
-        scheduleSearchInsetsBurst();
-        state.searchActive = true;
-        setSearchOpenState(true);
-      }
-      // No lanzar nueva búsqueda automáticamente
-    }
-  });
-
-  elements.searchInput.addEventListener('blur', () => {
-    // Keyboard is likely closing; keep the panel state as-is.
-    setKeyboardOpenState(false);
-    updateSearchClearButton();
-    scheduleSearchInsetsBurst();
-  });
-
-  elements.searchInput.addEventListener('input', (e) => {
-    const currentQuery = e.target.value.trim();
-
-    updateSearchClearButton();
-
-    // Only clear when the input becomes empty
-    if (currentQuery === '') {
-      isCleaning = true;
-
-      // Clear search state and show history immediately
-      performCompleteCleanup();
-      displaySearchHistory();
-      state.searchActive = true;
-      hideFavoritesList();
-      setSearchOpenState(true);
-      scheduleSearchInsetsBurst();
-
-      lastSearchQuery = currentQuery;
-      return;
-    }
-
-    isCleaning = false;
-    hideFavoritesList();
-
-    // If the user edits the query (without executing a search), hide the panel to avoid stale results.
-    // If the text matches the last executed query, re-show existing results (no network).
-    if (state.searchResults.length > 0 && currentQuery === state.currentSearchQuery) {
-      elements.searchResults.classList.add('active');
-      scheduleSearchInsetsBurst();
-      state.searchActive = true;
-      setSearchOpenState(true);
-    } else {
-      hideSearchResults();
-    }
-
-    lastSearchQuery = currentQuery;
-  });
-
-  // También limpiar cuando el usuario pegue texto (podría ser una modificación)
-  elements.searchInput.addEventListener('paste', () => {
-    setTimeout(() => {
-      const currentQuery = elements.searchInput.value.trim();
-      updateSearchClearButton();
-      if (currentQuery === '') {
-        performCompleteCleanup();
-        displaySearchHistory();
-        state.searchActive = true;
-        hideFavoritesList();
-        setSearchOpenState(true);
-        scheduleSearchInsetsBurst();
-      }
-    }, 50);
-  });
-
-  // Limpiar cuando se use el botón "x" nativo del input en algunos navegadores
-  elements.searchInput.addEventListener('search', () => {
-    if (elements.searchInput.value.trim() === '') {
-      performCompleteCleanup();
-      displaySearchHistory();
-      state.searchActive = true;
-      hideFavoritesList();
-      setSearchOpenState(true);
-      scheduleSearchInsetsBurst();
-    }
-    updateSearchClearButton();
-  });
-
-  // Initial state
-  updateSearchClearButton();
-
-  // Tap outside closes the panel (mobile-friendly)
-  if (!window._resonateSearchOutsideCloseInit) {
-    window._resonateSearchOutsideCloseInit = true;
-    document.addEventListener('pointerdown', (e) => {
-      try {
-        if (!elements.searchResults || !elements.searchResults.classList.contains('active')) return;
-
-        const target = e.target;
-        const container = document.querySelector('.search-container');
-        if (container && container.contains(target)) return;
-        if (elements.searchResults.contains(target)) return;
-        if (elements.favoritesList && elements.favoritesList.contains(target)) return;
-
-        hideSearchResults();
-        try {
-          if (document.activeElement === elements.searchInput) {
-            elements.searchInput.blur();
-          }
-        } catch {}
-      } catch {
-        // ignore
-      }
-    }, { capture: true });
-  }
+  ensureSearchInputControllerBound();
 }
 
 function performCompleteCleanup() {
