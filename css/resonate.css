@@ -1379,6 +1379,7 @@ select:focus {
   max-width: none;
   height: auto;
   max-height: none;
+  min-height: 160px;
   opacity: 1;
   background: var(--card);
   z-index: 150;
@@ -1572,6 +1573,7 @@ select:focus {
   max-width: none;
   height: auto;
   max-height: none;
+  min-height: 160px;
   opacity: 1;
   background: var(--card);
   z-index: 140;

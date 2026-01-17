@@ -47,11 +47,21 @@ function setFavoritesPanelInsets() {
     const playerSection = document.querySelector('.main-player-section');
     if (!searchInput || !playerSection) return;
 
+    const viewportHeight = Math.max(0, Math.round((window.visualViewport && window.visualViewport.height) || window.innerHeight || 0));
+    if (!viewportHeight) return;
+
     const inputRect = searchInput.getBoundingClientRect();
     const playerRect = playerSection.getBoundingClientRect();
 
-    const topPx = Math.max(0, Math.round(inputRect.bottom + 10));
-    const bottomPx = Math.max(0, Math.round((window.innerHeight || 0) - playerRect.top + 10));
+    let topPx = Math.max(0, Math.round(inputRect.bottom + 10));
+    let bottomPx = Math.max(0, Math.round(viewportHeight - playerRect.top + 10));
+
+    const minPanelHeight = 160;
+    topPx = Math.min(topPx, Math.max(0, viewportHeight - minPanelHeight));
+    bottomPx = Math.min(bottomPx, Math.max(0, viewportHeight - minPanelHeight));
+    if (topPx + bottomPx > viewportHeight - minPanelHeight) {
+      bottomPx = Math.max(0, viewportHeight - topPx - minPanelHeight);
+    }
 
     document.documentElement.style.setProperty('--favorites-panel-top', `${topPx}px`);
     document.documentElement.style.setProperty('--favorites-panel-bottom', `${bottomPx}px`);
@@ -69,11 +79,21 @@ function setSearchPanelInsets() {
     const playerSection = document.querySelector('.main-player-section');
     if (!searchInput || !playerSection) return;
 
+    const viewportHeight = Math.max(0, Math.round((window.visualViewport && window.visualViewport.height) || window.innerHeight || 0));
+    if (!viewportHeight) return;
+
     const inputRect = searchInput.getBoundingClientRect();
     const playerRect = playerSection.getBoundingClientRect();
 
-    const topPx = Math.max(0, Math.round(inputRect.bottom + 10));
-    const bottomPx = Math.max(0, Math.round((window.innerHeight || 0) - playerRect.top + 10));
+    let topPx = Math.max(0, Math.round(inputRect.bottom + 10));
+    let bottomPx = Math.max(0, Math.round(viewportHeight - playerRect.top + 10));
+
+    const minPanelHeight = 160;
+    topPx = Math.min(topPx, Math.max(0, viewportHeight - minPanelHeight));
+    bottomPx = Math.min(bottomPx, Math.max(0, viewportHeight - minPanelHeight));
+    if (topPx + bottomPx > viewportHeight - minPanelHeight) {
+      bottomPx = Math.max(0, viewportHeight - topPx - minPanelHeight);
+    }
 
     document.documentElement.style.setProperty('--search-panel-top', `${topPx}px`);
     document.documentElement.style.setProperty('--search-panel-bottom', `${bottomPx}px`);
@@ -99,6 +119,11 @@ try {
 
   window.addEventListener('resize', scheduleFavoritesInsetsUpdate, { passive: true });
   window.addEventListener('orientationchange', scheduleFavoritesInsetsUpdate, { passive: true });
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', scheduleFavoritesInsetsUpdate, { passive: true });
+    window.visualViewport.addEventListener('scroll', scheduleFavoritesInsetsUpdate, { passive: true });
+  }
 } catch {
   // ignore
 }

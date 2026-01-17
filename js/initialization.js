@@ -31,7 +31,7 @@ initFeatureFlags();
 // Mobile viewport height helper (avoids 100vh issues on iOS/Android)
 function setAppViewportHeightVar() {
   try {
-    const heightPx = Math.max(0, Math.round(window.innerHeight || 0));
+    const heightPx = Math.max(0, Math.round((window.visualViewport && window.visualViewport.height) || window.innerHeight || 0));
     if (!heightPx) return;
     document.documentElement.style.setProperty('--app-height', `${heightPx}px`);
   } catch {
@@ -54,6 +54,11 @@ try {
 
   window.addEventListener('resize', scheduleUpdate, { passive: true });
   window.addEventListener('orientationchange', scheduleUpdate, { passive: true });
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', scheduleUpdate, { passive: true });
+    window.visualViewport.addEventListener('scroll', scheduleUpdate, { passive: true });
+  }
 } catch {
   // ignore
 }
