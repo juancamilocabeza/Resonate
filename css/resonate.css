@@ -836,7 +836,6 @@ h3 {
   align-items: center;
   gap: clamp(var(--spacing-sm), 6vw, calc(var(--spacing-lg) * 2));
   margin: 8px auto 0 auto;
-  padding: 12px 0 0 0;
   flex-shrink: 0;
   flex-wrap: nowrap !important;
   width: 100%;
