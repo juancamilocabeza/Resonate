@@ -86,6 +86,13 @@ function setSearchActiveUI(isActive) {
   if (els && els.searchResults && els.searchResults.classList) {
     els.searchResults.classList.toggle('active', Boolean(isActive));
   }
+  try {
+    if (isActive && typeof window.setSearchPanelInsets === 'function') {
+      requestAnimationFrame(window.setSearchPanelInsets);
+    }
+  } catch {
+    // ignore
+  }
   const st = getSearchStateRef();
   if (st) st.searchActive = Boolean(isActive);
 }

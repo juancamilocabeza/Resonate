@@ -1,10 +1,9 @@
 /* Modal de descripción */
 .description-modal {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   background: rgba(0,0,0,0.65);
   display: flex;
   align-items: center;
@@ -304,7 +303,7 @@ body {
   color: var(--fg);
   font: 15px/1.4 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   overflow-x: hidden;
-  overflow-y: auto;
+  overflow-y: hidden;
   -webkit-tap-highlight-color: transparent;
   scroll-behavior: smooth;
 }
@@ -314,9 +313,18 @@ body {
   display: flex;
   flex-direction: column;
   position: relative;
-  min-height: 100vh;
+  height: var(--app-height, 100vh);
+  min-height: var(--app-height, 100vh);
   overflow-x: hidden;
+  overflow-y: hidden;
   justify-content: flex-start;
+}
+
+@supports (height: 100dvh) {
+  .app {
+    height: var(--app-height, 100dvh);
+    min-height: var(--app-height, 100dvh);
+  }
 }
 
 .main-player-section {
@@ -1297,6 +1305,8 @@ select:focus {
   justify-content: center;
   line-height: 1;
   box-shadow: none;
+}
+
 @media (max-width: 768px) and (min-width: 481px) {
   .header-controls {
     gap: 22px;
@@ -1319,11 +1329,6 @@ select:focus {
     justify-content: center !important;
     text-align: center !important;
   }
-}
-  flex-shrink: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  letter-spacing: 0;
-  border: none;
 }
 
 .favorites-count {
@@ -1348,19 +1353,35 @@ select:focus {
 }
 
 .favorites-list {
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
   margin-top: 6px;
   display: none;
   background: var(--card);
-  height: auto;
+  height: calc(var(--app-height, 100vh) - 200px);
   overflow-x: hidden;
-  max-width: 1024px;
-  margin: 0 auto;
+  overflow-y: auto;
+  max-height: calc(var(--app-height, 100vh) - 200px);
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   padding: 0 12px;
 }
 
 .favorites-list.active {
   display: block;
+  position: fixed;
+  left: 10px;
+  right: 10px;
+  top: var(--favorites-panel-top, 120px);
+  bottom: var(--favorites-panel-bottom, 200px);
+  width: auto;
+  max-width: none;
+  height: auto;
+  max-height: none;
+  opacity: 1;
+  background: var(--card);
+  z-index: 150;
 }
 
 .favorite-item {
@@ -1534,7 +1555,7 @@ select:focus {
   overflow-y: auto;
   display: none;
   height: auto;
-  max-height: calc(100vh - 200px);
+  max-height: none;
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
@@ -1542,13 +1563,18 @@ select:focus {
 
 .search-results.active {
   display: block;
+  position: fixed;
+  left: 10px;
+  right: 10px;
+  top: var(--search-panel-top, 120px);
+  bottom: var(--search-panel-bottom, 200px);
+  width: auto;
+  max-width: none;
+  height: auto;
+  max-height: none;
   opacity: 1;
-  margin-top: 5px;
-  margin-left: 10px;
-  margin-right: 10px;
-  width: calc(100% - 20px);
-  max-width: calc(100% - 20px);
   background: var(--card);
+  z-index: 140;
 }
 
 .search-results-header {
@@ -2595,6 +2621,7 @@ body.offline-mode .share-track-button {
     margin: 6px auto 0 !important;
     overflow-y: visible;
     max-height: none;
+    height: auto;
   }
 
   .search-results-list {
@@ -2610,6 +2637,9 @@ body.offline-mode .share-track-button {
   .favorites-list {
     max-width: 1000px;
     margin: 6px auto !important;
+    overflow-y: visible;
+    max-height: none;
+    height: auto;
   }
 }
 

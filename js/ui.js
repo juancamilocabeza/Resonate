@@ -38,6 +38,71 @@ const elements = {
   currentTrackShare: document.getElementById('current-track-share')
 };
 
+function setFavoritesPanelInsets() {
+  try {
+    const favoritesList = elements.favoritesList;
+    if (!favoritesList || !favoritesList.classList.contains('active')) return;
+
+    const searchInput = elements.searchInput;
+    const playerSection = document.querySelector('.main-player-section');
+    if (!searchInput || !playerSection) return;
+
+    const inputRect = searchInput.getBoundingClientRect();
+    const playerRect = playerSection.getBoundingClientRect();
+
+    const topPx = Math.max(0, Math.round(inputRect.bottom + 10));
+    const bottomPx = Math.max(0, Math.round((window.innerHeight || 0) - playerRect.top + 10));
+
+    document.documentElement.style.setProperty('--favorites-panel-top', `${topPx}px`);
+    document.documentElement.style.setProperty('--favorites-panel-bottom', `${bottomPx}px`);
+  } catch {
+    // ignore
+  }
+}
+
+function setSearchPanelInsets() {
+  try {
+    const searchResults = elements.searchResults;
+    if (!searchResults || !searchResults.classList.contains('active')) return;
+
+    const searchInput = elements.searchInput;
+    const playerSection = document.querySelector('.main-player-section');
+    if (!searchInput || !playerSection) return;
+
+    const inputRect = searchInput.getBoundingClientRect();
+    const playerRect = playerSection.getBoundingClientRect();
+
+    const topPx = Math.max(0, Math.round(inputRect.bottom + 10));
+    const bottomPx = Math.max(0, Math.round((window.innerHeight || 0) - playerRect.top + 10));
+
+    document.documentElement.style.setProperty('--search-panel-top', `${topPx}px`);
+    document.documentElement.style.setProperty('--search-panel-bottom', `${bottomPx}px`);
+  } catch {
+    // ignore
+  }
+}
+
+// Expose for other scripts (search.js) to call when toggling UI
+window.setSearchPanelInsets = setSearchPanelInsets;
+
+try {
+  let favoritesInsetsScheduled = false;
+  const scheduleFavoritesInsetsUpdate = () => {
+    if (favoritesInsetsScheduled) return;
+    favoritesInsetsScheduled = true;
+    requestAnimationFrame(() => {
+      favoritesInsetsScheduled = false;
+      setFavoritesPanelInsets();
+      setSearchPanelInsets();
+    });
+  };
+
+  window.addEventListener('resize', scheduleFavoritesInsetsUpdate, { passive: true });
+  window.addEventListener('orientationchange', scheduleFavoritesInsetsUpdate, { passive: true });
+} catch {
+  // ignore
+}
+
 // Search configuration
 // Llamar a updateDescriptionUI cada vez que se actualiza la pista
 if (!window._resonateDescriptionInit) {
@@ -987,6 +1052,7 @@ function setupSearchOnEnter() {
       if (state.currentSearchQuery) {
 
         elements.searchResults.classList.add('active');
+        try { requestAnimationFrame(setSearchPanelInsets); } catch {}
         // Ocultar teclado al lanzar búsqueda
         elements.searchInput.blur();
         (window.performOptimizedSearch || performOptimizedSearch)(state.currentSearchQuery, 0).then(result => {
@@ -3467,6 +3533,7 @@ class FavoritesToggle {
     if (this.isVisible) {
       this.listElement?.classList.add('active');
       this.element?.classList.add('active');
+      try { requestAnimationFrame(setFavoritesPanelInsets); } catch {}
     } else {
       this.listElement?.classList.remove('active');
       this.element?.classList.remove('active');

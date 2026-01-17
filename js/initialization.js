@@ -28,6 +28,36 @@ function initFeatureFlags() {
 // Initialize flags early
 initFeatureFlags();
 
+// Mobile viewport height helper (avoids 100vh issues on iOS/Android)
+function setAppViewportHeightVar() {
+  try {
+    const heightPx = Math.max(0, Math.round(window.innerHeight || 0));
+    if (!heightPx) return;
+    document.documentElement.style.setProperty('--app-height', `${heightPx}px`);
+  } catch {
+    // ignore
+  }
+}
+
+// Set early and keep updated on viewport changes
+setAppViewportHeightVar();
+try {
+  let scheduled = false;
+  const scheduleUpdate = () => {
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(() => {
+      scheduled = false;
+      setAppViewportHeightVar();
+    });
+  };
+
+  window.addEventListener('resize', scheduleUpdate, { passive: true });
+  window.addEventListener('orientationchange', scheduleUpdate, { passive: true });
+} catch {
+  // ignore
+}
+
 function logInitDebug(message, data) {
   try {
     if (window.logger && typeof window.logger.debug === 'function') {
@@ -937,7 +967,7 @@ function handleOfflineMode() {
       // Always show the main app, never the fallback
       fallback.style.display = 'none';
       app.style.display = 'block';
-      document.body.style.overflow = 'auto'; // Ensure scrolling works
+      document.body.style.overflow = 'hidden';
     }
 
     if (window.logger) window.logger.info('App interface ensured visible', 'SYSTEM');
