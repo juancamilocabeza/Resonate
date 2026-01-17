@@ -610,7 +610,6 @@ h3 {
 
 #description-container {
   width: 100%;
-  margin: 12px auto 18px auto;
   display: flex;
   flex-direction: row;
   gap: var(--spacing-sm);
