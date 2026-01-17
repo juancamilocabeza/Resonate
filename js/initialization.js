@@ -343,6 +343,66 @@ async function handleSharedLink() {
   }
 }
 
+function tryHandleSharedLinkFromUrlString(targetUrlString) {
+  try {
+    if (!targetUrlString) return false;
+    const url = new URL(String(targetUrlString), window.location.origin);
+
+    const playIdentifier = url.searchParams.get('play');
+    const trackIndexParam = url.searchParams.get('t');
+    const parsedTrackIndex = trackIndexParam !== null ? parseInt(trackIndexParam, 10) : null;
+    const trackIndex = Number.isFinite(parsedTrackIndex) && parsedTrackIndex >= 0 ? parsedTrackIndex : null;
+    if (!playIdentifier) return false;
+
+    // Keep the address bar in sync inside the app (best-effort).
+    try {
+      window.history.pushState({}, '', url);
+    } catch {}
+
+    safeShowStatus('Opening your shared track…', 'info', 2500);
+
+    // Defer slightly so the rest of the app is ready.
+    setTimeout(async () => {
+      try {
+        await playSharedContent(playIdentifier, trackIndex);
+      } catch (err) {
+        console.error('Error playing shared content (launchQueue):', err);
+        safeShowStatus('Could not open the shared track', 'error', 4500);
+      }
+    }, 250);
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function setupLaunchQueueHandling() {
+  try {
+    if (!('launchQueue' in window)) return;
+    if (window._resonateLaunchQueueInit) return;
+    window._resonateLaunchQueueInit = true;
+
+    window.launchQueue.setConsumer((launchParams) => {
+      try {
+        const targetURL = launchParams && launchParams.targetURL ? String(launchParams.targetURL) : '';
+        // If we can handle it without a full navigation, do so.
+        const handled = tryHandleSharedLinkFromUrlString(targetURL);
+        if (handled) return;
+
+        // Otherwise, fall back to navigation.
+        if (targetURL) {
+          try { window.location.href = targetURL; } catch {}
+        }
+      } catch {
+        // ignore
+      }
+    });
+  } catch {
+    // ignore
+  }
+}
+
 // Function to play content from shared link
 async function playSharedContent(identifier, startTrackIndex = null) {
   try {
@@ -458,6 +518,9 @@ async function playSharedContent(identifier, startTrackIndex = null) {
 
 async function initializeApp() {
   logInitInfo('Starting app initialization...');
+
+  // If the platform routes launches into an existing PWA instance, consume them.
+  setupLaunchQueueHandling();
 
   // One-time: Clear old SW audio cache from previous versions (avoid duplicate audio storage)
   requestClearLegacySwAudioCacheOnce();

@@ -3985,6 +3985,17 @@ function maybeShowOpenInAppBannerForSharedLink() {
       ? window.buildShareUrl(playIdentifier, trackIndex)
       : window.location.href;
 
+    // Best-effort: if we're not already at the canonical shared URL, navigate there.
+    // This helps when the link was opened on a non-canonical host/path.
+    try {
+      const currentNoHash = String(window.location.href || '').split('#')[0];
+      const shareNoHash = String(shareUrl || '').split('#')[0];
+      if (shareNoHash && currentNoHash && shareNoHash !== currentNoHash) {
+        window.location.replace(shareUrl);
+        return;
+      }
+    } catch {}
+
     // Dismiss policy: per-session to avoid annoyance during navigation.
     const dismissKey = 'resonate_open_in_app_banner_dismissed';
     try {
@@ -3993,16 +4004,17 @@ function maybeShowOpenInAppBannerForSharedLink() {
 
     const banner = document.createElement('div');
     banner.id = 'open-in-app-banner';
-    banner.className = 'pwa-install-banner';
+    banner.className = 'pwa-install-banner open-in-app-banner';
     banner.innerHTML = `
       <div class="pwa-banner-content">
-        <div class="pwa-banner-text">
-          <div class="pwa-banner-buttons">
-            Want the best experience? Open this in the Resonate app.
-            <button class="pwa-install-btn open-in-app-btn">Open in app</button>
-            <button class="pwa-install-btn pwa-install-btn-secondary">Get the app</button>
-            <button class="pwa-close-btn" aria-label="Close">✕</button>
-          </div>
+        <div class="open-in-app-text" role="status" aria-live="polite">
+          <div class="open-in-app-title">Open in Resonate</div>
+          <div class="open-in-app-subtitle">Keep listening with a faster player, fewer interruptions, and offline support.</div>
+        </div>
+        <div class="open-in-app-actions">
+          <button class="pwa-install-btn open-in-app-btn" type="button" aria-label="Open this track in the Resonate app">Open</button>
+          <button class="pwa-install-btn pwa-install-btn-secondary" type="button">Get the app</button>
+          <button class="pwa-close-btn" aria-label="Close" type="button">✕</button>
         </div>
       </div>
     `;
@@ -4014,7 +4026,8 @@ function maybeShowOpenInAppBannerForSharedLink() {
     if (openBtn) {
       openBtn.addEventListener('click', () => {
         // Best-effort: navigating to the canonical app URL is what enables OS link capturing.
-        try { window.location.href = shareUrl; } catch {}
+        try { showStatus('Opening Resonate…', 'info', 2000); } catch {}
+        try { window.location.replace(shareUrl); } catch {}
       });
     }
 
@@ -4271,8 +4284,9 @@ function getCanonicalShareOrigin() {
     const hostname = String(window.location.hostname || '').trim().toLowerCase();
     // Production canonicalization: ensure shared links match the PWA install origin.
     // Keep localhost/dev origins untouched.
-    if (hostname === 'resonateplayer.com') return 'https://www.resonateplayer.com';
-    if (hostname === 'www.resonateplayer.com') return origin;
+    if (hostname === 'resonateplayer.com' || hostname === 'www.resonateplayer.com') {
+      return 'https://www.resonateplayer.com';
+    }
     return origin;
   } catch {
     return window.location.origin;

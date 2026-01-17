@@ -28,6 +28,27 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Resonate Player">
+  <script>
+    // Production canonicalization: keep a single install origin for the PWA.
+    // This improves the odds that shared links open in the installed app.
+    (function () {
+      try {
+        var host = String(window.location.hostname || '').toLowerCase();
+        var isProdHost = host === 'resonateplayer.com' || host === 'www.resonateplayer.com';
+        if (!isProdHost) return;
+
+        var canonicalHost = 'www.resonateplayer.com';
+        var needsHttps = window.location.protocol !== 'https:';
+        var needsWww = host === 'resonateplayer.com';
+        if (needsHttps || needsWww) {
+          var target = 'https://' + canonicalHost + window.location.pathname + window.location.search + window.location.hash;
+          window.location.replace(target);
+        }
+      } catch (e) {
+        // ignore
+      }
+    })();
+  </script>
   <link rel="manifest" href="/manifest.json" />
   <link rel="stylesheet" href="css/resonate.css" />
 </head>
