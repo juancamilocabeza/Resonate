@@ -69,8 +69,19 @@ function setFavoritesPanelInsets() {
     let anchorTopVp = anchorRect.top - vpTop;
 
     if (footer) {
-      if (!Number.isFinite(anchorTopVp) || anchorTopVp < 0 || anchorTopVp > vpHeight + 50) {
-        anchorTopVp = vpHeight - footerHeight;
+      const footerStartFallback = vpHeight - footerHeight;
+      const plausibleMin = Math.max(0, footerStartFallback - 120);
+      const plausibleMax = vpHeight + 50;
+
+      // Some mobile/PWA layouts can report sticky footer rects in unexpected coordinates.
+      // If the footer top looks implausible, fall back to "viewport bottom - footer height".
+      if (!Number.isFinite(anchorTopVp) || anchorTopVp < plausibleMin || anchorTopVp > plausibleMax) {
+        anchorTopVp = footerStartFallback;
+      }
+
+      // Extra safety: if the footer appears in the upper half of the viewport, treat as unreliable.
+      if (Number.isFinite(anchorTopVp) && anchorTopVp < vpHeight * 0.5) {
+        anchorTopVp = footerStartFallback;
       }
     }
 
@@ -123,8 +134,16 @@ function setSearchPanelInsets() {
     let anchorTopVp = anchorRect.top - vpTop;
 
     if (footer) {
-      if (!Number.isFinite(anchorTopVp) || anchorTopVp < 0 || anchorTopVp > vpHeight + 50) {
-        anchorTopVp = vpHeight - footerHeight;
+      const footerStartFallback = vpHeight - footerHeight;
+      const plausibleMin = Math.max(0, footerStartFallback - 120);
+      const plausibleMax = vpHeight + 50;
+
+      if (!Number.isFinite(anchorTopVp) || anchorTopVp < plausibleMin || anchorTopVp > plausibleMax) {
+        anchorTopVp = footerStartFallback;
+      }
+
+      if (Number.isFinite(anchorTopVp) && anchorTopVp < vpHeight * 0.5) {
+        anchorTopVp = footerStartFallback;
       }
     }
 
@@ -1175,6 +1194,7 @@ function setupSearchFocusBehavior() {
       hideFavoritesList();
       if (state.searchResults.length > 0 && currentQuery === state.currentSearchQuery) {
         elements.searchResults.classList.add('active');
+        try { requestAnimationFrame(setSearchPanelInsets); } catch {}
         state.searchActive = true;
       }
       // No lanzar nueva búsqueda automáticamente
@@ -1205,6 +1225,7 @@ function setupSearchFocusBehavior() {
     // If the text matches the last executed query, re-show existing results (no network).
     if (state.searchResults.length > 0 && currentQuery === state.currentSearchQuery) {
       elements.searchResults.classList.add('active');
+      try { requestAnimationFrame(setSearchPanelInsets); } catch {}
       state.searchActive = true;
     } else {
       hideSearchResults();
