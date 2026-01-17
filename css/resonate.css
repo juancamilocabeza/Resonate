@@ -333,8 +333,17 @@ body {
 }
 
 .main-player-section {
-  flex-shrink: 0;
-  padding: var(--spacing-lg) 0;
+  /* Allow the player to fit within the fixed-height app without clipping */
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding-top: var(--spacing-lg);
+  padding-left: 0;
+  padding-right: 0;
+  /* Reserve space for sticky/fixed footer + safe-area so controls stay reachable */
+  padding-bottom: calc(var(--spacing-md) + env(safe-area-inset-bottom, 0) + var(--footer-height, 44px));
+  box-sizing: border-box;
   position: relative;
   z-index: 50;
 }
@@ -532,10 +541,23 @@ h3 {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   max-width: 800px;
   margin: 0 auto;
   width: 100%;
+}
+
+/* Mobile web: keep controls above the footer and avoid centering pushing them down */
+@media (max-width: 1023px) {
+  .player-container {
+    justify-content: flex-start;
+    padding-top: var(--spacing-sm);
+  }
+
+  .player-content {
+    justify-content: flex-start;
+  }
 }
 
 .player-content {
@@ -2853,7 +2875,7 @@ body.offline-mode .share-track-button {
   }
 
   .main-player-section {
-    padding: 10px 0;
+    padding-top: 10px;
   }
 
   .player-content {
@@ -2920,7 +2942,7 @@ body.offline-mode .share-track-button {
   }
 
   .main-player-section {
-    padding: 6px 0;
+    padding-top: 6px;
   }
 
   .player-content {

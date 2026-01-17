@@ -39,8 +39,22 @@ function setAppViewportHeightVar() {
   }
 }
 
+function setFooterHeightVar() {
+  try {
+    const footer = document.querySelector('.footer');
+    if (!footer) return;
+    const rect = footer.getBoundingClientRect();
+    const heightPx = Math.max(0, Math.round((rect && rect.height) || footer.offsetHeight || 0));
+    if (!heightPx) return;
+    document.documentElement.style.setProperty('--footer-height', `${heightPx}px`);
+  } catch {
+    // ignore
+  }
+}
+
 // Set early and keep updated on viewport changes
 setAppViewportHeightVar();
+setFooterHeightVar();
 try {
   let scheduled = false;
   const scheduleUpdate = () => {
@@ -49,6 +63,7 @@ try {
     requestAnimationFrame(() => {
       scheduled = false;
       setAppViewportHeightVar();
+      setFooterHeightVar();
     });
   };
 
