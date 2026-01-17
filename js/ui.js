@@ -4380,22 +4380,44 @@ function showPWAInstallBanner() {
   // Avoid stacking with shared-link banner.
   if (document.getElementById('open-in-app-banner')) return;
 
+  const isIOS = (() => {
+    try {
+      const ua = String(navigator.userAgent || '').toLowerCase();
+      const iOS = /iphone|ipad|ipod/.test(ua);
+      const isMS = typeof window.MSStream !== 'undefined';
+      return iOS && !isMS;
+    } catch {
+      return false;
+    }
+  })();
+
+  const installPromptAvailable = (() => {
+    try { return Boolean(window.__resonateDeferredInstallPrompt); } catch { return false; }
+  })();
+
+  const primaryLabel = (isIOS && !installPromptAvailable) ? 'Add to Home Screen' : 'Install';
+
   const banner = document.createElement('div');
   banner.id = 'pwa-install-banner';
-  banner.className = 'pwa-install-banner';
+  // Reuse the shared-link banner layout for a consistent, friendlier UX.
+  banner.className = 'pwa-install-banner open-in-app-banner';
   banner.innerHTML = `
     <div class="pwa-banner-content">
-      <div class="pwa-banner-text">
-        <div class="pwa-banner-buttons">Install Resonate for a better experience
-          <button class="pwa-install-btn">Install</button>
-          <button class="pwa-close-btn" aria-label="Close">✕</button>
-        </div>
+      <div class="open-in-app-text" role="status" aria-live="polite">
+        <div class="open-in-app-title">Install Resonate to keep listening</div>
+        <div class="open-in-app-subtitle">Faster playback, offline support, and fewer interruptions.</div>
+      </div>
+      <div class="open-in-app-actions">
+        <button class="pwa-install-btn open-in-app-btn" type="button">${primaryLabel}</button>
+        <button class="pwa-install-btn pwa-install-btn-secondary" type="button">Not now</button>
+        <button class="pwa-close-btn" aria-label="Close" type="button">✕</button>
       </div>
     </div>
   `;
 
   // Add event listeners
   const installBtn = banner.querySelector('.pwa-install-btn');
+  const notNowBtn = banner.querySelector('.pwa-install-btn-secondary');
   const closeBtn = banner.querySelector('.pwa-close-btn');
 
   installBtn.addEventListener('click', () => {
@@ -4413,6 +4435,17 @@ function showPWAInstallBanner() {
       console.warn('Could not save PWA banner preference');
     }
   });
+
+  if (notNowBtn) {
+    notNowBtn.addEventListener('click', () => {
+      hidePWAInstallBanner();
+      try {
+        localStorage.setItem('resonate_pwa_banner_dismissed', 'true');
+      } catch (e) {
+        console.warn('Could not save PWA banner preference');
+      }
+    });
+  }
 
   // Add to body
   document.body.appendChild(banner);

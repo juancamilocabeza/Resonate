@@ -126,7 +126,7 @@
 
   /* Component Sizes - Mobile Optimized */
   /* Mobile cover: responsive to viewport height to avoid clipping controls */
-  --art-size-mobile: clamp(140px, 28vh, 240px);
+  --art-size-mobile: clamp(140px, 26vh, 220px);
   --art-size-tablet: 320px;
   --art-size-desktop: 380px;
   /* Mobile controls: keep accessible tap targets while protecting vertical space */
@@ -868,6 +868,18 @@ h3 {
   padding-left: calc(var(--spacing-sm) + env(safe-area-inset-left, 0));
   padding-right: calc(var(--spacing-sm) + env(safe-area-inset-right, 0));
   padding-bottom: var(--vv-bottom-inset, 0px);
+}
+
+/* Footer is informational only; never let it block control taps */
+.footer {
+  pointer-events: none;
+}
+
+/* Add a small touch-safe bottom inset for mobile web (gesture bars may not map to safe-area/env). */
+@media (hover: none) and (pointer: coarse) {
+  .main-player-section .controls {
+    padding-bottom: calc(var(--vv-bottom-inset, 0px) + 10px);
+  }
 }
 
 @media (max-width: 400px) {
@@ -3292,8 +3304,8 @@ body.offline-mode .share-track-button {
 }
 
 .pwa-install-btn {
-  background: var(--accent);
-  color: #000;
+  background: var(--primary);
+  color: #fff;
   border: none;
   border-radius: var(--border-radius);
   font-size: 12px;
@@ -3376,13 +3388,13 @@ body.offline-mode .share-track-button {
 
 .pwa-install-btn:active {
   transform: translateY(0);
-  background: var(--accent);
+  background: var(--primary);
 }
 
 /* ===== SW UPDATE BANNER (Mode B) ===== */
 .sw-update-banner .pwa-install-btn.sw-update-apply-btn {
-  background: var(--accent);
-  color: #000;
+  background: var(--primary);
+  color: #fff;
 }
 
 .sw-update-banner .pwa-install-btn.sw-update-apply-btn:hover {
