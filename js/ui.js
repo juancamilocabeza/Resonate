@@ -48,32 +48,43 @@ function setFavoritesPanelInsets() {
     const playerSection = document.querySelector('.main-player-section');
     if (!searchInput || !(footer || playerSection)) return;
 
-    const viewportHeight = Math.max(
-      0,
-      Math.round((window.visualViewport && window.visualViewport.height) || window.innerHeight || 0)
-    );
-    if (!viewportHeight) return;
+    const vv = window.visualViewport;
+    const vpTop = (vv && Number.isFinite(vv.offsetTop)) ? vv.offsetTop : 0;
+    const vpHeight = Math.max(0, Math.round((vv && vv.height) || window.innerHeight || 0));
+    if (!vpHeight) return;
 
+    const gapPx = 10;
     const inputRect = searchInput.getBoundingClientRect();
-    const bottomAnchorEl = footer || playerSection;
-    const bottomAnchorRect = bottomAnchorEl.getBoundingClientRect();
-    const footerMarginTop = footer
-      ? (parseFloat(getComputedStyle(footer).marginTop) || 0)
+    const inputBottomVp = inputRect.bottom - vpTop;
+
+    // Bottom cap: always stop at the visible start of the footer.
+    // If footer rect is unreliable (can happen with sticky inside fixed/overflow contexts), infer from footer height.
+    const footerRect = footer ? footer.getBoundingClientRect() : null;
+    const footerHeight = footer
+      ? Math.max(0, (footerRect && footerRect.height) || footer.offsetHeight || 0)
       : 0;
-    const bottomAnchorTop = footer ? (bottomAnchorRect.top - footerMarginTop) : bottomAnchorRect.top;
 
-    const topBase = Math.max(0, Math.round(inputRect.bottom + 10));
-    const bottomBase = Math.max(0, Math.round(viewportHeight - bottomAnchorTop + 10));
+    const anchorEl = footer || playerSection;
+    const anchorRect = anchorEl.getBoundingClientRect();
+    let anchorTopVp = anchorRect.top - vpTop;
 
-    // Ensure the panel keeps a useful height even if the player is tall.
-    const minPanelHeight = Math.max(220, Math.round(viewportHeight * 0.45));
-    const maxInset = Math.max(0, viewportHeight - 80);
+    if (footer) {
+      if (!Number.isFinite(anchorTopVp) || anchorTopVp < 0 || anchorTopVp > vpHeight + 50) {
+        anchorTopVp = vpHeight - footerHeight;
+      }
+    }
 
-    let topPx = Math.min(topBase, maxInset);
-    let bottomPx = Math.min(bottomBase, maxInset);
+    const requiredBottomPx = Math.max(0, Math.round(vpHeight - anchorTopVp + gapPx));
+    let bottomPx = Math.min(requiredBottomPx, vpHeight);
 
-    if (viewportHeight - topPx - bottomPx < minPanelHeight) {
-      bottomPx = Math.max(0, viewportHeight - topPx - minPanelHeight);
+    const minPanelHeight = Math.max(220, Math.round(vpHeight * 0.45));
+    const maxTopPx = Math.max(0, vpHeight - bottomPx);
+    let topPx = Math.max(0, Math.min(Math.round(inputBottomVp + gapPx), maxTopPx));
+
+    const available = vpHeight - topPx - bottomPx;
+    if (available < minPanelHeight) {
+      const maxTopForMin = Math.max(0, vpHeight - bottomPx - minPanelHeight);
+      topPx = Math.min(topPx, maxTopForMin);
     }
 
     document.documentElement.style.setProperty('--favorites-panel-top', `${topPx}px`);
@@ -93,31 +104,41 @@ function setSearchPanelInsets() {
     const playerSection = document.querySelector('.main-player-section');
     if (!searchInput || !(footer || playerSection)) return;
 
-    const viewportHeight = Math.max(
-      0,
-      Math.round((window.visualViewport && window.visualViewport.height) || window.innerHeight || 0)
-    );
-    if (!viewportHeight) return;
+    const vv = window.visualViewport;
+    const vpTop = (vv && Number.isFinite(vv.offsetTop)) ? vv.offsetTop : 0;
+    const vpHeight = Math.max(0, Math.round((vv && vv.height) || window.innerHeight || 0));
+    if (!vpHeight) return;
 
+    const gapPx = 10;
     const inputRect = searchInput.getBoundingClientRect();
-    const bottomAnchorEl = footer || playerSection;
-    const bottomAnchorRect = bottomAnchorEl.getBoundingClientRect();
-    const footerMarginTop = footer
-      ? (parseFloat(getComputedStyle(footer).marginTop) || 0)
+    const inputBottomVp = inputRect.bottom - vpTop;
+
+    const footerRect = footer ? footer.getBoundingClientRect() : null;
+    const footerHeight = footer
+      ? Math.max(0, (footerRect && footerRect.height) || footer.offsetHeight || 0)
       : 0;
-    const bottomAnchorTop = footer ? (bottomAnchorRect.top - footerMarginTop) : bottomAnchorRect.top;
 
-    const topBase = Math.max(0, Math.round(inputRect.bottom + 10));
-    const bottomBase = Math.max(0, Math.round(viewportHeight - bottomAnchorTop + 10));
+    const anchorEl = footer || playerSection;
+    const anchorRect = anchorEl.getBoundingClientRect();
+    let anchorTopVp = anchorRect.top - vpTop;
 
-    const minPanelHeight = Math.max(220, Math.round(viewportHeight * 0.45));
-    const maxInset = Math.max(0, viewportHeight - 80);
+    if (footer) {
+      if (!Number.isFinite(anchorTopVp) || anchorTopVp < 0 || anchorTopVp > vpHeight + 50) {
+        anchorTopVp = vpHeight - footerHeight;
+      }
+    }
 
-    let topPx = Math.min(topBase, maxInset);
-    let bottomPx = Math.min(bottomBase, maxInset);
+    const requiredBottomPx = Math.max(0, Math.round(vpHeight - anchorTopVp + gapPx));
+    let bottomPx = Math.min(requiredBottomPx, vpHeight);
 
-    if (viewportHeight - topPx - bottomPx < minPanelHeight) {
-      bottomPx = Math.max(0, viewportHeight - topPx - minPanelHeight);
+    const minPanelHeight = Math.max(220, Math.round(vpHeight * 0.45));
+    const maxTopPx = Math.max(0, vpHeight - bottomPx);
+    let topPx = Math.max(0, Math.min(Math.round(inputBottomVp + gapPx), maxTopPx));
+
+    const available = vpHeight - topPx - bottomPx;
+    if (available < minPanelHeight) {
+      const maxTopForMin = Math.max(0, vpHeight - bottomPx - minPanelHeight);
+      topPx = Math.min(topPx, maxTopForMin);
     }
 
     document.documentElement.style.setProperty('--search-panel-top', `${topPx}px`);
@@ -276,6 +297,7 @@ const state = {
   isSeeking: false,
   searchActive: false,
   searchTimeout: null,
+  searchRequestId: 0,
   isAndroid: /Android/.test(navigator.userAgent),
   expandedAlbums: new Set(),
   shuffleFavorites: false,
@@ -1101,13 +1123,20 @@ function setupSearchOnEnter() {
       console.log('Search query:', state.currentSearchQuery);
       if (state.currentSearchQuery) {
 
+        const queryAtDispatch = state.currentSearchQuery;
+        state.searchRequestId = (state.searchRequestId || 0) + 1;
+        const requestId = state.searchRequestId;
+
         elements.searchResults.classList.add('active');
         try { requestAnimationFrame(setSearchPanelInsets); } catch {}
         // Ocultar teclado al lanzar búsqueda
         elements.searchInput.blur();
-        (window.performOptimizedSearch || performOptimizedSearch)(state.currentSearchQuery, 0).then(result => {
+        (window.performOptimizedSearch || performOptimizedSearch)(queryAtDispatch, 0).then(result => {
+          // Ignore stale results (user cleared/changed query or a newer search started)
+          if ((state.searchRequestId || 0) !== requestId) return;
+          if ((elements.searchInput.value || '').trim() !== queryAtDispatch) return;
           displaySearchResults(result);
-          addToSearchHistory(state.currentSearchQuery);
+          addToSearchHistory(queryAtDispatch);
         }).catch(error => {
           console.error('Search error:', error);
           showStatus('Search encountered an error', 'error');
@@ -4002,9 +4031,16 @@ function displaySearchHistory() {
         state.currentSearchPage = 0;
         state.currentSearchQuery = query;
 
+        const queryAtDispatch = query;
+        state.searchRequestId = (state.searchRequestId || 0) + 1;
+        const requestId = state.searchRequestId;
+
         elements.searchResults.classList.add('active');
+        try { requestAnimationFrame(setSearchPanelInsets); } catch {}
         if (window.performOptimizedSearch) {
-          window.performOptimizedSearch(query, 0).then(result => {
+          window.performOptimizedSearch(queryAtDispatch, 0).then(result => {
+            if ((state.searchRequestId || 0) !== requestId) return;
+            if ((elements.searchInput.value || '').trim() !== queryAtDispatch) return;
             displaySearchResults(result);
           }).catch(error => {
             console.error('Search error:', error);

@@ -2323,13 +2323,13 @@ body.offline-mode .share-track-button {
   left: 0;
   right: 0;
   background: var(--bg);
-  z-index: 100;
+  z-index: 220;
   border-top: 1px solid rgba(255, 255, 255, 0.03);
   opacity: 0.6;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  margin-top: 24px;
+  margin-top: 0;
   width: 100% !important;
   line-height: 1.4;
   margin-left: 0 !important;
