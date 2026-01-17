@@ -3969,6 +3969,7 @@ function displaySearchHistory() {
   if (history.length === 0) {
     elements.searchResultsList.innerHTML = '<div class="no-results">No recent searches</div>';
     elements.searchResults.classList.add('active');
+    try { requestAnimationFrame(setSearchPanelInsets); } catch {}
     return;
   }
 
@@ -4024,6 +4025,7 @@ function displaySearchHistory() {
   elements.searchResultsList.innerHTML = '';
   elements.searchResultsList.appendChild(fragment);
   elements.searchResults.classList.add('active');
+  try { requestAnimationFrame(setSearchPanelInsets); } catch {}
 
   // Add event listeners for remove buttons
   document.querySelectorAll('.history-remove').forEach(btn => {
