@@ -1586,10 +1586,32 @@ select:focus {
   border-radius: var(--border-radius-large);
   color: var(--fg);
   font-size: 16px;
-  padding: 0 var(--spacing-md);
+  padding: 0 calc(var(--spacing-md) + 44px) 0 var(--spacing-md);
   transition: var(--transition-all-slow);
   width: 100%;
   min-width: 0;
+}
+
+.search-clear-btn {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.search-clear-btn:active {
+  background: rgba(var(--primary-rgb), 0.14);
 }
 
 .search-input:focus {

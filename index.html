@@ -77,7 +77,19 @@
     <div class="discovery-section">
       <div class="search-section">
         <div class="search-container">
-          <input type="text" id="search-input" class="search-input" placeholder="Discover something new to play" aria-label="Discover something new to play" autocomplete="off">
+          <input
+            type="search"
+            id="search-input"
+            class="search-input"
+            placeholder="Discover something new to play"
+            aria-label="Discover something new to play"
+            autocomplete="off"
+            autocapitalize="none"
+            autocorrect="off"
+            spellcheck="false"
+            inputmode="search"
+            enterkeyhint="search">
+          <button id="search-clear" class="search-clear-btn" type="button" aria-label="Clear search" title="Clear" hidden>✕</button>
         </div>
         <div id="search-results" class="search-results">
           <div id="search-results-list" class="search-results-list" role="list" aria-label="Search results"></div>

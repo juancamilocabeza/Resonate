@@ -17,6 +17,7 @@ const elements = {
   favoriteBtn: document.getElementById('favorite-btn'),
   shuffleFavoritesBtn: document.getElementById('shuffle-favorites-btn'),
   searchInput: document.getElementById('search-input'),
+  searchClear: document.getElementById('search-clear'),
   searchResults: document.getElementById('search-results'),
   searchResultsList: document.getElementById('search-results-list'),
   searchLoader: document.getElementById('search-loader'),
@@ -37,6 +38,41 @@ const elements = {
   playerContent: document.getElementById('player-content'),
   currentTrackShare: document.getElementById('current-track-share')
 };
+
+function setBodyUiState(className, enabled) {
+  try {
+    document.body.classList.toggle(className, Boolean(enabled));
+  } catch {
+    // ignore
+  }
+}
+
+function setSearchOpenState(isOpen) {
+  setBodyUiState('search-open', isOpen);
+}
+
+function setKeyboardOpenState(isOpen) {
+  setBodyUiState('keyboard-open', isOpen);
+}
+
+function scheduleSearchInsetsBurst() {
+  // Some mobile browsers report the final keyboard/viewport size slightly after focus.
+  // Burst a few updates to keep the panel visible above the keyboard.
+  try {
+    requestAnimationFrame(setSearchPanelInsets);
+  } catch {}
+
+  try {
+    setTimeout(() => {
+      try { setSearchPanelInsets(); } catch {}
+    }, 120);
+    setTimeout(() => {
+      try { setSearchPanelInsets(); } catch {}
+    }, 420);
+  } catch {
+    // ignore
+  }
+}
 
 function setFavoritesPanelInsets() {
   try {
@@ -1054,6 +1090,7 @@ function hideSearchResults() {
   
   elements.searchResults.classList.remove('active');
   state.searchActive = false;
+  setSearchOpenState(false);
   hideFavoritesList();
 }
 
@@ -1147,7 +1184,8 @@ function setupSearchOnEnter() {
         const requestId = state.searchRequestId;
 
         elements.searchResults.classList.add('active');
-        try { requestAnimationFrame(setSearchPanelInsets); } catch {}
+        setSearchOpenState(true);
+        scheduleSearchInsetsBurst();
         // Ocultar teclado al lanzar búsqueda
         elements.searchInput.blur();
         (window.performOptimizedSearch || performOptimizedSearch)(queryAtDispatch, 0).then(result => {
@@ -1167,6 +1205,8 @@ function setupSearchOnEnter() {
         displaySearchHistory();
         state.searchActive = true;
         hideFavoritesList();
+        setSearchOpenState(true);
+        scheduleSearchInsetsBurst();
       }
     }
   });
@@ -1176,8 +1216,62 @@ function setupSearchFocusBehavior() {
   let lastSearchQuery = '';
   let isCleaning = false;
 
+  const updateSearchClearButton = () => {
+    const btn = elements.searchClear;
+    if (!btn) return;
+    const hasValue = Boolean((elements.searchInput.value || '').trim());
+    btn.hidden = !hasValue;
+    btn.disabled = !hasValue;
+  };
+
+  if (elements.searchClear && !elements.searchClear.dataset.bound) {
+    elements.searchClear.dataset.bound = 'true';
+    elements.searchClear.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (!elements.searchInput) return;
+
+      // Mark any in-flight search as stale.
+      state.searchRequestId = (state.searchRequestId || 0) + 1;
+
+      elements.searchInput.value = '';
+      updateSearchClearButton();
+
+      performCompleteCleanup();
+      displaySearchHistory();
+      state.searchActive = true;
+      hideFavoritesList();
+      setSearchOpenState(true);
+      setKeyboardOpenState(true);
+
+      try {
+        elements.searchInput.focus({ preventScroll: true });
+      } catch {
+        try { elements.searchInput.focus(); } catch {}
+      }
+
+      scheduleSearchInsetsBurst();
+    });
+  }
+
+  // Tap on the input should always bring back the panel (especially when already focused).
+  elements.searchInput.addEventListener('pointerdown', () => {
+    if (isCleaning) return;
+    const currentQuery = elements.searchInput.value.trim();
+    if (currentQuery === '') {
+      displaySearchHistory();
+      state.searchActive = true;
+      hideFavoritesList();
+      setSearchOpenState(true);
+    }
+    scheduleSearchInsetsBurst();
+  });
+
   elements.searchInput.addEventListener('focus', () => {
     if (isCleaning) return;
+
+    setKeyboardOpenState(true);
 
     const currentQuery = elements.searchInput.value.trim();
 
@@ -1186,23 +1280,39 @@ function setupSearchFocusBehavior() {
       displaySearchHistory();
       state.searchActive = true;
       hideFavoritesList();
+      setSearchOpenState(true);
+      scheduleSearchInsetsBurst();
+      updateSearchClearButton();
       return;
     }
 
     // Si hay texto, solo mostrar resultados existentes si coinciden
     if (currentQuery.length > 0) {
       hideFavoritesList();
+      setSearchOpenState(Boolean(elements.searchResults.classList.contains('active')));
+      scheduleSearchInsetsBurst();
+      updateSearchClearButton();
       if (state.searchResults.length > 0 && currentQuery === state.currentSearchQuery) {
         elements.searchResults.classList.add('active');
-        try { requestAnimationFrame(setSearchPanelInsets); } catch {}
+        scheduleSearchInsetsBurst();
         state.searchActive = true;
+        setSearchOpenState(true);
       }
       // No lanzar nueva búsqueda automáticamente
     }
   });
 
+  elements.searchInput.addEventListener('blur', () => {
+    // Keyboard is likely closing; keep the panel state as-is.
+    setKeyboardOpenState(false);
+    updateSearchClearButton();
+    scheduleSearchInsetsBurst();
+  });
+
   elements.searchInput.addEventListener('input', (e) => {
     const currentQuery = e.target.value.trim();
+
+    updateSearchClearButton();
 
     // Only clear when the input becomes empty
     if (currentQuery === '') {
@@ -1213,6 +1323,8 @@ function setupSearchFocusBehavior() {
       displaySearchHistory();
       state.searchActive = true;
       hideFavoritesList();
+      setSearchOpenState(true);
+      scheduleSearchInsetsBurst();
 
       lastSearchQuery = currentQuery;
       return;
@@ -1225,8 +1337,9 @@ function setupSearchFocusBehavior() {
     // If the text matches the last executed query, re-show existing results (no network).
     if (state.searchResults.length > 0 && currentQuery === state.currentSearchQuery) {
       elements.searchResults.classList.add('active');
-      try { requestAnimationFrame(setSearchPanelInsets); } catch {}
+      scheduleSearchInsetsBurst();
       state.searchActive = true;
+      setSearchOpenState(true);
     } else {
       hideSearchResults();
     }
@@ -1238,11 +1351,14 @@ function setupSearchFocusBehavior() {
   elements.searchInput.addEventListener('paste', () => {
     setTimeout(() => {
       const currentQuery = elements.searchInput.value.trim();
+      updateSearchClearButton();
       if (currentQuery === '') {
         performCompleteCleanup();
         displaySearchHistory();
         state.searchActive = true;
         hideFavoritesList();
+        setSearchOpenState(true);
+        scheduleSearchInsetsBurst();
       }
     }, 50);
   });
@@ -1254,8 +1370,39 @@ function setupSearchFocusBehavior() {
       displaySearchHistory();
       state.searchActive = true;
       hideFavoritesList();
+      setSearchOpenState(true);
+      scheduleSearchInsetsBurst();
     }
+    updateSearchClearButton();
   });
+
+  // Initial state
+  updateSearchClearButton();
+
+  // Tap outside closes the panel (mobile-friendly)
+  if (!window._resonateSearchOutsideCloseInit) {
+    window._resonateSearchOutsideCloseInit = true;
+    document.addEventListener('pointerdown', (e) => {
+      try {
+        if (!elements.searchResults || !elements.searchResults.classList.contains('active')) return;
+
+        const target = e.target;
+        const container = document.querySelector('.search-container');
+        if (container && container.contains(target)) return;
+        if (elements.searchResults.contains(target)) return;
+        if (elements.favoritesList && elements.favoritesList.contains(target)) return;
+
+        hideSearchResults();
+        try {
+          if (document.activeElement === elements.searchInput) {
+            elements.searchInput.blur();
+          }
+        } catch {}
+      } catch {
+        // ignore
+      }
+    }, { capture: true });
+  }
 }
 
 function performCompleteCleanup() {
@@ -1347,6 +1494,9 @@ function displaySearchResults(searchData, clearExisting = true) {
       </div>
     `;
     elements.searchResults.classList.add('active');
+    state.searchActive = true;
+    setSearchOpenState(true);
+    scheduleSearchInsetsBurst();
     // Volver a deshabilitar los controles si no hay resultados
     if (state.favorites.length === 0) {
       updatePlayButtonState();
@@ -1379,6 +1529,10 @@ function displaySearchResults(searchData, clearExisting = true) {
   }
 
   elements.searchResults.classList.add('active');
+
+  state.searchActive = true;
+  setSearchOpenState(true);
+  scheduleSearchInsetsBurst();
 
   // Habilitar controles si hay resultados de búsqueda
   enableControlsForSearchResults();
@@ -4342,7 +4496,9 @@ function displaySearchHistory() {
   if (history.length === 0) {
     elements.searchResultsList.innerHTML = '<div class="no-results">No recent searches</div>';
     elements.searchResults.classList.add('active');
-    try { requestAnimationFrame(setSearchPanelInsets); } catch {}
+    state.searchActive = true;
+    setSearchOpenState(true);
+    scheduleSearchInsetsBurst();
     return;
   }
 
@@ -4370,7 +4526,9 @@ function displaySearchHistory() {
         const requestId = state.searchRequestId;
 
         elements.searchResults.classList.add('active');
-        try { requestAnimationFrame(setSearchPanelInsets); } catch {}
+        state.searchActive = true;
+        setSearchOpenState(true);
+        scheduleSearchInsetsBurst();
         if (window.performOptimizedSearch) {
           window.performOptimizedSearch(queryAtDispatch, 0).then(result => {
             if ((state.searchRequestId || 0) !== requestId) return;
@@ -4405,7 +4563,9 @@ function displaySearchHistory() {
   elements.searchResultsList.innerHTML = '';
   elements.searchResultsList.appendChild(fragment);
   elements.searchResults.classList.add('active');
-  try { requestAnimationFrame(setSearchPanelInsets); } catch {}
+  state.searchActive = true;
+  setSearchOpenState(true);
+  scheduleSearchInsetsBurst();
 
   // Add event listeners for remove buttons
   document.querySelectorAll('.history-remove').forEach(btn => {
