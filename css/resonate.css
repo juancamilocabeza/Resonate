@@ -1612,11 +1612,23 @@ select:focus {
   border: 2px solid transparent;
   border-radius: var(--border-radius-large);
   color: var(--fg);
+  /* Avoid showing the native search clear icon (we provide our own clear button). */
+  -webkit-appearance: none;
   font-size: 16px;
-  padding: 0 calc(var(--spacing-md) + 44px) 0 var(--spacing-md);
+  /* Reserve space for the clear button hit-target */
+  padding: 0 calc(var(--spacing-md) + 56px) 0 var(--spacing-md);
   transition: var(--transition-all-slow);
   width: 100%;
   min-width: 0;
+}
+
+/* Hide native search decorations (WebKit/Blink) to prevent a double-clear button. */
+.search-input::-webkit-search-cancel-button,
+.search-input::-webkit-search-decoration,
+.search-input::-webkit-search-results-button,
+.search-input::-webkit-search-results-decoration {
+  -webkit-appearance: none;
+  display: none;
 }
 
 .search-clear-btn {
@@ -1624,21 +1636,43 @@ select:focus {
   right: 10px;
   top: 50%;
   transform: translateY(-50%);
-  width: 40px;
-  height: 40px;
+  /* Minimum recommended tap target */
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
   border-radius: 999px;
   border: none;
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--accent);
+  background: rgba(255, 255, 255, 0.10);
+  color: var(--fg);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   z-index: 2;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.15s ease, transform 0.12s ease, box-shadow 0.15s ease;
+}
+
+/* Respect the HTML hidden attribute (author styles can override UA defaults). */
+.search-clear-btn[hidden] {
+  display: none !important;
 }
 
 .search-clear-btn:active {
-  background: rgba(var(--primary-rgb), 0.14);
+  background: rgba(var(--primary-rgb), 0.18);
+  transform: translateY(-50%) scale(0.96);
+}
+
+.search-clear-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.search-clear-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.22);
 }
 
 .search-input:focus {

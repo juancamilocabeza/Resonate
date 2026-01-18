@@ -263,8 +263,8 @@ try {
 
 // UI behavior tuning (overridable by other scripts before ui.js runs)
 window.SEARCH_UI_CONFIG = window.SEARCH_UI_CONFIG || {
-  // Better mobile UX: keep keyboard open after searching so users can refine.
-  closeKeyboardOnSubmit: false,
+  // Mobile UX: close the keyboard when a search is executed.
+  closeKeyboardOnSubmit: true,
   keyboardOpenThresholdPx: 80,
   // Mobile UX: if there is search history, first tap shows it without opening the keyboard.
   suppressKeyboardWhenHistory: true
@@ -4672,6 +4672,12 @@ function displaySearchHistory() {
     historyItem.addEventListener('click', (e) => {
       if (!e.target.classList.contains('history-remove')) {
         elements.searchInput.value = query;
+        try {
+          if (window.SEARCH_UI_CONFIG && window.SEARCH_UI_CONFIG.closeKeyboardOnSubmit) {
+            elements.searchInput.blur();
+            setKeyboardOpenState(false);
+          }
+        } catch {}
         // Trigger search
         state.currentSearchPage = 0;
         state.currentSearchQuery = query;
