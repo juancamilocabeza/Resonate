@@ -1561,24 +1561,9 @@ function displaySearchResults(searchData, clearExisting = true) {
     return;
   }
 
-  // Render results either as legacy list or new card grid
-  if (state.viewMode === 'grid') {
-    renderCardGrid(elements.searchResultsList, results, 'search', clearExisting);
-  } else {
-    const fragment = document.createDocumentFragment();
-    results.forEach((result, index) => {
-      const globalIndex = clearExisting ? index : state.searchResults.length - results.length + index;
-      const resultEl = createSearchResultElement(result, globalIndex);
-      fragment.appendChild(resultEl);
-    });
-    if (clearExisting) {
-      elements.searchResultsList.appendChild(fragment);
-    } else {
-      const existingObserver = elements.searchResultsList.querySelector('.lazy-load-observer');
-      if (existingObserver) existingObserver.remove();
-      elements.searchResultsList.appendChild(fragment);
-    }
-  }
+  // Grid always (favorites + search): improves consistency and theming
+  state.viewMode = 'grid';
+  renderCardGrid(elements.searchResultsList, results, 'search', clearExisting);
 
   // Configurar lazy loading si hay más resultados
   if (hasMore && SEARCH_CONFIG.enableLazyLoading) {
@@ -2076,6 +2061,19 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
     media.addEventListener('click', playFromCard);
     t.addEventListener('click', playFromCard);
 
+    // Card-level interactions: click/keyboard anywhere except buttons
+    card.addEventListener('click', (e) => {
+      if (e.target && e.target.closest && e.target.closest('button')) return;
+      playFromCard(e);
+    });
+
+    card.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      if (e.target && e.target.closest && e.target.closest('button')) return;
+      e.preventDefault();
+      playFromCard(e);
+    });
+
     // Favorite
     favBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -2156,6 +2154,19 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
     t.style.cursor = 'pointer';
     media.addEventListener('click', playFromFavoriteCard);
     t.addEventListener('click', playFromFavoriteCard);
+
+    // Card-level interactions: click/keyboard anywhere except buttons
+    card.addEventListener('click', (e) => {
+      if (e.target && e.target.closest && e.target.closest('button')) return;
+      playFromFavoriteCard(e);
+    });
+
+    card.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      if (e.target && e.target.closest && e.target.closest('button')) return;
+      e.preventDefault();
+      playFromFavoriteCard(e);
+    });
 
     favBtn.addEventListener('click', (e) => {
       e.stopPropagation();
