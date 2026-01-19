@@ -849,6 +849,15 @@ function loadFavorites() {
     state.favorites = uniqueFavorites;
     window.logger.info(`Final favorites loaded: ${state.favorites.length} items`, 'UI');
 
+    // Notify other modules (e.g., initialization/restore) that favorites are ready.
+    try {
+      window.dispatchEvent(new CustomEvent('resonate:favorites-loaded', {
+        detail: { count: state.favorites.length }
+      }));
+    } catch {
+      try { window.dispatchEvent(new Event('resonate:favorites-loaded')); } catch {}
+    }
+
     // Precargar favoritos en cola FIFO
     if (state.favoritesPreloadEnabled && typeof audioCache !== 'undefined' && audioCache && typeof audioCache.preloadFavorites === 'function') {
       audioCache.preloadFavorites(state.favorites).catch(err => {
@@ -2988,6 +2997,17 @@ function loadSavedPlaybackState() {
 
       state.savedPlaybackState = savedState;
       state.savedPlaybackQueueSnapshot = savedState && savedState.queue ? savedState.queue : null;
+
+      // Help continuous playback on refresh: remember the last context so playback.js can
+      // reconstruct a loop even if the context restore races favorites loading.
+      try {
+        const lastCtx = state.savedPlaybackQueueSnapshot && state.savedPlaybackQueueSnapshot.context
+          ? String(state.savedPlaybackQueueSnapshot.context)
+          : '';
+        if (lastCtx === 'favorites') {
+          state.isPlayingFavorites = true;
+        }
+      } catch {}
 
       // Restore the track information (but don't start playing yet)
       state.currentTrack = { ...savedState.track };

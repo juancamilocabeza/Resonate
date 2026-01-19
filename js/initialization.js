@@ -315,7 +315,23 @@ function scheduleFavoritesQueuePreparation() {
 
   schedule(async () => {
     try {
-      await loadPlaybackQueue('favorites', window.state.favorites, 0);
+      // If we have a saved snapshot for favorites, continue after the last played index.
+      let startIndex = 0;
+      try {
+        const snap = window.state && window.state.savedPlaybackQueueSnapshot ? window.state.savedPlaybackQueueSnapshot : null;
+        if (snap && snap.context === 'favorites' && Number.isFinite(Number(snap.currentIndex))) {
+          const idx = Math.max(0, Math.floor(Number(snap.currentIndex)));
+          startIndex = (idx + 1) % window.state.favorites.length;
+          // Best-effort: restore the playbackManager context too.
+          try {
+            if (typeof playbackManager !== 'undefined' && playbackManager && typeof playbackManager.setContext === 'function') {
+              playbackManager.setContext('favorites', window.state.favorites, idx);
+            }
+          } catch {}
+        }
+      } catch {}
+
+      await loadPlaybackQueue('favorites', window.state.favorites, startIndex);
       if (window.state.playbackQueue.length > 0) {
         safeShowStatus('Tap play to start your favorites', 'info', 3000);
       }
@@ -712,12 +728,59 @@ async function initializeApp() {
   // Cargar estado de reproducción guardado (última sesión)
   loadSavedPlaybackState();
 
+  // If favorites load after this (common on refresh), retry restoring the playback context then.
+  try {
+    if (!window.__resonateRestoreAfterFavoritesHandlerInstalled) {
+      window.__resonateRestoreAfterFavoritesHandlerInstalled = true;
+      window.addEventListener('resonate:favorites-loaded', async () => {
+        try {
+          const url = new URL(window.location.href);
+          const hasSharedPlay = !!url.searchParams.get('play');
+          if (hasSharedPlay) return;
+
+          const snap = window.state && window.state.savedPlaybackQueueSnapshot ? window.state.savedPlaybackQueueSnapshot : null;
+          if (!snap || !snap.context) return;
+          if (String(snap.context) !== 'favorites') return;
+
+          if (typeof window.restorePlaybackQueueFromSnapshot !== 'function') return;
+
+          const restored = await window.restorePlaybackQueueFromSnapshot(snap);
+          if (!restored) return;
+
+          // Best-effort: rebuild FIFO queue to continue after the restored index.
+          try {
+            const favorites = window.state && Array.isArray(window.state.favorites) ? window.state.favorites : [];
+            const idx = Number.isFinite(Number(snap.currentIndex)) ? Math.max(0, Math.floor(Number(snap.currentIndex))) : 0;
+            const startIndex = favorites.length ? ((idx + 1) % favorites.length) : 0;
+            if (favorites.length && typeof loadPlaybackQueue === 'function') {
+              loadPlaybackQueue('favorites', favorites, startIndex);
+            }
+          } catch {}
+        } catch {
+          // ignore
+        }
+      });
+    }
+  } catch {}
+
   // Restore queue/context (best-effort) so Next/Prev keeps continuity after reload.
   try {
     const url = new URL(window.location.href);
     const hasSharedPlay = !!url.searchParams.get('play');
     if (!hasSharedPlay && window.state && window.state.savedPlaybackQueueSnapshot && typeof window.restorePlaybackQueueFromSnapshot === 'function') {
-      await window.restorePlaybackQueueFromSnapshot(window.state.savedPlaybackQueueSnapshot);
+      const restored = await window.restorePlaybackQueueFromSnapshot(window.state.savedPlaybackQueueSnapshot);
+
+      // If we restored a favorites context, rebuild FIFO queue so continuous playback doesn't stall.
+      try {
+        const snap = window.state.savedPlaybackQueueSnapshot;
+        if (restored && snap && snap.context === 'favorites' && Array.isArray(window.state.favorites) && window.state.favorites.length) {
+          const idx = Number.isFinite(Number(snap.currentIndex)) ? Math.max(0, Math.floor(Number(snap.currentIndex))) : 0;
+          const startIndex = (idx + 1) % window.state.favorites.length;
+          if (typeof loadPlaybackQueue === 'function') {
+            loadPlaybackQueue('favorites', window.state.favorites, startIndex);
+          }
+        }
+      } catch {}
     }
   } catch {}
 
