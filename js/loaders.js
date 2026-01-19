@@ -55,6 +55,23 @@ const Loaders = (() => {
   let activeLoader = null;
 
   function showLoader({ type = "spinner", target = document.body, progress = 0, showProgress = false } = {}) {
+    // If a loader is already active in the same target, reuse it to avoid flicker.
+    if (activeLoader && activeLoader.parentElement === target) {
+      try {
+        activeLoader._showProgress = showProgress;
+        const progressEl = activeLoader._progressEl;
+        const messageEl = activeLoader._messageEl;
+
+        if (progressEl) progressEl.style.display = showProgress ? '' : 'none';
+        if (messageEl) messageEl.style.display = showProgress ? '' : 'none';
+      } catch {
+        // best-effort
+      }
+
+      setProgress(progress);
+      return;
+    }
+
     if (activeLoader) hideLoader();
 
     const { overlay, progressEl, messageEl } = createLoaderElement(type);

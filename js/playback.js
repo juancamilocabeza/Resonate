@@ -1968,15 +1968,64 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
 }
 
 // Playback control functions
+function showManualSkipLoader() {
+  try {
+    if (!window.Loaders || typeof window.Loaders.showLoader !== 'function') return;
+    // Manual Prev/Next should feel instant; show percent to indicate real work.
+    window.Loaders.showLoader({ type: 'spinner', showProgress: true, progress: 0 });
+
+    // Best-effort: initialize progress if playback helpers are available.
+    try {
+      if (typeof resetLoaderProgress === 'function') resetLoaderProgress();
+      if (typeof updateLoaderProgress === 'function') updateLoaderProgress(5);
+    } catch {}
+  } catch {
+    // best-effort
+  }
+}
+
+function scheduleHideManualSkipLoaderFallback(delayMs = 3000) {
+  try {
+    if (!window.Loaders || typeof window.Loaders.hideLoader !== 'function') return;
+
+    window.setTimeout(() => {
+      // If no load actually started, ensure the loader doesn't get stuck.
+      try {
+        if (!state || state.isLoading) return;
+        window.Loaders.hideLoader();
+      } catch {
+        // best-effort
+      }
+    }, delayMs);
+  } catch {
+    // best-effort
+  }
+}
+
 function playPrevious() {
   state.userInteracted = true;
   showStatus('Going back to previous track', 'info');
-  playPreviousInContext();
+  if (state.isLoading) return;
+
+  showManualSkipLoader();
+  scheduleHideManualSkipLoaderFallback();
+
+  playPreviousInContext().catch((err) => {
+    logPlayback('warn', 'Manual Prev failed', err);
+    try {
+      if (window.Loaders) window.Loaders.hideLoader();
+    } catch {}
+  });
 }
 
 async function playNext() {
   state.userInteracted = true;
   showStatus('Skipping to next track now', 'info');
+
+  if (state.isLoading) return;
+
+  showManualSkipLoader();
+  scheduleHideManualSkipLoaderFallback();
 
   // Keep manual Next consistent with auto-advance by using the enhanced handlers.
   try {
