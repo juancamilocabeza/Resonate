@@ -532,6 +532,11 @@ function ensureSearchInputControllerBound() {
         if (!elements.searchResults || !elements.searchResults.classList.contains('active')) return;
 
         const target = e.target;
+
+        // Theme toggle should not close overlays (search/favorites).
+        const themeToggle = document.getElementById('theme-toggle');
+        if (themeToggle && target && themeToggle.contains(target)) return;
+
         const container = document.querySelector('.search-container');
         if (container && container.contains(target)) return;
         if (elements.searchResults.contains(target)) return;

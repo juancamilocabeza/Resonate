@@ -1019,6 +1019,13 @@ async function initializeApp() {
   document.addEventListener('click', (e) => {
     try {
       const target = e.target;
+
+      // Theme toggle should not close overlays (search/favorites).
+      const themeToggle = document.getElementById('theme-toggle');
+      if (themeToggle && target && themeToggle.contains(target)) {
+        return;
+      }
+
       const clickedInsideSearch =
         (elements.searchInput && target && elements.searchInput.contains(target)) ||
         (elements.searchResults && target && elements.searchResults.contains(target));
