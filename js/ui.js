@@ -4161,7 +4161,22 @@ function startApp() {
   state.appStarted = true;
   elements.startView.classList.add('hidden');
   elements.app.classList.add('active');
-  forcePlay();
+
+  // Use the user gesture from the Start button to resume playback if possible.
+  // This avoids clearing an already-restored title (resume state) on startup.
+  try {
+    state.userInteracted = true;
+  } catch {}
+
+  try {
+    if (typeof togglePlay === 'function') {
+      togglePlay();
+    } else {
+      forcePlay();
+    }
+  } catch {
+    try { forcePlay(); } catch {}
+  }
 }
 
 // CTA banner to initiate favorites playback (captures user interaction)
