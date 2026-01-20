@@ -693,14 +693,24 @@ function updateTitleTicker(titleText) {
   }
   const myToken = ++titleTickerToken;
   
-  if (!titleText) return;
+  if (!titleText) {
+    try {
+      const existingSpan = elements.title.querySelector('.title-text');
+      if (existingSpan) existingSpan.textContent = '';
+      else elements.title.textContent = '';
+    } catch {}
+    return;
+  }
 
   // Ensure we always animate an inner span to avoid layout jumps.
   let titleSpan = elements.title.querySelector('.title-text');
   if (!titleSpan) {
     titleSpan = document.createElement('span');
     titleSpan.className = 'title-text';
-    elements.title.textContent = '';
+    // Wrap existing content instead of clearing first to avoid visible flicker.
+    while (elements.title.firstChild) {
+      titleSpan.appendChild(elements.title.firstChild);
+    }
     elements.title.appendChild(titleSpan);
   }
   titleSpan.textContent = titleText;
@@ -718,7 +728,7 @@ function updateTitleTicker(titleText) {
     const container = elements.title.parentElement;
     if (!container) return;
     
-    const containerWidth = container.clientWidth;
+    const containerWidth = elements.title.clientWidth || container.clientWidth;
     const titleWidth = liveSpan.scrollWidth;
     
     // Activar ticker si el texto es más ancho que el contenedor
@@ -3135,7 +3145,6 @@ function loadSavedPlaybackState() {
         const titleText = (isAlbumTrack && albumTitle && albumTitle.toLowerCase() !== trackTitle.toLowerCase())
           ? `${albumTitle} — ${trackTitle}`
           : trackTitle;
-        elements.title.textContent = titleText;
         window.updateTitleTicker(titleText);
       }
       const totalTracks = Number.isFinite(state.currentTrack.totalTracks) ? state.currentTrack.totalTracks : 1;

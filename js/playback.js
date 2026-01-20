@@ -1780,8 +1780,12 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
       ? `${albumTitle} — ${trackTitle}`
       : trackTitle;
 
-    window.elements.title.textContent = titleText;
-    window.updateTitleTicker(titleText);
+    // Delegate rendering to the ticker helper (it manages the inner span wrapper).
+    if (typeof window.updateTitleTicker === 'function') {
+      window.updateTitleTicker(titleText);
+    } else {
+      window.elements.title.textContent = titleText;
+    }
     window.elements.creator.textContent = isAlbumTrack
       ? `${track.creator || 'Unknown'} (${trackIndex + 1}/${totalTracks})`
       : (track.creator || 'Unknown');
