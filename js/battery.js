@@ -8,6 +8,10 @@ const Battery = (() => {
   let isBatterySaverMode = false;
   let batteryManager = null;
 
+  // Battery-driven eco mode should be temporary and must not overwrite user preference.
+  const ECO_OVERRIDE_ACTIVE_KEY = 'resonate-eco-battery-active';
+  const ECO_OVERRIDE_PREV_THEME_KEY = 'resonate-eco-battery-prev-theme';
+
   /**
    * Inicializa el monitor de bateria
    * Solicita permiso y configura listeners
@@ -81,19 +85,32 @@ const Battery = (() => {
     
     if (isEcoMode && !charging) {
       // Solo cambiar a eco si no estamos cargando
-      if (themeManager?.getSavedTheme?.() !== 'energy-saver') {
+      const savedTheme = themeManager?.getSavedTheme?.();
+      if (savedTheme !== 'energy-saver') {
+        try {
+          localStorage.setItem(ECO_OVERRIDE_PREV_THEME_KEY, savedTheme || 'night');
+          localStorage.setItem(ECO_OVERRIDE_ACTIVE_KEY, '1');
+        } catch {}
+
         themeManager?.applyTheme?.('energy-saver');
-        themeManager?.saveTheme?.('energy-saver');
         showBatteryNotification(level, true);
       }
     } else if (!isEcoMode && charging) {
-      // Si estamos cargando nuevamente, volver al tema anterior
-      const savedTheme = themeManager?.getSavedTheme?.();
-      if (savedTheme === 'energy-saver') {
-        // Volver al tema predeterminado (noche)
-        themeManager?.applyTheme?.('night');
-        themeManager?.saveTheme?.('night');
+      // Si estamos cargando nuevamente, desactivar eco solo si fue activado por batería.
+      let shouldRestore = false;
+      let prevTheme = 'night';
+      try {
+        shouldRestore = localStorage.getItem(ECO_OVERRIDE_ACTIVE_KEY) === '1';
+        prevTheme = localStorage.getItem(ECO_OVERRIDE_PREV_THEME_KEY) || prevTheme;
+      } catch {}
+
+      if (shouldRestore) {
+        themeManager?.applyTheme?.(prevTheme);
         showBatteryNotification(level, false);
+        try {
+          localStorage.removeItem(ECO_OVERRIDE_ACTIVE_KEY);
+          localStorage.removeItem(ECO_OVERRIDE_PREV_THEME_KEY);
+        } catch {}
       }
     }
   }

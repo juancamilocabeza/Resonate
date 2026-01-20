@@ -46,6 +46,20 @@
     
     // Update theme-color meta tag
     updateThemeColor(theme);
+
+    // Keep toggle label in sync even when theme changes programmatically.
+    try {
+      setToggleLabel(theme);
+    } catch {}
+
+    // Re-evaluate title ticker measurements (fonts/colors can change width).
+    try {
+      if (typeof window.updateTitleTicker === 'function') {
+        const titleEl = document.getElementById('title');
+        const titleText = titleEl ? (titleEl.textContent || '') : '';
+        window.updateTitleTicker(titleText);
+      }
+    } catch {}
     
     // Log for debugging
     console.log(`Theme applied: ${theme}`);

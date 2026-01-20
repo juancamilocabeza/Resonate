@@ -623,29 +623,134 @@ function updateDescriptionUI(track) {
 window.updateDescriptionUI = updateDescriptionUI;
 
 // Title Ticker Management
+let titleTickerTimeoutId = null;
+let titleTickerToken = 0;
+const TITLE_TICKER_START_DELAY_MS = 1000;
+const TITLE_TICKER_ECO_MIN_DURATION_S = 30;
+const TITLE_TICKER_ECO_MULTIPLIER = 2;
+let titleTickerInteractionInit = false;
+
+function getActiveThemeName() {
+  try {
+    return document.documentElement.getAttribute('data-theme') || 'night';
+  } catch {
+    return 'night';
+  }
+}
+
+function isEnergySaverThemeActive() {
+  return getActiveThemeName() === 'energy-saver';
+}
+
+function initTitleTickerInteractions() {
+  if (titleTickerInteractionInit) return;
+  titleTickerInteractionInit = true;
+  if (!elements.title) return;
+
+  // In energy-saver: ticker only starts when the user taps the title.
+  elements.title.addEventListener('click', () => {
+    if (!elements.title) return;
+    if (!isEnergySaverThemeActive()) return;
+
+    const overflowRaw = elements.title.style.getPropertyValue('--title-overflow') || '';
+    const overflowPx = Number.parseFloat(String(overflowRaw).replace('px', ''));
+    if (!Number.isFinite(overflowPx) || overflowPx <= 0) return;
+
+    const span = elements.title.querySelector('.title-text');
+    if (span) {
+      const duration = span.style.getPropertyValue('animation-duration');
+      if (duration) {
+        // Ensure eco wildcard rules don't clamp the ticker duration.
+        span.style.setProperty('animation-duration', duration, 'important');
+      }
+    }
+
+    // Toggle for convenience; when active, ticker remains infinite.
+    if (elements.title.classList.contains('ticker')) {
+      elements.title.classList.remove('ticker');
+      return;
+    }
+
+    if (span) {
+      void span.offsetWidth;
+    }
+    elements.title.classList.add('ticker');
+  });
+}
+
+initTitleTickerInteractions();
 function updateTitleTicker(titleText) {
   if (!elements.title) return;
   
   // Remover cualquier clase de ticker anterior
   elements.title.classList.remove('ticker');
+  elements.title.style.removeProperty('--title-overflow');
+
+  // Cancel any scheduled ticker activation from a previous title.
+  if (titleTickerTimeoutId) {
+    clearTimeout(titleTickerTimeoutId);
+    titleTickerTimeoutId = null;
+  }
+  const myToken = ++titleTickerToken;
   
   if (!titleText) return;
+
+  // Ensure we always animate an inner span to avoid layout jumps.
+  let titleSpan = elements.title.querySelector('.title-text');
+  if (!titleSpan) {
+    titleSpan = document.createElement('span');
+    titleSpan.className = 'title-text';
+    elements.title.textContent = '';
+    elements.title.appendChild(titleSpan);
+  }
+  titleSpan.textContent = titleText;
+  titleSpan.style.removeProperty('animation-duration');
   
-  // Usar setTimeout para asegurar que el DOM se actualice primero
+  // Esperar un tick para asegurar que el DOM/layout se actualice primero
   setTimeout(() => {
+    if (!elements.title) return;
+    if (myToken !== titleTickerToken) return;
+
+    const liveSpan = elements.title.querySelector('.title-text');
+    if (!liveSpan) return;
+
     // Obtener el ancho disponible del contenedor padre
     const container = elements.title.parentElement;
     if (!container) return;
     
     const containerWidth = container.clientWidth;
-    const titleWidth = elements.title.scrollWidth;
+    const titleWidth = liveSpan.scrollWidth;
     
     // Activar ticker si el texto es más ancho que el contenedor
     if (titleWidth > containerWidth) {
       // Calcular duración basada en la longitud del texto
-      const duration = Math.max(15, Math.ceil((titleText.length / 30) * 15));
-      elements.title.style.animationDuration = duration + 's';
-      elements.title.classList.add('ticker');
+      const baseDuration = Math.max(15, Math.ceil((titleText.length / 30) * 15));
+      const isEco = isEnergySaverThemeActive();
+      const duration = isEco
+        ? Math.max(TITLE_TICKER_ECO_MIN_DURATION_S, Math.ceil(baseDuration * TITLE_TICKER_ECO_MULTIPLIER))
+        : baseDuration;
+
+      // Eco mode clamps animation durations globally; force our duration to win.
+      liveSpan.style.setProperty('animation-duration', duration + 's', isEco ? 'important' : '');
+
+      // Animate only the overflow distance; keeps start position stable.
+      const overflowPx = Math.max(0, titleWidth - containerWidth);
+      elements.title.style.setProperty('--title-overflow', overflowPx + 'px');
+
+      // Night/Day: show first, then auto-start ticker.
+      // Energy-saver: never auto-start; user can tap to start.
+      if (!isEco) {
+        titleTickerTimeoutId = setTimeout(() => {
+          if (!elements.title) return;
+          if (myToken !== titleTickerToken) return;
+
+          // Force reflow so animation restarts reliably when class is added.
+          void liveSpan.offsetWidth;
+
+          elements.title.classList.add('ticker');
+          titleTickerTimeoutId = null;
+        }, TITLE_TICKER_START_DELAY_MS);
+      }
     }
   }, 0);
 }

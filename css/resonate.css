@@ -346,7 +346,7 @@
 }
 
 /* Excluir ticker de optimizaciones en modo eco para mantener legibilidad */
-[data-theme="energy-saver"] .title.ticker {
+[data-theme="energy-saver"] .title.ticker .title-text {
   animation-duration: unset !important;
 }
 
@@ -688,10 +688,10 @@ h3 {
 /* Title Ticker Animation */
 @keyframes titleTicker {
   0% {
-    transform: translateX(100%);
+    transform: translateX(0%);
   }
   100% {
-    transform: translateX(-100%);
+    transform: translateX(calc(-1 * var(--title-overflow, 0px)));
   }
 }
 
@@ -759,12 +759,19 @@ h3 {
   transition: none;
 }
 
+.title .title-text {
+  display: inline-block;
+  white-space: nowrap;
+  will-change: transform;
+}
+
 .title.ticker {
-  overflow: visible;
   text-overflow: clip;
+  overflow: hidden;
+}
+
+.title.ticker .title-text {
   animation: titleTicker 15s linear infinite;
-  padding: 0 20px;
-  width: auto;
 }
 
 .creator {
