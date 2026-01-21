@@ -333,8 +333,10 @@ async function performOptimizedSearch(query, page = 0, options = {}) {
       if (processedResults.length > 1) {
         processedResults.sort((a, b) => b.relevanceScore - a.relevanceScore);
       }
-      const hasMore = results.length === resultsPerPage;
       const total = (data.response && data.response.numFound) ? data.response.numFound : 0;
+      const hasMore = (typeof total === 'number' && isFinite(total) && total > 0)
+        ? ((page + 1) * resultsPerPage) < total
+        : (results.length === resultsPerPage);
 
       if (deferMetadata) {
         const fastResult = {
@@ -386,8 +388,10 @@ async function performOptimizedSearch(query, page = 0, options = {}) {
             trackCount: null,
             relevanceScore: 0.5 // Neutral score for fallback results
           }));
-          const hasMore = fallbackResults.length === resultsPerPage;
           const total = (fallbackData.response && fallbackData.response.numFound) ? fallbackData.response.numFound : 0;
+          const hasMore = (typeof total === 'number' && isFinite(total) && total > 0)
+            ? ((page + 1) * resultsPerPage) < total
+            : (fallbackResults.length === resultsPerPage);
 
           if (deferMetadata) {
             const fastResult = {

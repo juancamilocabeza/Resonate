@@ -62,59 +62,20 @@ let offlineIndex = {
   trackIdSet: new Set()
 };
 
-let offlineIndexWarmScheduled = false;
-let offlineIndexWarmSeq = 0;
-
-let searchLazyObserver = null;
-
-function getSearchPrefetchPageCount() {
-  // Heuristic: keep a small buffer of pages prefetched for smooth scrolling.
+function tryExtractArchiveIdentifierFromUrl(url) {
   try {
-    const coarse = Boolean(window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches);
-    const effectiveType = (navigator && navigator.connection && navigator.connection.effectiveType)
-      ? String(navigator.connection.effectiveType)
-      : '';
-    const slow = /(^|\b)(slow-2g|2g)\b/.test(effectiveType);
-    const medium = /(^|\b)3g\b/.test(effectiveType);
-    if (slow) return 1;
-    if (medium) return coarse ? 1 : 2;
-    return coarse ? 2 : 3;
-  } catch {
-    return 2;
-  }
-}
-
-function warmOfflineIndexAndRerender() {
-  // Build/refresh the offline index in the background so Offline chips can be shown
-  // without requiring a dedicated checkbox toggle.
-  try {
-    if (offlineIndexWarmScheduled) return;
-    offlineIndexWarmScheduled = true;
-    const seq = ++offlineIndexWarmSeq;
-
-    setTimeout(() => {
-      ensureOfflineIndexFresh({ force: false }).then(() => {
-        // Ignore if a newer warm was scheduled.
-        if (seq !== offlineIndexWarmSeq) return;
-        try {
-          if (elements.searchResults && elements.searchResults.classList.contains('active')) {
-            rerenderSearchResultsFromState(true);
-          }
-        } catch {}
-        try {
-          if (elements.favoritesList && elements.favoritesList.classList.contains('active')) {
-            updateFavoritesList();
-          }
-        } catch {}
-      }).catch(() => {
-        // ignore
-      }).finally(() => {
-        if (seq === offlineIndexWarmSeq) offlineIndexWarmScheduled = false;
-      });
-    }, 0);
-  } catch {
-    offlineIndexWarmScheduled = false;
-  }
+    if (!url) return '';
+    const s = String(url);
+    try {
+      const u = new URL(s);
+      const m = (u.pathname || '').match(/^\/download\/([^/]+)\//);
+      if (m && m[1]) return decodeURIComponent(m[1]);
+    } catch {
+      const m = s.match(/\/download\/([^/]+)\//);
+      if (m && m[1]) return decodeURIComponent(m[1]);
+    }
+  } catch {}
+  return '';
 }
 
 async function buildOfflineUrlSetFromCacheApi() {
@@ -154,6 +115,16 @@ async function ensureOfflineIndexFresh({ force = false } = {}) {
 
     const albumIdSet = new Set();
     const trackIdSet = new Set();
+
+    // Derive identifiers directly from cached URLs so search results can show Offline chips
+    // even when metadata doesn't include albumId (e.g., cached singles).
+    try {
+      for (const url of urlSet) {
+        const identifier = tryExtractArchiveIdentifierFromUrl(url);
+        if (identifier) albumIdSet.add(String(identifier));
+      }
+    } catch {}
+
     try {
       const meta = await window.audioCache?.getAllMetadata?.();
       if (Array.isArray(meta)) {
@@ -221,7 +192,20 @@ function initializePanelToolbarsOnce() {
       });
     }
 
-    // Offline checkbox removed: Offline chip is shown automatically when cached.
+    if (elements.searchOfflineOnly) {
+      elements.searchOfflineOnly.addEventListener('change', async () => {
+        state.searchUi = state.searchUi || {};
+        state.searchUi.offlineOnly = !!elements.searchOfflineOnly.checked;
+
+        // Checkbox also controls Offline chip visibility in search cards.
+        try { setBodyUiState('search-show-offline-chips', state.searchUi.offlineOnly); } catch {}
+
+        if (state.searchUi.offlineOnly) {
+          try { await ensureOfflineIndexFresh({ force: false }); } catch {}
+        }
+        rerenderSearchResultsFromState();
+      });
+    }
 
   } catch {}
 
@@ -241,7 +225,20 @@ function initializePanelToolbarsOnce() {
       });
     }
 
-    // Offline checkbox removed: Offline chip is shown automatically when cached.
+    if (elements.favoritesOfflineOnly) {
+      elements.favoritesOfflineOnly.addEventListener('change', async () => {
+        state.favoritesUi = state.favoritesUi || {};
+        state.favoritesUi.offlineOnly = !!elements.favoritesOfflineOnly.checked;
+
+        // Checkbox also controls Offline chip visibility in favorites cards.
+        try { setBodyUiState('favorites-show-offline-chips', state.favoritesUi.offlineOnly); } catch {}
+
+        if (state.favoritesUi.offlineOnly) {
+          try { await ensureOfflineIndexFresh({ force: false }); } catch {}
+        }
+        updateFavoritesList();
+      });
+    }
 
   } catch {}
 }
@@ -571,6 +568,7 @@ function ensureSearchInputControllerBound() {
   const config = window.SEARCH_UI_CONFIG || { closeKeyboardOnSubmit: false, keyboardOpenThresholdPx: 80, suppressKeyboardWhenHistory: true };
   let isCleaning = false;
   let suppressNextFocus = false;
+  let lastSubmit = { query: '', at: 0 };
 
   const isCoarsePointer = (() => {
     try {
@@ -589,6 +587,14 @@ function ensureSearchInputControllerBound() {
     }
   };
 
+  const closeSearchKeyboard = () => {
+    try { setKeyboardOpenState(false); } catch {}
+    try { input.blur(); } catch {}
+    // Some mobile browsers ignore blur inside key events; retry next ticks.
+    try { setTimeout(() => { try { input.blur(); } catch {} }, 0); } catch {}
+    try { requestAnimationFrame(() => { try { input.blur(); } catch {} }); } catch {}
+  };
+
   const updateSearchClearButton = () => {
     const btn = elements.searchClear;
     if (!btn) return;
@@ -597,54 +603,13 @@ function ensureSearchInputControllerBound() {
     btn.disabled = !hasValue;
   };
 
-  const cancelInFlightSearchUi = () => {
-    // Prevent late async results from overwriting the history UI.
-    try { state.searchRequestId = (state.searchRequestId || 0) + 1; } catch {}
-    try {
-      if (typeof window.abortAllSearchOperations === 'function') {
-        window.abortAllSearchOperations();
-      }
-    } catch {}
-  };
-
-  const showHistoryPanel = (options = {}) => {
-    const suppressKeyboard = !!options.suppressKeyboard;
-
-    cancelInFlightSearchUi();
-
-    // Do NOT call performCompleteCleanup(): we want to preserve last search state
-    // so retyping the previous query can instantly reopen results.
-    try {
-      if (elements.searchResultsList) elements.searchResultsList.innerHTML = '';
-    } catch {}
-
-    // Mutually exclusive panels
-    try { hideFavoritesList(); } catch {}
-
-    try { displaySearchHistory(); } catch {}
-    try { state.searchActive = true; } catch {}
-    try { setSearchOpenState(true); } catch {}
-    try { scheduleSearchInsetsBurst(); } catch {}
-
-    // Avoid getting stuck in a state where taps no longer reopen history.
-    try {
-      requestAnimationFrame(() => { isCleaning = false; });
-    } catch {
-      isCleaning = false;
-    }
-
-    // If we opened history via pointerdown to avoid the keyboard, make sure the
-    // suppression self-clears even if focus never fires.
-    if (suppressKeyboard) {
-      suppressNextFocus = true;
-      try {
-        setTimeout(() => {
-          suppressNextFocus = false;
-        }, 450);
-      } catch {
-        suppressNextFocus = false;
-      }
-    }
+  const showHistoryPanel = () => {
+    performCompleteCleanup();
+    displaySearchHistory();
+    state.searchActive = true;
+    hideFavoritesList();
+    setSearchOpenState(true);
+    scheduleSearchInsetsBurst();
   };
 
   const openResultsPanelIfAny = () => {
@@ -686,18 +651,27 @@ function ensureSearchInputControllerBound() {
     const panelOpen = Boolean(elements.searchResults && elements.searchResults.classList.contains('active'));
 
     if (isCoarsePointer && config.suppressKeyboardWhenHistory && currentQuery === '' && !panelOpen && hasSearchHistory()) {
+      suppressNextFocus = true;
       try {
         e.preventDefault();
         e.stopPropagation();
       } catch {}
 
-      showHistoryPanel({ suppressKeyboard: true });
+      displaySearchHistory();
+      state.searchActive = true;
+      hideFavoritesList();
+      setSearchOpenState(true);
+      scheduleSearchInsetsBurst();
       return;
     }
 
     if (currentQuery === '') {
-      showHistoryPanel();
+      displaySearchHistory();
+      state.searchActive = true;
+      hideFavoritesList();
+      setSearchOpenState(true);
     }
+    scheduleSearchInsetsBurst();
   });
 
   input.addEventListener('focus', () => {
@@ -715,7 +689,11 @@ function ensureSearchInputControllerBound() {
 
     const currentQuery = (input.value || '').trim();
     if (currentQuery === '') {
-      showHistoryPanel();
+      displaySearchHistory();
+      state.searchActive = true;
+      hideFavoritesList();
+      setSearchOpenState(true);
+      scheduleSearchInsetsBurst();
       updateSearchClearButton();
       return;
     }
@@ -773,9 +751,45 @@ function ensureSearchInputControllerBound() {
   });
 
   input.addEventListener('search', () => {
-    if ((input.value || '').trim() === '') {
+    const q = (input.value || '').trim();
+    if (q === '') {
       showHistoryPanel();
+      updateSearchClearButton();
+      return;
     }
+
+    // Native search action (mobile keyboards). Ensure keyboard closes.
+    if (isCoarsePointer || config.closeKeyboardOnSubmit) closeSearchKeyboard();
+
+    // De-dupe if Enter handler already submitted.
+    const now = Date.now();
+    if (lastSubmit.query === q && (now - lastSubmit.at) < 500) {
+      updateSearchClearButton();
+      return;
+    }
+    lastSubmit = { query: q, at: now };
+
+    state.currentSearchPage = 0;
+    state.currentSearchQuery = q;
+
+    const queryAtDispatch = q;
+    state.searchRequestId = (state.searchRequestId || 0) + 1;
+    const requestId = state.searchRequestId;
+
+    elements.searchResults.classList.add('active');
+    setSearchOpenState(true);
+    scheduleSearchInsetsBurst();
+
+    (window.performOptimizedSearch || performOptimizedSearch)(queryAtDispatch, 0).then(result => {
+      if ((state.searchRequestId || 0) !== requestId) return;
+      if (((input.value || '').trim()) !== queryAtDispatch) return;
+      displaySearchResults(result);
+      addToSearchHistory(queryAtDispatch);
+    }).catch(error => {
+      console.error('Search error:', error);
+      showStatus('Search encountered an error', 'error');
+    });
+
     updateSearchClearButton();
   });
 
@@ -807,7 +821,7 @@ function ensureSearchInputControllerBound() {
       if (focusedCard) {
         e.preventDefault();
         try { focusedCard.click(); } catch {}
-        try { input.blur(); } catch {}
+        closeSearchKeyboard();
         return;
       }
 
@@ -816,6 +830,7 @@ function ensureSearchInputControllerBound() {
 
       if (state.currentSearchQuery) {
         const queryAtDispatch = state.currentSearchQuery;
+        lastSubmit = { query: queryAtDispatch, at: Date.now() };
         state.searchRequestId = (state.searchRequestId || 0) + 1;
         const requestId = state.searchRequestId;
 
@@ -823,11 +838,7 @@ function ensureSearchInputControllerBound() {
         setSearchOpenState(true);
         scheduleSearchInsetsBurst();
 
-        // Desktop UX: keep focus so refining the query is fast.
-        // Mobile UX: blur to reclaim space.
-        if (config.closeKeyboardOnSubmit && isCoarsePointer) {
-          try { input.blur(); } catch {}
-        }
+        if (isCoarsePointer || config.closeKeyboardOnSubmit) closeSearchKeyboard();
 
         (window.performOptimizedSearch || performOptimizedSearch)(queryAtDispatch, 0).then(result => {
           if ((state.searchRequestId || 0) !== requestId) return;
@@ -1097,9 +1108,7 @@ function updateTitleTicker(titleText) {
 window.updateTitleTicker = updateTitleTicker;
 
 const SEARCH_CONFIG = {
-  // Page size used by js/search.js (Archive advancedsearch rows).
-  // Keep reasonably high so the infinite list feels responsive.
-  resultsPerPage: 10,
+  resultsPerPage: 20,
   timeout: 8000,
   enableLazyLoading: true
 };
@@ -1905,6 +1914,7 @@ function hideSearchResults() {
   } catch {}
   state.searchActive = false;
   setSearchOpenState(false);
+  hideFavoritesList();
 }
 
 function updateMediaPositionState() {
@@ -2034,12 +2044,6 @@ function displaySearchResults(searchData, clearExisting = true) {
   // Ensure toolbar bindings exist
   try { initializePanelToolbarsOnce(); } catch {}
 
-  // Mutually exclusive panels: opening search hides favorites
-  try { if (clearExisting) hideFavoritesList(); } catch {}
-
-  // Warm offline index so search cards can show the Offline chip when cached.
-  try { warmOfflineIndexAndRerender(); } catch {}
-
   // Update toolbar visibility + count
   try {
     if (elements.searchResultsHeader) elements.searchResultsHeader.hidden = false;
@@ -2048,7 +2052,10 @@ function displaySearchResults(searchData, clearExisting = true) {
       const visibleCount = Array.isArray(state.searchResults) ? state.searchResults.length : 0;
       elements.searchResultsCount.textContent = totalCount ? `${visibleCount} / ${totalCount}` : `${visibleCount} results`;
     }
-    // Offline checkbox removed.
+    if (elements.searchOfflineOnly) {
+      elements.searchOfflineOnly.checked = !!(state.searchUi && state.searchUi.offlineOnly);
+      try { setBodyUiState('search-show-offline-chips', !!(state.searchUi && state.searchUi.offlineOnly)); } catch {}
+    }
   } catch {}
 
   if (results.length === 0 && clearExisting) {
@@ -2093,8 +2100,7 @@ function displaySearchResults(searchData, clearExisting = true) {
   // Background prefetch: keep 2 pages ahead for infinite scroll
   try {
     if (typeof window.prefetchNextSearchPages === 'function') {
-      const count = getSearchPrefetchPageCount();
-      window.prefetchNextSearchPages(state.currentSearchQuery, state.currentSearchPage, state.currentSearchHasMore, count);
+      window.prefetchNextSearchPages(state.currentSearchQuery, state.currentSearchPage, state.currentSearchHasMore, 2);
     }
   } catch {}
 }
@@ -2113,28 +2119,14 @@ function rerenderSearchResultsFromState(clearExisting = true) {
     }
   });
 
-  // No offline-only filter: Offline chip is shown automatically when cached.
-
-  // Empty-state UX
-  if (!viewItems.length) {
-    try {
-      const title = 'No results';
-      const hint = 'Try different keywords or check your spelling.';
-      elements.searchResultsList.innerHTML = `
-        <div class="no-results">
-          <div class="no-results-icon">🔍</div>
-          <div class="no-results-title">${title}</div>
-          <div class="no-results-hint">${hint}</div>
-        </div>
-      `;
-    } catch {}
-
-    try {
-      if (elements.searchResultsCount) {
-        elements.searchResultsCount.textContent = '0 results';
-      }
-    } catch {}
-    return;
+  // Offline filter (real cache)
+  const offlineOnly = !!(state.searchUi && state.searchUi.offlineOnly);
+  try { setBodyUiState('search-show-offline-chips', offlineOnly); } catch {}
+  if (offlineOnly) {
+    viewItems = viewItems.filter(item => {
+      const id = item && item.identifier ? String(item.identifier) : '';
+      return isAlbumOfflineAvailableSync(id);
+    });
   }
 
   renderCardGrid(elements.searchResultsList, viewItems, 'search', clearExisting);
@@ -2148,41 +2140,10 @@ function rerenderSearchResultsFromState(clearExisting = true) {
 }
 
 function setupLazyLoadingObserver() {
-  // Disconnect any existing observer to prevent leaks / duplicate triggers.
-  try {
-    if (searchLazyObserver) {
-      try { searchLazyObserver.disconnect(); } catch {}
-      searchLazyObserver = null;
-    }
-  } catch {}
-
-  // Remove any existing sentinel to avoid multiple observers stacking.
-  try {
-    const existing = elements.searchResultsList && elements.searchResultsList.querySelector
-      ? elements.searchResultsList.querySelector('.lazy-load-observer')
-      : null;
-    if (existing) existing.remove();
-  } catch {}
-
-  // Create sentinel element (must have height so threshold calculations work reliably).
+  // Crear elemento observador
   const observerElement = document.createElement('div');
   observerElement.className = 'lazy-load-observer';
-  observerElement.style.width = '100%';
-  observerElement.style.height = '1px';
-
-  // Prefer placing sentinel after the grid for consistent layout.
-  try {
-    const grid = elements.searchResultsList && elements.searchResultsList.querySelector
-      ? elements.searchResultsList.querySelector('.card-grid')
-      : null;
-    if (grid && grid.parentNode) {
-      grid.parentNode.appendChild(observerElement);
-    } else {
-      elements.searchResultsList.appendChild(observerElement);
-    }
-  } catch {
-    elements.searchResultsList.appendChild(observerElement);
-  }
+  elements.searchResultsList.appendChild(observerElement);
 
   // Configurar Intersection Observer
   const observer = new IntersectionObserver(async (entries) => {
@@ -2191,35 +2152,11 @@ function setupLazyLoadingObserver() {
       !state.isLoadingMore) {
 
       state.isLoadingMore = true;
+      state.currentSearchPage++;
+
       try {
-        const query = String(state.currentSearchQuery || '').trim();
-        const nextPage = (Number.isFinite(state.currentSearchPage) ? state.currentSearchPage : 0) + 1;
-        if (!query) return;
-
-        // Cache-first for instant append when prefetch already completed.
-        const cacheKey = `search:${query}:${nextPage}`;
-        const cached = window.enhancedCache && window.enhancedCache.get('search', cacheKey);
-        if (cached && Array.isArray(cached.results)) {
-          state.currentSearchPage = nextPage;
-          displaySearchResults(cached, false);
-        } else {
-          const result = await (window.performOptimizedSearch || performOptimizedSearch)(query, nextPage, {
-            abortPrevious: false,
-            showLoader: false,
-            activateUI: false,
-            deferMetadata: true
-          });
-          state.currentSearchPage = nextPage;
-          displaySearchResults(result, false);
-        }
-
-        // Keep a small buffer ahead for smooth scrolling.
-        try {
-          if (typeof window.prefetchNextSearchPages === 'function') {
-            const count = getSearchPrefetchPageCount();
-            window.prefetchNextSearchPages(state.currentSearchQuery, state.currentSearchPage, state.currentSearchHasMore, count);
-          }
-        } catch {}
+        const result = await (window.performOptimizedSearch || performOptimizedSearch)(state.currentSearchQuery, state.currentSearchPage);
+        displaySearchResults(result, false);
       } catch (error) {
         console.error('Error en lazy loading:', error);
       } finally {
@@ -2227,15 +2164,11 @@ function setupLazyLoadingObserver() {
       }
     }
   }, {
-    // Use the actual scroll container as root to ensure intersection triggers while
-    // scrolling inside the overlay panel.
-    root: elements.searchResults || null,
-    rootMargin: '600px 0px',
-    threshold: 0
+    rootMargin: '100px', // Cargar antes de llegar al final
+    threshold: 0.1
   });
 
   observer.observe(observerElement);
-  searchLazyObserver = observer;
 }
 
 // Load album info and update result element metadata
@@ -2261,82 +2194,26 @@ async function loadAlbumInfoBackground(identifier, resultEl) {
 
   try {
     const metadata = await fetchOptimizedPlayableFiles(identifier);
+    const itemMetadata = metadata[0]?.metadata;
+    const isAlbum = metadata.length > 1;
     const trackCount = metadata.length;
-
-    const forceSingle = (resultEl && resultEl.dataset && resultEl.dataset.isTrackList === 'true');
-    const isAlbum = !forceSingle && trackCount > 1;
 
     console.log(`Album check for ${identifier}: ${trackCount} tracks, isAlbum: ${isAlbum}`);
 
-    // Persist into state for future renders (best-effort)
-    try {
-      const st = (typeof state !== 'undefined') ? state : (window.state || null);
-      if (st && Array.isArray(st.searchResults)) {
-        const idx = st.searchResults.findIndex(r => r && r.identifier === identifier);
-        if (idx >= 0) {
-          const current = st.searchResults[idx];
-          st.searchResults[idx] = Object.assign({}, current, {
-            isAlbum: isAlbum,
-            trackCount: trackCount
-          });
-        }
-      }
-    } catch {}
-
-    // Update legacy search-result layout (if present)
-    const metaElement = resultEl.querySelector ? resultEl.querySelector('.result-meta') : null;
+    const metaElement = resultEl.querySelector('.result-meta');
     if (metaElement) {
+      const forceSingle = resultEl.dataset.isTrackList === 'true';
       if (trackCount === 0) {
         metaElement.innerHTML = '<span style="color: var(--muted); font-size: 10px;">No playable tracks</span>';
       } else {
-        metaElement.innerHTML = isAlbum
+        metaElement.innerHTML = (isAlbum && !forceSingle)
           ? `<span class="album-indicator">${trackCount} tracks</span>`
           : `<span class="album-indicator">Single track</span>`;
       }
     }
 
-    // Update card-grid layout (.content-card)
-    try {
-      if (resultEl && resultEl.classList && resultEl.classList.contains('content-card')) {
-        const chips = resultEl.querySelector('.card-chips');
-        if (chips) {
-          // Type chip: first non-quiet chip
-          const typeChip = chips.querySelector('.chip:not(.chip-quiet)') || chips.querySelector('.chip');
-          if (typeChip) typeChip.textContent = isAlbum ? 'Album' : 'Single';
-
-          // Remove existing track-count quiet chips (keep offline chip)
-          const quiet = Array.from(chips.querySelectorAll('.chip.chip-quiet'));
-          quiet.forEach((q) => {
-            if (q && q.classList && !q.classList.contains('chip-offline')) {
-              q.remove();
-            }
-          });
-
-          if (trackCount > 1 && !forceSingle) {
-            const chipTrackCount = document.createElement('span');
-            chipTrackCount.className = 'chip chip-quiet';
-            chipTrackCount.textContent = `${trackCount} tracks`;
-            chips.appendChild(chipTrackCount);
-          }
-        }
-
-        const expandBtn = resultEl.querySelector('.card-btn.expand');
-        if (expandBtn) {
-          expandBtn.style.display = isAlbum ? 'flex' : 'none';
-        }
-
-        const favBtn = resultEl.querySelector('.card-btn.favorite');
-        if (favBtn) {
-          const isFav = isAlbumInFavorites(identifier);
-          favBtn.classList.toggle('active', isFav);
-          favBtn.textContent = isFav ? '❤️' : '🩶';
-          favBtn.title = isFav ? 'Remove from favorites' : 'Add to favorites';
-        }
-      }
-    } catch {}
-
-    // Actualizar el estado del botón de favorito (legacy)
-    const favoriteBtn = resultEl.querySelector ? resultEl.querySelector('.result-favorite') : null;
+    // Actualizar el estado del botón de favorito
+    const favoriteBtn = resultEl.querySelector('.result-favorite');
     if (favoriteBtn) {
       const buttonState = isAlbum ? getAlbumButtonState(identifier, trackCount) : getAlbumButtonState(identifier, 1);
       favoriteBtn.classList.toggle('active', buttonState.isActive);
@@ -2344,9 +2221,10 @@ async function loadAlbumInfoBackground(identifier, resultEl) {
       favoriteBtn.title = buttonState.label;
     }
 
-    // Mostrar/ocultar el botón de expandir basado en si es un álbum (legacy)
-    const expandButton = resultEl.querySelector ? resultEl.querySelector('.favorite-actions button:last-child') : null;
+    // Mostrar/ocultar el botón de expandir basado en si es un álbum
+    const expandButton = resultEl.querySelector('.favorite-actions button:last-child');
     if (expandButton) {
+      const forceSingle = resultEl.dataset.isTrackList === 'true';
       // Never show expand for explicit track-list items
       expandButton.style.display = (!forceSingle && trackCount > 1) ? 'inline-block' : 'none';
     }
@@ -2653,8 +2531,6 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
     card.dataset.context = String(context);
     card.dataset.albumId = String(identifier);
     card.dataset.globalIndex = String(globalIndex);
-    card.dataset.isTrackList = item && item.isTrackList ? 'true' : 'false';
-    card.dataset.unplayable = item && item.unplayable ? 'true' : 'false';
   } catch {}
 
   // Media
@@ -2760,28 +2636,13 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
   } catch {}
 
   // Background album info population (track count / album flag)
-  // Skip when we already have trackCount/isAlbum to reduce work.
-  try {
-    if (context === 'search') {
-      const knownTrackCount = item && typeof item.trackCount === 'number' && isFinite(item.trackCount);
-      const knownIsAlbum = item && typeof item.isAlbum === 'boolean';
-      if (!knownTrackCount || !knownIsAlbum) {
-        loadAlbumInfoBackground(identifier, card);
-      }
-    }
-  } catch (e) {}
+  try { loadAlbumInfoBackground(identifier, card); } catch (e) {}
 
   // Event wiring
   if (context === 'search') {
     // Play UX: click cover or title
     const playFromCard = async (e) => {
       e.stopPropagation();
-      try {
-        if ((card && card.dataset && card.dataset.unplayable === 'true') || (item && item.unplayable)) {
-          showStatus('No playable audio for this result', 'warning', 2500);
-          return;
-        }
-      } catch {}
       showStatus('Loading your track', 'info');
       await window.playOptimizedSearchResult?.(item, globalIndex, state.searchResults);
     };
@@ -2808,10 +2669,6 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
     favBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
       try {
-        if (card && card.dataset && card.dataset.unplayable === 'true') {
-          showStatus('No playable audio for this result', 'warning', 2500);
-          return;
-        }
         const files = await fetchOptimizedPlayableFiles(identifier);
         if (files.length > 1) {
           const buttonState = getAlbumButtonState(identifier, files.length);
@@ -2842,12 +2699,6 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
     // Expand
     expandBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      try {
-        if (card && card.dataset && card.dataset.unplayable === 'true') {
-          showStatus('No playable audio for this result', 'warning', 2500);
-          return;
-        }
-      } catch {}
       let tracksContainer = card.nextElementSibling;
       if (!tracksContainer || !tracksContainer.classList.contains('tracks-container')) {
         tracksContainer = document.createElement('div');
@@ -2946,119 +2797,6 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
 
   return card;
 }
-
-function updateSearchCardFromEnrichedInfo(card, info) {
-  if (!card || !info) return;
-  try {
-    const forceSingle = card.dataset && card.dataset.isTrackList === 'true';
-    const trackCount = typeof info.trackCount === 'number' && isFinite(info.trackCount) ? info.trackCount : null;
-    const unplayable = Boolean(info.unplayable) || trackCount === 0;
-    const isAlbum = !forceSingle && (Boolean(info.isAlbum) || (trackCount != null && trackCount > 1));
-
-    if (card.dataset) card.dataset.unplayable = unplayable ? 'true' : 'false';
-
-    const chips = card.querySelector('.card-chips');
-    if (chips) {
-      const typeChip = chips.querySelector('.chip:not(.chip-quiet)') || chips.querySelector('.chip');
-      if (typeChip) typeChip.textContent = unplayable ? 'Unavailable' : (isAlbum ? 'Album' : 'Single');
-
-      // Remove existing non-offline quiet chips
-      const quiet = Array.from(chips.querySelectorAll('.chip.chip-quiet'));
-      quiet.forEach((q) => {
-        if (q && q.classList && !q.classList.contains('chip-offline')) q.remove();
-      });
-
-      if (!unplayable && trackCount != null && trackCount > 1 && !forceSingle) {
-        const chipTrackCount = document.createElement('span');
-        chipTrackCount.className = 'chip chip-quiet';
-        chipTrackCount.textContent = `${trackCount} tracks`;
-        chips.appendChild(chipTrackCount);
-      }
-    }
-
-    const expandBtn = card.querySelector('.card-btn.expand');
-    if (expandBtn) expandBtn.style.display = (!unplayable && isAlbum) ? 'flex' : 'none';
-
-    const favBtn = card.querySelector('.card-btn.favorite');
-    if (favBtn) {
-      favBtn.disabled = unplayable;
-      if (unplayable) {
-        favBtn.title = 'Unavailable';
-        favBtn.classList.remove('active');
-        favBtn.textContent = '🩶';
-      } else {
-        const isFav = isAlbumInFavorites(info.identifier || card.dataset.albumId);
-        favBtn.classList.toggle('active', isFav);
-        favBtn.textContent = isFav ? '❤️' : '🩶';
-        favBtn.title = isFav ? 'Remove from favorites' : 'Add to favorites';
-      }
-    }
-
-    // Visually de-emphasize if unplayable
-    try {
-      card.classList.toggle('unplayable', unplayable);
-      if (unplayable) {
-        card.setAttribute('aria-disabled', 'true');
-      } else {
-        card.removeAttribute('aria-disabled');
-      }
-    } catch {}
-  } catch {
-    // ignore
-  }
-}
-
-// Called by search.js when a deferred page finishes background enrichment.
-window.onSearchPageEnriched = function ({ query, page } = {}) {
-  try {
-    const st = (typeof state !== 'undefined') ? state : (window.state || null);
-    const q = String(query || '').trim();
-    if (!q || !st || String(st.currentSearchQuery || '').trim() !== q) return;
-
-    const safePage = Number.isFinite(page) ? page : null;
-    if (safePage == null) return;
-
-    const cacheKey = `search:${q}:${safePage}`;
-    const cached = window.enhancedCache && window.enhancedCache.get('search', cacheKey);
-    if (!cached || !Array.isArray(cached.results)) return;
-
-    const byId = new Map();
-    for (const r of cached.results) {
-      if (r && r.identifier) byId.set(String(r.identifier), r);
-    }
-
-    // Update state in-place (no filtering, no reordering)
-    try {
-      if (Array.isArray(st.searchResults)) {
-        for (let i = 0; i < st.searchResults.length; i++) {
-          const r = st.searchResults[i];
-          if (!r || !r.identifier) continue;
-          const enriched = byId.get(String(r.identifier));
-          if (!enriched) continue;
-          st.searchResults[i] = Object.assign({}, r, {
-            trackCount: enriched.trackCount,
-            isAlbum: enriched.isAlbum,
-            unplayable: enriched.unplayable
-          });
-        }
-      }
-    } catch {}
-
-    // Update only currently rendered cards (no rerender)
-    const list = elements && elements.searchResultsList ? elements.searchResultsList : null;
-    if (!list || !list.querySelectorAll) return;
-    const cards = Array.from(list.querySelectorAll('.content-card[data-context="search"]'));
-    for (const card of cards) {
-      const id = card && card.dataset ? card.dataset.albumId : null;
-      if (!id) continue;
-      const enriched = byId.get(String(id));
-      if (!enriched) continue;
-      updateSearchCardFromEnrichedInfo(card, enriched);
-    }
-  } catch {
-    // ignore
-  }
-};
 
 function containerForFavorites() {
   return elements.favoritesList || document.getElementById('favorites-list');
@@ -4636,7 +4374,10 @@ function updateFavoritesList() {
       elements.favoritesFilter.title = msg;
     }
 
-    // Offline checkbox removed.
+    if (elements.favoritesOfflineOnly) {
+      elements.favoritesOfflineOnly.checked = !!(state.favoritesUi && state.favoritesUi.offlineOnly);
+      try { setBodyUiState('favorites-show-offline-chips', !!(state.favoritesUi && state.favoritesUi.offlineOnly)); } catch {}
+    }
     if (elements.favoritesFilter) {
       const ft = (state.favoritesUi && typeof state.favoritesUi.filterText === 'string') ? state.favoritesUi.filterText : '';
       if (elements.favoritesFilter.value !== ft) elements.favoritesFilter.value = ft;
@@ -4693,19 +4434,21 @@ function updateFavoritesList() {
     items = items.filter(item => getTextForSearchItem(item).includes(filterText));
   }
 
-  // Empty-state UX (avoid a blank panel when filter hides everything)
-  if (!items.length) {
-    const isFiltering = !!filterText;
-    const title = isFiltering ? 'No matches' : 'No favorites';
-    const hint = isFiltering ? 'Try a different filter.' : 'Add some favorites first.';
-    favoritesList.innerHTML = `
-      <div class="no-results">
-        <div class="no-results-icon">♡</div>
-        <div class="no-results-title">${title}</div>
-        <div class="no-results-hint">${hint}</div>
-      </div>
-    `;
-    return;
+  const offlineOnly = !!(state.favoritesUi && state.favoritesUi.offlineOnly);
+  if (offlineOnly && (!offlineIndex || !offlineIndex.builtAt)) {
+    try {
+      ensureOfflineIndexFresh({ force: false }).then(() => {
+        try {
+          if (state.favoritesUi && state.favoritesUi.offlineOnly) updateFavoritesList();
+        } catch {}
+      });
+    } catch {}
+  }
+  if (offlineOnly) {
+    items = items.filter(item => {
+      const tracks = Array.isArray(item.tracks) ? item.tracks : [];
+      return tracks.some(t => t && t.url && isUrlOfflineAvailableSync(t.url));
+    });
   }
 
   renderCardGrid(favoritesList, items, 'favorites', true);
@@ -4799,13 +4542,6 @@ class FavoritesToggle {
    */
   updateVisibility() {
     if (this.isVisible) {
-      // Mutually exclusive panels: opening favorites hides search
-      try { hideSearchResults(); } catch {}
-      try { if (elements.searchInput) elements.searchInput.blur(); } catch {}
-
-      // Warm offline index so cards can show Offline chip when cached.
-      try { warmOfflineIndexAndRerender(); } catch {}
-
       this.listElement?.classList.add('active');
       this.element?.classList.add('active');
       try { state.favoritesVisible = true; } catch {}
@@ -5626,9 +5362,6 @@ function addToSearchHistory(query) {
 function displaySearchHistory() {
   const history = loadSearchHistory();
 
-  // Mutually exclusive panels: opening search hides favorites
-  try { hideFavoritesList(); } catch {}
-
   if (history.length === 0) {
     elements.searchResultsList.innerHTML = '<div class="no-results">No recent searches</div>';
     elements.searchResults.classList.add('active');
@@ -5649,29 +5382,17 @@ function displaySearchHistory() {
     const historyItem = document.createElement('div');
     historyItem.className = 'search-history-item';
 
-    const querySpan = document.createElement('span');
-    querySpan.className = 'history-query';
-    querySpan.textContent = String(query);
-
-    const removeBtn = document.createElement('button');
-    removeBtn.className = 'history-remove btn-tertiary';
-    removeBtn.dataset.index = String(index);
-    removeBtn.title = 'Remove';
-    removeBtn.textContent = '✕';
-
-    historyItem.appendChild(querySpan);
-    historyItem.appendChild(removeBtn);
+    historyItem.innerHTML = `
+      <span class="history-query">${query}</span>
+      <button class="history-remove btn-tertiary" data-index="${index}" title="Remove">✕</button>
+    `;
 
     // Click on query to search
     historyItem.addEventListener('click', (e) => {
       if (!e.target.classList.contains('history-remove')) {
         elements.searchInput.value = query;
         try {
-          const cfg = window.SEARCH_UI_CONFIG || {};
-          const coarse = (() => {
-            try { return Boolean(window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches); } catch { return false; }
-          })();
-          if (cfg.closeKeyboardOnSubmit && coarse) {
+          if (window.SEARCH_UI_CONFIG && window.SEARCH_UI_CONFIG.closeKeyboardOnSubmit) {
             elements.searchInput.blur();
             setKeyboardOpenState(false);
           }
@@ -5679,9 +5400,6 @@ function displaySearchHistory() {
         // Trigger search
         state.currentSearchPage = 0;
         state.currentSearchQuery = query;
-
-        // Promote the chosen item to the top immediately.
-        try { addToSearchHistory(query); } catch {}
 
         const queryAtDispatch = query;
         state.searchRequestId = (state.searchRequestId || 0) + 1;

@@ -1612,7 +1612,7 @@ select:focus {
 .favorites-results-controls {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
   justify-content: flex-start;
   flex: 1 1 auto;
@@ -1620,26 +1620,14 @@ select:focus {
 }
 
 .favorites-filter {
-  height: var(--search-height-mobile);
-  background: var(--search-input-bg, var(--btn));
-  border: 2px solid transparent;
-  border-radius: var(--border-radius-large);
-  color: var(--search-input-fg, var(--fg));
-  -webkit-appearance: none;
-  font-size: 16px;
-  padding: 0 var(--spacing-md);
-  transition: var(--transition-all-slow);
+  height: 36px;
+  background: var(--btn);
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: var(--fg);
+  padding: 0 10px;
   flex: 1 1 auto;
   min-width: 0;
-}
-
-/* Hide native search decorations to avoid a double-clear button (match search input) */
-.favorites-filter::-webkit-search-cancel-button,
-.favorites-filter::-webkit-search-decoration,
-.favorites-filter::-webkit-search-results-button,
-.favorites-filter::-webkit-search-results-decoration {
-  -webkit-appearance: none;
-  display: none;
 }
 
 #favorites-close {
@@ -1653,18 +1641,7 @@ select:focus {
 
 .favorites-filter:focus {
   outline: none;
-  border-color: var(--primary);
-  background: var(--search-input-bg-focus, var(--search-input-bg, var(--btn)));
-  color: var(--search-input-fg, var(--fg));
-  box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.1);
-}
-
-.favorites-filter::placeholder {
-  color: var(--search-input-placeholder, var(--muted));
-  font-size: 14px;
-  font-weight: 400;
-  font-style: normal;
-  opacity: 0.9;
+  box-shadow: var(--focus-ring-shadow);
 }
 
 .favorites-control-toggle,
@@ -1685,12 +1662,14 @@ select:focus {
 }
 
 /* Close buttons in panel toolbars: treat as subtle icon buttons */
-#search-results-close {
+#search-results-close,
+#favorites-close {
   color: var(--muted);
   background: transparent;
 }
 
-#search-results-close:hover {
+#search-results-close:hover,
+#favorites-close:hover {
   background: rgba(var(--primary-rgb), 0.12);
   color: var(--fg);
 }
@@ -1906,10 +1885,7 @@ select:focus {
 
 .search-input::placeholder {
   color: var(--search-input-placeholder, var(--muted));
-  font-size: 14px;
-  font-weight: 400;
-  font-style: normal;
-  opacity: 0.9;
+  font-style: italic;
 }
 
 .search-button {
@@ -2528,22 +2504,6 @@ body.offline-mode .share-track-button {
   background: var(--surface-hover);
 }
 
-/* Search enrichment: de-emphasize items that turn out to be unplayable */
-.content-card.unplayable {
-  opacity: 0.55;
-  filter: grayscale(0.25);
-}
-
-.content-card.unplayable:hover {
-  transform: none;
-  box-shadow: var(--shadow-subtle);
-}
-
-.content-card.unplayable .card-media,
-.content-card.unplayable .card-title {
-  cursor: not-allowed;
-}
-
 .content-card:focus-visible {
   outline: none;
   border-color: rgba(var(--primary-rgb), 0.45);
@@ -2586,8 +2546,19 @@ body.offline-mode .share-track-button {
   border-color: rgba(var(--primary-rgb), 0.30);
 }
 
-/* Offline chips are shown automatically when the item is cached */
-.chip-offline { display: inline-flex; }
+/* Offline chip visibility is controlled by the Offline checkbox */
+.chip-offline { display: none; }
+body.search-show-offline-chips .search-results-list .chip-offline { display: inline-flex; }
+body.favorites-show-offline-chips .favorites-list-content .chip-offline { display: inline-flex; }
+
+/* When the Offline checkbox is enabled, make the Offline chip look "active" */
+body.search-show-offline-chips .search-results-list .chip-offline,
+body.favorites-show-offline-chips .favorites-list-content .chip-offline {
+  background: rgba(var(--primary-rgb), 0.30);
+  color: var(--chip-fg);
+  border-color: rgba(var(--primary-rgb), 0.40);
+  box-shadow: 0 0 0 1px rgba(var(--primary-rgb), 0.10);
+}
 
 .card-body { padding: 10px 12px; display: grid; gap: 6px; grid-template-columns: 1fr 1fr; /* Two columns */ grid-template-rows: auto auto; /* Two rows */ grid-auto-flow: row; align-content: start; }
 .content-card .card-body { position: relative; }
