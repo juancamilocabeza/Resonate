@@ -57,9 +57,9 @@ const Loaders = (() => {
   // Loader explanations by context
   const loaderExplanations = {
     search: "Loading results. Wait, your multimedia experience is on the way.",
-    playback: "Preparing your track for smooth, high-quality playback. Resonate optimizes your listening experience.",
-    album: "Loading your album and getting tracks ready for seamless listening.",
-    favorite: "Loading your favorite tracks for quick and reliable playback, even offline.",
+    playback: "Preparing your track for optimal playback.",
+    album: "Loading your album for seamless listening.",
+    favorite: "Loading your favorite tracks for reliable playback.",
     default: "Resonate is ensuring audio quality for an offline experience."
   };
 
