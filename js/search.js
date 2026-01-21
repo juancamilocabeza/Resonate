@@ -32,7 +32,105 @@ const searchInFlight = {
 };
 
 function getSearchCacheKey(query, page) {
-  return `search:${query}:${page}`;
+  const q = (query || '').trim();
+  return `search:${q}:${page}`;
+}
+
+function scheduleTaskIdle(task, { timeout = 1500 } = {}) {
+  try {
+    if (typeof requestIdleCallback === 'function') {
+      requestIdleCallback(() => {
+        try { task(); } catch {}
+      }, { timeout });
+      return;
+    }
+  } catch {}
+  setTimeout(() => {
+    try { task(); } catch {}
+  }, 0);
+}
+
+async function enrichSearchResultsWithMetadata(processedResults, query, { signal, keepUnplayables = false } = {}) {
+  const enrichedResults = [];
+  const batchSize = SEARCH_LIMITS.metadataBatchSize;
+
+  for (let i = 0; i < processedResults.length; i += batchSize) {
+    if (signal && signal.aborted) throw new DOMException('Aborted', 'AbortError');
+    const batch = processedResults.slice(i, i + batchSize);
+    const batchPromises = batch.map(async (item) => {
+      try {
+        const files = await fetchOptimizedPlayableFiles(item.identifier);
+        const count = Array.isArray(files) ? files.length : 0;
+        if (count > 0) {
+          return {
+            ...item,
+            // Respect explicit track-list flag: render as single even if multiple files
+            isAlbum: item.isTrackList ? false : (count > 1),
+            trackCount: count
+          };
+        }
+        return keepUnplayables
+          ? {
+            ...item,
+            isAlbum: false,
+            trackCount: 0,
+            unplayable: true
+          }
+          : null;
+      } catch {
+        return keepUnplayables
+          ? {
+            ...item,
+            isAlbum: false,
+            trackCount: 0,
+            unplayable: true
+          }
+          : null;
+      }
+    });
+    const batchResultsRaw = await Promise.all(batchPromises);
+    const batchResults = keepUnplayables ? batchResultsRaw.filter(Boolean) : batchResultsRaw.filter(Boolean);
+    enrichedResults.push(...batchResults);
+  }
+
+  // For deferred/background enrichment, preserve original order to avoid index churn.
+  if (!keepUnplayables) {
+    // Apply priority ordering: Single > Album; Exact contains > Typo-similar > others
+    prioritizeResults(enrichedResults, query);
+  }
+  return enrichedResults;
+}
+
+function scheduleSearchPageEnrichment({ normalizedQuery, page, processedResults, hasMore, total, generation }) {
+  try {
+    const cacheKey = getSearchCacheKey(normalizedQuery, page);
+    scheduleTaskIdle(async () => {
+      try {
+        if (generation !== searchInFlight.prefetchGeneration) return;
+        const existing = window.enhancedCache && window.enhancedCache.get('search', cacheKey);
+        if (existing && existing.deferredMetadata !== true) return; // already full
+
+        const enrichedResults = await enrichSearchResultsWithMetadata(processedResults, normalizedQuery, { keepUnplayables: true });
+        const full = {
+          results: enrichedResults,
+          hasMore,
+          total,
+          deferredMetadata: false
+        };
+        if (window.enhancedCache) window.enhancedCache.set('search', cacheKey, full);
+
+        try {
+          if (typeof window.onSearchPageEnriched === 'function') {
+            window.onSearchPageEnriched({ query: normalizedQuery, page });
+          }
+        } catch {}
+      } catch {
+        // background enrichment is best-effort
+      }
+    }, { timeout: 1500 });
+  } catch {
+    // ignore
+  }
 }
 
 function getSearchStateRef() {
@@ -122,6 +220,7 @@ async function performOptimizedSearch(query, page = 0, options = {}) {
   const abortPrevious = options.abortPrevious !== false;
   const showLoader = options.showLoader !== false;
   const activateUI = options.activateUI !== false;
+  const deferMetadata = options.deferMetadata === true;
 
   // Prevent search when offline
   const st = getSearchStateRef();
@@ -134,6 +233,23 @@ async function performOptimizedSearch(query, page = 0, options = {}) {
   const cacheKey = getSearchCacheKey(query, page);
   const cached = window.enhancedCache && window.enhancedCache.get('search', cacheKey);
   if (cached) {
+    // If we have a deferred result and the caller wants full enrichment, upgrade it.
+    if (cached.deferredMetadata === true && !deferMetadata) {
+      try {
+        const processed = Array.isArray(cached.results) ? cached.results : [];
+        const enrichedResults = await enrichSearchResultsWithMetadata(processed, normalizedQuery, { signal: options.signal });
+        const upgraded = {
+          results: enrichedResults,
+          hasMore: Boolean(cached.hasMore),
+          total: typeof cached.total === 'number' ? cached.total : 0,
+          deferredMetadata: false
+        };
+        if (window.enhancedCache) window.enhancedCache.set('search', cacheKey, upgraded);
+        return upgraded;
+      } catch {
+        return cached;
+      }
+    }
     return cached;
   }
 
@@ -217,42 +333,32 @@ async function performOptimizedSearch(query, page = 0, options = {}) {
       if (processedResults.length > 1) {
         processedResults.sort((a, b) => b.relevanceScore - a.relevanceScore);
       }
-      // Filter out non-playable items by checking optimized playable files
-      // Limit concurrent metadata fetches to avoid excessive parallel downloads
-      const enrichedResults = [];
-      const batchSize = SEARCH_LIMITS.metadataBatchSize; // Process metadata in small batches
-
-      for (let i = 0; i < processedResults.length; i += batchSize) {
-        const batch = processedResults.slice(i, i + batchSize);
-        const batchPromises = batch.map(async (item) => {
-          try {
-            const files = await fetchOptimizedPlayableFiles(item.identifier);
-            const count = Array.isArray(files) ? files.length : 0;
-            if (count > 0) {
-              return {
-                ...item,
-                // Respect explicit track-list flag: render as single even if multiple files
-                isAlbum: item.isTrackList ? false : (count > 1),
-                trackCount: count
-              };
-            }
-            return null;
-          } catch (e) {
-            // On error fetching metadata, skip the item to avoid presenting non-playables
-            return null;
-          }
-        });
-        const batchResults = (await Promise.all(batchPromises)).filter(Boolean);
-        enrichedResults.push(...batchResults);
-      }
-      // Apply priority ordering: Single > Album; Exact contains > Typo-similar > others
-      prioritizeResults(enrichedResults, query);
       const hasMore = results.length === resultsPerPage;
-      const searchResult = {
-        results: enrichedResults,
-        hasMore,
-        total: (data.response && data.response.numFound) ? data.response.numFound : 0
-      };
+      const total = (data.response && data.response.numFound) ? data.response.numFound : 0;
+
+      if (deferMetadata) {
+        const fastResult = {
+          results: processedResults,
+          hasMore,
+          total,
+          deferredMetadata: true
+        };
+        if (window.enhancedCache) window.enhancedCache.set('search', cacheKey, fastResult);
+        // Enrich in idle time so infinite-scroll can append instantly.
+        scheduleSearchPageEnrichment({
+          normalizedQuery,
+          page,
+          processedResults,
+          hasMore,
+          total,
+          generation: searchInFlight.prefetchGeneration
+        });
+        return fastResult;
+      }
+
+      // Full (blocking) enrichment: filter non-playables and compute track counts.
+      const enrichedResults = await enrichSearchResultsWithMetadata(processedResults, normalizedQuery, { signal });
+      const searchResult = { results: enrichedResults, hasMore, total, deferredMetadata: false };
       if (window.enhancedCache) window.enhancedCache.set('search', cacheKey, searchResult);
       return searchResult;
     } catch (error) {
@@ -280,38 +386,30 @@ async function performOptimizedSearch(query, page = 0, options = {}) {
             trackCount: null,
             relevanceScore: 0.5 // Neutral score for fallback results
           }));
-          // Filter out non-playable items in fallback path too
-          const enrichedFallback = [];
-          const batchSize = SEARCH_LIMITS.metadataBatchSize; // Process metadata in small batches
+          const hasMore = fallbackResults.length === resultsPerPage;
+          const total = (fallbackData.response && fallbackData.response.numFound) ? fallbackData.response.numFound : 0;
 
-          for (let i = 0; i < processedFallbackResults.length; i += batchSize) {
-            const batch = processedFallbackResults.slice(i, i + batchSize);
-            const batchPromises = batch.map(async (item) => {
-              try {
-                const files = await fetchOptimizedPlayableFiles(item.identifier);
-                const count = Array.isArray(files) ? files.length : 0;
-                if (count > 0) {
-                  return {
-                    ...item,
-                    isAlbum: count > 1,
-                    trackCount: count
-                  };
-                }
-                return null;
-              } catch (e) {
-                return null;
-              }
+          if (deferMetadata) {
+            const fastResult = {
+              results: processedFallbackResults,
+              hasMore,
+              total,
+              deferredMetadata: true
+            };
+            if (window.enhancedCache) window.enhancedCache.set('search', cacheKey, fastResult);
+            scheduleSearchPageEnrichment({
+              normalizedQuery,
+              page,
+              processedResults: processedFallbackResults,
+              hasMore,
+              total,
+              generation: searchInFlight.prefetchGeneration
             });
-            const batchResults = (await Promise.all(batchPromises)).filter(Boolean);
-            enrichedFallback.push(...batchResults);
+            return fastResult;
           }
-          // Apply priority ordering to fallback results as well
-          prioritizeResults(enrichedFallback, query);
-          const searchResult = {
-            results: enrichedFallback,
-            hasMore: fallbackResults.length === resultsPerPage,
-            total: (fallbackData.response && fallbackData.response.numFound) ? fallbackData.response.numFound : 0
-          };
+
+          const enrichedFallback = await enrichSearchResultsWithMetadata(processedFallbackResults, normalizedQuery, { signal });
+          const searchResult = { results: enrichedFallback, hasMore, total, deferredMetadata: false };
           if (window.enhancedCache) window.enhancedCache.set('search', cacheKey, searchResult);
           return searchResult;
         }
@@ -452,6 +550,11 @@ function prioritizeResults(items, query) {
     return isTypoSimilar(q, t) || isTypoSimilar(q, c);
   };
   items.sort((a, b) => {
+    // Always push known-unplayable items to the bottom.
+    const aUn = (a && (a.unplayable || a.trackCount === 0)) ? 1 : 0;
+    const bUn = (b && (b.unplayable || b.trackCount === 0)) ? 1 : 0;
+    if (aUn !== bUn) return aUn - bUn;
+
     // Type rank respecting requested priority:
     // 1) Single exact; 2) Album exact; 3) Track list exact (rendered as single);
     // Then fuzzy in same order; finally relevance.
@@ -1196,6 +1299,7 @@ function prefetchNextSearchPages(query, currentPage, hasMore, count = 2) {
           abortPrevious: false,
           showLoader: false,
           activateUI: false,
+          deferMetadata: true,
           signal: controller.signal
         });
         // If the next page indicates no more results, don't keep fetching further.

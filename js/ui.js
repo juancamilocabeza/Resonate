@@ -62,6 +62,61 @@ let offlineIndex = {
   trackIdSet: new Set()
 };
 
+let offlineIndexWarmScheduled = false;
+let offlineIndexWarmSeq = 0;
+
+let searchLazyObserver = null;
+
+function getSearchPrefetchPageCount() {
+  // Heuristic: keep a small buffer of pages prefetched for smooth scrolling.
+  try {
+    const coarse = Boolean(window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches);
+    const effectiveType = (navigator && navigator.connection && navigator.connection.effectiveType)
+      ? String(navigator.connection.effectiveType)
+      : '';
+    const slow = /(^|\b)(slow-2g|2g)\b/.test(effectiveType);
+    const medium = /(^|\b)3g\b/.test(effectiveType);
+    if (slow) return 1;
+    if (medium) return coarse ? 1 : 2;
+    return coarse ? 2 : 3;
+  } catch {
+    return 2;
+  }
+}
+
+function warmOfflineIndexAndRerender() {
+  // Build/refresh the offline index in the background so Offline chips can be shown
+  // without requiring a dedicated checkbox toggle.
+  try {
+    if (offlineIndexWarmScheduled) return;
+    offlineIndexWarmScheduled = true;
+    const seq = ++offlineIndexWarmSeq;
+
+    setTimeout(() => {
+      ensureOfflineIndexFresh({ force: false }).then(() => {
+        // Ignore if a newer warm was scheduled.
+        if (seq !== offlineIndexWarmSeq) return;
+        try {
+          if (elements.searchResults && elements.searchResults.classList.contains('active')) {
+            rerenderSearchResultsFromState(true);
+          }
+        } catch {}
+        try {
+          if (elements.favoritesList && elements.favoritesList.classList.contains('active')) {
+            updateFavoritesList();
+          }
+        } catch {}
+      }).catch(() => {
+        // ignore
+      }).finally(() => {
+        if (seq === offlineIndexWarmSeq) offlineIndexWarmScheduled = false;
+      });
+    }, 0);
+  } catch {
+    offlineIndexWarmScheduled = false;
+  }
+}
+
 async function buildOfflineUrlSetFromCacheApi() {
   const cacheName = 'audio-cache-v1';
   const cache = await caches.open(cacheName);
@@ -1042,7 +1097,9 @@ function updateTitleTicker(titleText) {
 window.updateTitleTicker = updateTitleTicker;
 
 const SEARCH_CONFIG = {
-  resultsPerPage: 6,
+  // Page size used by js/search.js (Archive advancedsearch rows).
+  // Keep reasonably high so the infinite list feels responsive.
+  resultsPerPage: 10,
   timeout: 8000,
   enableLazyLoading: true
 };
@@ -1978,7 +2035,10 @@ function displaySearchResults(searchData, clearExisting = true) {
   try { initializePanelToolbarsOnce(); } catch {}
 
   // Mutually exclusive panels: opening search hides favorites
-  try { hideFavoritesList(); } catch {}
+  try { if (clearExisting) hideFavoritesList(); } catch {}
+
+  // Warm offline index so search cards can show the Offline chip when cached.
+  try { warmOfflineIndexAndRerender(); } catch {}
 
   // Update toolbar visibility + count
   try {
@@ -2033,7 +2093,8 @@ function displaySearchResults(searchData, clearExisting = true) {
   // Background prefetch: keep 2 pages ahead for infinite scroll
   try {
     if (typeof window.prefetchNextSearchPages === 'function') {
-      window.prefetchNextSearchPages(state.currentSearchQuery, state.currentSearchPage, state.currentSearchHasMore, 2);
+      const count = getSearchPrefetchPageCount();
+      window.prefetchNextSearchPages(state.currentSearchQuery, state.currentSearchPage, state.currentSearchHasMore, count);
     }
   } catch {}
 }
@@ -2087,10 +2148,41 @@ function rerenderSearchResultsFromState(clearExisting = true) {
 }
 
 function setupLazyLoadingObserver() {
-  // Crear elemento observador
+  // Disconnect any existing observer to prevent leaks / duplicate triggers.
+  try {
+    if (searchLazyObserver) {
+      try { searchLazyObserver.disconnect(); } catch {}
+      searchLazyObserver = null;
+    }
+  } catch {}
+
+  // Remove any existing sentinel to avoid multiple observers stacking.
+  try {
+    const existing = elements.searchResultsList && elements.searchResultsList.querySelector
+      ? elements.searchResultsList.querySelector('.lazy-load-observer')
+      : null;
+    if (existing) existing.remove();
+  } catch {}
+
+  // Create sentinel element (must have height so threshold calculations work reliably).
   const observerElement = document.createElement('div');
   observerElement.className = 'lazy-load-observer';
-  elements.searchResultsList.appendChild(observerElement);
+  observerElement.style.width = '100%';
+  observerElement.style.height = '1px';
+
+  // Prefer placing sentinel after the grid for consistent layout.
+  try {
+    const grid = elements.searchResultsList && elements.searchResultsList.querySelector
+      ? elements.searchResultsList.querySelector('.card-grid')
+      : null;
+    if (grid && grid.parentNode) {
+      grid.parentNode.appendChild(observerElement);
+    } else {
+      elements.searchResultsList.appendChild(observerElement);
+    }
+  } catch {
+    elements.searchResultsList.appendChild(observerElement);
+  }
 
   // Configurar Intersection Observer
   const observer = new IntersectionObserver(async (entries) => {
@@ -2099,11 +2191,35 @@ function setupLazyLoadingObserver() {
       !state.isLoadingMore) {
 
       state.isLoadingMore = true;
-      state.currentSearchPage++;
-
       try {
-        const result = await (window.performOptimizedSearch || performOptimizedSearch)(state.currentSearchQuery, state.currentSearchPage);
-        displaySearchResults(result, false);
+        const query = String(state.currentSearchQuery || '').trim();
+        const nextPage = (Number.isFinite(state.currentSearchPage) ? state.currentSearchPage : 0) + 1;
+        if (!query) return;
+
+        // Cache-first for instant append when prefetch already completed.
+        const cacheKey = `search:${query}:${nextPage}`;
+        const cached = window.enhancedCache && window.enhancedCache.get('search', cacheKey);
+        if (cached && Array.isArray(cached.results)) {
+          state.currentSearchPage = nextPage;
+          displaySearchResults(cached, false);
+        } else {
+          const result = await (window.performOptimizedSearch || performOptimizedSearch)(query, nextPage, {
+            abortPrevious: false,
+            showLoader: false,
+            activateUI: false,
+            deferMetadata: true
+          });
+          state.currentSearchPage = nextPage;
+          displaySearchResults(result, false);
+        }
+
+        // Keep a small buffer ahead for smooth scrolling.
+        try {
+          if (typeof window.prefetchNextSearchPages === 'function') {
+            const count = getSearchPrefetchPageCount();
+            window.prefetchNextSearchPages(state.currentSearchQuery, state.currentSearchPage, state.currentSearchHasMore, count);
+          }
+        } catch {}
       } catch (error) {
         console.error('Error en lazy loading:', error);
       } finally {
@@ -2111,11 +2227,15 @@ function setupLazyLoadingObserver() {
       }
     }
   }, {
-    rootMargin: '100px', // Cargar antes de llegar al final
-    threshold: 0.1
+    // Use the actual scroll container as root to ensure intersection triggers while
+    // scrolling inside the overlay panel.
+    root: elements.searchResults || null,
+    rootMargin: '600px 0px',
+    threshold: 0
   });
 
   observer.observe(observerElement);
+  searchLazyObserver = observer;
 }
 
 // Load album info and update result element metadata
@@ -2141,26 +2261,82 @@ async function loadAlbumInfoBackground(identifier, resultEl) {
 
   try {
     const metadata = await fetchOptimizedPlayableFiles(identifier);
-    const itemMetadata = metadata[0]?.metadata;
-    const isAlbum = metadata.length > 1;
     const trackCount = metadata.length;
+
+    const forceSingle = (resultEl && resultEl.dataset && resultEl.dataset.isTrackList === 'true');
+    const isAlbum = !forceSingle && trackCount > 1;
 
     console.log(`Album check for ${identifier}: ${trackCount} tracks, isAlbum: ${isAlbum}`);
 
-    const metaElement = resultEl.querySelector('.result-meta');
+    // Persist into state for future renders (best-effort)
+    try {
+      const st = (typeof state !== 'undefined') ? state : (window.state || null);
+      if (st && Array.isArray(st.searchResults)) {
+        const idx = st.searchResults.findIndex(r => r && r.identifier === identifier);
+        if (idx >= 0) {
+          const current = st.searchResults[idx];
+          st.searchResults[idx] = Object.assign({}, current, {
+            isAlbum: isAlbum,
+            trackCount: trackCount
+          });
+        }
+      }
+    } catch {}
+
+    // Update legacy search-result layout (if present)
+    const metaElement = resultEl.querySelector ? resultEl.querySelector('.result-meta') : null;
     if (metaElement) {
-      const forceSingle = resultEl.dataset.isTrackList === 'true';
       if (trackCount === 0) {
         metaElement.innerHTML = '<span style="color: var(--muted); font-size: 10px;">No playable tracks</span>';
       } else {
-        metaElement.innerHTML = (isAlbum && !forceSingle)
+        metaElement.innerHTML = isAlbum
           ? `<span class="album-indicator">${trackCount} tracks</span>`
           : `<span class="album-indicator">Single track</span>`;
       }
     }
 
-    // Actualizar el estado del botón de favorito
-    const favoriteBtn = resultEl.querySelector('.result-favorite');
+    // Update card-grid layout (.content-card)
+    try {
+      if (resultEl && resultEl.classList && resultEl.classList.contains('content-card')) {
+        const chips = resultEl.querySelector('.card-chips');
+        if (chips) {
+          // Type chip: first non-quiet chip
+          const typeChip = chips.querySelector('.chip:not(.chip-quiet)') || chips.querySelector('.chip');
+          if (typeChip) typeChip.textContent = isAlbum ? 'Album' : 'Single';
+
+          // Remove existing track-count quiet chips (keep offline chip)
+          const quiet = Array.from(chips.querySelectorAll('.chip.chip-quiet'));
+          quiet.forEach((q) => {
+            if (q && q.classList && !q.classList.contains('chip-offline')) {
+              q.remove();
+            }
+          });
+
+          if (trackCount > 1 && !forceSingle) {
+            const chipTrackCount = document.createElement('span');
+            chipTrackCount.className = 'chip chip-quiet';
+            chipTrackCount.textContent = `${trackCount} tracks`;
+            chips.appendChild(chipTrackCount);
+          }
+        }
+
+        const expandBtn = resultEl.querySelector('.card-btn.expand');
+        if (expandBtn) {
+          expandBtn.style.display = isAlbum ? 'flex' : 'none';
+        }
+
+        const favBtn = resultEl.querySelector('.card-btn.favorite');
+        if (favBtn) {
+          const isFav = isAlbumInFavorites(identifier);
+          favBtn.classList.toggle('active', isFav);
+          favBtn.textContent = isFav ? '❤️' : '🩶';
+          favBtn.title = isFav ? 'Remove from favorites' : 'Add to favorites';
+        }
+      }
+    } catch {}
+
+    // Actualizar el estado del botón de favorito (legacy)
+    const favoriteBtn = resultEl.querySelector ? resultEl.querySelector('.result-favorite') : null;
     if (favoriteBtn) {
       const buttonState = isAlbum ? getAlbumButtonState(identifier, trackCount) : getAlbumButtonState(identifier, 1);
       favoriteBtn.classList.toggle('active', buttonState.isActive);
@@ -2168,10 +2344,9 @@ async function loadAlbumInfoBackground(identifier, resultEl) {
       favoriteBtn.title = buttonState.label;
     }
 
-    // Mostrar/ocultar el botón de expandir basado en si es un álbum
-    const expandButton = resultEl.querySelector('.favorite-actions button:last-child');
+    // Mostrar/ocultar el botón de expandir basado en si es un álbum (legacy)
+    const expandButton = resultEl.querySelector ? resultEl.querySelector('.favorite-actions button:last-child') : null;
     if (expandButton) {
-      const forceSingle = resultEl.dataset.isTrackList === 'true';
       // Never show expand for explicit track-list items
       expandButton.style.display = (!forceSingle && trackCount > 1) ? 'inline-block' : 'none';
     }
@@ -2478,6 +2653,8 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
     card.dataset.context = String(context);
     card.dataset.albumId = String(identifier);
     card.dataset.globalIndex = String(globalIndex);
+    card.dataset.isTrackList = item && item.isTrackList ? 'true' : 'false';
+    card.dataset.unplayable = item && item.unplayable ? 'true' : 'false';
   } catch {}
 
   // Media
@@ -2583,13 +2760,28 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
   } catch {}
 
   // Background album info population (track count / album flag)
-  try { loadAlbumInfoBackground(identifier, card); } catch (e) {}
+  // Skip when we already have trackCount/isAlbum to reduce work.
+  try {
+    if (context === 'search') {
+      const knownTrackCount = item && typeof item.trackCount === 'number' && isFinite(item.trackCount);
+      const knownIsAlbum = item && typeof item.isAlbum === 'boolean';
+      if (!knownTrackCount || !knownIsAlbum) {
+        loadAlbumInfoBackground(identifier, card);
+      }
+    }
+  } catch (e) {}
 
   // Event wiring
   if (context === 'search') {
     // Play UX: click cover or title
     const playFromCard = async (e) => {
       e.stopPropagation();
+      try {
+        if ((card && card.dataset && card.dataset.unplayable === 'true') || (item && item.unplayable)) {
+          showStatus('No playable audio for this result', 'warning', 2500);
+          return;
+        }
+      } catch {}
       showStatus('Loading your track', 'info');
       await window.playOptimizedSearchResult?.(item, globalIndex, state.searchResults);
     };
@@ -2616,6 +2808,10 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
     favBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
       try {
+        if (card && card.dataset && card.dataset.unplayable === 'true') {
+          showStatus('No playable audio for this result', 'warning', 2500);
+          return;
+        }
         const files = await fetchOptimizedPlayableFiles(identifier);
         if (files.length > 1) {
           const buttonState = getAlbumButtonState(identifier, files.length);
@@ -2646,6 +2842,12 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
     // Expand
     expandBtn.addEventListener('click', (e) => {
       e.stopPropagation();
+      try {
+        if (card && card.dataset && card.dataset.unplayable === 'true') {
+          showStatus('No playable audio for this result', 'warning', 2500);
+          return;
+        }
+      } catch {}
       let tracksContainer = card.nextElementSibling;
       if (!tracksContainer || !tracksContainer.classList.contains('tracks-container')) {
         tracksContainer = document.createElement('div');
@@ -2744,6 +2946,119 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
 
   return card;
 }
+
+function updateSearchCardFromEnrichedInfo(card, info) {
+  if (!card || !info) return;
+  try {
+    const forceSingle = card.dataset && card.dataset.isTrackList === 'true';
+    const trackCount = typeof info.trackCount === 'number' && isFinite(info.trackCount) ? info.trackCount : null;
+    const unplayable = Boolean(info.unplayable) || trackCount === 0;
+    const isAlbum = !forceSingle && (Boolean(info.isAlbum) || (trackCount != null && trackCount > 1));
+
+    if (card.dataset) card.dataset.unplayable = unplayable ? 'true' : 'false';
+
+    const chips = card.querySelector('.card-chips');
+    if (chips) {
+      const typeChip = chips.querySelector('.chip:not(.chip-quiet)') || chips.querySelector('.chip');
+      if (typeChip) typeChip.textContent = unplayable ? 'Unavailable' : (isAlbum ? 'Album' : 'Single');
+
+      // Remove existing non-offline quiet chips
+      const quiet = Array.from(chips.querySelectorAll('.chip.chip-quiet'));
+      quiet.forEach((q) => {
+        if (q && q.classList && !q.classList.contains('chip-offline')) q.remove();
+      });
+
+      if (!unplayable && trackCount != null && trackCount > 1 && !forceSingle) {
+        const chipTrackCount = document.createElement('span');
+        chipTrackCount.className = 'chip chip-quiet';
+        chipTrackCount.textContent = `${trackCount} tracks`;
+        chips.appendChild(chipTrackCount);
+      }
+    }
+
+    const expandBtn = card.querySelector('.card-btn.expand');
+    if (expandBtn) expandBtn.style.display = (!unplayable && isAlbum) ? 'flex' : 'none';
+
+    const favBtn = card.querySelector('.card-btn.favorite');
+    if (favBtn) {
+      favBtn.disabled = unplayable;
+      if (unplayable) {
+        favBtn.title = 'Unavailable';
+        favBtn.classList.remove('active');
+        favBtn.textContent = '🩶';
+      } else {
+        const isFav = isAlbumInFavorites(info.identifier || card.dataset.albumId);
+        favBtn.classList.toggle('active', isFav);
+        favBtn.textContent = isFav ? '❤️' : '🩶';
+        favBtn.title = isFav ? 'Remove from favorites' : 'Add to favorites';
+      }
+    }
+
+    // Visually de-emphasize if unplayable
+    try {
+      card.classList.toggle('unplayable', unplayable);
+      if (unplayable) {
+        card.setAttribute('aria-disabled', 'true');
+      } else {
+        card.removeAttribute('aria-disabled');
+      }
+    } catch {}
+  } catch {
+    // ignore
+  }
+}
+
+// Called by search.js when a deferred page finishes background enrichment.
+window.onSearchPageEnriched = function ({ query, page } = {}) {
+  try {
+    const st = (typeof state !== 'undefined') ? state : (window.state || null);
+    const q = String(query || '').trim();
+    if (!q || !st || String(st.currentSearchQuery || '').trim() !== q) return;
+
+    const safePage = Number.isFinite(page) ? page : null;
+    if (safePage == null) return;
+
+    const cacheKey = `search:${q}:${safePage}`;
+    const cached = window.enhancedCache && window.enhancedCache.get('search', cacheKey);
+    if (!cached || !Array.isArray(cached.results)) return;
+
+    const byId = new Map();
+    for (const r of cached.results) {
+      if (r && r.identifier) byId.set(String(r.identifier), r);
+    }
+
+    // Update state in-place (no filtering, no reordering)
+    try {
+      if (Array.isArray(st.searchResults)) {
+        for (let i = 0; i < st.searchResults.length; i++) {
+          const r = st.searchResults[i];
+          if (!r || !r.identifier) continue;
+          const enriched = byId.get(String(r.identifier));
+          if (!enriched) continue;
+          st.searchResults[i] = Object.assign({}, r, {
+            trackCount: enriched.trackCount,
+            isAlbum: enriched.isAlbum,
+            unplayable: enriched.unplayable
+          });
+        }
+      }
+    } catch {}
+
+    // Update only currently rendered cards (no rerender)
+    const list = elements && elements.searchResultsList ? elements.searchResultsList : null;
+    if (!list || !list.querySelectorAll) return;
+    const cards = Array.from(list.querySelectorAll('.content-card[data-context="search"]'));
+    for (const card of cards) {
+      const id = card && card.dataset ? card.dataset.albumId : null;
+      if (!id) continue;
+      const enriched = byId.get(String(id));
+      if (!enriched) continue;
+      updateSearchCardFromEnrichedInfo(card, enriched);
+    }
+  } catch {
+    // ignore
+  }
+};
 
 function containerForFavorites() {
   return elements.favoritesList || document.getElementById('favorites-list');
@@ -4487,6 +4802,9 @@ class FavoritesToggle {
       // Mutually exclusive panels: opening favorites hides search
       try { hideSearchResults(); } catch {}
       try { if (elements.searchInput) elements.searchInput.blur(); } catch {}
+
+      // Warm offline index so cards can show Offline chip when cached.
+      try { warmOfflineIndexAndRerender(); } catch {}
 
       this.listElement?.classList.add('active');
       this.element?.classList.add('active');

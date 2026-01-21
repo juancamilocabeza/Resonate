@@ -1612,7 +1612,7 @@ select:focus {
 .favorites-results-controls {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   flex-wrap: wrap;
   justify-content: flex-start;
   flex: 1 1 auto;
@@ -1620,11 +1620,11 @@ select:focus {
 }
 
 .favorites-filter {
-  height: 36px;
-  background: var(--btn);
+  height: var(--search-height-mobile);
+  background: var(--search-input-bg, var(--btn));
   border: 2px solid transparent;
   border-radius: var(--border-radius-large);
-  color: var(--fg);
+  color: var(--search-input-fg, var(--fg));
   -webkit-appearance: none;
   font-size: 16px;
   padding: 0 var(--spacing-md);
@@ -1644,32 +1644,6 @@ select:focus {
 
 #favorites-close {
   margin-left: auto;
-}
-
-/* Favorites close should match the search bar control styling */
-#favorites-close.search-control-btn {
-  width: 36px;
-  height: 36px;
-  min-width: 36px;
-  padding: 0;
-  border-radius: 10px;
-  background: var(--btn);
-  color: var(--accent);
-  transition: background-color 0.2s, transform 0.15s, box-shadow 0.15s ease;
-}
-
-#favorites-close.search-control-btn:hover {
-  background: var(--card);
-}
-
-#favorites-close.search-control-btn:active {
-  background: var(--card);
-  transform: none;
-}
-
-#favorites-close.search-control-btn:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.22);
 }
 
 .favorites-control-toggle {
@@ -2552,6 +2526,22 @@ body.offline-mode .share-track-button {
   transform: translateY(-2px);
   box-shadow: var(--shadow-card-hover);
   background: var(--surface-hover);
+}
+
+/* Search enrichment: de-emphasize items that turn out to be unplayable */
+.content-card.unplayable {
+  opacity: 0.55;
+  filter: grayscale(0.25);
+}
+
+.content-card.unplayable:hover {
+  transform: none;
+  box-shadow: var(--shadow-subtle);
+}
+
+.content-card.unplayable .card-media,
+.content-card.unplayable .card-title {
+  cursor: not-allowed;
 }
 
 .content-card:focus-visible {
