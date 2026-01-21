@@ -1594,7 +1594,8 @@ select:focus {
 }
 
 #favorites-close {
-  margin-left: auto;
+  margin-left: 4px;
+  align-self: center;
 }
 
 .favorites-control-toggle {
@@ -1848,7 +1849,6 @@ select:focus {
 
 .search-input::placeholder {
   color: var(--search-input-placeholder, var(--muted));
-  font-style: italic;
 }
 
 .search-button {
@@ -2511,11 +2511,10 @@ body.offline-mode .share-track-button {
 
 /* Offline chip visibility is controlled by the Offline checkbox */
 .chip-offline { display: none; }
-body.search-show-offline-chips .search-results-list .chip-offline { display: inline-flex; }
+/* .chip-offline is no longer shown in search results */
 body.favorites-show-offline-chips .favorites-list-content .chip-offline { display: inline-flex; }
 
 /* When the Offline checkbox is enabled, make the Offline chip look "active" */
-body.search-show-offline-chips .search-results-list .chip-offline,
 body.favorites-show-offline-chips .favorites-list-content .chip-offline {
   background: rgba(var(--primary-rgb), 0.30);
   color: var(--chip-fg);

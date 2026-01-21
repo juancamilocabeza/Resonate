@@ -2567,13 +2567,7 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
         chipOffline.textContent = cachedCount === tracks.length ? 'Offline' : `Offline ${cachedCount}/${tracks.length}`;
         chips.appendChild(chipOffline);
       }
-    } else if (context === 'search') {
-      if (isAlbumOfflineAvailableSync(identifier)) {
-        const chipOffline = document.createElement('span');
-        chipOffline.className = 'chip chip-quiet chip-offline';
-        chipOffline.textContent = 'Offline';
-        chips.appendChild(chipOffline);
-      }
+    }
     }
   } catch {}
 
