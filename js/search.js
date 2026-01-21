@@ -4,7 +4,7 @@
 
 const SEARCH_DEFAULTS = {
   resultsPerPage: 8,
-  timeout: 15000,
+  timeout: 20000,
   metadataTimeout: 60000
 };
 

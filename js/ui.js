@@ -32,6 +32,7 @@ const elements = {
   favoritesCountLabel: document.getElementById('favorites-count-label'),
   favoritesListContent: document.getElementById('favorites-list-content'),
   favoritesFilter: document.getElementById('favorites-filter'),
+  favoritesClear: document.getElementById('favorites-clear'),
   favoritesOfflineOnly: document.getElementById('favorites-offline-only'),
   favoritesClose: document.getElementById('favorites-close'),
   preloadFavoritesToggle: document.getElementById('preload-favorites-toggle'),
@@ -191,22 +192,6 @@ function initializePanelToolbarsOnce() {
         try { hideSearchResults(); } catch {}
       });
     }
-
-    if (elements.searchOfflineOnly) {
-      elements.searchOfflineOnly.addEventListener('change', async () => {
-        state.searchUi = state.searchUi || {};
-        state.searchUi.offlineOnly = !!elements.searchOfflineOnly.checked;
-
-        // Checkbox also controls Offline chip visibility in search cards.
-        try { setBodyUiState('search-show-offline-chips', state.searchUi.offlineOnly); } catch {}
-
-        if (state.searchUi.offlineOnly) {
-          try { await ensureOfflineIndexFresh({ force: false }); } catch {}
-        }
-        rerenderSearchResultsFromState();
-      });
-    }
-
   } catch {}
 
   // Favorites toolbar
@@ -218,28 +203,34 @@ function initializePanelToolbarsOnce() {
     }
 
     if (elements.favoritesFilter) {
-      elements.favoritesFilter.addEventListener('input', () => {
+      const input = elements.favoritesFilter;
+      const clearBtn = elements.favoritesClear;
+      const updateClearBtn = () => {
+        if (!clearBtn) return;
+        const hasValue = Boolean((input.value || '').trim());
+        clearBtn.hidden = !hasValue;
+        clearBtn.disabled = !hasValue;
+      };
+      input.addEventListener('input', (e) => {
         state.favoritesUi = state.favoritesUi || {};
-        state.favoritesUi.filterText = elements.favoritesFilter.value;
+        state.favoritesUi.filterText = (e.target.value || '').trim();
         updateFavoritesList();
+        updateClearBtn();
       });
+      if (clearBtn) {
+        clearBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          input.value = '';
+          state.favoritesUi = state.favoritesUi || {};
+          state.favoritesUi.filterText = '';
+          updateFavoritesList();
+          updateClearBtn();
+          try { input.focus({ preventScroll: true }); } catch { try { input.focus(); } catch {} }
+        });
+      }
+      updateClearBtn();
     }
-
-    if (elements.favoritesOfflineOnly) {
-      elements.favoritesOfflineOnly.addEventListener('change', async () => {
-        state.favoritesUi = state.favoritesUi || {};
-        state.favoritesUi.offlineOnly = !!elements.favoritesOfflineOnly.checked;
-
-        // Checkbox also controls Offline chip visibility in favorites cards.
-        try { setBodyUiState('favorites-show-offline-chips', state.favoritesUi.offlineOnly); } catch {}
-
-        if (state.favoritesUi.offlineOnly) {
-          try { await ensureOfflineIndexFresh({ force: false }); } catch {}
-        }
-        updateFavoritesList();
-      });
-    }
-
   } catch {}
 }
 
@@ -1109,7 +1100,7 @@ window.updateTitleTicker = updateTitleTicker;
 
 const SEARCH_CONFIG = {
   resultsPerPage: 20,
-  timeout: 8000,
+  timeout: 20000,
   enableLazyLoading: true
 };
 

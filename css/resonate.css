@@ -603,13 +603,7 @@ header {
   border-left: 3px solid var(--error);
 }
 
-.offline-mode header {
-  background: rgba(239, 68, 68, 0.05);
-}
-
-/* ===== TYPOGRAPHY HIERARCHY ===== */
-h1 {
-  font-size: 20px;
+.chip-offline { display: inline-flex; color: var(--chip-fg); }
   font-weight: 700;
   letter-spacing: -0.5px;
   color: var(--primary);
@@ -1303,37 +1297,6 @@ button:active:not(:disabled) {
   padding: 5px;
 }
 
-.volume-slider {
-  width: 60px;
-  height: 4px;
-  background: var(--card);
-  border-radius: 2px;
-  outline: none;
-  -webkit-appearance: none;
-  appearance: none;
-  cursor: pointer;
-  display: none;
-}
-
-.volume-slider::-webkit-slider-thumb,
-.volume-slider::-moz-range-thumb {
-  width: 12px;
-  height: 12px;
-  background: var(--accent);
-  border-radius: 50%;
-  cursor: pointer;
-  border: none;
-}
-
-/* ===== CONTACT SECTION ===== */
-.contact-section {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 10px;
-  gap: 10px;
-  font-size: 13px;
-}
 
 .contact-section a {
   transition: transform 0.2s;
