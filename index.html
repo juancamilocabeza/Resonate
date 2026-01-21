@@ -74,9 +74,10 @@
         <span id="current-track-share" class="theme-selector" role="button" tabindex="0" aria-label="Share current track" title="Share this track">🔗</span>
       </div>
     </header>
-    <div class="discovery-section">
-      <div class="search-section">
-        <div class="search-container">
+    <div class="content-layout" id="content-layout">
+      <div class="discovery-section">
+        <div class="search-section">
+          <div class="search-container">
           <input
             type="search"
             id="search-input"
@@ -90,14 +91,41 @@
             inputmode="search"
             enterkeyhint="search">
           <button id="search-clear" class="search-clear-btn" type="button" aria-label="Clear search" title="Clear" hidden>✕</button>
-        </div>
-        <div id="search-results" class="search-results">
-          <div id="search-results-list" class="search-results-list" role="list" aria-label="Search results"></div>
+          </div>
+          <div id="search-results" class="search-results">
+            <div id="search-results-header" class="search-results-header" hidden>
+              <div class="search-results-summary" aria-live="polite">
+                <span id="search-results-count">Results</span>
+              </div>
+              <div class="search-results-controls" aria-label="Search results controls">
+                <label class="search-control-toggle" title="Show only cached items (available offline)">
+                  <input id="search-offline-only" type="checkbox" />
+                  <span>Offline</span>
+                </label>
+                <button id="search-results-close" class="search-control-btn" type="button" title="Close">✕</button>
+              </div>
+            </div>
+            <div id="search-results-list" class="search-results-list" role="list" aria-label="Search results"></div>
+          </div>
         </div>
       </div>
-    </div>
-    <div id="favorites-list" class="favorites-list" role="list" aria-label="Favorites"></div>
-    <div class="main-player-section">
+      <div id="favorites-list" class="favorites-list" role="region" aria-label="Favorites">
+        <div id="favorites-header" class="favorites-results-header" hidden>
+          <div class="favorites-results-summary" aria-live="polite">
+            <span id="favorites-count-label">Favorites</span>
+          </div>
+          <div class="favorites-results-controls" aria-label="Favorites controls">
+            <input id="favorites-filter" class="favorites-filter" type="search" placeholder="Filter favorites" aria-label="Filter favorites" />
+            <label class="favorites-control-toggle" title="Show only cached favorites (available offline)">
+              <input id="favorites-offline-only" type="checkbox" />
+              <span>Offline</span>
+            </label>
+            <button id="favorites-close" class="search-control-btn" type="button" title="Close">✕</button>
+          </div>
+        </div>
+        <div id="favorites-list-content" class="favorites-list-content" role="list" aria-label="Favorites list"></div>
+      </div>
+      <div class="main-player-section">
       <div class="player-container">
         <div class="player-content" id="player-content">
           <div class="art" id="art">
@@ -135,6 +163,7 @@
           <div id="modal-description" class="modal-description"></div>
         </div>
       </div>
+    </div>
     </div>
     <footer class="footer">
       &copy; 2025 Resonate Player - Early Stage - All rights reserved.

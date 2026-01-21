@@ -160,7 +160,7 @@
   --btn-large-desktop: 50px;
   --search-height-mobile: 48px;
   --search-height-tablet: 44px;
-  --search-height-desktop: 40px;
+  --search-height-desktop: 48px;
   --content-max-width: 500px;
   --progress-height: 8px;
   --progress-height-desktop: 6px;
@@ -395,6 +395,42 @@ body {
   overflow-x: hidden;
   overflow-y: hidden;
   justify-content: flex-start;
+}
+
+/* Main content wrapper between header and footer */
+.content-layout {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Mobile/tablet: when favorites is open, make it full-height */
+@media (max-width: 1023px) {
+  /* Favorites becomes the primary view; hide other sections to let it span the screen */
+  .favorites-embedded-open .discovery-section,
+  .favorites-embedded-open .main-player-section {
+    display: none;
+  }
+
+  .favorites-embedded-open .content-layout {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .favorites-embedded-open .favorites-list {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+    margin-top: 0;
+  }
+
+  .favorites-embedded-open .favorites-list.active {
+    height: 100%;
+    max-height: none;
+  }
 }
 
 @supports (height: 100dvh) {
@@ -1510,31 +1546,132 @@ select:focus {
   margin-top: 6px;
   display: none;
   background: var(--card);
-  height: calc(var(--app-height, 100vh) - 200px);
   overflow-x: hidden;
   overflow-y: auto;
-  max-height: calc(var(--app-height, 100vh) - 200px);
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-  padding: 0 12px;
+  padding: 0;
 }
 
 .favorites-list.active {
-  display: block;
-  position: fixed;
-  left: 10px;
-  right: 10px;
-  top: var(--favorites-panel-top, 120px);
-  bottom: var(--favorites-panel-bottom, 200px);
-  width: auto;
-  max-width: none;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  left: auto;
+  right: auto;
+  top: auto;
+  bottom: auto;
+  width: 100%;
+  max-width: 100%;
   height: auto;
-  max-height: none;
+  max-height: min(45vh, 520px);
   min-height: 160px;
   opacity: 1;
   background: var(--card);
-  z-index: 150;
+  z-index: 120;
+}
+
+/* Embedded desktop sidebar: let the layout determine width/height */
+@media (min-width: 1024px) {
+  .favorites-embedded-open .favorites-list.active {
+    margin-top: 0;
+    max-height: none;
+    height: 100%;
+    min-height: 0;
+    border-radius: 12px;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22);
+  }
+}
+
+.favorites-list-content {
+  /* Keep existing list padding behavior but inside the content region */
+  padding: 0 10px;
+}
+
+.favorites-results-header {
+  position: sticky;
+  top: 0;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  /* Opaque header so scrolling chips/content never show through */
+  background: var(--bg);
+  border-bottom: 1px solid var(--surface-border);
+  backdrop-filter: blur(10px);
+}
+
+/* The filter placeholder already carries the count; hide the redundant label. */
+.favorites-results-summary {
+  display: none;
+}
+
+.favorites-results-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.favorites-filter {
+  height: 36px;
+  background: var(--btn);
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: var(--fg);
+  padding: 0 10px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+#favorites-close {
+  margin-left: auto;
+}
+
+.favorites-control-toggle {
+  gap: 5px;
+  font-size: 11px;
+}
+
+.favorites-filter:focus {
+  outline: none;
+  box-shadow: var(--focus-ring-shadow);
+}
+
+.favorites-control-toggle,
+.search-control-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  user-select: none;
+}
+
+.favorites-control-toggle input,
+.search-control-toggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
+}
+
+/* Close buttons in panel toolbars: treat as subtle icon buttons */
+#search-results-close,
+#favorites-close {
+  color: var(--muted);
+  background: transparent;
+}
+
+#search-results-close:hover,
+#favorites-close:hover {
+  background: rgba(var(--primary-rgb), 0.12);
+  color: var(--fg);
 }
 
 .favorite-item {
@@ -1665,6 +1802,7 @@ select:focus {
   flex-shrink: 0;
   position: relative;
   display: flex;
+  align-items: center;
   margin: 0 auto;
   gap: 8px;
   width: 100%;
@@ -1680,8 +1818,7 @@ select:focus {
   /* Avoid showing the native search clear icon (we provide our own clear button). */
   -webkit-appearance: none;
   font-size: 16px;
-  /* Reserve space for the clear button hit-target */
-  padding: 0 calc(var(--spacing-md) + 56px) 0 var(--spacing-md);
+  padding: 0 var(--spacing-md);
   transition: var(--transition-all-slow);
   width: 100%;
   min-width: 0;
@@ -1697,28 +1834,26 @@ select:focus {
 }
 
 .search-clear-btn {
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  /* Minimum recommended tap target */
-  width: 44px;
-  height: 44px;
-  min-width: 44px;
-  min-height: 44px;
-  border-radius: 999px;
+  /* Sibling control (no overlay) so it never hides the input border */
+  flex: 0 0 auto;
+  width: var(--search-height-mobile);
+  height: var(--search-height-mobile);
+  min-width: var(--search-height-mobile);
+  min-height: var(--search-height-mobile);
+  border-radius: 8px;
   border: none;
-  background: rgba(var(--primary-rgb), 0.10);
-  color: var(--fg);
+  background: var(--btn);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 500;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  z-index: 2;
   touch-action: manipulation;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
-  transition: background-color 0.15s ease, transform 0.12s ease, box-shadow 0.15s ease;
+  transition: background-color 0.2s, transform 0.15s, box-shadow 0.15s ease;
 }
 
 /* Respect the HTML hidden attribute (author styles can override UA defaults). */
@@ -1727,12 +1862,12 @@ select:focus {
 }
 
 .search-clear-btn:active {
-  background: rgba(var(--primary-rgb), 0.18);
-  transform: translateY(-50%) scale(0.96);
+  background: var(--card);
+  transform: none;
 }
 
 .search-clear-btn:hover {
-  background: rgba(var(--primary-rgb), 0.14);
+  background: var(--card);
 }
 
 .search-clear-btn:focus-visible {
@@ -1790,17 +1925,57 @@ select:focus {
   -webkit-overflow-scrolling: touch;
 }
 
+/* Desktop: anchored panel that uses the space down to the footer */
+@media (min-width: 1024px) and (hover: hover) and (pointer: fine) {
+  .search-results.active {
+    position: fixed;
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    width: min(1200px, calc(100vw - 48px));
+    max-width: min(1200px, calc(100vw - 48px));
+    top: var(--search-panel-top, 120px);
+    bottom: var(--search-panel-bottom, calc(var(--footer-height, 44px) + env(safe-area-inset-bottom, 0) + var(--vv-bottom-inset, 0px) + 10px));
+    z-index: 140;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: auto;
+  }
+
+  /* Avoid double scroll: only the panel scrolls */
+  .search-results-list {
+    overflow: visible;
+    max-height: none;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+}
+
 .search-results-header {
+  position: sticky;
+  top: 0;
+  z-index: 25;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 12px;
+  padding: 10px 12px;
   border-bottom: 1px solid var(--surface-border);
+  /* Opaque header so scrolling chips/content never show through */
+  background: var(--bg);
+  backdrop-filter: blur(10px);
+}
+
+.search-results-summary {
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .search-results-controls {
   display: flex;
   gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .search-control-btn {
@@ -2294,10 +2469,22 @@ body.offline-mode .share-track-button {
   grid-template-columns: repeat(2, minmax(160px, 1fr));
 }
 
-/* Favorites grid must always be 2 columns */
-.favorites-list .card-grid {
+/* Favorites grid must always be 2 columns (content wrapper) */
+.favorites-list-content .card-grid {
   grid-template-columns: repeat(2, minmax(160px, 1fr));
 }
+
+/* Favorites panel: compact card styling for better visual harmony */
+.favorites-list-content .card-grid { gap: 8px; }
+.favorites-list-content .content-card { border-radius: 10px; }
+.favorites-list-content .card-media { aspect-ratio: 4 / 5; }
+.favorites-list-content .card-chips { top: 6px; left: 6px; gap: 5px; }
+.favorites-list-content .chip { font-size: 10px; padding: 2px 6px; }
+.favorites-list-content .card-body { padding: 8px 10px; gap: 4px; }
+.favorites-list-content .card-title { font-size: 13px; line-height: 1.2; -webkit-line-clamp: 4; line-clamp: 4; }
+.favorites-list-content .content-card .result-meta { padding-top: 2px; }
+.favorites-list-content .card-actions { padding: 8px 10px; min-height: 40px; gap: 6px; }
+.favorites-list-content .card-btn { width: 40px; height: 40px; min-width: 40px; min-height: 40px; border-radius: 8px; }
 
 .content-card {
   display: grid;
@@ -2332,8 +2519,46 @@ body.offline-mode .share-track-button {
 .card-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
 .card-chips { position: absolute; top: 8px; left: 8px; display: flex; gap: 6px; flex-wrap: wrap; z-index: 10; }
-.chip { background: var(--chip-bg); color: var(--chip-fg); font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px; backdrop-filter: blur(6px); }
-.chip-quiet { background: var(--chip-bg-quiet); color: var(--chip-fg); }
+.chip {
+  /* Ensure strong readability on top of cover art in all themes */
+  background: linear-gradient(
+    to bottom,
+    rgba(var(--primary-rgb), 0.44),
+    rgba(var(--primary-rgb), 0.28)
+  );
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(var(--primary-rgb), 0.40);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.26);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(10px);
+}
+.chip-quiet {
+  background: linear-gradient(
+    to bottom,
+    rgba(var(--primary-rgb), 0.32),
+    rgba(var(--primary-rgb), 0.22)
+  );
+  color: #fff;
+  border-color: rgba(var(--primary-rgb), 0.30);
+}
+
+/* Offline chip visibility is controlled by the Offline checkbox */
+.chip-offline { display: none; }
+body.search-show-offline-chips .search-results-list .chip-offline { display: inline-flex; }
+body.favorites-show-offline-chips .favorites-list-content .chip-offline { display: inline-flex; }
+
+/* When the Offline checkbox is enabled, make the Offline chip look "active" */
+body.search-show-offline-chips .search-results-list .chip-offline,
+body.favorites-show-offline-chips .favorites-list-content .chip-offline {
+  background: rgba(var(--primary-rgb), 0.30);
+  color: var(--chip-fg);
+  border-color: rgba(var(--primary-rgb), 0.40);
+  box-shadow: 0 0 0 1px rgba(var(--primary-rgb), 0.10);
+}
 
 .card-body { padding: 10px 12px; display: grid; gap: 6px; grid-template-columns: 1fr 1fr; /* Two columns */ grid-template-rows: auto auto; /* Two rows */ grid-auto-flow: row; align-content: start; }
 .content-card .card-body { position: relative; }
@@ -2342,6 +2567,11 @@ body.offline-mode .share-track-button {
 .card-title { -webkit-line-clamp: 3; line-clamp: 3; }
 /* Desktop: show up to 6 lines */
 @media (min-width: 1024px) { .card-title { -webkit-line-clamp: 6; line-clamp: 6; } }
+
+/* Favorites: keep titles compact even on desktop */
+@media (min-width: 1024px) {
+  .favorites-list-content .card-title { -webkit-line-clamp: 4; line-clamp: 4; }
+}
 .card-subtitle { display: none; }
 .result-meta { grid-column: 1 / -1; grid-row: 2; display: block; }
 /* Ensure indicator renders as a single line under the title */
@@ -2355,34 +2585,68 @@ body.offline-mode .share-track-button {
 .card-btn:focus-visible { outline: none; box-shadow: var(--focus-ring-shadow); }
 .card-btn.favorite.active { color: var(--favorite); background: var(--favorite-bg); }
 
+/* Premium desktop: de-emphasize actions until hover/focus (keeps scanability) */
+@media (min-width: 1024px) {
+  .content-card .card-actions {
+    opacity: 0.86;
+    transition: opacity 0.16s ease, transform 0.16s ease;
+  }
+
+  .content-card:hover .card-actions,
+  .content-card:focus-within .card-actions {
+    opacity: 1;
+  }
+
+  /* Make actions feel like a unified control strip */
+  .content-card .card-actions {
+    background: linear-gradient(
+      to top,
+	    rgba(var(--primary-rgb), 0.06),
+	    rgba(var(--primary-rgb), 0.00)
+    );
+  }
+}
+
+/* Desktop density: Compact by default (no toggle) */
+@media (min-width: 1024px) and (hover: hover) and (pointer: fine) {
+  .card-grid { gap: 12px; }
+  .content-card { border-radius: 10px; }
+  .card-body { padding: 8px 10px; gap: 4px; }
+  .card-title { font-size: 14px; -webkit-line-clamp: 5; line-clamp: 5; }
+  .card-chips { top: 6px; left: 6px; gap: 5px; }
+  .chip { font-size: 10px; padding: 2px 7px; }
+  .card-actions { padding: 8px 10px; min-height: 40px; gap: 6px; }
+  .card-btn { width: 40px; height: 40px; border-radius: 8px; }
+}
+
 /* Single-track favorites keep same square media to standardize height */
 .content-card.single .card-actions { padding-top: 6px; }
 
 /* Grid breakpoints */
 @media (min-width: 768px) {
-  .search-results-list,
-  .favorites-list { padding: 0 16px; }
+  .search-results-list { padding: 0 16px; }
+  .favorites-list-content { padding: 0 12px; }
   .card-grid { grid-template-columns: repeat(3, minmax(160px, 1fr)); gap: 14px; }
-  .search-results-list .card-grid { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
-  .favorites-list .card-grid { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
+  /* Keep favorites stable: 2 columns to match search card sizing */
+  .favorites-list-content .card-grid { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
 }
 @media (min-width: 1024px) {
-  .search-results-list,
-  .favorites-list { max-width: 960px; padding: 0 24px; }
+  .search-results-list { max-width: 1200px; padding: 0 24px; }
+  .favorites-list-content { padding: 0 12px; }
   .card-grid { grid-template-columns: repeat(4, minmax(180px, 1fr)); gap: 16px; }
-  .search-results-list .card-grid { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
-  .favorites-list .card-grid { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
+  .search-results-list .card-grid { grid-template-columns: repeat(5, minmax(160px, 1fr)); }
+  /* Desktop requirement: favorites always 2 columns */
+  .favorites-list-content .card-grid { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
 }
 
 /* Extra desktop (1280px and up) - Wider container and denser grid */
 @media (min-width: 1280px) {
   .search-results,
   .search-container,
-  .search-results-list,
-  .favorites-list { max-width: 1200px; }
+  .search-results-list { max-width: 1200px; }
   .card-grid { grid-template-columns: repeat(5, minmax(200px, 1fr)); gap: 18px; }
-  .search-results-list .card-grid { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
-  .favorites-list .card-grid { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
+  /* Keep favorites stable: 2 columns on wide desktop too */
+  .favorites-list-content .card-grid { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
 }
 
 /* Mobile tightening for 2-column search grid (3 action buttons fit without wrapping) */
@@ -2392,10 +2656,10 @@ body.offline-mode .share-track-button {
   .search-results-list .card-actions { padding: 8px 8px; gap: 6px; }
   .search-results-list .card-btn { width: 40px; height: 40px; }
 
-  .favorites-list { padding: 8px; }
-  .favorites-list .card-grid { gap: 8px; }
-  .favorites-list .card-actions { padding: 8px 8px; gap: 6px; }
-  .favorites-list .card-btn { width: 40px; height: 40px; }
+  .favorites-list-content { padding: 8px; }
+  .favorites-list-content .card-grid { gap: 8px; }
+  .favorites-list-content .card-actions { padding: 8px 8px; gap: 6px; }
+  .favorites-list-content .card-btn { width: 40px; height: 40px; }
 }
 
 .no-results-icon {
@@ -2706,6 +2970,38 @@ body.offline-mode .share-track-button {
     overflow-y: auto;
     overflow-x: hidden;
     padding: var(--spacing-lg) 0;
+  }
+
+  /* Embedded Favorites layout: two columns only when favorites is open */
+  .favorites-embedded-open .content-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) clamp(320px, 32vw, 460px);
+    grid-template-rows: minmax(160px, 1fr) minmax(260px, 1fr);
+    column-gap: var(--spacing-lg);
+    row-gap: var(--spacing-lg);
+    padding: var(--spacing-md) var(--spacing-lg);
+  }
+
+  .favorites-embedded-open .discovery-section {
+    grid-column: 1;
+    grid-row: 1;
+    padding: 0;
+    min-height: 0;
+  }
+
+  .favorites-embedded-open .main-player-section {
+    grid-column: 1;
+    grid-row: 2;
+    padding: 0;
+    min-height: 0;
+  }
+
+  .favorites-embedded-open .favorites-list {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    min-height: 0;
+    width: 100%;
+    max-width: 100%;
   }
 
   /* Fixed footer - always visible */
