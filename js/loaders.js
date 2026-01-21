@@ -54,7 +54,16 @@ const Loaders = (() => {
 
   let activeLoader = null;
 
-  function showLoader({ type = "spinner", target = document.body, progress = 0, showProgress = false } = {}) {
+  // Loader explanations by context
+  const loaderExplanations = {
+    search: "Loading results. Your multimedia experience is on the way.",
+    playback: "Preparing your track for smooth, high-quality playback. Resonate optimizes your listening experience.",
+    album: "Loading your album and getting tracks ready for seamless listening.",
+    favorite: "Loading your favorite tracks for quick and reliable playback, even offline.",
+    default: "Resonate is ensuring audio quality for an offline experience."
+  };
+
+  function showLoader({ type = "spinner", target = document.body, progress = 0, showProgress = false, context = "default" } = {}) {
     // If a loader is already active in the same target, reuse it to avoid flicker.
     if (activeLoader && activeLoader.parentElement === target) {
       try {
@@ -74,16 +83,19 @@ const Loaders = (() => {
 
     if (activeLoader) hideLoader();
 
-    const { overlay, progressEl, messageEl } = createLoaderElement(type);
+    const { overlay, progressEl, messageEl } = createLoaderElement(type, context);
     overlay._progressEl = progressEl;
     overlay._messageEl = messageEl;
     overlay._showProgress = showProgress;
 
-    // Hide progress and message if showProgress is false
+    // Hide progress if showProgress is false
     if (!showProgress && progressEl) {
       progressEl.style.display = 'none';
     }
-    if (!showProgress && messageEl) {
+    // Always show message for search context
+    if (context === 'search' && messageEl) {
+      messageEl.style.display = '';
+    } else if (!showProgress && messageEl) {
       messageEl.style.display = 'none';
     }
 
@@ -100,7 +112,7 @@ const Loaders = (() => {
     }
   }
 
-  function createLoaderElement(type) {
+  function createLoaderElement(type, context) {
     const overlay = document.createElement("div");
     overlay.className = "loader-overlay";
     // Don't override CSS - overlay uses class for styles
@@ -119,7 +131,12 @@ const Loaders = (() => {
 
     const messageEl = document.createElement("div");
     messageEl.className = "loader-message";
-    messageEl.textContent = "Resonate is ensuring audio quality for an offline experience";
+    // Use ARIA for accessibility
+    messageEl.setAttribute("role", "status");
+    messageEl.setAttribute("aria-live", "polite");
+    // Pick explanation by context
+    const explanation = loaderExplanations[context] || loaderExplanations.default;
+    messageEl.textContent = explanation;
 
     container.appendChild(loader);
     container.appendChild(progressEl);

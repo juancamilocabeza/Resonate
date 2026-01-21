@@ -1721,7 +1721,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
 
   // Show loader based on context - ONLY playback shows progress
   if (window.Loaders) {
-    window.Loaders.showLoader({ type: 'spinner', showProgress: showProgress });
+    window.Loaders.showLoader({ type: 'spinner', showProgress: showProgress, context: 'playback' });
     resetLoaderProgress();
     updateLoaderProgress(10);
   }
@@ -1976,7 +1976,7 @@ function showManualSkipLoader() {
   try {
     if (!window.Loaders || typeof window.Loaders.showLoader !== 'function') return;
     // Manual Prev/Next should feel instant; show percent to indicate real work.
-    window.Loaders.showLoader({ type: 'spinner', showProgress: true, progress: 0 });
+    window.Loaders.showLoader({ type: 'spinner', showProgress: true, progress: 0, context: 'playback' });
 
     // Best-effort: initialize progress if playback helpers are available.
     try {
@@ -3244,7 +3244,7 @@ function setupMediaSession() {
 
 async function playTrack(trackId) {
   if (window.Loaders) {
-    window.Loaders.showLoader({ type: 'spinner', showProgress: false });
+    window.Loaders.showLoader({ type: 'spinner', showProgress: false, context: 'playback' });
   }
   try {
     const audioElement = getAudioEl();

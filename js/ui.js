@@ -74,8 +74,9 @@ function tryExtractArchiveIdentifierFromUrl(url) {
     } catch {
       const m = s.match(/\/download\/([^/]+)\//);
       if (m && m[1]) return decodeURIComponent(m[1]);
+
     }
-  } catch {}
+  } catch (e) {}
   return '';
 }
 
@@ -2557,6 +2558,7 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
   chips.appendChild(chipType);
 
   // Offline chip (when we can determine it cheaply)
+
   try {
     if (context === 'favorites') {
       const tracks = Array.isArray(item.tracks) ? item.tracks : [];
@@ -2568,8 +2570,7 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
         chips.appendChild(chipOffline);
       }
     }
-    }
-  } catch {}
+  } catch (e) {}
 
   if (item.trackCount) {
     const chipTrackCount = document.createElement('span');
