@@ -166,20 +166,7 @@ function initializePanelToolbarsOnce() {
       });
     }
 
-    if (elements.searchOfflineOnly) {
-      elements.searchOfflineOnly.addEventListener('change', async () => {
-        state.searchUi = state.searchUi || {};
-        state.searchUi.offlineOnly = !!elements.searchOfflineOnly.checked;
-
-        // Checkbox also controls Offline chip visibility in search cards.
-        try { setBodyUiState('search-show-offline-chips', state.searchUi.offlineOnly); } catch {}
-
-        if (state.searchUi.offlineOnly) {
-          try { await ensureOfflineIndexFresh({ force: false }); } catch {}
-        }
-        rerenderSearchResultsFromState();
-      });
-    }
+    // Offline checkbox removed: Offline chip is shown automatically when cached.
 
   } catch {}
 
@@ -199,20 +186,7 @@ function initializePanelToolbarsOnce() {
       });
     }
 
-    if (elements.favoritesOfflineOnly) {
-      elements.favoritesOfflineOnly.addEventListener('change', async () => {
-        state.favoritesUi = state.favoritesUi || {};
-        state.favoritesUi.offlineOnly = !!elements.favoritesOfflineOnly.checked;
-
-        // Checkbox also controls Offline chip visibility in favorites cards.
-        try { setBodyUiState('favorites-show-offline-chips', state.favoritesUi.offlineOnly); } catch {}
-
-        if (state.favoritesUi.offlineOnly) {
-          try { await ensureOfflineIndexFresh({ force: false }); } catch {}
-        }
-        updateFavoritesList();
-      });
-    }
+    // Offline checkbox removed: Offline chip is shown automatically when cached.
 
   } catch {}
 }
@@ -568,13 +542,54 @@ function ensureSearchInputControllerBound() {
     btn.disabled = !hasValue;
   };
 
-  const showHistoryPanel = () => {
-    performCompleteCleanup();
-    displaySearchHistory();
-    state.searchActive = true;
-    hideFavoritesList();
-    setSearchOpenState(true);
-    scheduleSearchInsetsBurst();
+  const cancelInFlightSearchUi = () => {
+    // Prevent late async results from overwriting the history UI.
+    try { state.searchRequestId = (state.searchRequestId || 0) + 1; } catch {}
+    try {
+      if (typeof window.abortAllSearchOperations === 'function') {
+        window.abortAllSearchOperations();
+      }
+    } catch {}
+  };
+
+  const showHistoryPanel = (options = {}) => {
+    const suppressKeyboard = !!options.suppressKeyboard;
+
+    cancelInFlightSearchUi();
+
+    // Do NOT call performCompleteCleanup(): we want to preserve last search state
+    // so retyping the previous query can instantly reopen results.
+    try {
+      if (elements.searchResultsList) elements.searchResultsList.innerHTML = '';
+    } catch {}
+
+    // Mutually exclusive panels
+    try { hideFavoritesList(); } catch {}
+
+    try { displaySearchHistory(); } catch {}
+    try { state.searchActive = true; } catch {}
+    try { setSearchOpenState(true); } catch {}
+    try { scheduleSearchInsetsBurst(); } catch {}
+
+    // Avoid getting stuck in a state where taps no longer reopen history.
+    try {
+      requestAnimationFrame(() => { isCleaning = false; });
+    } catch {
+      isCleaning = false;
+    }
+
+    // If we opened history via pointerdown to avoid the keyboard, make sure the
+    // suppression self-clears even if focus never fires.
+    if (suppressKeyboard) {
+      suppressNextFocus = true;
+      try {
+        setTimeout(() => {
+          suppressNextFocus = false;
+        }, 450);
+      } catch {
+        suppressNextFocus = false;
+      }
+    }
   };
 
   const openResultsPanelIfAny = () => {
@@ -616,27 +631,18 @@ function ensureSearchInputControllerBound() {
     const panelOpen = Boolean(elements.searchResults && elements.searchResults.classList.contains('active'));
 
     if (isCoarsePointer && config.suppressKeyboardWhenHistory && currentQuery === '' && !panelOpen && hasSearchHistory()) {
-      suppressNextFocus = true;
       try {
         e.preventDefault();
         e.stopPropagation();
       } catch {}
 
-      displaySearchHistory();
-      state.searchActive = true;
-      hideFavoritesList();
-      setSearchOpenState(true);
-      scheduleSearchInsetsBurst();
+      showHistoryPanel({ suppressKeyboard: true });
       return;
     }
 
     if (currentQuery === '') {
-      displaySearchHistory();
-      state.searchActive = true;
-      hideFavoritesList();
-      setSearchOpenState(true);
+      showHistoryPanel();
     }
-    scheduleSearchInsetsBurst();
   });
 
   input.addEventListener('focus', () => {
@@ -654,11 +660,7 @@ function ensureSearchInputControllerBound() {
 
     const currentQuery = (input.value || '').trim();
     if (currentQuery === '') {
-      displaySearchHistory();
-      state.searchActive = true;
-      hideFavoritesList();
-      setSearchOpenState(true);
-      scheduleSearchInsetsBurst();
+      showHistoryPanel();
       updateSearchClearButton();
       return;
     }
@@ -766,7 +768,9 @@ function ensureSearchInputControllerBound() {
         setSearchOpenState(true);
         scheduleSearchInsetsBurst();
 
-        if (config.closeKeyboardOnSubmit) {
+        // Desktop UX: keep focus so refining the query is fast.
+        // Mobile UX: blur to reclaim space.
+        if (config.closeKeyboardOnSubmit && isCoarsePointer) {
           try { input.blur(); } catch {}
         }
 
@@ -1844,7 +1848,6 @@ function hideSearchResults() {
   } catch {}
   state.searchActive = false;
   setSearchOpenState(false);
-  hideFavoritesList();
 }
 
 function updateMediaPositionState() {
@@ -1974,6 +1977,9 @@ function displaySearchResults(searchData, clearExisting = true) {
   // Ensure toolbar bindings exist
   try { initializePanelToolbarsOnce(); } catch {}
 
+  // Mutually exclusive panels: opening search hides favorites
+  try { hideFavoritesList(); } catch {}
+
   // Update toolbar visibility + count
   try {
     if (elements.searchResultsHeader) elements.searchResultsHeader.hidden = false;
@@ -1982,10 +1988,7 @@ function displaySearchResults(searchData, clearExisting = true) {
       const visibleCount = Array.isArray(state.searchResults) ? state.searchResults.length : 0;
       elements.searchResultsCount.textContent = totalCount ? `${visibleCount} / ${totalCount}` : `${visibleCount} results`;
     }
-    if (elements.searchOfflineOnly) {
-      elements.searchOfflineOnly.checked = !!(state.searchUi && state.searchUi.offlineOnly);
-      try { setBodyUiState('search-show-offline-chips', !!(state.searchUi && state.searchUi.offlineOnly)); } catch {}
-    }
+    // Offline checkbox removed.
   } catch {}
 
   if (results.length === 0 && clearExisting) {
@@ -2049,14 +2052,28 @@ function rerenderSearchResultsFromState(clearExisting = true) {
     }
   });
 
-  // Offline filter (real cache)
-  const offlineOnly = !!(state.searchUi && state.searchUi.offlineOnly);
-  try { setBodyUiState('search-show-offline-chips', offlineOnly); } catch {}
-  if (offlineOnly) {
-    viewItems = viewItems.filter(item => {
-      const id = item && item.identifier ? String(item.identifier) : '';
-      return isAlbumOfflineAvailableSync(id);
-    });
+  // No offline-only filter: Offline chip is shown automatically when cached.
+
+  // Empty-state UX
+  if (!viewItems.length) {
+    try {
+      const title = 'No results';
+      const hint = 'Try different keywords or check your spelling.';
+      elements.searchResultsList.innerHTML = `
+        <div class="no-results">
+          <div class="no-results-icon">🔍</div>
+          <div class="no-results-title">${title}</div>
+          <div class="no-results-hint">${hint}</div>
+        </div>
+      `;
+    } catch {}
+
+    try {
+      if (elements.searchResultsCount) {
+        elements.searchResultsCount.textContent = '0 results';
+      }
+    } catch {}
+    return;
   }
 
   renderCardGrid(elements.searchResultsList, viewItems, 'search', clearExisting);
@@ -4304,10 +4321,7 @@ function updateFavoritesList() {
       elements.favoritesFilter.title = msg;
     }
 
-    if (elements.favoritesOfflineOnly) {
-      elements.favoritesOfflineOnly.checked = !!(state.favoritesUi && state.favoritesUi.offlineOnly);
-      try { setBodyUiState('favorites-show-offline-chips', !!(state.favoritesUi && state.favoritesUi.offlineOnly)); } catch {}
-    }
+    // Offline checkbox removed.
     if (elements.favoritesFilter) {
       const ft = (state.favoritesUi && typeof state.favoritesUi.filterText === 'string') ? state.favoritesUi.filterText : '';
       if (elements.favoritesFilter.value !== ft) elements.favoritesFilter.value = ft;
@@ -4364,21 +4378,19 @@ function updateFavoritesList() {
     items = items.filter(item => getTextForSearchItem(item).includes(filterText));
   }
 
-  const offlineOnly = !!(state.favoritesUi && state.favoritesUi.offlineOnly);
-  if (offlineOnly && (!offlineIndex || !offlineIndex.builtAt)) {
-    try {
-      ensureOfflineIndexFresh({ force: false }).then(() => {
-        try {
-          if (state.favoritesUi && state.favoritesUi.offlineOnly) updateFavoritesList();
-        } catch {}
-      });
-    } catch {}
-  }
-  if (offlineOnly) {
-    items = items.filter(item => {
-      const tracks = Array.isArray(item.tracks) ? item.tracks : [];
-      return tracks.some(t => t && t.url && isUrlOfflineAvailableSync(t.url));
-    });
+  // Empty-state UX (avoid a blank panel when filter hides everything)
+  if (!items.length) {
+    const isFiltering = !!filterText;
+    const title = isFiltering ? 'No matches' : 'No favorites';
+    const hint = isFiltering ? 'Try a different filter.' : 'Add some favorites first.';
+    favoritesList.innerHTML = `
+      <div class="no-results">
+        <div class="no-results-icon">♡</div>
+        <div class="no-results-title">${title}</div>
+        <div class="no-results-hint">${hint}</div>
+      </div>
+    `;
+    return;
   }
 
   renderCardGrid(favoritesList, items, 'favorites', true);
@@ -4472,6 +4484,10 @@ class FavoritesToggle {
    */
   updateVisibility() {
     if (this.isVisible) {
+      // Mutually exclusive panels: opening favorites hides search
+      try { hideSearchResults(); } catch {}
+      try { if (elements.searchInput) elements.searchInput.blur(); } catch {}
+
       this.listElement?.classList.add('active');
       this.element?.classList.add('active');
       try { state.favoritesVisible = true; } catch {}
@@ -5292,6 +5308,9 @@ function addToSearchHistory(query) {
 function displaySearchHistory() {
   const history = loadSearchHistory();
 
+  // Mutually exclusive panels: opening search hides favorites
+  try { hideFavoritesList(); } catch {}
+
   if (history.length === 0) {
     elements.searchResultsList.innerHTML = '<div class="no-results">No recent searches</div>';
     elements.searchResults.classList.add('active');
@@ -5312,17 +5331,29 @@ function displaySearchHistory() {
     const historyItem = document.createElement('div');
     historyItem.className = 'search-history-item';
 
-    historyItem.innerHTML = `
-      <span class="history-query">${query}</span>
-      <button class="history-remove btn-tertiary" data-index="${index}" title="Remove">✕</button>
-    `;
+    const querySpan = document.createElement('span');
+    querySpan.className = 'history-query';
+    querySpan.textContent = String(query);
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'history-remove btn-tertiary';
+    removeBtn.dataset.index = String(index);
+    removeBtn.title = 'Remove';
+    removeBtn.textContent = '✕';
+
+    historyItem.appendChild(querySpan);
+    historyItem.appendChild(removeBtn);
 
     // Click on query to search
     historyItem.addEventListener('click', (e) => {
       if (!e.target.classList.contains('history-remove')) {
         elements.searchInput.value = query;
         try {
-          if (window.SEARCH_UI_CONFIG && window.SEARCH_UI_CONFIG.closeKeyboardOnSubmit) {
+          const cfg = window.SEARCH_UI_CONFIG || {};
+          const coarse = (() => {
+            try { return Boolean(window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches); } catch { return false; }
+          })();
+          if (cfg.closeKeyboardOnSubmit && coarse) {
             elements.searchInput.blur();
             setKeyboardOpenState(false);
           }
@@ -5330,6 +5361,9 @@ function displaySearchHistory() {
         // Trigger search
         state.currentSearchPage = 0;
         state.currentSearchQuery = query;
+
+        // Promote the chosen item to the top immediately.
+        try { addToSearchHistory(query); } catch {}
 
         const queryAtDispatch = query;
         state.searchRequestId = (state.searchRequestId || 0) + 1;

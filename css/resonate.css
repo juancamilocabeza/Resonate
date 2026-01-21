@@ -1622,16 +1622,54 @@ select:focus {
 .favorites-filter {
   height: 36px;
   background: var(--btn);
-  border: 1px solid transparent;
-  border-radius: 10px;
+  border: 2px solid transparent;
+  border-radius: var(--border-radius-large);
   color: var(--fg);
-  padding: 0 10px;
+  -webkit-appearance: none;
+  font-size: 16px;
+  padding: 0 var(--spacing-md);
+  transition: var(--transition-all-slow);
   flex: 1 1 auto;
   min-width: 0;
 }
 
+/* Hide native search decorations to avoid a double-clear button (match search input) */
+.favorites-filter::-webkit-search-cancel-button,
+.favorites-filter::-webkit-search-decoration,
+.favorites-filter::-webkit-search-results-button,
+.favorites-filter::-webkit-search-results-decoration {
+  -webkit-appearance: none;
+  display: none;
+}
+
 #favorites-close {
   margin-left: auto;
+}
+
+/* Favorites close should match the search bar control styling */
+#favorites-close.search-control-btn {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  padding: 0;
+  border-radius: 10px;
+  background: var(--btn);
+  color: var(--accent);
+  transition: background-color 0.2s, transform 0.15s, box-shadow 0.15s ease;
+}
+
+#favorites-close.search-control-btn:hover {
+  background: var(--card);
+}
+
+#favorites-close.search-control-btn:active {
+  background: var(--card);
+  transform: none;
+}
+
+#favorites-close.search-control-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.22);
 }
 
 .favorites-control-toggle {
@@ -1641,7 +1679,18 @@ select:focus {
 
 .favorites-filter:focus {
   outline: none;
-  box-shadow: var(--focus-ring-shadow);
+  border-color: var(--primary);
+  background: var(--search-input-bg-focus, var(--search-input-bg, var(--btn)));
+  color: var(--search-input-fg, var(--fg));
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.1);
+}
+
+.favorites-filter::placeholder {
+  color: var(--search-input-placeholder, var(--muted));
+  font-size: 14px;
+  font-weight: 400;
+  font-style: normal;
+  opacity: 0.9;
 }
 
 .favorites-control-toggle,
@@ -1662,14 +1711,12 @@ select:focus {
 }
 
 /* Close buttons in panel toolbars: treat as subtle icon buttons */
-#search-results-close,
-#favorites-close {
+#search-results-close {
   color: var(--muted);
   background: transparent;
 }
 
-#search-results-close:hover,
-#favorites-close:hover {
+#search-results-close:hover {
   background: rgba(var(--primary-rgb), 0.12);
   color: var(--fg);
 }
@@ -1885,7 +1932,10 @@ select:focus {
 
 .search-input::placeholder {
   color: var(--search-input-placeholder, var(--muted));
-  font-style: italic;
+  font-size: 14px;
+  font-weight: 400;
+  font-style: normal;
+  opacity: 0.9;
 }
 
 .search-button {
@@ -2546,19 +2596,8 @@ body.offline-mode .share-track-button {
   border-color: rgba(var(--primary-rgb), 0.30);
 }
 
-/* Offline chip visibility is controlled by the Offline checkbox */
-.chip-offline { display: none; }
-body.search-show-offline-chips .search-results-list .chip-offline { display: inline-flex; }
-body.favorites-show-offline-chips .favorites-list-content .chip-offline { display: inline-flex; }
-
-/* When the Offline checkbox is enabled, make the Offline chip look "active" */
-body.search-show-offline-chips .search-results-list .chip-offline,
-body.favorites-show-offline-chips .favorites-list-content .chip-offline {
-  background: rgba(var(--primary-rgb), 0.30);
-  color: var(--chip-fg);
-  border-color: rgba(var(--primary-rgb), 0.40);
-  box-shadow: 0 0 0 1px rgba(var(--primary-rgb), 0.10);
-}
+/* Offline chips are shown automatically when the item is cached */
+.chip-offline { display: inline-flex; }
 
 .card-body { padding: 10px 12px; display: grid; gap: 6px; grid-template-columns: 1fr 1fr; /* Two columns */ grid-template-rows: auto auto; /* Two rows */ grid-auto-flow: row; align-content: start; }
 .content-card .card-body { position: relative; }

@@ -86,6 +86,14 @@ function setSearchActiveUI(isActive) {
   if (els && els.searchResults && els.searchResults.classList) {
     els.searchResults.classList.toggle('active', Boolean(isActive));
   }
+  // Mutually exclusive panels: opening search hides favorites
+  try {
+    if (isActive && typeof window.hideFavoritesList === 'function') {
+      window.hideFavoritesList();
+    }
+  } catch {
+    // ignore
+  }
   try {
     if (isActive && typeof window.setSearchPanelInsets === 'function') {
       requestAnimationFrame(window.setSearchPanelInsets);
