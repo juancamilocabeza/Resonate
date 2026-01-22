@@ -1799,6 +1799,13 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
   if (window.updateDescriptionUI) {
     window.updateDescriptionUI(track);
   }
+  // Forzar actualización del botón Tracks si existe
+  if (window.elements && window.elements.toggleTracksBtn && window.elements.tracksListContainer) {
+    const albumId = track && (track.albumId || track.album_id || track.album_id_str || track.album_id_num || track.album_id_str_v2 || track.album_id_v2 || track.album_id_strict || track.album_id_fallback || track.album || track._albumId);
+    window.elements.toggleTracksBtn.style.display = albumId ? 'inline-flex' : 'none';
+    window.elements.toggleTracksBtn.disabled = !albumId;
+    window.elements.tracksListContainer.style.display = 'none';
+  }
 
   await setArtwork(track, identifier);
   updateLoaderProgress(20);

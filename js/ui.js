@@ -6,6 +6,8 @@ const elements = {
   description: document.getElementById('description'),
     descriptionContainer: document.getElementById('description-container'),
     toggleDescriptionBtn: document.getElementById('toggle-description-btn'),
+    toggleTracksBtn: document.getElementById('toggle-tracks-btn'),
+    tracksListContainer: document.getElementById('tracks-list-container'),
   progressBar: document.getElementById('progress-bar'),
   progressSection: document.querySelector('.progress-section'),
   progress: document.getElementById('progress'),
@@ -918,6 +920,37 @@ function sanitizeHTML(html) {
 function updateDescriptionUI(track) {
   if (!elements.descriptionContainer || !elements.toggleDescriptionBtn) return;
   // ...existing code...
+
+  // --- TRACKS BUTTON LOGIC ---
+  if (elements.toggleTracksBtn && elements.tracksListContainer) {
+    const albumId = track && (track.albumId || track.album_id || track.album_id_str || track.album_id_num || track.album_id_str_v2 || track.album_id_v2 || track.album_id_strict || track.album_id_fallback || track.album || track._albumId);
+    elements.toggleTracksBtn.style.display = albumId ? 'inline-flex' : 'none';
+    elements.toggleTracksBtn.disabled = !albumId;
+    // Solo asignar el handler una vez
+    if (!elements.toggleTracksBtn._resonateHandlerSet) {
+      elements.toggleTracksBtn._resonateHandlerSet = true;
+      elements.toggleTracksBtn.addEventListener('click', function() {
+        if (!window.state || !window.state.currentTrack) return;
+        const currentTrack = window.state.currentTrack;
+        const currentAlbumId = currentTrack.albumId || currentTrack.album_id || currentTrack.album_id_str || currentTrack.album_id_num || currentTrack.album_id_str_v2 || currentTrack.album_id_v2 || currentTrack.album_id_strict || currentTrack.album_id_fallback || currentTrack.album || currentTrack._albumId;
+        if (!currentAlbumId) return;
+        const isVisible = elements.tracksListContainer.style.display === 'block';
+        if (isVisible) {
+          elements.tracksListContainer.style.display = 'none';
+          elements.toggleTracksBtn.classList.remove('active');
+        } else {
+          elements.tracksListContainer.style.display = 'block';
+          elements.toggleTracksBtn.classList.add('active');
+          elements.tracksListContainer.innerHTML = '';
+          if (window.displayAlbumTracksV2) {
+            window.displayAlbumTracksV2(currentAlbumId, elements.tracksListContainer);
+          } else {
+            elements.tracksListContainer.innerHTML = '<div class="no-results">No se puede mostrar el listado de pistas</div>';
+          }
+        }
+      });
+    }
+  }
   // Modal elements
   const modal = document.getElementById('description-modal');
   const modalDesc = document.getElementById('modal-description');
@@ -953,7 +986,17 @@ function updateDescriptionUI(track) {
     if (modalDesc) modalDesc.innerHTML = '';
   }
 }
+
 window.updateDescriptionUI = updateDescriptionUI;
+
+// Inicializar botón Tracks y contenedor al cargar la página
+document.addEventListener('DOMContentLoaded', function() {
+  if (elements.toggleTracksBtn && elements.tracksListContainer) {
+    elements.toggleTracksBtn.style.display = 'none';
+    elements.tracksListContainer.style.display = 'none';
+    elements.toggleTracksBtn.classList.remove('active');
+  }
+});
 
 // Title Ticker Management
 let titleTickerTimeoutId = null;
@@ -2798,24 +2841,16 @@ function toggleAlbumTracks(albumId, tracksContainer, expandButton) {
   if (tracksContainer.style.display === 'none') {
     tracksContainer.style.display = 'block';
     expandButton.textContent = '▲';
-
-    // Progressive enhancement: render Tracklist V2 when enabled
+    // Forzar Tracklist V2 siempre
     try {
-      if (window.features && window.features.tracklistV2) {
-        // Avoid duplicate mounting
-        if (!tracksContainer.dataset.tlv2Mounted) {
-          if (typeof window.displayAlbumTracksV2 === 'function') {
-            window.displayAlbumTracksV2(albumId, tracksContainer);
-            tracksContainer.dataset.tlv2Mounted = 'true';
-          }
+      if (!tracksContainer.dataset.tlv2Mounted) {
+        if (typeof window.displayAlbumTracksV2 === 'function') {
+          window.displayAlbumTracksV2(albumId, tracksContainer);
+          tracksContainer.dataset.tlv2Mounted = 'true';
         }
-      } else {
-        // Legacy renderer fallback
-        displayAlbumTracks(albumId, tracksContainer);
       }
     } catch (e) {
-      // Fallback to legacy on any issue
-      try { displayAlbumTracks(albumId, tracksContainer); } catch {}
+      tracksContainer.innerHTML = '<div class="no-results">No tracks found</div>';
     }
   } else {
     tracksContainer.style.display = 'none';

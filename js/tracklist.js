@@ -30,6 +30,8 @@
 
       const list = document.createElement('div');
       list.className = 'tlv2-list';
+      list.style.maxHeight = '340px';
+      list.style.overflowY = 'auto';
 
       const favContext = isFavoritesContext(tracksContainer);
 
@@ -66,9 +68,10 @@
 
       files.forEach((track, index) => {
         // Asignar la mejor descripción disponible
-        track.description = window.getBestDescription
-          ? window.getBestDescription(track, albumDescription, resultDescription)
-          : (track.description || albumDescription || resultDescription || '');
+        // Solo mostrar la descripción propia de la pista, no la del álbum
+        track.description = (typeof track.description === 'string' && track.description.trim() !== '')
+          ? track.description
+          : '';
         // Propagar descripción al reproducir desde favoritos
         track._albumDescription = albumDescription;
 
@@ -77,77 +80,53 @@
           window.updateDescriptionUI(track);
         }
 
+        // Nuevo layout: <compartir><corazon><#><titulo><duracion>
         const row = document.createElement('div');
         row.className = 'tlv2-row';
+        row.style.display = 'grid';
+        row.style.gridTemplateColumns = '40px 40px 40px 1fr 60px';
+        row.style.alignItems = 'center';
+        row.style.gap = '8px';
+        row.style.padding = '6px 4px';
+        row.style.borderRadius = '8px';
 
-        const left = document.createElement('div');
-        left.className = 'tlv2-left';
-        const num = document.createElement('span');
-        num.className = 'tlv2-number';
-        num.textContent = typeof track.trackNumber === 'number' ? String(track.trackNumber) : String(index + 1);
-        left.appendChild(num);
+        // Compartir
+        const shareBtn = document.createElement('button');
+        shareBtn.className = 'tlv2-action tlv2-share';
+        shareBtn.title = 'Share';
+        shareBtn.textContent = '🔗';
+        row.appendChild(shareBtn);
 
-        const info = document.createElement('div');
-        info.className = 'tlv2-info';
-        const title = document.createElement('div');
-        title.className = 'tlv2-title';
-        title.textContent = track.title || 'Untitled';
-        const creator = document.createElement('div');
-        creator.className = 'tlv2-creator';
-        creator.textContent = track.creator || 'Unknown';
-        info.appendChild(title);
-        info.appendChild(creator);
-        // Mostrar descripción si existe
-        if (track.description) {
-          const desc = document.createElement('div');
-          desc.className = 'tlv2-description';
-          desc.textContent = track.description;
-          info.appendChild(desc);
-        }
-
-        const right = document.createElement('div');
-        right.className = 'tlv2-right';
-
-        const duration = document.createElement('span');
-        duration.className = 'tlv2-duration';
-        duration.textContent = formatTime(track.duration);
-
-        const offlineBadge = document.createElement('span');
-        offlineBadge.className = 'tlv2-offline';
-        offlineBadge.textContent = '';
-
-        const downloadBtn = document.createElement('button');
-        downloadBtn.className = 'tlv2-action tlv2-download';
-        downloadBtn.title = 'Download for offline';
-        downloadBtn.textContent = '⬇';
-
-        if (track.downloadOffline) {
-          downloadBtn.textContent = '✔';
-          offlineBadge.textContent = 'Offline';
-        }
-
+        // Favorito
         const favBtn = document.createElement('button');
         favBtn.className = 'tlv2-action tlv2-fav';
         const nowFav = typeof window.isTrackFavorite === 'function' ? window.isTrackFavorite(track) : false;
         favBtn.classList.toggle('active', nowFav);
         favBtn.textContent = nowFav ? '❤️' : '🩶';
         favBtn.title = nowFav ? 'Remove from favorites' : 'Add to favorites';
+        row.appendChild(favBtn);
 
-        const shareBtn = document.createElement('button');
-        shareBtn.className = 'tlv2-action tlv2-share';
-        shareBtn.title = 'Share';
-        shareBtn.textContent = '🔗';
+        // Número de pista
+        const num = document.createElement('span');
+        num.className = 'tlv2-number';
+        num.textContent = typeof track.trackNumber === 'number' ? String(track.trackNumber) : String(index + 1);
+        num.style.textAlign = 'center';
+        row.appendChild(num);
 
-        info.appendChild(offlineBadge);
+        // Título justificado a la izquierda
+        const title = document.createElement('div');
+        title.className = 'tlv2-title';
+        title.textContent = track.title || 'Untitled';
+        title.style.textAlign = 'left';
+        row.appendChild(title);
 
-        right.appendChild(duration);
-        right.appendChild(favBtn);
-        right.appendChild(downloadBtn);
-        right.appendChild(shareBtn);
-
-        row.appendChild(left);
-        row.appendChild(info);
-        row.appendChild(right);
+        // Duración
+        const duration = document.createElement('span');
+        duration.className = 'tlv2-duration';
+        duration.textContent = formatTime(track.duration);
+        duration.style.textAlign = 'center';
+        row.appendChild(duration);
+        // Eliminado: left, info, right (layout simplificado)
 
         const playFromRow = () => {
           try {
@@ -184,30 +163,9 @@
           } catch {}
         });
 
-        downloadBtn.addEventListener('click', async (e) => {
-          e.stopPropagation();
-          try {
-            track.downloadOffline = !track.downloadOffline;
-            downloadBtn.textContent = track.downloadOffline ? '✔' : '⬇';
-            if (typeof window.toggleDownloadOffline === 'function') {
-              await window.toggleDownloadOffline(track);
-            }
-            if (track.downloadOffline) {
-              offlineBadge.textContent = 'Offline';
-            } else {
-              offlineBadge.textContent = '';
-            }
-          } catch {}
-        });
+        // downloadBtn eliminado
 
-        if (window.audioCache && typeof window.audioCache.isCached === 'function') {
-          window.audioCache.isCached(track.url).then((isCached) => {
-            if (isCached) {
-              offlineBadge.textContent = 'Offline';
-              downloadBtn.textContent = '✔';
-            }
-          }).catch(() => {});
-        }
+        // offlineBadge eliminado
 
         shareBtn.addEventListener('click', (e) => {
           e.stopPropagation();
