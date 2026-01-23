@@ -591,6 +591,11 @@ header {
   gap: var(--spacing-lg);
 }
 
+/* index.html: remove inline styles */
+#app-title {
+  cursor: pointer;
+}
+
 /* Header Controls Container */
 .header-controls {
   display: flex;
@@ -1517,6 +1522,15 @@ select:focus {
   width: 30px;
   height: 30px;
   display: block;
+}
+
+/* Works for inline SVG and <use>/<symbol> */
+.resontes-toggle .resontes-icon .resonate-icon {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 32;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 /* Resonate logo sizing across Resonates buttons */
@@ -2537,6 +2551,12 @@ body.offline-mode .share-track-button {
   overflow-x: hidden;
   max-width: 100%;
   box-sizing: border-box;
+}
+
+/* index.html: default hidden state (toggled visible by JS) */
+#tracks-list-container,
+#description-modal {
+  display: none;
 }
 
 .expand-tracks {

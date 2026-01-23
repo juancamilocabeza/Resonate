@@ -10,17 +10,13 @@
   <meta name="keywords" content="Resonate, player, music, free, online, offline, PWA">
   <meta name="robots" content="index, follow">
   <meta name="author" content="Juan Cabeza">
-  <meta name="copyright" content="2025 Resonate Player">
+  <meta name="copyright" content="2026 Resonate Player">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://www.resonateplayer.com">
   <meta property="og:title" content="Resonate Player">
   <meta property="og:description" content="Enjoy content freely from https://archive.org">
-  <meta property="og:image" content="https://www.resonateplayer.com/icons/maskable_icon_x512.png">
   <meta property="twitter:card" content="summary_large_image">
-  <meta property="twitter:url" content="https://www.resonateplayer.com">
   <meta property="twitter:title" content="Resonate Player">
   <meta property="twitter:description" content="Enjoy content freely from https://archive.org">
-  <meta property="twitter:image" content="https://www.resonateplayer.com/icons/maskable_icon_x512.png">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="theme-color" id="meta-theme-color" content="#3da9ff">
   <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
@@ -28,35 +24,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Resonate Player">
-  <script>
-    function canonicalHost(){
-      try {
-        var host = String(window.location.hostname || '').toLowerCase();
-        var isProdHost = host === 'resonateplayer.com' || host === 'www.resonateplayer.com';
-        if (!isProdHost) return;
-
-        var canonicalHost = 'www.resonateplayer.com';
-        var needsHttps = window.location.protocol !== 'https:';
-        var needsWww = host === 'resonateplayer.com';
-        if (needsHttps || needsWww) {
-          var targetUrl = new URL('https://' + canonicalHost + window.location.pathname + window.location.search + window.location.hash);
-          if (needsWww && !targetUrl.searchParams.has('src')) {
-            targetUrl.searchParams.set('src', 'apex');
-          }
-          window.location.replace(String(targetUrl));
-        }
-      } catch (e) {
-        console.error('Redirection error:', e);
-      }
-    };
-  </script>
   <link rel="manifest" href="/manifest.json" />
   <link rel="stylesheet" href="css/resonate.css" />
 </head>
 <body>
-  <div class="app" id="app">
+  <div class="app" id="app" data-nosnippet>
     <header>
-      <h1 id="app-title" style="cursor: pointer;">
+      <h1 id="app-title">
         Resonate
       </h1>
       <div class="header-controls">
@@ -64,7 +38,7 @@
           Eco
         </button>
         <button id="resontes-toggle" class="theme-selector resontes-toggle" type="button" aria-label="View resonates" aria-expanded="false" aria-controls="resontes-list" aria-live="polite" title="Click to view your saved resonates">
-          <span class="resontes-icon"><svg class="resonate-icon" width="24" height="24" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false"><circle cx="256" cy="256" r="200" stroke="currentColor" stroke-width="32" fill="none"></circle><path d="M96 256 C140 256, 180 180, 220 180 C260 180, 300 332, 340 332 C380 332, 416 256, 416 256" stroke="currentColor" stroke-width="32" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>
+          <span class="resontes-icon"><svg class="resonate-icon" viewBox="0 0 512 512" aria-hidden="true" focusable="false"><use href="/icons/sprite.svg#resonate-icon"></use></svg></span>
           <span class="resontes-count" id="resontes-count">0</span>
         </button>
         <span id="current-track-share" class="theme-selector" role="button" tabindex="0" aria-label="Share current track" title="Share this track">🔗</span>
@@ -134,7 +108,7 @@
             <div id="description-container">
               <button id="toggle-description-btn" class="btn-secondary" type="button" aria-label="Show track description" title="Show description">Info</button>
               <button id="toggle-tracks-btn" class="btn-secondary" type="button" aria-label="Show album tracks" title="Show tracks">Tracks</button>
-              <div id="tracks-list-container" class="tracks-container" style="display:none;"></div>
+              <div id="tracks-list-container" class="tracks-container"></div>
             </div>
           </div>
           <div class="progress-section">
@@ -153,7 +127,7 @@
           </div>
         </div>
       </div>
-      <div id="description-modal" class="description-modal" style="display:none;">
+      <div id="description-modal" class="description-modal">
         <div class="description-modal-content">
           <button id="close-description-modal" class="close-description-modal" aria-label="Close description">X</button>
           <div id="modal-description" class="modal-description"></div>

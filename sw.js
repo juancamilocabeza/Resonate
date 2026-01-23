@@ -44,6 +44,7 @@ const STATIC_FILES = [
   '/js/battery.js',
   '/js/initialization.js',
   '/icons/favicon.svg',
+  '/icons/sprite.svg',
   '/icons/maskable_icon_x192.png',
   '/icons/maskable_icon_x384.png',
   '/icons/maskable_icon_x512.png'
