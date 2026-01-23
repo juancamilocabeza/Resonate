@@ -1080,17 +1080,19 @@ class ResontesContextHandler extends BaseContextHandler {
       }
     }
 
-    // Fallback to context navigation
-    const context = playbackManager.contextData.favorites;
+    // Fallback to context navigation (back-compat: favorites -> resontes)
+    const context = (playbackManager.contextData && (playbackManager.contextData.resontes || playbackManager.contextData.favorites))
+      ? (playbackManager.contextData.resontes || playbackManager.contextData.favorites)
+      : null;
     if (!context || !context.items || context.items.length === 0) return null;
 
     const isShuffle = this.stateManager.getShuffleMode();
     if (isShuffle) {
       const currentKey = state && state.currentTrack && state.currentTrack.url ? canonicalizeUrl(state.currentTrack.url) : '';
-      const { deck } = ensureShuffleDeck('favorites', context.items, { currentKey });
+      const { deck } = ensureShuffleDeck('resontes', context.items, { currentKey });
       const nextKey = Array.isArray(deck.order) ? deck.order[Number(deck.index) || 0] : '';
       const idx = nextKey
-        ? context.items.findIndex(it => getItemKeyForDeck('favorites', it) === nextKey)
+        ? context.items.findIndex(it => getItemKeyForDeck('resontes', it) === nextKey)
         : -1;
       context.currentIndex = idx >= 0 ? idx : (context.currentIndex || 0);
     } else {
@@ -1114,6 +1116,13 @@ class ResontesContextHandler extends BaseContextHandler {
     }
 
     return null;
+  }
+}
+
+// Back-compat alias: older code paths still refer to "favorites".
+class FavoritesContextHandler extends ResontesContextHandler {
+  getContextType() {
+    return 'favorites';
   }
 }
 
@@ -1290,6 +1299,8 @@ class ContextHandlerFactory {
     switch (contextType) {
       case 'album':
         return new AlbumContextHandler(playbackStateManager);
+      case 'resontes':
+        return new ResontesContextHandler(playbackStateManager);
       case 'favorites':
         return new FavoritesContextHandler(playbackStateManager);
       case 'search':
@@ -1297,7 +1308,7 @@ class ContextHandlerFactory {
       case 'searchPlaylist':
         return new SearchPlaylistContextHandler(playbackStateManager);
       default:
-        return new FavoritesContextHandler(playbackStateManager); // fallback
+        return new ResontesContextHandler(playbackStateManager); // fallback
     }
   }
 }
@@ -3050,21 +3061,36 @@ function setupProgressBarInteraction() {
     return;
   }
 
+  const resolveProgressSection = () => {
+    try {
+      const els = window.elements || {};
+      if (els.progressSection) return els.progressSection;
+      const section = (els.progressBar && typeof els.progressBar.closest === 'function')
+        ? els.progressBar.closest('.progress-section')
+        : null;
+      if (section) {
+        els.progressSection = section;
+        window.elements = els;
+      }
+      return section;
+    } catch {
+      return null;
+    }
+  };
+
   let isDragging = false;
 
   const startDrag = (e) => {
     if (!window.elements.audio || !window.elements.audio.duration || !isFinite(window.elements.audio.duration)) return;
-    if (!window.elements.progressBar || !window.elements.progressSection) {
-      if (window.logger && typeof window.logger.warn === 'function') window.logger.warn('Missing progress elements in startDrag', 'PLAYBACK');
-      return;
-    }
+    if (!window.elements.progressBar) return;
 
     isDragging = true;
     state.isSeeking = true;
     
     try {
       window.elements.progressBar.classList.add('dragging');
-      window.elements.progressSection.classList.add('dragging');
+      const progressSection = resolveProgressSection();
+      if (progressSection) progressSection.classList.add('dragging');
     } catch (err) {
       if (window.logger && typeof window.logger.error === 'function') window.logger.error(`Error adding dragging class: ${err.message}`, 'PLAYBACK');
     }
@@ -3090,9 +3116,8 @@ function setupProgressBarInteraction() {
     if (window.elements.progressBar) {
       window.elements.progressBar.classList.remove('dragging');
     }
-    if (window.elements.progressSection) {
-      window.elements.progressSection.classList.remove('dragging');
-    }
+    const progressSection = resolveProgressSection();
+    if (progressSection) progressSection.classList.remove('dragging');
   };
 
   const updateProgressOnDrag = (e) => {

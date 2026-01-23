@@ -666,10 +666,35 @@ function setResontesPanelInsets(metricsOverride = null) {
   }
 }
 
+function setTracksPanelInsets(metricsOverride = null) {
+  try {
+    const tracksEl = elements.tracksListContainer;
+    if (!tracksEl) return;
+    if (!(document.body && document.body.classList && document.body.classList.contains('tracks-open'))) return;
+
+    const header = document.querySelector('header');
+    const footer = document.querySelector('.footer');
+    const playerSection = document.querySelector('.main-player-section');
+    if (!header || !(footer || playerSection)) return;
+
+    const metrics = metricsOverride || getViewportMetrics();
+    const anchorEl = footer || playerSection;
+    const insets = computeOverlayInsets({ inputEl: header, anchorEl, metrics, gapPx: 10, minPanelHeight: 220 });
+    applyOverlayInsetVars({
+      cssTopVar: '--tracks-panel-top',
+      cssBottomVar: '--tracks-panel-bottom',
+      insets
+    });
+  } catch {
+    // ignore
+  }
+}
+
 // Expose for other scripts (search.js) to call when toggling UI
 window.setSearchPanelInsets = setSearchPanelInsets;
 window.setFavoritesPanelInsets = setFavoritesPanelInsets;
 window.setResontesPanelInsets = setResontesPanelInsets;
+window.setTracksPanelInsets = setTracksPanelInsets;
 
 try {
   if (!window._resonateOverlayInsetsSubscriptionInit) {
@@ -683,6 +708,7 @@ try {
         insetsScheduled = false;
         setSearchPanelInsets(metrics);
         setResontesPanelInsets(metrics);
+        setTracksPanelInsets(metrics);
 
         // Keep the keyboard-open class accurate even if browsers skip blur/focus events.
         try {
@@ -1107,15 +1133,46 @@ function updateDescriptionUI(track) {
         if (isVisible) {
           elements.tracksListContainer.style.display = 'none';
           elements.toggleTracksBtn.classList.remove('active');
+          try { document.body.classList.remove('tracks-open'); } catch {}
         } else {
           elements.tracksListContainer.style.display = 'block';
           elements.toggleTracksBtn.classList.add('active');
-          elements.tracksListContainer.innerHTML = '';
-          if (window.displayAlbumTracksV2) {
-            window.displayAlbumTracksV2(currentAlbumId, elements.tracksListContainer);
-          } else {
-            elements.tracksListContainer.innerHTML = '<div class="no-results">Can\'t show the track list</div>';
+
+          try { document.body.classList.add('tracks-open'); } catch {}
+
+          elements.tracksListContainer.innerHTML = `
+            <div class="search-results-header" role="banner">
+              <div class="search-results-summary" aria-live="polite">
+                <span class="tracks-overlay-count">Tracks</span>
+              </div>
+              <div class="search-results-controls" aria-label="Tracks controls">
+                <button class="search-control-btn tracks-overlay-close" type="button" aria-label="Close tracks" title="Close">✕</button>
+              </div>
+            </div>
+            <div class="search-results-list tracks-overlay-list" role="list" aria-label="Album tracks"></div>
+          `;
+
+          const closeBtn = elements.tracksListContainer.querySelector('.tracks-overlay-close');
+          if (closeBtn) {
+            closeBtn.addEventListener('click', (e) => {
+              try { e.preventDefault(); e.stopPropagation(); } catch {}
+              try { elements.tracksListContainer.style.display = 'none'; } catch {}
+              try { elements.toggleTracksBtn.classList.remove('active'); } catch {}
+              try { document.body.classList.remove('tracks-open'); } catch {}
+            });
           }
+
+          const listEl = elements.tracksListContainer.querySelector('.tracks-overlay-list');
+          if (window.displayAlbumTracksV2 && listEl) {
+            window.displayAlbumTracksV2(currentAlbumId, listEl);
+          } else if (listEl) {
+            listEl.innerHTML = '<div class="no-results">Can\'t show the track list</div>';
+          }
+
+          try {
+            if (typeof window.requestViewportUpdate === 'function') window.requestViewportUpdate();
+            if (typeof window.setTracksPanelInsets === 'function') window.setTracksPanelInsets();
+          } catch {}
         }
       });
     }

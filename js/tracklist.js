@@ -16,6 +16,8 @@
       const message = tracksContainer.closest('.search-result') ? 'Searching...' : 'Loading...';
       tracksContainer.innerHTML = `<div class="search-loading"><div class="loader"></div><span class="loader-text">${message}</span></div>`;
 
+      const isPlaybackPanel = !!(tracksContainer && tracksContainer.closest && tracksContainer.closest('#tracks-list-container'));
+
       const files = await (window.fetchOptimizedPlayableFiles || fetchOptimizedPlayableFiles)(albumId);
 
       tracksContainer.innerHTML = '';
@@ -25,13 +27,28 @@
         return;
       }
 
+      // Update Tracks header count when rendered inside the playback Tracks overlay.
+      if (isPlaybackPanel) {
+        try {
+          const overlay = tracksContainer.closest('#tracks-list-container');
+          const label = overlay ? overlay.querySelector('.tracks-overlay-count') : null;
+          if (label) label.textContent = `Tracks (${files.length})`;
+        } catch {}
+      }
+
       const root = document.createElement('div');
       root.className = 'tlv2';
 
       const list = document.createElement('div');
       list.className = 'tlv2-list';
-      list.style.maxHeight = '340px';
-      list.style.overflowY = 'auto';
+      if (isPlaybackPanel) {
+        // The current-album tracks panel handles scrolling.
+        list.style.maxHeight = 'none';
+        list.style.overflowY = 'visible';
+      } else {
+        list.style.maxHeight = '340px';
+        list.style.overflowY = 'auto';
+      }
 
       const resonteContext = isResontesContext(tracksContainer);
 
@@ -126,7 +143,10 @@
         // Track number
         const num = document.createElement('span');
         num.className = 'tlv2-number';
-        num.textContent = typeof track.trackNumber === 'number' ? String(track.trackNumber) : String(index + 1);
+        const tn = (track && typeof track.trackNumber === 'number' && isFinite(track.trackNumber) && track.trackNumber > 0)
+          ? track.trackNumber
+          : null;
+        num.textContent = tn != null ? String(tn) : String(index + 1);
         num.style.textAlign = 'center';
         row.appendChild(num);
 

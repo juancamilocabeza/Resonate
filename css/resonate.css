@@ -43,12 +43,54 @@
 #description-container {
   display: flex;
   flex-direction: row;
+  flex-wrap: wrap;
   gap: 0.5em;
   align-items: center;
   margin-bottom: 0.5em;
 }
 #description-container .btn-secondary {
   margin: 0;
+}
+
+/* Ensure the current-album track list flows below the buttons (not beside them) */
+#tracks-list-container {
+  border: 1px solid var(--surface-border);
+  border-radius: 8px;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* Current album: show Tracks as a fixed overlay panel (same UX as search results) */
+body.tracks-open #tracks-list-container {
+  display: block;
+  position: fixed;
+  left: 10px;
+  right: 10px;
+  top: var(--tracks-panel-top, calc(54px + env(safe-area-inset-top, 0) + 10px));
+  bottom: var(--tracks-panel-bottom, calc(var(--footer-height, 44px) + env(safe-area-inset-bottom, 0) + var(--vv-bottom-inset, 0px) + 10px));
+  width: auto;
+  height: auto;
+  max-height: none;
+  background: var(--card);
+  z-index: 150;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Tracklist V2 inside the overlay should not create a nested scroll */
+body.tracks-open #tracks-list-container .tlv2-list {
+  overflow: visible;
+  max-height: none;
+}
+
+/* Tracks overlay: close button should match Search close look */
+body.tracks-open #tracks-list-container .tracks-overlay-close.search-control-btn {
+  height: 48px;
+  min-width: 48px;
+  border-radius: 8px;
+  padding: 10px 14px;
 }
 /* === Estilos para el listado de pistas del álbum actual === */
 
@@ -555,6 +597,9 @@ body {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
   padding-top: var(--spacing-lg);
   padding-left: 0;
   padding-right: 0;
