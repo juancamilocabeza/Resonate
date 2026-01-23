@@ -136,16 +136,7 @@
         title.textContent = track.title || 'Untitled';
         title.style.textAlign = 'left';
         row.appendChild(title);
-        // Apply TitleTicker
-        if (window.updateTitleTicker) {
-          window.updateTitleTicker(title.textContent);
-          // Copia el contenido ticker al elemento actual
-          const tickerSpan = document.querySelector('.title-text');
-          if (tickerSpan) {
-            title.innerHTML = '';
-            title.appendChild(tickerSpan.cloneNode(true));
-          }
-        }
+
 
         // Duración
         const duration = document.createElement('span');

@@ -4190,6 +4190,27 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* Tracklist V2: fallback global (cuando el contenedor no usa .tracks-container) */
+.tlv2-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* En pantallas grandes, permitir 2 líneas con ellipsis (mejor legibilidad) */
+@media (min-width: 768px) {
+  .tlv2-title {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
 .tracks-container .tlv2-creator {
   font-size: 12px;

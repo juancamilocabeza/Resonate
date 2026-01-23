@@ -1319,6 +1319,7 @@ function prefetchNextSearchPages(query, currentPage, hasMore, count = 2) {
 }
 
 window.performOptimizedSearch = performOptimizedSearch;
+window.fetchOptimizedPlayableFiles = fetchOptimizedPlayableFiles;
 window.playOptimizedSearchResult = playOptimizedSearchResult;
 window.playSpecificSearchTrack = playSpecificSearchTrack;
 window.playAlbumFromResontes = playAlbumFromResontes;

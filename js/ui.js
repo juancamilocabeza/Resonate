@@ -1593,6 +1593,9 @@ function loadFavorites() {
     state.favorites = uniqueFavorites;
     window.logger.info(`Final favorites loaded: ${state.favorites.length} items`, 'UI');
 
+    // Repair corrupted albumTitle data (migration)
+    repairCorruptedAlbumTitles();
+
     // Notify other modules (e.g., initialization/restore) that resontes/favorites are ready.
     try {
       window.dispatchEvent(new CustomEvent('resonate:favorites-loaded', {
@@ -1626,6 +1629,75 @@ function loadFavorites() {
     updatePlayButtonState();
   }
 }
+
+/**
+ * Repairs corrupted albumTitle data where track title was saved as album title.
+ * This migration runs once when favorites are loaded and attempts to fetch correct
+ * album titles from Archive.org metadata.
+ */
+async function repairCorruptedAlbumTitles() {
+  try {
+    // Check if migration was already done
+    const migrationDone = localStorage.getItem('resonate_album_title_migration_v1');
+    if (migrationDone === 'true') {
+      window.logger.debug('Album title migration already completed, skipping', 'UI');
+      return;
+    }
+
+    let needsSave = false;
+    const albumCache = new Map();
+    let repairedCount = 0;
+
+    for (const favorite of state.favorites) {
+      // Skip if no albumTitle or if albumTitle doesn't match title (likely correct)
+      if (!favorite.albumTitle || favorite.albumTitle !== favorite.title) {
+        continue;
+      }
+
+      // This favorite has albumTitle === title, which indicates corruption
+      const albumId = favorite.albumId || favorite.id;
+      if (!albumId) continue;
+
+      // Check cache first
+      let correctAlbumTitle = albumCache.get(albumId);
+      
+      if (!correctAlbumTitle) {
+        try {
+          // Fetch metadata from Archive.org to get correct album title
+          if (typeof window.fetchOptimizedPlayableFiles === 'function') {
+            const files = await window.fetchOptimizedPlayableFiles(albumId);
+            if (files && files.length > 0) {
+              correctAlbumTitle = files[0].album;
+              albumCache.set(albumId, correctAlbumTitle);
+            }
+          }
+        } catch (err) {
+          window.logger.debug(`Could not fetch metadata for album ${albumId}: ${err.message}`, 'UI');
+          continue;
+        }
+      }
+
+      // Update if we found a valid album title that's different from track title
+      if (correctAlbumTitle && correctAlbumTitle !== favorite.title) {
+        favorite.albumTitle = correctAlbumTitle;
+        needsSave = true;
+        repairedCount++;
+        window.logger.debug(`Repaired albumTitle for track "${favorite.title}" in album ${albumId}`, 'UI');
+      }
+    }
+
+    if (needsSave) {
+      saveFavorites();
+      window.logger.info(`Album titles migration completed: ${repairedCount} tracks repaired`, 'UI');
+    }
+
+    // Mark migration as done
+    localStorage.setItem('resonate_album_title_migration_v1', 'true');
+  } catch (err) {
+    window.logger.warn(`Error during album title repair: ${err.message}`, 'UI');
+  }
+}
+
 function saveFavorites() {
   try {
     // Eliminar duplicados antes de guardar
@@ -1815,7 +1887,7 @@ function toggleFavorite(track) {
       albumId: track.albumId || track.id,
       trackIndex: track.trackIndex || 0,
       totalTracks: track.totalTracks || 1,
-      albumTitle: track.album || track.title,
+      albumTitle: track.album || '',
       downloadOffline: !!track.downloadOffline
     };
     state.favorites.push(favoriteTrack);
@@ -4733,7 +4805,7 @@ function updateFavoritesList() {
     const albumId = favorite.albumId || favorite.id;
     if (!favoritesByAlbum[albumId]) {
       favoritesByAlbum[albumId] = {
-        albumTitle: favorite.albumTitle || favorite.title,
+        albumTitle: favorite.albumTitle || 'Untitled Album',
         albumCreator: favorite.creator,
         tracks: []
       };
@@ -4750,6 +4822,15 @@ function updateFavoritesList() {
     isAlbum: favoritesByAlbum[albumId].tracks.length > 1,
     tracks: favoritesByAlbum[albumId].tracks
   }));
+
+  // Update albumTitle for tracks that don't have it or have degraded info
+  state.favorites.forEach(favorite => {
+    const albumId = favorite.albumId || favorite.id;
+    const album = favoritesByAlbum[albumId];
+    if (album && favorite.albumTitle && favorite.albumTitle !== favorite.title && album.albumTitle === 'Untitled Album') {
+      album.albumTitle = favorite.albumTitle;
+    }
+  });
 
   // Favorites toolbar filters
   const filterText = normalizeFilterText(state.favoritesUi && state.favoritesUi.filterText);
