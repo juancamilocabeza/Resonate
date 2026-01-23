@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Resonate Player</title>
   <meta name="application-name" content="Resonate Player">
-  <meta name="resonate-version" content="16">
+  <meta name="resonate-version" content="17">
   <meta name="description" content="Enjoy content freely from https://archive.org">
   <meta name="keywords" content="Resonate, player, music, free, online, offline, PWA">
   <meta name="robots" content="index, follow">
@@ -29,9 +29,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Resonate Player">
   <script>
-    // Production canonicalization: keep a single install origin for the PWA.
-    // This improves the odds that shared links open in the installed app.
-    (function () {
+    function canonicalHost(){
       try {
         var host = String(window.location.hostname || '').toLowerCase();
         var isProdHost = host === 'resonateplayer.com' || host === 'www.resonateplayer.com';
@@ -41,8 +39,6 @@
         var needsHttps = window.location.protocol !== 'https:';
         var needsWww = host === 'resonateplayer.com';
         if (needsHttps || needsWww) {
-          // If coming from apex, tag the navigation so the canonical origin can show
-          // the same banner UX as a shared-link entry.
           var targetUrl = new URL('https://' + canonicalHost + window.location.pathname + window.location.search + window.location.hash);
           if (needsWww && !targetUrl.searchParams.has('src')) {
             targetUrl.searchParams.set('src', 'apex');
@@ -50,9 +46,9 @@
           window.location.replace(String(targetUrl));
         }
       } catch (e) {
-        // ignore
+        console.error('Redirection error:', e);
       }
-    })();
+    };
   </script>
   <link rel="manifest" href="/manifest.json" />
   <link rel="stylesheet" href="css/resonate.css" />
@@ -67,9 +63,9 @@
         <button id="theme-toggle" class="theme-selector" type="button" aria-label="Theme toggle" aria-current="page" title="Switch theme">
           Eco
         </button>
-        <button id="favorites-toggle" class="theme-selector favorites-toggle" type="button" aria-label="View favorites" aria-expanded="false" aria-controls="favorites-list" aria-live="polite" title="Click to view your saved favorites">
-          <span class="favorites-icon">❤️</span>
-          <span class="favorites-count" id="favorites-count">0</span>
+        <button id="resontes-toggle" class="theme-selector resontes-toggle" type="button" aria-label="View resonates" aria-expanded="false" aria-controls="resontes-list" aria-live="polite" title="Click to view your saved resonates">
+          <span class="resontes-icon"><svg class="resonate-icon" width="24" height="24" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false"><circle cx="256" cy="256" r="200" stroke="currentColor" stroke-width="32" fill="none"></circle><path d="M96 256 C140 256, 180 180, 220 180 C260 180, 300 332, 340 332 C380 332, 416 256, 416 256" stroke="currentColor" stroke-width="32" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>
+          <span class="resontes-count" id="resontes-count">0</span>
         </button>
         <span id="current-track-share" class="theme-selector" role="button" tabindex="0" aria-label="Share current track" title="Share this track">🔗</span>
       </div>
@@ -105,20 +101,24 @@
           </div>
         </div>
       </div>
-      <div id="favorites-list" class="favorites-list" role="region" aria-label="Favorites">
-        <div id="favorites-header" class="favorites-results-header" hidden>
-          <div class="favorites-results-summary" aria-live="polite">
-            <span id="favorites-count-label">Favorites</span>
-          </div>
-          <div class="favorites-results-controls" aria-label="Favorites controls">
-            <div class="search-container">
-              <input id="favorites-filter" class="search-input" type="search" placeholder="Filter favorites" aria-label="Filter favorites" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="search" enterkeyhint="search">
-              <button id="favorites-clear" class="search-clear-btn" type="button" aria-label="Clear filter" title="Clear" hidden>✕</button>
-              <button id="favorites-close" class="search-control-btn" type="button" title="Close">✕</button>
-            </div>
+      <div id="resontes-list" class="resontes-list" role="region" aria-label="Resonates">
+        <div class="resontes-filter-bar" aria-label="Resonates filter">
+          <div class="search-container">
+            <input id="resontes-filter" class="search-input" type="search" placeholder="Filter resonates" aria-label="Filter resonates" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="search" enterkeyhint="search">
+            <button id="resontes-clear" class="search-clear-btn" type="button" aria-label="Clear filter" title="Clear" hidden>✕</button>
           </div>
         </div>
-        <div id="favorites-list-content" class="favorites-list-content" role="list" aria-label="Favorites list"></div>
+        <div class="resontes-panel-inner" role="presentation">
+          <div id="resontes-header" class="search-results-header resontes-results-header" hidden>
+            <div class="search-results-summary" aria-live="polite">
+              <span id="resontes-count-label">Resonates</span>
+            </div>
+            <div class="search-results-controls" aria-label="Resonates controls">
+              <button id="resontes-close" class="search-control-btn" type="button" title="Close">✕</button>
+            </div>
+          </div>
+          <div id="resontes-list-content" class="resontes-list-content" role="list" aria-label="Resonates list"></div>
+        </div>
       </div>
       <div class="main-player-section">
       <div class="player-container">
@@ -149,11 +149,10 @@
             <button id="prev-btn" class="prev-btn" aria-label="Previous">⏮</button>
             <button id="play-btn" class="play-btn" aria-label="Play/Pause">▶</button>
             <button id="next-btn" class="next-btn" aria-label="Next">⏭</button>
-            <button id="favorite-btn" class="additional-btn" aria-label="Favorite">🩶</button>
+            <button id="favorite-btn" class="additional-btn" aria-label="Add to resonates" title="Add to resonates"></button>
           </div>
         </div>
       </div>
-      <!-- Modal para descripción -->
       <div id="description-modal" class="description-modal" style="display:none;">
         <div class="description-modal-content">
           <button id="close-description-modal" class="close-description-modal" aria-label="Close description">X</button>
@@ -163,7 +162,7 @@
     </div>
     </div>
     <footer class="footer">
-      &copy; 2025 Resonate Player - Early Stage - All rights reserved.
+      &copy; 2026 Resonate Player - Early Stage - All rights reserved.
     </footer>
   </div>
   <audio id="audio" preload="metadata"></audio>
@@ -175,12 +174,11 @@
   <script src="js/playback.js"></script>
   <script src="js/search.js"></script>
   <script src="js/tracklist.js"></script>
-  <script src="js/ui.js"></script>
+  <script src="js/ui.js" defer></script>
   <script src="js/offline.js"></script>
   <script src="js/battery.js"></script>
-  <script src="js/initialization.js"></script>
+  <script src="js/initialization.js" defer></script>
   <script>
-    // Solo cargar Google Analytics en producción
     if (window.location.hostname !== 'localhost' && !window.location.hostname.startsWith('127.')) {
       (function() {
         var script = document.createElement('script');
@@ -197,4 +195,4 @@
   </script>    
   </body>
 </html>
-<!--2025 Resonate Player - All rights reserved-->
+<!--2026 Resonate Player - All rights reserved-->

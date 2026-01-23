@@ -184,10 +184,10 @@ function setSearchActiveUI(isActive) {
   if (els && els.searchResults && els.searchResults.classList) {
     els.searchResults.classList.toggle('active', Boolean(isActive));
   }
-  // Mutually exclusive panels: opening search hides favorites
+  // Mutually exclusive panels: opening search hides resontes
   try {
-    if (isActive && typeof window.hideFavoritesList === 'function') {
-      window.hideFavoritesList();
+    if (isActive && typeof window.hideResontesList === 'function') {
+      window.hideResontesList();
     }
   } catch {
     // ignore
@@ -1020,7 +1020,7 @@ async function playOptimizedSearchResult(result, index, allResults) {
       // Mensaje claro y sugerencia al usuario
       logSearch('Playback finished or unrecoverable error', 'error', 'UI');
       window.showStatus?.(
-        'Playback finished. Try searching for more music or add tracks to your favorites.',
+        'Playback finished. Try searching for more music or add tracks to your resonates.',
         'info',
         4000
       );
@@ -1067,16 +1067,17 @@ async function playSpecificSearchTrack(track, albumId, trackIndex, totalTracks) 
   }
 }
 
-async function playAlbumFromFavorites(albumId) {
+async function playAlbumFromResontes(albumId, options = {}) {
   const st = getSearchStateRef();
-  if (st && st.isLoading) return;
+  const force = !!(options && typeof options === 'object' && options.force);
+  if (!force && st && st.isLoading) return;
 
   if (window.Loaders) {
     window.Loaders.showLoader({ type: 'spinner', showProgress: false, context: 'album' });
   }
 
   if (typeof window.hideSearchResults === 'function') window.hideSearchResults();
-  if (typeof window.hideFavoritesList === 'function') window.hideFavoritesList();
+  if (typeof window.hideResontesList === 'function') window.hideResontesList();
   
   try {
     logSearch('Loading album...', 'info', 'UI');
@@ -1117,74 +1118,74 @@ async function playAlbumFromFavorites(albumId) {
   }
 }
 
-async function playOptimizedFavorite(favoriteIndex = 0) {
-  if (!window.state?.isLoading && window.state?.favorites?.length > 0) {
+async function playOptimizedResonte(resonteIndex = 0) {
+  if (!window.state?.isLoading && window.state?.resontes?.length > 0) {
     if (window.Loaders) {
-      window.Loaders.showLoader({ type: 'spinner', showProgress: false, context: 'favorite' });
+      window.Loaders.showLoader({ type: 'spinner', showProgress: false, context: 'resonte' });
     }
     
-    logSearch('Loading favorite...', 'info', 'UI');
-    window.showStatus?.(`Loading favorite...`, 'info', null, 'normal', true);
-    if (window.state) window.state.isPlayingFavorites = true;
+    logSearch('Loading resonate...', 'info', 'UI');
+    window.showStatus?.('Loading resonate...', 'info', null, 'normal', true);
+    if (window.state) window.state.isPlayingResontes = true;
     try {
       let actualIndex;
-      if (window.state?.shuffleFavorites) {
-        actualIndex = Math.floor(Math.random() * window.state.favorites.length);
+      if (window.state?.shuffleResontes) {
+        actualIndex = Math.floor(Math.random() * window.state.resontes.length);
       } else {
-        actualIndex = favoriteIndex >= 0 ? favoriteIndex : 0;
+        actualIndex = resonteIndex >= 0 ? resonteIndex : 0;
       }
-      if (window.playbackManager) window.playbackManager.setContext('favorites', window.state.favorites, actualIndex);
-      const favorite = window.state.favorites[actualIndex];
-      // Validate favorite has URL
-      if (!favorite.url) {
-        logSearch({ message: 'Favorite without valid URL', favorite }, 'error', 'PLAYBACK');
-        logSearch('Favorite is broken, skipping it', 'error', 'UI');
-        window.showStatus?.('Favorite is broken, skipping it', 'error', 2000);
-        const nextIndex = (actualIndex + 1) % window.state.favorites.length;
-        return playOptimizedFavorite(nextIndex);
+      if (window.playbackManager) window.playbackManager.setContext('resontes', window.state.resontes, actualIndex);
+      const resonte = window.state.resontes[actualIndex];
+      // Validate resonte has URL
+      if (!resonte.url) {
+        logSearch({ message: 'Resonte without valid URL', resonte }, 'error', 'PLAYBACK');
+        logSearch('Resonate is broken, skipping it', 'error', 'UI');
+        window.showStatus?.('Resonate is broken, skipping it', 'error', 2000);
+        const nextIndex = (actualIndex + 1) % window.state.resontes.length;
+        return playOptimizedResonte(nextIndex);
       }
-      logSearch('Loading favorite...', 'info', 'UI');
-      window.showStatus?.(`Loading favorite...`, 'info', null, 'normal', true);
+      logSearch('Loading resonate...', 'info', 'UI');
+      window.showStatus?.('Loading resonate...', 'info', null, 'normal', true);
       const track = {
-        url: favorite.url,
-        title: favorite.title || 'Untitled',
-        creator: favorite.creator || 'Unknown',
-        id: favorite.id,
-        isAlbumTrack: favorite.isAlbumTrack || false,
-        albumId: favorite.albumId || favorite.id,
-        trackIndex: favorite.trackIndex || 0,
-        totalTracks: favorite.totalTracks || 1
+        url: resonte.url,
+        title: resonte.title || 'Untitled',
+        creator: resonte.creator || 'Unknown',
+        id: resonte.id,
+        isAlbumTrack: resonte.isAlbumTrack || false,
+        albumId: resonte.albumId || resonte.id,
+        trackIndex: resonte.trackIndex || 0,
+        totalTracks: resonte.totalTracks || 1
       };
       if (!track.url || track.url === '') {
-        throw new Error('Audio URL not available in favorite');
+        throw new Error('Audio URL not available in resonte');
       }
       if (window.Loaders) window.Loaders.hideLoader();
-      // CHECK IF PRELOADED FAVORITES CACHE
-      const favoritesQueue = typeof window.audioCache !== 'undefined' && window.audioCache ? window.audioCache.getFavoritesQueue() : [];
-      const isPreloaded = favoritesQueue.includes(track.url);
+      // CHECK IF PRELOADED RESONTES CACHE
+      const resontesQueue = typeof window.audioCache !== 'undefined' && window.audioCache ? window.audioCache.getResontesQueue() : [];
+      const isPreloaded = resontesQueue.includes(track.url);
       if (isPreloaded) {
-        logSearch(`Playing from preloaded favorites: ${track.title}`, 'debug', 'PLAYBACK');
+        logSearch(`Playing from preloaded resontes: ${track.title}`, 'debug', 'PLAYBACK');
       } else {
-        logSearch(`Favorite not preloaded, loading from network: ${track.title}`, 'debug', 'PLAYBACK');
+        logSearch(`Resonte not preloaded, loading from network: ${track.title}`, 'debug', 'PLAYBACK');
       }
       const cached = typeof window.audioCache !== 'undefined' && window.audioCache ? await window.audioCache.get(track.url) : null;
       if (!cached && !window.state.networkOnline) {
-        logSearch("Favorite isn't offline. Skipping it", 'warn', 'UI');
-        window.showStatus?.("Favorite isn't offline. Skipping it", 'error', 2000);
-        const nextIndex = (actualIndex + 1) % window.state.favorites.length;
+        logSearch("Resonate isn't available offline. Skipping it", 'warn', 'UI');
+        window.showStatus?.("Resonate isn't available offline. Skipping it", 'error', 2000);
+        const nextIndex = (actualIndex + 1) % window.state.resontes.length;
         if (window.Loaders) window.Loaders.hideLoader();
-        return playOptimizedFavorite(nextIndex);
+        return playOptimizedResonte(nextIndex);
       }
       if (window.Loaders) window.Loaders.hideLoader();
-      await window.playAudioTrackOptimized(track, favorite.id, favorite.trackIndex, favorite.totalTracks, true);
+      await window.playAudioTrackOptimized(track, resonte.id, resonte.trackIndex, resonte.totalTracks, true);
       if (typeof window.updateShuffleButton === 'function') window.updateShuffleButton();
     } catch (error) {
       logSearch(error, 'error', 'PLAYBACK');
-      logSearch('Error with this favorite', 'error', 'UI');
-      window.showStatus?.(`Error with this favorite`, 'error');
-      if (window.state?.favorites?.length > 1) {
-        const nextIndex = (favoriteIndex + 1) % window.state.favorites.length;
-        setTimeout(() => playOptimizedFavorite(nextIndex), 1000);
+      logSearch('Error with this resonate', 'error', 'UI');
+      window.showStatus?.('Error with this resonate', 'error');
+      if (window.state?.resontes?.length > 1) {
+        const nextIndex = (resonteIndex + 1) % window.state.resontes.length;
+        setTimeout(() => playOptimizedResonte(nextIndex), 1000);
       }
     }
   }
@@ -1320,8 +1321,10 @@ function prefetchNextSearchPages(query, currentPage, hasMore, count = 2) {
 window.performOptimizedSearch = performOptimizedSearch;
 window.playOptimizedSearchResult = playOptimizedSearchResult;
 window.playSpecificSearchTrack = playSpecificSearchTrack;
-window.playAlbumFromFavorites = playAlbumFromFavorites;
-window.playOptimizedFavorite = playOptimizedFavorite;
+window.playAlbumFromResontes = playAlbumFromResontes;
+// Back-compat: some UI surfaces still call the old function name.
+window.playAlbumFromFavorites = playAlbumFromResontes;
+window.playOptimizedResonte = playOptimizedResonte;
 window.playRandomSearchResults = playRandomSearchResults;
 window.abortAllSearchOperations = abortAllSearchOperations;
 window.prefetchNextSearchPages = prefetchNextSearchPages;

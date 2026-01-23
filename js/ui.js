@@ -1,56 +1,200 @@
+// Hook global refresh after any album resonte change
+try {
+  if (typeof window.toggleAlbumResonte === 'function') {
+    const originalToggleAlbumResonte = window.toggleAlbumResonte;
+    window.toggleAlbumResonte = function(albumId) {
+      const result = originalToggleAlbumResonte(albumId);
+      try {
+        if (typeof window.refreshAllResonteButtons === 'function') {
+          window.refreshAllResonteButtons();
+        }
+      } catch {}
+      return result;
+    };
+  }
+} catch {}
+
+// Refresca todos los iconos de resonte en todos los listados
+window.resonateLogoSVG = `<svg class="resonate-icon" width="24" height="24" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false"><circle cx="256" cy="256" r="200" stroke="currentColor" stroke-width="32" fill="none"></circle><path d="M96 256 C140 256, 180 180, 220 180 C260 180, 300 332, 340 332 C380 332, 416 256, 416 256" stroke="currentColor" stroke-width="32" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>`;
+
+window.refreshAllResonteButtons = function refreshAllResonteButtons() {
+  // Tracklist V2
+  document.querySelectorAll('.track-resonte, .tlv2-resonte').forEach(btn => {
+    const row = btn.closest('.tlv2-row');
+    if (!row) return;
+    // Prefer stable identity via albumId + trackIndex when available.
+    const ds = (btn && btn.dataset) ? btn.dataset : {};
+    const dsAlbumId = ds.albumId ? String(ds.albumId) : '';
+    const dsTrackIndex = ds.trackIndex ? String(ds.trackIndex) : '';
+
+    // Otherwise fall back to URL.
+    const url = ds.url ? String(ds.url) : '';
+    const trackLike = url ? { url } : null;
+
+    let isResonte = false;
+    try {
+      // 1) Best case: stable identity albumId + trackIndex
+      if (dsAlbumId && dsTrackIndex && window.state && Array.isArray(window.state.favorites)) {
+        const idx = parseInt(dsTrackIndex, 10);
+        isResonte = window.state.favorites.some(f => String(f.albumId) === dsAlbumId && Number(f.trackIndex) === idx);
+
+        // If ordering differs between render list and saved list, fall back to URL match.
+        if (!isResonte && url) {
+          isResonte = window.state.favorites.some(f => String(f.url) === url);
+        }
+      }
+
+      // 2) URL-based match (works across different sort orders)
+      if (!isResonte && trackLike && typeof window.isTrackResonte === 'function') {
+        isResonte = !!window.isTrackResonte(trackLike);
+      } else if (!isResonte && trackLike && typeof window.isTrackFavorite === 'function') {
+        isResonte = !!window.isTrackFavorite(trackLike);
+      }
+
+      // 3) Last resort: best-effort heuristic by title + track number
+      if (!isResonte) {
+        const trackTitle = row.querySelector('.tlv2-title')?.textContent;
+        const trackNum = row.querySelector('.tlv2-number')?.textContent;
+        let track = null;
+        if (window.state && Array.isArray(window.state.currentTracklist)) {
+          track = window.state.currentTracklist.find(t => t.title === trackTitle && String(t.trackNumber) === trackNum);
+        }
+        if (track) {
+          isResonte = typeof window.isTrackResonte === 'function' ? !!window.isTrackResonte(track) : false;
+        }
+      }
+    } catch {}
+    btn.classList.toggle('active', isResonte);
+    btn.innerHTML = window.resonateLogoSVG;
+    btn.title = isResonte ? 'Remove from resonates' : 'Add to resonates';
+    try { btn.setAttribute('aria-label', btn.title); } catch {}
+  });
+
+  // Search results (cards)
+  document.querySelectorAll('.card-btn.resonte, .card-btn.favorite').forEach(btn => {
+    const card = btn.closest('.content-card');
+    if (!card) return;
+    const albumId = card.getAttribute('data-album-id');
+    const isResonte = typeof window.isAlbumResonte === 'function'
+      ? window.isAlbumResonte(albumId)
+      : (typeof isAlbumInFavorites === 'function' ? isAlbumInFavorites(albumId) : false);
+    btn.classList.toggle('active', isResonte);
+    btn.innerHTML = window.resonateLogoSVG;
+    const label = isResonte ? 'Remove from resonates' : 'Add to resonates';
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+  });
+
+  // Legacy search results
+  document.querySelectorAll('.result-resonte, .result-favorite').forEach(btn => {
+    const resultEl = btn.closest('.search-result');
+    if (!resultEl) return;
+    const albumId = resultEl.__resultData?.identifier || resultEl.getAttribute('data-album-id') || resultEl.querySelector('.result-info')?.textContent;
+    const isResonte = typeof window.isAlbumResonte === 'function'
+      ? window.isAlbumResonte(albumId)
+      : (typeof isAlbumInFavorites === 'function' ? isAlbumInFavorites(albumId) : false);
+    btn.classList.toggle('active', isResonte);
+    btn.innerHTML = window.resonateLogoSVG;
+    const label = isResonte ? 'Remove from resonates' : 'Add to resonates';
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+  });
+};
+
 const elements = {
+  // Core
+  app: document.getElementById('app'),
   audio: document.getElementById('audio'),
-  art: document.getElementById('art'),
-  title: document.getElementById('title'),
-  creator: document.getElementById('creator'),
-  description: document.getElementById('description'),
-    descriptionContainer: document.getElementById('description-container'),
-    toggleDescriptionBtn: document.getElementById('toggle-description-btn'),
-    toggleTracksBtn: document.getElementById('toggle-tracks-btn'),
-    tracksListContainer: document.getElementById('tracks-list-container'),
-  progressBar: document.getElementById('progress-bar'),
-  progressSection: document.querySelector('.progress-section'),
-  progress: document.getElementById('progress'),
-  currentTime: document.getElementById('current-time'),
-  totalTime: document.getElementById('total-time'),
-  prevBtn: document.getElementById('prev-btn'),
-  playBtn: document.getElementById('play-btn'),
-  nextBtn: document.getElementById('next-btn'),
-  favoriteBtn: document.getElementById('favorite-btn'),
-  shuffleFavoritesBtn: document.getElementById('shuffle-favorites-btn'),
+
+  // Header / global controls
+  themeToggle: document.getElementById('theme-toggle'),
+  currentTrackShare: document.getElementById('current-track-share'),
+
+  // Search
   searchInput: document.getElementById('search-input'),
   searchClear: document.getElementById('search-clear'),
   searchResults: document.getElementById('search-results'),
-  searchResultsList: document.getElementById('search-results-list'),
   searchResultsHeader: document.getElementById('search-results-header'),
   searchResultsCount: document.getElementById('search-results-count'),
-  searchOfflineOnly: document.getElementById('search-offline-only'),
+  searchResultsList: document.getElementById('search-results-list'),
   searchResultsClose: document.getElementById('search-results-close'),
-  searchLoader: document.getElementById('search-loader'),
-  playAllFavoritesBtn: document.getElementById('play-all-favorites-btn'),
-  favoritesToggle: document.getElementById('favorites-toggle'),
-  favoritesList: document.getElementById('favorites-list'),
-  favoritesHeader: document.getElementById('favorites-header'),
-  favoritesCountLabel: document.getElementById('favorites-count-label'),
-  favoritesListContent: document.getElementById('favorites-list-content'),
-  favoritesFilter: document.getElementById('favorites-filter'),
-  favoritesClear: document.getElementById('favorites-clear'),
-  favoritesOfflineOnly: document.getElementById('favorites-offline-only'),
-  favoritesClose: document.getElementById('favorites-close'),
-  preloadFavoritesToggle: document.getElementById('preload-favorites-toggle'),
-  volumeIcon: document.getElementById('volume-icon'),
-  volumeSlider: document.getElementById('volume-slider'),
-  // New elements for tab navigation
-  navTabs: document.querySelectorAll('.nav-tab'),
-  playerTab: document.getElementById('player-tab'),
-  searchTab: document.getElementById('search-tab'),
-  favoritesTab: document.getElementById('favorites-tab'),
-  startView: document.getElementById('start-view'),
-  startButton: document.getElementById('start-button'),
-  app: document.getElementById('app'),
+
+  // Resontes panel
+  resontesToggle: document.getElementById('resontes-toggle'),
+  resontesCount: document.getElementById('resontes-count'),
+  resontesList: document.getElementById('resontes-list'),
+  resontesHeader: document.getElementById('resontes-header'),
+  resontesCountLabel: document.getElementById('resontes-count-label'),
+  resontesListContent: document.getElementById('resontes-list-content'),
+  resontesFilter: document.getElementById('resontes-filter'),
+  resontesClear: document.getElementById('resontes-clear'),
+  resontesOfflineOnly: document.getElementById('resontes-offline-only'),
+  resontesClose: document.getElementById('resontes-close'),
+  preloadResontesToggle: document.getElementById('preload-resontes-toggle'),
+  resontesTab: document.getElementById('resontes-tab'),
+
+  // Player
   playerContent: document.getElementById('player-content'),
-  currentTrackShare: document.getElementById('current-track-share')
+  art: document.getElementById('art'),
+  title: document.getElementById('title'),
+  creator: document.getElementById('creator'),
+  progressBar: document.getElementById('progress-bar'),
+  progress: document.getElementById('progress'),
+  currentTime: document.getElementById('current-time'),
+  totalTime: document.getElementById('total-time'),
+  playBtn: document.getElementById('play-btn'),
+  prevBtn: document.getElementById('prev-btn'),
+  nextBtn: document.getElementById('next-btn'),
+  shuffleFavoritesBtn: document.getElementById('shuffle-favorites-btn'),
+  favoriteBtn: document.getElementById('favorite-btn'),
+
+  // Description / tracks UI
+  descriptionContainer: document.getElementById('description-container'),
+  toggleDescriptionBtn: document.getElementById('toggle-description-btn'),
+  toggleTracksBtn: document.getElementById('toggle-tracks-btn'),
+  tracksListContainer: document.getElementById('tracks-list-container'),
+  descriptionModal: document.getElementById('description-modal'),
+  closeDescriptionModal: document.getElementById('close-description-modal'),
+  modalDescription: document.getElementById('modal-description'),
+
+  // Misc
+  startButton: document.getElementById('start-button')
 };
+window.elements = elements;
+
+// Ensure shuffle button is wired (idempotent).
+try {
+  if (elements.shuffleFavoritesBtn && !elements.shuffleFavoritesBtn.dataset.resonateShuffleBound) {
+    elements.shuffleFavoritesBtn.dataset.resonateShuffleBound = 'true';
+    elements.shuffleFavoritesBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // Prefer the resontes alias, then fall back to favorites naming.
+      const toggleFn =
+        (typeof window.toggleShuffleResontes === 'function' && window.toggleShuffleResontes) ||
+        (typeof window.toggleShuffleFavorites === 'function' && window.toggleShuffleFavorites) ||
+        (typeof toggleShuffleFavorites === 'function' && toggleShuffleFavorites);
+
+      if (typeof toggleFn === 'function') {
+        toggleFn();
+      }
+    });
+  }
+} catch {}
+
+// Back-compat DOM wiring: many older functions still reference "favorites*" elements.
+// The UI is now rendered under "resontes-*" ids, so alias them here.
+try {
+  if (!elements.favoritesToggle) elements.favoritesToggle = elements.resontesToggle;
+  if (!elements.favoritesCount) elements.favoritesCount = elements.resontesCount;
+  if (!elements.favoritesList) elements.favoritesList = elements.resontesList;
+  if (!elements.favoritesHeader) elements.favoritesHeader = elements.resontesHeader;
+  if (!elements.favoritesCountLabel) elements.favoritesCountLabel = elements.resontesCountLabel;
+  if (!elements.favoritesListContent) elements.favoritesListContent = elements.resontesListContent;
+  if (!elements.favoritesFilter) elements.favoritesFilter = elements.resontesFilter;
+  if (!elements.favoritesClear) elements.favoritesClear = elements.resontesClear;
+  if (!elements.favoritesOfflineOnly) elements.favoritesOfflineOnly = elements.resontesOfflineOnly;
+  if (!elements.favoritesClose) elements.favoritesClose = elements.resontesClose;
+} catch {}
 
 // Cleanup: remove legacy density preference (desktop is now always compact by default).
 try { localStorage.removeItem('resonate_ui_density'); } catch {}
@@ -199,15 +343,15 @@ function initializePanelToolbarsOnce() {
 
   // Favorites toolbar
   try {
-    if (elements.favoritesClose) {
-      elements.favoritesClose.addEventListener('click', () => {
-        try { hideFavoritesList(); } catch {}
+    if (elements.resontesClose) {
+      elements.resontesClose.addEventListener('click', () => {
+        try { hideResontesList(); } catch {}
       });
     }
 
-    if (elements.favoritesFilter) {
-      const input = elements.favoritesFilter;
-      const clearBtn = elements.favoritesClear;
+    if (elements.resontesFilter) {
+      const input = elements.resontesFilter;
+      const clearBtn = elements.resontesClear;
       const updateClearBtn = () => {
         if (!clearBtn) return;
         const hasValue = Boolean((input.value || '').trim());
@@ -215,9 +359,9 @@ function initializePanelToolbarsOnce() {
         clearBtn.disabled = !hasValue;
       };
       input.addEventListener('input', (e) => {
-        state.favoritesUi = state.favoritesUi || {};
-        state.favoritesUi.filterText = (e.target.value || '').trim();
-        updateFavoritesList();
+        state.resontesUi = state.resontesUi || {};
+        state.resontesUi.filterText = (e.target.value || '').trim();
+        updateResontesList();
         updateClearBtn();
       });
       if (clearBtn) {
@@ -225,9 +369,9 @@ function initializePanelToolbarsOnce() {
           e.preventDefault();
           e.stopPropagation();
           input.value = '';
-          state.favoritesUi = state.favoritesUi || {};
-          state.favoritesUi.filterText = '';
-          updateFavoritesList();
+          state.resontesUi = state.resontesUi || {};
+          state.resontesUi.filterText = '';
+          updateResontesList();
           updateClearBtn();
           try { input.focus({ preventScroll: true }); } catch { try { input.focus(); } catch {} }
         });
@@ -266,9 +410,9 @@ function initializeDesktopShortcutsOnce() {
           hideSearchResults();
           return;
         }
-        if (elements.favoritesList && elements.favoritesList.classList.contains('active')) {
+        if (elements.resontesList && elements.resontesList.classList.contains('active')) {
           e.preventDefault();
-          hideFavoritesList();
+          hideResontesList();
           return;
         }
         return;
@@ -499,9 +643,33 @@ function setSearchPanelInsets(metricsOverride = null) {
   }
 }
 
+function setResontesPanelInsets(metricsOverride = null) {
+  try {
+    const resontesList = elements.resontesList;
+    if (!resontesList || !resontesList.classList.contains('active')) return;
+
+    const header = document.querySelector('header');
+    const footer = document.querySelector('.footer');
+    const playerSection = document.querySelector('.main-player-section');
+    if (!header || !(footer || playerSection)) return;
+
+    const metrics = metricsOverride || getViewportMetrics();
+    const anchorEl = footer || playerSection;
+    const insets = computeOverlayInsets({ inputEl: header, anchorEl, metrics, gapPx: 10 });
+    applyOverlayInsetVars({
+      cssTopVar: '--resontes-panel-top',
+      cssBottomVar: '--resontes-panel-bottom',
+      insets
+    });
+  } catch {
+    // ignore
+  }
+}
+
 // Expose for other scripts (search.js) to call when toggling UI
 window.setSearchPanelInsets = setSearchPanelInsets;
 window.setFavoritesPanelInsets = setFavoritesPanelInsets;
+window.setResontesPanelInsets = setResontesPanelInsets;
 
 try {
   if (!window._resonateOverlayInsetsSubscriptionInit) {
@@ -514,6 +682,7 @@ try {
       requestAnimationFrame(() => {
         insetsScheduled = false;
         setSearchPanelInsets(metrics);
+        setResontesPanelInsets(metrics);
 
         // Keep the keyboard-open class accurate even if browsers skip blur/focus events.
         try {
@@ -945,7 +1114,7 @@ function updateDescriptionUI(track) {
           if (window.displayAlbumTracksV2) {
             window.displayAlbumTracksV2(currentAlbumId, elements.tracksListContainer);
           } else {
-            elements.tracksListContainer.innerHTML = '<div class="no-results">No se puede mostrar el listado de pistas</div>';
+            elements.tracksListContainer.innerHTML = '<div class="no-results">Can\'t show the track list</div>';
           }
         }
       });
@@ -965,9 +1134,9 @@ function updateDescriptionUI(track) {
     elements.toggleDescriptionBtn.style.display = 'inline-flex';
     elements.toggleDescriptionBtn.textContent = 'Info';
     elements.toggleDescriptionBtn.disabled = false;
-    console.log('[updateDescriptionUI] Mostrando botón de descripción');
+    console.log('[updateDescriptionUI] Showing description button');
     elements.toggleDescriptionBtn.onclick = function() {
-      console.log('[updateDescriptionUI] Click en botón de descripción, mostrando modal');
+      console.log('[updateDescriptionUI] Description button clicked; opening modal');
       if (modal && modalDesc) {
         modalDesc.innerHTML = sanitizeHTML(bestDescription);
         modal.style.display = 'flex';
@@ -975,12 +1144,12 @@ function updateDescriptionUI(track) {
     };
     if (closeModalBtn && modal) {
       closeModalBtn.onclick = function() {
-        console.log('[updateDescriptionUI] Cerrando modal de descripción');
+        console.log('[updateDescriptionUI] Closing description modal');
         modal.style.display = 'none';
       };
     }
   } else {
-    console.log('[updateDescriptionUI] Ocultando botón de descripción, no hay descripción disponible');
+    console.log('[updateDescriptionUI] Hiding description button; no description available');
     if (elements.toggleDescriptionBtn) elements.toggleDescriptionBtn.style.display = 'none';
     if (modal) modal.style.display = 'none';
     if (modalDesc) modalDesc.innerHTML = '';
@@ -1163,6 +1332,7 @@ const state = {
   isPlayingFavorites: false,
   favoritesVisible: false,
   isInitialized: false,
+  // ...add any other required default properties here...
   onPlayCallback: null,
   appStarted: false,
   pageVisible: true,
@@ -1192,6 +1362,7 @@ const state = {
   playbackHistory: [],
   playbackQueue: [],
   favoritesPreloadEnabled: true,
+  resontesPreloadEnabled: true,
   contextReloadCount: {},
   contextRepeatCount: {},
 
@@ -1218,6 +1389,53 @@ const state = {
 // Expose state globally for other modules
 window.state = state;
 
+// ---- Resontes primary API surface (backward compatible) ----
+// Keep storage/engine internals on `favorites` while exposing `resontes` aliases.
+try {
+  Object.defineProperty(state, 'resontes', {
+    configurable: true,
+    enumerable: true,
+    get() { return state.favorites; },
+    set(v) { state.favorites = Array.isArray(v) ? v : []; }
+  });
+} catch {}
+
+try {
+  Object.defineProperty(state, 'resontesUi', {
+    configurable: true,
+    enumerable: true,
+    get() { return state.favoritesUi; },
+    set(v) { state.favoritesUi = v || { filterText: '', offlineOnly: false }; }
+  });
+} catch {}
+
+try {
+  Object.defineProperty(state, 'resontesVisible', {
+    configurable: true,
+    enumerable: true,
+    get() { return state.favoritesVisible; },
+    set(v) { state.favoritesVisible = !!v; }
+  });
+} catch {}
+
+try {
+  Object.defineProperty(state, 'isPlayingResontes', {
+    configurable: true,
+    enumerable: true,
+    get() { return state.isPlayingFavorites; },
+    set(v) { state.isPlayingFavorites = !!v; }
+  });
+} catch {}
+
+function loadResontes() { return loadFavorites(); }
+function saveResontes() { return saveFavorites(); }
+function isTrackResonte(track) { return isTrackFavorite(track); }
+function toggleResonteTrack(track) { return toggleFavorite(track); }
+function addAlbumToResontes(albumId, files) { return addAlbumToFavorites(albumId, files); }
+function removeAlbumFromResontes(albumId) { return removeAlbumFromFavorites(albumId); }
+function updateResontesList() { return updateFavoritesList(); }
+function updateResontesCount() { return updateFavoritesCount(); }
+
 // Load persisted preference for favorites preload
 function loadFavoritesPreloadPreference() {
   try {
@@ -1237,35 +1455,54 @@ function loadFavoritesPreloadPreference() {
   }
 }
 
-function setFavoritesPreloadEnabled(enabled) {
-  state.favoritesPreloadEnabled = !!enabled;
+// Load persisted preference for resontes preload
+function loadResontesPreloadPreference() {
   try {
-    localStorage.setItem('resonate_preload_favorites_enabled', String(enabled));
+    const saved = localStorage.getItem('resonate_preload_resontes_enabled');
+    if (saved === null) {
+      state.resontesPreloadEnabled = true;
+    } else {
+      state.resontesPreloadEnabled = saved === 'true';
+    }
   } catch (e) {
-    window.logger?.warn(`Could not save favorites preload preference: ${e.message}`, 'UI');
+    state.resontesPreloadEnabled = true;
+    window.logger?.warn(`Could not load resontes preload preference: ${e.message}`, 'UI');
   }
 
-  if (elements.preloadFavoritesToggle) {
-    elements.preloadFavoritesToggle.checked = state.favoritesPreloadEnabled;
+  if (elements.preloadResontesToggle) {
+    elements.preloadResontesToggle.checked = state.resontesPreloadEnabled;
+  }
+}
+
+function setResontesPreloadEnabled(enabled) {
+  state.resontesPreloadEnabled = !!enabled;
+  try {
+    localStorage.setItem('resonate_preload_resontes_enabled', String(enabled));
+  } catch (e) {
+    window.logger?.warn(`Could not save resontes preload preference: ${e.message}`, 'UI');
   }
 
-  const statusMsg = enabled ? 'Favorites preload enabled' : 'Favorites preload disabled';
+  if (elements.preloadResontesToggle) {
+    elements.preloadResontesToggle.checked = state.resontesPreloadEnabled;
+  }
+
+  const statusMsg = enabled ? 'Resonates preload enabled' : 'Resonates preload disabled';
   showStatus(statusMsg, 'info', 2000);
 }
 
-function initializePreloadFavoritesToggle() {
-  loadFavoritesPreloadPreference();
+function initializePreloadResontesToggle() {
+  loadResontesPreloadPreference();
 
-  if (!elements.preloadFavoritesToggle) return;
+  if (!elements.preloadResontesToggle) return;
 
-  elements.preloadFavoritesToggle.checked = state.favoritesPreloadEnabled;
-  elements.preloadFavoritesToggle.addEventListener('change', (e) => {
-    setFavoritesPreloadEnabled(e.target.checked);
+  elements.preloadResontesToggle.checked = state.resontesPreloadEnabled;
+  elements.preloadResontesToggle.addEventListener('change', (e) => {
+    setResontesPreloadEnabled(e.target.checked);
   });
 }
 
 // Initialize preload preference on load
-loadFavoritesPreloadPreference();
+loadResontesPreloadPreference();
 
 // Favorites management
 function isSupportedAudioUrl(url) {
@@ -1356,7 +1593,7 @@ function loadFavorites() {
     state.favorites = uniqueFavorites;
     window.logger.info(`Final favorites loaded: ${state.favorites.length} items`, 'UI');
 
-    // Notify other modules (e.g., initialization/restore) that favorites are ready.
+    // Notify other modules (e.g., initialization/restore) that resontes/favorites are ready.
     try {
       window.dispatchEvent(new CustomEvent('resonate:favorites-loaded', {
         detail: { count: state.favorites.length }
@@ -1364,27 +1601,31 @@ function loadFavorites() {
     } catch {
       try { window.dispatchEvent(new Event('resonate:favorites-loaded')); } catch {}
     }
+    try {
+      window.dispatchEvent(new CustomEvent('resonate:resontes-loaded', {
+        detail: { count: state.favorites.length }
+      }));
+    } catch {
+      try { window.dispatchEvent(new Event('resonate:resontes-loaded')); } catch {}
+    }
 
     // Precargar favoritos en cola FIFO
     if (state.favoritesPreloadEnabled && typeof audioCache !== 'undefined' && audioCache && typeof audioCache.preloadFavorites === 'function') {
       audioCache.preloadFavorites(state.favorites).catch(err => {
-        showStatus('Error preloading favorites for offline: ' + (err && err.message ? err.message : err), 'error', 6000, 'error');
-        window.logger.error('Error preloading favorites for offline: ' + (err && err.message ? err.message : err), 'UI');
+        showStatus('Error preloading resonates for offline: ' + (err && err.message ? err.message : err), 'error', 6000, 'error');
+        window.logger.error('Error preloading resonates for offline: ' + (err && err.message ? err.message : err), 'UI');
       });
       window.logger.debug('Favorites preload initiated', 'CACHE');
     }
     // Actualizar estado del botón de reproducción
     updatePlayButtonState();
     // Actualizar la lista visual de favoritos
-    updateFavoritesList();
     updateFavoritesCount();
   } catch (e) {
     window.logger.error(`Error loading favorites: ${e.message}`, 'UI');
-    state.favorites = [];
     updatePlayButtonState();
   }
 }
-
 function saveFavorites() {
   try {
     // Eliminar duplicados antes de guardar
@@ -1403,8 +1644,8 @@ function saveFavorites() {
     // Request preload/update of favorites in cache if available
     if (state.favoritesPreloadEnabled && typeof audioCache !== 'undefined' && audioCache && typeof audioCache.preloadFavorites === 'function') {
       audioCache.preloadFavorites(state.favorites).catch(err => {
-        showStatus('Error preloading favorites for offline: ' + (err && err.message ? err.message : err), 'error', 6000, 'error');
-        window.logger.error('Error preloading favorites for offline: ' + (err && err.message ? err.message : err), 'UI');
+        showStatus('Error preloading resonates for offline: ' + (err && err.message ? err.message : err), 'error', 6000, 'error');
+        window.logger.error('Error preloading resonates for offline: ' + (err && err.message ? err.message : err), 'UI');
       });
       window.logger.debug('Favorites preload requested', 'CACHE');
     }
@@ -1558,11 +1799,11 @@ function toggleFavorite(track) {
     if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.remove === 'function') {
       audioCache.remove(track.url);
     }
-    showStatus('Track removed from favorites', 'info');
+    showStatus('Track removed from your resonates', 'info');
   } else {
     // Evitar duplicados
     if (state.favorites.some(fav => fav.url === track.url)) {
-      showStatus('Track is already in your favorites', 'info');
+      showStatus('Track is already in your resonates', 'info');
       return;
     }
     const favoriteTrack = {
@@ -1582,12 +1823,12 @@ function toggleFavorite(track) {
     // Precargar el favorito en caché
     if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.prefetchAudio === 'function') {
       audioCache.prefetchAudio(track.url, true).catch(err => {
-        showStatus('Error preloading favorite for offline: ' + (err && err.message ? err.message : err), 'error', 6000, 'error');
-        window.logger.error('Error preloading favorite for offline: ' + (err && err.message ? err.message : err), 'UI');
+        showStatus('Error preloading resonate for offline: ' + (err && err.message ? err.message : err), 'error', 6000, 'error');
+        window.logger.error('Error preloading resonate for offline: ' + (err && err.message ? err.message : err), 'UI');
       });
     }
 
-    showStatus('Track added to your favorites', 'info');
+    showStatus('Track added to your resonates', 'info');
   }
 
   saveFavorites();
@@ -1634,7 +1875,7 @@ window.addEventListener('online', () => {
       }
     }
     if (typeof window.showStatus === 'function') {
-      window.showStatus('Conexión recuperada: sincronizando caché offline', 'info', 4000, 'info');
+      window.showStatus('Connection restored: syncing offline cache', 'info', 4000, 'info');
     }
   } catch (e) {
     window.logger.error('Error during favorites reconciliation: ' + (e && e.message ? e.message : e), 'UI');
@@ -1716,9 +1957,10 @@ function addAlbumToFavorites(albumId, files) {
     updateFavoritesCount();
     updatePlayButtonState();
     updateTrackFavoriteStatesInContainer(albumId);
-    showStatus(`Album and all tracks saved`, 'info');
+    try { if (typeof window.refreshAllResonteButtons === 'function') window.refreshAllResonteButtons(); } catch {}
+    showStatus('Album saved to your resonates', 'info');
   } else {
-    showStatus('All tracks already favorited', 'info');
+    showStatus('All tracks are already in your resonates', 'info');
   }
 }
 
@@ -1745,6 +1987,7 @@ function removeAlbumFromFavorites(albumId) {
   updateFavoritesCount();
   updatePlayButtonState();
   updateTrackFavoriteStatesInContainer(albumId);
+  try { if (typeof window.refreshAllResonteButtons === 'function') window.refreshAllResonteButtons(); } catch {}
 
   if (removedCount > 0) {
     showStatus(`Album removed completely`, 'info');
@@ -1770,13 +2013,13 @@ function getAlbumButtonState(albumId, trackCount) {
 
   if (favoritedCount === trackCount) {
     // Todas las pistas están en favoritos
-    return { action: 'remove', label: 'Remove from favorites', isActive: true };
+    return { action: 'remove', label: 'Remove from resonates', isActive: true };
   } else if (favoritedCount === 0) {
     // Ninguna pista está en favoritos
-    return { action: 'add', label: 'Add to favorites', isActive: false };
+    return { action: 'add', label: 'Add to resonates', isActive: false };
   } else {
     // Estado mixto: algunas pistas favoritas, otras no
-    return { action: 'complete', label: 'Completar álbum', isActive: false };
+    return { action: 'complete', label: 'Complete album', isActive: false };
   }
 }
 
@@ -1798,17 +2041,16 @@ function updateTrackFavoriteStatesInContainer(albumId) {
       trackItems.forEach(trackItem => {
         const favoriteBtn = trackItem.querySelector('.track-favorite');
         if (favoriteBtn) {
-          // Extraer información de la pista del botón (asumiendo que tenemos data attributes o podemos inferir)
-          // Como alternativa, podemos buscar la pista por URL o recrear la lógica
-
           // Buscar el botón play que tiene data-url
           const playBtn = trackItem.querySelector('.track-play');
           if (playBtn && playBtn.dataset.url) {
             const trackUrl = playBtn.dataset.url;
             const isFavorite = isTrackFavorite({ url: trackUrl });
-
             favoriteBtn.classList.toggle('active', isFavorite);
-            favoriteBtn.textContent = isFavorite ? '❤️' : '🩶';
+            favoriteBtn.innerHTML = window.resonateLogoSVG || '';
+            const label = isFavorite ? 'Remove from resonates' : 'Add to resonates';
+            favoriteBtn.title = label;
+            favoriteBtn.setAttribute('aria-label', label);
           }
         }
       });
@@ -1828,8 +2070,10 @@ function updateSearchResultFavoriteState(albumId, isFavorite) {
       const favoriteBtn = card.querySelector('.card-btn.favorite');
       if (!favoriteBtn) return;
       favoriteBtn.classList.toggle('active', !!isFavorite);
-      favoriteBtn.textContent = isFavorite ? '❤️' : '🩶';
-      favoriteBtn.title = isFavorite ? 'Remove from favorites' : 'Add to favorites';
+      favoriteBtn.innerHTML = window.resonateLogoSVG || '';
+      const label = isFavorite ? 'Remove from resonates' : 'Add to resonates';
+      favoriteBtn.title = label;
+      favoriteBtn.setAttribute('aria-label', label);
     });
   } catch {}
 
@@ -1841,8 +2085,10 @@ function updateSearchResultFavoriteState(albumId, isFavorite) {
       const favoriteBtn = resultEl.querySelector('.result-favorite');
       if (favoriteBtn) {
         favoriteBtn.classList.toggle('active', !!isFavorite);
-        favoriteBtn.innerHTML = isFavorite ? '❤️' : '🩶';
-        favoriteBtn.title = isFavorite ? 'Remove from favorites' : 'Add to favorites';
+        favoriteBtn.innerHTML = window.resonateLogoSVG || '';
+        const label = isFavorite ? 'Remove from resonates' : 'Add to resonates';
+        favoriteBtn.title = label;
+        favoriteBtn.setAttribute('aria-label', label);
       }
     }
   });
@@ -1861,14 +2107,15 @@ function updateAlbumButtonForTrack(albumId) {
       const metaElement = resultEl.querySelector('.result-meta');
       if (metaElement) {
         const metaText = metaElement.textContent;
-        const trackMatch = metaText.match(/(\d+)\s+pistas?/);
+        const trackMatch = metaText.match(/(\d+)\s+(tracks?|pistas?)/i);
         if (trackMatch) {
           const trackCount = parseInt(trackMatch[1]);
           const buttonState = getAlbumButtonState(albumId, trackCount);
 
           button.classList.toggle('active', buttonState.isActive);
-          button.textContent = buttonState.isActive ? '❤️' : '🩶';
+          button.innerHTML = window.resonateLogoSVG || '';
           button.title = buttonState.label;
+          button.setAttribute('aria-label', buttonState.label);
         }
       }
     }
@@ -1876,14 +2123,18 @@ function updateAlbumButtonForTrack(albumId) {
 }
 
 function updateFavoriteButton() {
-  if (state.currentTrack && state.currentTrack.url) {
-    const isFavorite = isTrackFavorite(state.currentTrack);
-    elements.favoriteBtn.classList.toggle('active', isFavorite);
-    elements.favoriteBtn.textContent = isFavorite ? '❤️' : '🩶';
-  } else {
-    elements.favoriteBtn.classList.remove('active');
-    elements.favoriteBtn.textContent = '🩶';
-  }
+  const btn = elements && elements.favoriteBtn ? elements.favoriteBtn : null;
+  if (!btn) return;
+
+  const hasTrack = !!(state.currentTrack && state.currentTrack.url);
+  const isResonte = hasTrack ? isTrackFavorite(state.currentTrack) : false;
+
+  btn.classList.toggle('active', isResonte);
+  btn.innerHTML = window.resonateLogoSVG || '';
+
+  const label = isResonte ? 'Remove from resonates' : 'Add to resonates';
+  btn.title = label;
+  btn.setAttribute('aria-label', label);
 }
 
 function showStatus(message, type = 'info', duration = null, priority = 'normal', showSpinner = false) {
@@ -2213,7 +2464,7 @@ async function loadAlbumInfoBackground(identifier, resultEl) {
   if (isFileProtocol) {
     const metaElement = resultEl.querySelector('.result-meta');
     if (metaElement) {
-      metaElement.innerHTML = '<span style="color: var(--muted); font-size: 10px;">Info no disponible (file://)</span>';
+      metaElement.innerHTML = '<span style="color: var(--muted); font-size: 10px;">Info unavailable (file://)</span>';
     }
     return;
   }
@@ -2252,8 +2503,9 @@ async function loadAlbumInfoBackground(identifier, resultEl) {
     if (favoriteBtn) {
       const buttonState = isAlbum ? getAlbumButtonState(identifier, trackCount) : getAlbumButtonState(identifier, 1);
       favoriteBtn.classList.toggle('active', buttonState.isActive);
-      favoriteBtn.innerHTML = buttonState.isActive ? '❤️' : '🩶';
+      favoriteBtn.innerHTML = window.resonateLogoSVG || '';
       favoriteBtn.title = buttonState.label;
+      favoriteBtn.setAttribute('aria-label', buttonState.label);
     }
 
     // Mostrar/ocultar el botón de expandir basado en si es un álbum
@@ -2301,8 +2553,10 @@ function createResultButtons(result, hasFavoriteTrack) {
   // Favorite button
   const favoriteBtn = document.createElement('button');
   favoriteBtn.className = `result-favorite ${hasFavoriteTrack ? 'active' : ''}`;
-  favoriteBtn.title = hasFavoriteTrack ? 'Remove from favorites' : 'Add to favorites';
-  favoriteBtn.textContent = hasFavoriteTrack ? '❤️' : '🩶';
+  favoriteBtn.innerHTML = window.resonateLogoSVG || '';
+  const favLabel = hasFavoriteTrack ? 'Remove from resonates' : 'Add to resonates';
+  favoriteBtn.title = favLabel;
+  favoriteBtn.setAttribute('aria-label', favLabel);
 
   // Expand button
   const expandBtn = document.createElement('button');
@@ -2354,8 +2608,10 @@ function createFavoriteActions(result, hasFavoriteTrack, options = {}) {
   // Favorite button
   const favoriteBtn = document.createElement('button');
   favoriteBtn.className = `button result-favorite ${hasFavoriteTrack ? 'active' : ''}`;
-  favoriteBtn.title = hasFavoriteTrack ? 'Remove from favorites' : 'Add to favorites';
-  favoriteBtn.textContent = hasFavoriteTrack ? '❤️' : '🩶';
+  favoriteBtn.innerHTML = window.resonateLogoSVG || '';
+  const favLabel = hasFavoriteTrack ? 'Remove from resonates' : 'Add to resonates';
+  favoriteBtn.title = favLabel;
+  favoriteBtn.setAttribute('aria-label', favLabel);
 
   // Share button
   const shareBtn = document.createElement('button');
@@ -2431,7 +2687,7 @@ function createSearchResultElement(result, globalIndex) {
   const { actionsDiv, favoriteBtn, shareBtn, expandBtn } = createFavoriteActions(result, hasFavoriteTrack, { showPlay: false });
 
   // Add ARIA labels to buttons
-  favoriteBtn.setAttribute('aria-label', hasFavoriteTrack ? 'Remove from favorites' : 'Add to favorites');
+  favoriteBtn.setAttribute('aria-label', hasFavoriteTrack ? 'Remove from resonates' : 'Add to resonates');
   shareBtn.setAttribute('aria-label', `Share ${result.title || 'Untitled'}`);
   expandBtn.setAttribute('aria-label', 'Show album tracks');
 
@@ -2469,6 +2725,14 @@ function createSearchResultElement(result, globalIndex) {
   favoriteBtn.addEventListener('click', async (e) => {
     e.stopPropagation();
 
+    const applyResonteVisual = (active) => {
+      favoriteBtn.classList.toggle('active', !!active);
+      favoriteBtn.innerHTML = window.resonateLogoSVG || '';
+      const label = active ? 'Remove from resonates' : 'Add to resonates';
+      favoriteBtn.title = label;
+      favoriteBtn.setAttribute('aria-label', label);
+    };
+
     try {
       const files = await fetchOptimizedPlayableFiles(result.identifier);
       if (files.length > 0) {
@@ -2477,33 +2741,25 @@ function createSearchResultElement(result, globalIndex) {
           const buttonState = getAlbumButtonState(result.identifier, files.length);
           if (buttonState.action === 'remove') {
             removeAlbumFromFavorites(result.identifier);
-            favoriteBtn.classList.remove('active');
-            favoriteBtn.textContent = '🩶';
-            favoriteBtn.title = 'Add to favorites';
+            applyResonteVisual(false);
           } else if (buttonState.action === 'complete') {
             addAlbumToFavorites(result.identifier, files);
-            favoriteBtn.classList.add('active');
-            favoriteBtn.textContent = '❤️';
-            favoriteBtn.title = 'Remove from favorites';
+            applyResonteVisual(true);
           } else if (buttonState.action === 'add') {
             addAlbumToFavorites(result.identifier, files);
-            favoriteBtn.classList.add('active');
-            favoriteBtn.textContent = '❤️';
-            favoriteBtn.title = 'Remove from favorites';
+            applyResonteVisual(true);
           }
         } else {
           // Single track handling
           const track = files[0];
           toggleFavorite(track);
           const isNowFavorite = isTrackFavorite(track);
-          favoriteBtn.classList.toggle('active', isNowFavorite);
-          favoriteBtn.textContent = isNowFavorite ? '❤️' : '🩶';
-          favoriteBtn.title = isNowFavorite ? 'Remove from favorites' : 'Add to favorites';
+          applyResonteVisual(isNowFavorite);
         }
       }
     } catch (error) {
       console.error('Error managing favorite:', error);
-      showStatus('Couldn\'t manage favorite', 'error');
+      showStatus('Couldn\'t update resonates', 'error');
     }
   });
 
@@ -2576,13 +2832,25 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
   img.loading = 'lazy';
   img.src = `https://archive.org/services/img/${identifier}`;
   img.onerror = () => {
+    const theme = (() => {
+      try {
+        const styles = getComputedStyle(document.documentElement);
+        const btn = styles.getPropertyValue('--btn').trim() || '#1f2937';
+        const card = styles.getPropertyValue('--card').trim() || '#111827';
+        const primary = styles.getPropertyValue('--primary').trim() || '#3da9ff';
+        return { btn, card, primary };
+      } catch {
+        return { btn: '#1f2937', card: '#111827', primary: '#3da9ff' };
+      }
+    })();
+
     // Compact inline SVG placeholder to avoid external dependencies
     const svg = encodeURIComponent(
       `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'>` +
       `<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>` +
-      `<stop offset='0%' stop-color='#1f2937'/><stop offset='100%' stop-color='#111827'/></linearGradient></defs>` +
+      `<stop offset='0%' stop-color='${theme.btn}'/><stop offset='100%' stop-color='${theme.card}'/></linearGradient></defs>` +
       `<rect width='100%' height='100%' fill='url(#g)'/>` +
-      `<g fill='rgba(61, 169, 255, 0.67)' font-family='sans-serif' font-weight='700'>` +
+      `<g fill='${theme.primary}' fill-opacity='0.78' font-family='sans-serif' font-weight='700'>` +
       `<text x='50%' y='48%' dominant-baseline='middle' text-anchor='middle' font-size='22'>No Cover</text>` +
       `<text x='50%' y='66%' dominant-baseline='middle' text-anchor='middle' font-size='12'>${(creator || '').toString().slice(0,24)}</text>` +
       `</g></svg>`
@@ -2638,7 +2906,8 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
   actions.className = 'card-actions';
   const favBtn = document.createElement('button');
   favBtn.className = 'card-btn favorite';
-  favBtn.textContent = isAlbum ? '🩶' : '🩶';
+  favBtn.innerHTML = window.resonateLogoSVG || '';
+  favBtn.setAttribute('aria-label', 'Add to resonates');
   const shareBtn = document.createElement('button');
   shareBtn.className = 'card-btn share';
   shareBtn.title = 'Share';
@@ -2654,14 +2923,24 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
 
   card.appendChild(media);
   card.appendChild(body);
-  card.appendChild(actions);
+
+  // Compact overlay action bar over the cover (search + resonates cards)
+  if (context === 'search' || context === 'favorites') {
+    actions.classList.add('card-actions-overlay');
+    card.classList.add('actions-overlay');
+    media.appendChild(actions);
+  } else {
+    card.appendChild(actions);
+  }
 
   // Initialize favorite state from current favorites (albums: any track favorite)
   try {
     const isFav = isAlbumInFavorites(identifier);
     favBtn.classList.toggle('active', isFav);
-    favBtn.textContent = isFav ? '❤️' : '🩶';
-    favBtn.title = isFav ? 'Remove from favorites' : 'Add to favorites';
+    favBtn.innerHTML = window.resonateLogoSVG || '';
+    const label = isFav ? 'Remove from resonates' : 'Add to resonates';
+    favBtn.title = label;
+    favBtn.setAttribute('aria-label', label);
   } catch {}
 
   // Background album info population (track count / album flag)
@@ -2698,18 +2977,24 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
     favBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
       try {
+        const applyResonteVisual = (active) => {
+          favBtn.classList.toggle('active', !!active);
+          favBtn.innerHTML = window.resonateLogoSVG || '';
+          const label = active ? 'Remove from resonates' : 'Add to resonates';
+          favBtn.title = label;
+          favBtn.setAttribute('aria-label', label);
+        };
+
         const files = await fetchOptimizedPlayableFiles(identifier);
         if (files.length > 1) {
           const buttonState = getAlbumButtonState(identifier, files.length);
           if (buttonState.action === 'remove') {
             removeAlbumFromFavorites(identifier);
-            favBtn.classList.remove('active');
-            favBtn.textContent = '🩶';
+            applyResonteVisual(false);
             try { updateSearchResultFavoriteState(identifier, false); } catch {}
           } else {
             addAlbumToFavorites(identifier, files);
-            favBtn.classList.add('active');
-            favBtn.textContent = '❤️';
+            applyResonteVisual(true);
             try { updateSearchResultFavoriteState(identifier, true); } catch {}
           }
         } else if (files.length === 1) {
@@ -2717,12 +3002,11 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
           const before = isTrackFavorite(track);
           toggleFavorite(track);
           const after = isTrackFavorite(track);
-          favBtn.classList.toggle('active', after);
-          favBtn.textContent = after ? '❤️' : '🩶';
+          applyResonteVisual(after);
           try { updateSearchResultFavoriteState(identifier, after); } catch {}
         }
       } catch (err) {
-        showStatus('Couldn\'t manage favorite', 'error');
+        showStatus('Couldn\'t update resonates', 'error');
       }
     });
     // Expand
@@ -2757,10 +3041,16 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
       e.stopPropagation();
       try {
         if (isAlbumFavorite) {
-          if (typeof window.playAlbumFromFavorites === 'function') {
+          if (typeof window.playAlbumFromResontes === 'function') {
+            window.playAlbumFromResontes(identifier, { force: true, origin: 'favorites' });
+          } else if (typeof window.playAlbumFromFavorites === 'function') {
             window.playAlbumFromFavorites(identifier);
+          } else if (typeof playAlbumFromResontes === 'function') {
+            playAlbumFromResontes(identifier, { force: true, origin: 'favorites' });
           } else if (typeof playAlbumFromFavorites === 'function') {
             playAlbumFromFavorites(identifier);
+          } else {
+            try { showStatus('Album playback is not available yet', 'error', 2500); } catch {}
           }
         } else {
           const favoriteTrack = Array.isArray(item.tracks) && item.tracks.length ? item.tracks[0] : item;
@@ -2768,6 +3058,8 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
             window.playFromFavoritesQueue(favoriteTrack);
           } else if (typeof playFromFavoritesQueue === 'function') {
             playFromFavoritesQueue(favoriteTrack);
+          } else {
+            try { showStatus('Playback is not available yet', 'error', 2500); } catch {}
           }
         }
       } catch {}
@@ -2797,7 +3089,7 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
       removeAlbumFromFavorites(identifier);
       updateFavoritesList();
       updateFavoriteButton();
-      showStatus('Favorite was removed', 'info');
+      showStatus('Removed from resonates', 'info');
     });
 
     expandBtn.style.display = isAlbumFavorite ? 'inline-block' : 'none';
@@ -2847,6 +3139,7 @@ function toggleAlbumTracks(albumId, tracksContainer, expandButton) {
         if (typeof window.displayAlbumTracksV2 === 'function') {
           window.displayAlbumTracksV2(albumId, tracksContainer);
           tracksContainer.dataset.tlv2Mounted = 'true';
+          try { if (typeof window.refreshAllResonteButtons === 'function') window.refreshAllResonteButtons(); } catch {}
         }
       }
     } catch (e) {
@@ -2903,7 +3196,7 @@ function displayAlbumTracks(albumId, tracksContainer) {
         trackItem.innerHTML = `
           <div class="track-actions">
             <span class="track-number">${trackNumber}</span>
-            <button class="track-favorite ${isFavorite ? 'active' : ''}">${isFavorite ? '❤️' : '🩶'}</button>
+            <button class="track-favorite ${isFavorite ? 'active' : ''}" title="${isFavorite ? 'Remove from resonates' : 'Add to resonates'}" aria-label="${isFavorite ? 'Remove from resonates' : 'Add to resonates'}">${window.resonateLogoSVG || ''}</button>
             <button class="track-share" title="Share">🔗</button>
           </div>
           <div class="track-item-info">
@@ -2918,7 +3211,10 @@ function displayAlbumTracks(albumId, tracksContainer) {
           toggleFavorite(track);
           const isNowFavorite = isTrackFavorite(track);
           favoriteBtn.classList.toggle('active', isNowFavorite);
-          favoriteBtn.textContent = isNowFavorite ? '❤️' : '🩶';
+          favoriteBtn.innerHTML = window.resonateLogoSVG || '';
+          const label = isNowFavorite ? 'Remove from resonates' : 'Add to resonates';
+          favoriteBtn.title = label;
+          favoriteBtn.setAttribute('aria-label', label);
         });
 
         // Tap-to-play: click anywhere in the row except buttons
@@ -2944,7 +3240,7 @@ function displayAlbumTracks(albumId, tracksContainer) {
       tracksContainer.appendChild(tracksList);
     })
     .catch(error => {
-      console.error('Error cargando pistas del álbum:', error);
+      console.error('Error loading album tracks:', error);
       tracksContainer.innerHTML = '<div class="no-results">Error loading tracks</div>';
     });
 }
@@ -2996,10 +3292,10 @@ function updatePlayButtonState() {
     if (elements.favoriteBtn) elements.favoriteBtn.disabled = false;
     if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.disabled = false;
 
-    if (elements.playBtn) elements.playBtn.title = 'Play favorites';
+    if (elements.playBtn) elements.playBtn.title = 'Play resonates';
     if (elements.prevBtn) elements.prevBtn.title = 'Previous track';
     if (elements.nextBtn) elements.nextBtn.title = 'Next track';
-    if (elements.favoriteBtn) elements.favoriteBtn.title = 'Remove favorite';
+    if (elements.favoriteBtn) elements.favoriteBtn.title = 'Remove from resonates';
     if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.title = 'Shuffle';
 
     // Enable favorites controls
@@ -3017,7 +3313,7 @@ function updatePlayButtonState() {
     if (elements.playBtn) elements.playBtn.title = 'Resume last track';
 
     if (elements.favoriteBtn) elements.favoriteBtn.disabled = false;
-    if (elements.favoriteBtn) elements.favoriteBtn.title = 'Add to favorites';
+    if (elements.favoriteBtn) elements.favoriteBtn.title = 'Add to resonates';
 
     // Prev/Next depend on having a restored context; keep them conservative.
     if (elements.prevBtn) elements.prevBtn.disabled = true;
@@ -3026,7 +3322,7 @@ function updatePlayButtonState() {
     if (elements.nextBtn) elements.nextBtn.title = 'Resume to enable navigation';
 
     if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.disabled = true;
-    if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.title = 'Shuffle favorites';
+    if (elements.shuffleFavoritesBtn) elements.shuffleFavoritesBtn.title = 'Shuffle resonates';
 
     if (elements.playAllFavoritesBtn) elements.playAllFavoritesBtn.disabled = true;
     if (elements.playAllFavoritesBtn) elements.playAllFavoritesBtn.classList.add('disabled');
@@ -3043,7 +3339,7 @@ function enableControlsForSearchResults() {
     if (elements.playBtn) elements.playBtn.title = 'Play search result';
 
     if (elements.favoriteBtn) elements.favoriteBtn.disabled = false;
-    if (elements.favoriteBtn) elements.favoriteBtn.title = 'Add to favorites';
+    if (elements.favoriteBtn) elements.favoriteBtn.title = 'Add to resonates';
 
     // The prev/next buttons work within search context
     if (elements.prevBtn) elements.prevBtn.disabled = false;
@@ -3154,9 +3450,9 @@ function __resonateAttachConnectivityHandlersOnce() {
     if (typeof window.audioCache === 'object' && window.audioCache) {
       window.audioCache.getUsageStats().then(stats => {
         if (stats.itemCount > 0) {
-          showStatus('Solo tienes acceso a pistas guardadas offline. Conéctate para actualizar tu biblioteca.', 'offline', 6000, 'offline');
+          showStatus('You only have access to offline-saved tracks. Connect to update your library.', 'offline', 6000, 'offline');
         } else {
-          showStatus('No hay pistas disponibles offline. Conéctate para descargar tus favoritas.', 'offline', 6000, 'offline');
+          showStatus('No offline tracks available. Connect to download your resonates.', 'offline', 6000, 'offline');
         }
       });
     }
@@ -3357,9 +3653,9 @@ function showOfflineHints() {
   const favoritesCount = state.favorites ? state.favorites.length : 0;
 
   if (favoritesCount > 0) {
-    showStatus('You have offline favorites', 'info', 5000);
+    showStatus('You have resonates available offline', 'info', 5000);
   } else {
-    showStatus('Save favorites to listen offline', 'warning', 6000);
+    showStatus('Save your resonates to listen offline', 'warning', 6000);
   }
 
   // Check cache status
@@ -3635,9 +3931,11 @@ function loadSavedPlaybackState() {
       }
       const totalTracks = Number.isFinite(state.currentTrack.totalTracks) ? state.currentTrack.totalTracks : 1;
       const trackIndex = Number.isFinite(state.currentTrack.trackIndex) ? state.currentTrack.trackIndex : 0;
-      elements.creator.textContent = totalTracks > 1
-        ? `${state.currentTrack.creator || 'Unknown'} (${trackIndex + 1}/${totalTracks})`
-        : `${state.currentTrack.creator || 'Unknown'}`;
+      if (elements.creator) {
+        elements.creator.textContent = totalTracks > 1
+          ? `${state.currentTrack.creator || 'Unknown'} (${trackIndex + 1}/${totalTracks})`
+          : `${state.currentTrack.creator || 'Unknown'}`;
+      }
       setArtwork(state.currentTrack, state.currentTrack.id);
       updateFavoriteButton();
 
@@ -4368,8 +4666,8 @@ function ensureServiceWorkerUpdateCheckHandlers() {
 }
 
 function updateFavoritesList() {
-  const favoritesRoot = elements.favoritesList;
-  const favoritesList = elements.favoritesListContent || elements.favoritesList;
+  const favoritesRoot = elements.favoritesList || elements.resontesList;
+  const favoritesList = elements.favoritesListContent || elements.resontesListContent || elements.favoritesList || elements.resontesList;
   if (!favoritesList) return;
 
   // Ensure toolbar bindings exist
@@ -4377,31 +4675,35 @@ function updateFavoritesList() {
 
   // Show header while panel is open
   try {
-    if (elements.favoritesHeader) {
-      elements.favoritesHeader.hidden = !(favoritesRoot && favoritesRoot.classList && favoritesRoot.classList.contains('active'));
-      if (elements.favoritesCountLabel) {
-        elements.favoritesCountLabel.textContent = `Favorites (${state.favorites.length})`;
+    const headerEl = elements.favoritesHeader || elements.resontesHeader;
+    if (headerEl) {
+      headerEl.hidden = !(favoritesRoot && favoritesRoot.classList && favoritesRoot.classList.contains('active'));
+      const labelEl = elements.favoritesCountLabel || elements.resontesCountLabel;
+      if (labelEl) {
+        const count = (state && Array.isArray(state.favorites)) ? state.favorites.length : 0;
+        labelEl.textContent = `Resonates (${count})`;
       }
     }
 
-    // Friendly placeholder that includes the favorites count (English)
-    if (elements.favoritesFilter) {
+    // Placeholder that includes the resontes count
+    const filterEl = elements.favoritesFilter || elements.resontesFilter;
+    if (filterEl) {
       const count = (state && Array.isArray(state.favorites)) ? state.favorites.length : 0;
-      const noun = count === 1 ? 'favorite' : 'favorites';
       const msg = count > 0
-        ? `Search within your ${count} ${noun}`
-        : 'Search your favorites';
-      elements.favoritesFilter.placeholder = msg;
-      elements.favoritesFilter.title = msg;
+        ? `Search your ${count} resonates`
+        : 'Search your resonates';
+      filterEl.placeholder = msg;
+      filterEl.title = msg;
     }
 
-    if (elements.favoritesOfflineOnly) {
-      elements.favoritesOfflineOnly.checked = !!(state.favoritesUi && state.favoritesUi.offlineOnly);
+    const offlineOnlyEl = elements.favoritesOfflineOnly || elements.resontesOfflineOnly;
+    if (offlineOnlyEl) {
+      offlineOnlyEl.checked = !!(state.favoritesUi && state.favoritesUi.offlineOnly);
       try { setBodyUiState('favorites-show-offline-chips', !!(state.favoritesUi && state.favoritesUi.offlineOnly)); } catch {}
     }
-    if (elements.favoritesFilter) {
+    if (filterEl) {
       const ft = (state.favoritesUi && typeof state.favoritesUi.filterText === 'string') ? state.favoritesUi.filterText : '';
-      if (elements.favoritesFilter.value !== ft) elements.favoritesFilter.value = ft;
+      if (filterEl.value !== ft) filterEl.value = ft;
     }
   } catch {}
 
@@ -4417,9 +4719,9 @@ function updateFavoritesList() {
 
     favoritesList.innerHTML = `
       <div class="no-results">
-        <div class="no-results-icon">♡</div>
-        <div class="no-results-title">No Favorites Yet</div>
-        <div class="no-results-hint">Search for music and click the heart to save your favorites</div>
+        <div class="no-results-icon">${window.resonateLogoSVG || '◌'}</div>
+        <div class="no-results-title">You don't have any resonates yet</div>
+        <div class="no-results-hint">Search music and add tracks to your resonates</div>
       </div>
     `;
     return;
@@ -4511,7 +4813,7 @@ class FavoritesToggle {
     event.preventDefault();
 
     this.toggle();
-    window.logger?.info(`Favorites toggle ${this.isVisible ? 'opened' : 'closed'}`, 'UI');
+    window.logger?.info(`Resontes toggle ${this.isVisible ? 'opened' : 'closed'}`, 'UI');
   }
 
   /**
@@ -4535,6 +4837,7 @@ class FavoritesToggle {
     // Actualizar lista cuando se muestra
     if (this.isVisible) {
       updateFavoritesList();
+      try { if (typeof window.setResontesPanelInsets === 'function') window.setResontesPanelInsets(); } catch {}
     }
   }
 
@@ -4547,6 +4850,7 @@ class FavoritesToggle {
     this.updateVisibility();
     this.updateAriaAttributes();
     updateFavoritesList();
+    try { if (typeof window.setResontesPanelInsets === 'function') window.setResontesPanelInsets(); } catch {}
   }
 
   /**
@@ -4566,7 +4870,21 @@ class FavoritesToggle {
       this.listElement?.classList.add('active');
       this.element?.classList.add('active');
       try { state.favoritesVisible = true; } catch {}
-      try { setBodyUiState('favorites-embedded-open', true); } catch {}
+      try { setBodyUiState('resontes-open', true); } catch {}
+
+      // If search results are open, close them (but don't hide resontes).
+      try {
+        if (elements.searchResults && elements.searchResults.classList && elements.searchResults.classList.contains('active')) {
+          elements.searchResults.classList.remove('active');
+          try { if (elements.searchResultsHeader) elements.searchResultsHeader.hidden = true; } catch {}
+          try { state.searchActive = false; } catch {}
+          try { setSearchOpenState(false); } catch {}
+        }
+      } catch {}
+
+      // Keep overlay insets in sync with viewport (keyboard, rotations)
+      try { if (typeof window.requestViewportUpdate === 'function') window.requestViewportUpdate(); } catch {}
+      try { if (typeof window.setResontesPanelInsets === 'function') window.setResontesPanelInsets(); } catch {}
 
       // Embedded UX:
       // - Mobile/tablet: scroll favorites into view (avoid forcing the keyboard open).
@@ -4589,7 +4907,7 @@ class FavoritesToggle {
       this.listElement?.classList.remove('active');
       this.element?.classList.remove('active');
       try { state.favoritesVisible = false; } catch {}
-      try { setBodyUiState('favorites-embedded-open', false); } catch {}
+      try { setBodyUiState('resontes-open', false); } catch {}
     }
   }
 
@@ -4603,7 +4921,7 @@ class FavoritesToggle {
     this.element.setAttribute('aria-expanded', isExpanded);
     const countText = (state && Array.isArray(state.favorites)) ? state.favorites.length : 0;
     this.element.setAttribute('aria-label',
-      `View favorites (${countText} saved). ${this.isVisible ? 'Favorites list is visible' : 'Click to view your saved favorites'}`
+      `View resonates (${countText} saved). ${this.isVisible ? 'Resonates list is visible' : 'Click to view your saved resonates'}`
     );
   }
 
@@ -4637,94 +4955,94 @@ class FavoritesToggle {
 }
 
 // Instancia global del componente
-let favoritesToggleInstance = null;
+let resontesToggleInstance = null;
 
 // Make the component available across scripts and provide an idempotent initializer.
 // Some startup paths (or future refactors) can otherwise leave the toggle unbound.
-window.FavoritesToggle = FavoritesToggle;
-window.ensureFavoritesToggleInitialized = function ensureFavoritesToggleInitialized() {
+window.ResontesToggle = FavoritesToggle;
+window.ensureResontesToggleInitialized = function ensureResontesToggleInitialized() {
   try {
-    if (favoritesToggleInstance) return favoritesToggleInstance;
-    if (!elements.favoritesToggle || !elements.favoritesList) return null;
-    favoritesToggleInstance = new FavoritesToggle(elements.favoritesToggle, elements.favoritesList);
-    return favoritesToggleInstance;
+    if (resontesToggleInstance) return resontesToggleInstance;
+    if (!elements.resontesToggle || !elements.resontesList) return null;
+    resontesToggleInstance = new FavoritesToggle(elements.resontesToggle, elements.resontesList);
+    return resontesToggleInstance;
   } catch (e) {
-    try { console.warn('Failed to initialize FavoritesToggle:', e); } catch {}
+    try { console.warn('Failed to initialize ResontesToggle:', e); } catch {}
     return null;
   }
 };
 
 /**
  * Función legacy para compatibilidad hacia atrás
- * @deprecated Usar la instancia de FavoritesToggle directamente
+ * @deprecated Usar la instancia de ResontesToggle directamente
  */
-function toggleFavoritesList() {
-  if (favoritesToggleInstance) {
-    favoritesToggleInstance.toggle();
+function toggleResontesList() {
+  if (resontesToggleInstance) {
+    resontesToggleInstance.toggle();
   } else {
-    console.warn('FavoritesToggle instance not initialized');
+    console.warn('Resonates toggle instance not initialized');
   }
 }
 
 function updateFavoritesCount() {
-  const countElement = document.getElementById('favorites-count');
-  const toggleBtn = elements.favoritesToggle;
+  const countElement = (elements.resontesCount || document.getElementById('resontes-count') || elements.favoritesCount || document.getElementById('favorites-count'));
+  const toggleBtn = (elements.resontesToggle || elements.favoritesToggle);
   
   if (countElement && toggleBtn) {
     const count = state.favorites ? state.favorites.length : 0;
     countElement.textContent = count > 0 ? count : '0';
     
     // Improve ARIA label for accessibility
-    toggleBtn.setAttribute('aria-label', `View favorites (${count} saved)`);
+    try { toggleBtn.setAttribute('aria-label', `View resonates (${count} saved)`); } catch {}
     
     // Update aria-expanded based on visibility
-    const isExpanded = elements.favoritesList?.classList.contains('active') || false;
-    toggleBtn.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+    const panel = (elements.resontesList || elements.favoritesList);
+    const isExpanded = panel?.classList.contains('active') || false;
+    try { toggleBtn.setAttribute('aria-expanded', isExpanded ? 'true' : 'false'); } catch {}
 
     // Friendly placeholder copy for the filter input (English)
     try {
-      if (elements.favoritesFilter) {
-        const noun = count === 1 ? 'favorite' : 'favorites';
+      const filterEl = (elements.resontesFilter || elements.favoritesFilter);
+      if (filterEl) {
         const msg = count > 0
-          ? `Search within your ${count} ${noun}`
-          : 'Search your favorites';
-        elements.favoritesFilter.placeholder = msg;
-        elements.favoritesFilter.title = msg;
+          ? `Search your ${count} resonates`
+          : 'Search your resonates';
+        filterEl.placeholder = msg;
+        filterEl.title = msg;
       }
     } catch {}
   }
 }
 
-function hideFavoritesList() {
-  console.log('hideFavoritesList called - favoritesToggleInstance:', !!favoritesToggleInstance);
-  
+function hideResontesList() {
+  console.log('hideResontesList called - resontesToggleInstance:', !!resontesToggleInstance);
   // Siempre ejecutar el ocultamiento, sin importar el estado previo
-  if (favoritesToggleInstance) {
-    console.log('Calling favoritesToggleInstance.hide()');
-    favoritesToggleInstance.hide();
+  if (resontesToggleInstance) {
+    console.log('Calling resontesToggleInstance.hide()');
+    resontesToggleInstance.hide();
   }
-  
   // Siempre ejecutar el fallback para asegurar que se oculta
   console.log('Executing fallback - removing active class');
-  state.favoritesVisible = false;
-  
-  if (elements.favoritesList) {
-    elements.favoritesList.classList.remove('active');
-    console.log('Favorites list active class removed, has active:', elements.favoritesList.classList.contains('active'));
+  state.resontesVisible = false;
+  if (elements.resontesList) {
+    elements.resontesList.classList.remove('active');
+    console.log('Resonates list active class removed, has active:', elements.resontesList.classList.contains('active'));
   } else {
-    console.warn('elements.favoritesList not found');
+    console.warn('elements.resontesList not found');
   }
-
-  try { setBodyUiState('favorites-embedded-open', false); } catch {}
-
+  try { setBodyUiState('resontes-embedded-open', false); } catch {}
   try {
-    if (elements.favoritesHeader) elements.favoritesHeader.hidden = true;
+    if (elements.resontesHeader) elements.resontesHeader.hidden = true;
   } catch {}
-  
-  if (elements.favoritesToggle) {
-    elements.favoritesToggle.classList.remove('active');
-    elements.favoritesToggle.setAttribute('aria-expanded', 'false');
+  if (elements.resontesToggle) {
+    elements.resontesToggle.classList.remove('active');
+    elements.resontesToggle.setAttribute('aria-expanded', 'false');
   }
+}
+
+// Backward-compatible alias (favorites -> resontes)
+function hideFavoritesList() {
+  return hideResontesList();
 }
 
 function startApp() {
@@ -4769,7 +5087,7 @@ function createStartFavoritesCTA() {
   const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
   container.innerHTML = `
     <div>
-      <button id="start-favorites-btn" style="background:${accentAlt}; color:${bg}; border:none; padding:8px 12px; font-size:14px; border-radius:12px; cursor:pointer;">Play favorites</button>
+      <button id="start-favorites-btn" style="background:${accentAlt}; color:${bg}; border:none; padding:8px 12px; font-size:14px; border-radius:12px; cursor:pointer;">Play resonates</button>
       <button id="start-favorites-close" aria-label="Close" style="background:transparent; border:none; color:#666; font-size:16px; cursor:pointer;">✕</button>
     </div>
   `;
@@ -4805,7 +5123,7 @@ async function handleStartFavoritesCTA() {
       forcePlay();
     }
   } catch (err) {
-    console.error('Error al iniciar reproducción desde CTA:', err);
+    console.error('Error starting playback from CTA:', err);
     showStatus(typeof err === 'string' ? err : `Error: ${err && err.message ? err.message : err}`, 'error');
   }
 }
@@ -5710,7 +6028,7 @@ async function shareTrack(identifier, title = 'Track', creator = null, albumTitl
   };
 
   try {
-    console.log('Usando Web Share API con mensaje enriquecido');
+    console.log('Using Web Share API with enriched message');
 
     const baseShareData = {
       title: shareDataTitle,
@@ -5724,7 +6042,7 @@ async function shareTrack(identifier, title = 'Track', creator = null, albumTitl
       try {
         console.log('Attempting to include cover image in share');
         await navigator.share({ ...baseShareData, files: [coverFile] });
-        console.log('Web Share API exitoso (with cover file)');
+        console.log('Web Share API success (with cover file)');
         showStatus('Track shared successfully', 'info', 6000);
         return;
       } catch (errorWithFile) {
@@ -5737,34 +6055,34 @@ async function shareTrack(identifier, title = 'Track', creator = null, albumTitl
           try {
             console.log('File share unsupported, retrying without cover');
             await navigator.share(baseShareData);
-            console.log('Web Share API exitoso (without cover)');
+            console.log('Web Share API success (without cover)');
             showStatus('Track shared successfully', 'info', 6000);
             return;
           } catch (errorWithoutFile) {
             if (isShareCancelled(errorWithoutFile)) {
               return;
             }
-            console.log('Web Share API falló:', errorWithoutFile && errorWithoutFile.message ? errorWithoutFile.message : errorWithoutFile);
+            console.log('Web Share API failed:', errorWithoutFile && errorWithoutFile.message ? errorWithoutFile.message : errorWithoutFile);
             showStatus('Sharing not available', 'warning', 4000);
             return;
           }
         }
 
-        console.log('Web Share API falló:', errorWithFile && errorWithFile.message ? errorWithFile.message : errorWithFile);
+        console.log('Web Share API failed:', errorWithFile && errorWithFile.message ? errorWithFile.message : errorWithFile);
         showStatus('Sharing not available', 'warning', 4000);
         return;
       }
     }
 
     await navigator.share(baseShareData);
-    console.log('Web Share API exitoso');
+    console.log('Web Share API success');
     showStatus('Track shared successfully', 'info', 6000);
   } catch (error) {
     // If user cancels, don't spam.
     if (isShareCancelled(error)) {
       return;
     }
-    console.log('Web Share API falló:', error && error.message ? error.message : error);
+    console.log('Web Share API failed:', error && error.message ? error.message : error);
     showStatus('Sharing not available', 'warning', 4000);
   }
 }
@@ -5804,11 +6122,21 @@ function updateMetaTagsForSharing(identifier, title, creator = '') {
 }
 
 // Initialize UI toggles
-initializePreloadFavoritesToggle();
+initializePreloadResontesToggle();
+window.initializePreloadResontesToggle = initializePreloadResontesToggle;
 
 // Bind favorites toggle immediately (idempotent). This prevents cases where the
 // app starts partially (or init order changes) and the favorites button has no handler.
 try {
+  // Prefer resontes toggle initializer.
+  if (typeof window.ensureResontesToggleInitialized === 'function') {
+    window.ensureResontesToggleInitialized();
+  }
+
+  // Back-compat: some startup paths still call ensureFavoritesToggleInitialized().
+  if (typeof window.ensureFavoritesToggleInitialized !== 'function' && typeof window.ensureResontesToggleInitialized === 'function') {
+    window.ensureFavoritesToggleInitialized = window.ensureResontesToggleInitialized;
+  }
   if (typeof window.ensureFavoritesToggleInitialized === 'function') {
     window.ensureFavoritesToggleInitialized();
   }
@@ -5819,8 +6147,26 @@ try { initializePanelToolbarsOnce(); } catch {}
 try { initializeDesktopShortcutsOnce(); } catch {}
 
 // Expose critical functions globally for cross-module access
+window.loadResontes = loadResontes;
+window.saveResontes = saveResontes;
+window.isTrackResonte = isTrackResonte;
+window.toggleResonteTrack = toggleResonteTrack;
+// Legacy alias used by some UI surfaces (e.g., Tracklist V2)
+window.toggleResonte = toggleResonteTrack;
+window.addAlbumToResontes = addAlbumToResontes;
+window.removeAlbumFromResontes = removeAlbumFromResontes;
+window.updateResontesList = updateResontesList;
+window.updateResontesCount = updateResontesCount;
+
+// Legacy exports (favorites)
 window.loadFavorites = loadFavorites;
 window.saveFavorites = saveFavorites;
+window.isTrackFavorite = isTrackFavorite;
+window.toggleFavorite = toggleFavorite;
+window.addAlbumToFavorites = addAlbumToFavorites;
+window.removeAlbumFromFavorites = removeAlbumFromFavorites;
+window.updateFavoritesList = updateFavoritesList;
+window.updateFavoritesCount = updateFavoritesCount;
 window.loadVolume = loadVolume;
 window.saveVolume = saveVolume;
 // ...existing code...
@@ -5835,9 +6181,10 @@ window.updateServiceWorker = updateServiceWorker;
 window.setupPWAInstall = setupPWAInstall;
 window.displaySearchResults = displaySearchResults;
 window.hideSearchResults = hideSearchResults;
-window.hideFavoritesList = hideFavoritesList;
+window.hideResontesList = hideResontesList;
 window.loadSearchHistory = loadSearchHistory;
 window.initializeFavoritesPlayListener = initializeFavoritesPlayListener;
+window.initializeResontesPlayListener = initializeFavoritesPlayListener;
 window.saveSearchHistory = saveSearchHistory;
 window.addToSearchHistory = addToSearchHistory;
 window.displaySearchHistory = displaySearchHistory;

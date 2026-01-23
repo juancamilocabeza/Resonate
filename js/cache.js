@@ -201,6 +201,9 @@ setInterval(() => {
 class AudioCache {
   // Contextos definidos
   static CONTEXTS = {
+    // Preferred naming
+    RESONTES: 'resontes',
+    // Legacy naming (some call sites still use "favorites")
     FAVORITES: 'favorites',
     SEARCH: 'search',
     OFFLINE: 'offline',
@@ -215,7 +218,8 @@ class AudioCache {
     const metadata = await this.getAllMetadata();
     switch (context) {
       case AudioCache.CONTEXTS.FAVORITES:
-        return metadata.filter(item => item.isFavorite);
+      case AudioCache.CONTEXTS.RESONTES:
+        return metadata.filter(item => item.isFavorite || item.isResonte);
       case AudioCache.CONTEXTS.SEARCH:
         return metadata.filter(item => item.context === AudioCache.CONTEXTS.SEARCH);
       case AudioCache.CONTEXTS.OFFLINE:
@@ -264,13 +268,16 @@ class AudioCache {
     this.db = null;
     this.dbName = CACHE_CONSTANTS.AUDIO_CACHE.DB_NAME;
     this.dbVersion = CACHE_CONSTANTS.AUDIO_CACHE.DB_VERSION;
+    // Keep legacy "favorites" queue APIs working while the app uses "resontes" terminology.
+    // Some call sites still use favoritesQueue helpers.
     this.favoritesQueue = [];
+    this.resontesQueue = this.favoritesQueue;
     this.maxCacheSizeKey = CACHE_CONSTANTS.AUDIO_CACHE.MAX_BYTES_STORAGE_KEY;
     this.maxCacheSizeStepBytes = CACHE_CONSTANTS.AUDIO_CACHE.LIMIT_STEP_BYTES; // +3GB per user approval
     this.minFreeBufferBytes = CACHE_CONSTANTS.AUDIO_CACHE.MIN_FREE_BUFFER_BYTES; // Keep ~50MB buffer to avoid thrashing
     this.maxCacheSize = this.loadPersistedMaxCacheSize() ?? CACHE_CONSTANTS.AUDIO_CACHE.DEFAULT_MAX_BYTES;
     this.isInitialized = false;
-    this.isPreloadingFavorites = false;
+    this.isPreloadingResontes = false;
     this.lastLimitPromptAt = 0;
     this.limitPromptCooldownMs = CACHE_CONSTANTS.AUDIO_CACHE.LIMIT_PROMPT_COOLDOWN_MS;
     this.networkProfile = getNetworkProfile();
@@ -369,9 +376,9 @@ class AudioCache {
             if (actualHash !== meta.hash) {
               logCache('error', `Integridad fallida para ${url}: esperado ${meta.hash}, obtenido ${actualHash}`);
               if (typeof window.showStatus === 'function') {
-                window.showStatus('Archivo de audio corrupto detectado y eliminado: ' + url, 'error', 8000, 'error');
+                window.showStatus('Corrupted audio detected and removed: ' + url, 'error', 8000, 'error');
               } else {
-                alert('Archivo de audio corrupto detectado y eliminado: ' + url);
+                alert('Corrupted audio detected and removed: ' + url);
               }
               // Eliminar archivo corrupto
               await this.remove(url);
@@ -417,9 +424,9 @@ class AudioCache {
     try {
       const size = await this.getResponseSize(data);
       const interactive = !!isFavorite;
-      const canCache = await this.ensureSpaceFor(size, { isFavorite, interactive, url });
+      const canCache = await this.ensureSpaceFor(size, { isFavorite: interactive, interactive, url });
       if (!canCache) {
-        this.notifyCacheLimitReached(size, isFavorite);
+        this.notifyCacheLimitReached(size, interactive);
         return;
       }
 
@@ -428,9 +435,9 @@ class AudioCache {
       const hash = await this.computeBlobHash(blob);
 
       // Store in Cache API (best-effort + quota recovery)
-      const stored = await this.putWithQuotaRecovery(url, data, { size, isFavorite, metadata });
+      const stored = await this.putWithQuotaRecovery(url, data, { size, isFavorite: interactive, metadata });
       if (!stored) {
-        this.notifyCacheLimitReached(size, isFavorite);
+        this.notifyCacheLimitReached(size, interactive);
         return;
       }
 
@@ -439,7 +446,10 @@ class AudioCache {
         url,
         size,
         lastAccessed: nowMs(),
-        isFavorite,
+        // Store both flags for backward compatibility.
+        isFavorite: interactive,
+        isResonte: interactive,
+        context: metadata.context,
         cachedAt: nowMs(),
         title: metadata.title,
         creator: metadata.creator,
@@ -449,7 +459,7 @@ class AudioCache {
         hash
       });
 
-      // Enforce logical cache size (never evict favorites)
+      // Enforce logical cache size (never evict resontes)
       await this.enforceCacheSize({ interactive, reasonUrl: url });
 
       logCache('debug', `Cached audio file: ${url} (${this.formatBytes(size)})`);
@@ -583,23 +593,33 @@ class AudioCache {
     }
   }
 
-  async preloadFavorites(favorites) {
+  async preloadResontes(resontes) {
     if (!this.isInitialized) await this.init();
-    if (!favorites || favorites.length === 0) return;
-    if (this.isPreloadingFavorites) {
-      logCache('info', 'Favorites preload already in progress, skipping duplicate run');
+    if (!resontes || resontes.length === 0) return;
+    if (this.isPreloadingResontes) {
+      logCache('info', 'Resontes preload already in progress, skipping duplicate run');
       return;
     }
 
-    const shouldFetch = await this.shouldPrefetch(true);
-    if (!shouldFetch) {
-      logCache('info', 'Skipping favorites preload due to network or quota limits');
-      throw new Error('Skipping favorites preload due to network or quota limits');
-    }
+    this.isPreloadingResontes = true;
+    try {
+      const shouldFetch = await this.shouldPrefetch(true);
+      if (!shouldFetch) {
+        logCache('info', 'Skipping resontes preload due to network or quota limits');
+        throw new Error('Skipping resontes preload due to network or quota limits');
+      }
 
-    logCache('info', `Preloading ${favorites.length} favorites for offline playback`);
-    // Garantiza mínimo de favoritas cacheadas
-    await this.ensureMinTracksPerContext(AudioCache.CONTEXTS.FAVORITES, favorites);
+      logCache('info', `Preloading ${resontes.length} resontes for offline playback`);
+      // Garantiza mínimo de resontes cacheadas
+      await this.ensureMinTracksPerContext(AudioCache.CONTEXTS.RESONTES, resontes);
+    } finally {
+      this.isPreloadingResontes = false;
+    }
+  }
+
+  // Legacy alias: some modules still call preloadFavorites()
+  async preloadFavorites(favorites) {
+    return this.preloadResontes(favorites);
   }
 
   // Nuevo: Preload mínimo de resultados de búsqueda
@@ -646,21 +666,43 @@ class AudioCache {
   }
 
   getFavoritesQueue() {
-    return [...this.favoritesQueue];
+    const q = this.favoritesQueue || this.resontesQueue || [];
+    return Array.isArray(q) ? [...q] : [];
+  }
+
+  // Preferred aliases
+  getResontesQueue() {
+    return this.getFavoritesQueue();
   }
 
   loadFavoritesQueue(favorites, priority = false) {
-    this.favoritesQueue = favorites.map(f => f.url);
+    const next = Array.isArray(favorites) ? favorites.map(f => f && f.url).filter(Boolean) : [];
+    this.favoritesQueue = next;
+    this.resontesQueue = this.favoritesQueue;
+  }
+
+  loadResontesQueue(resontes, priority = false) {
+    return this.loadFavoritesQueue(resontes, priority);
   }
 
   removeFromFavoritesQueue(url) {
+    if (!this.favoritesQueue && this.resontesQueue) this.favoritesQueue = this.resontesQueue;
+    if (!Array.isArray(this.favoritesQueue)) this.favoritesQueue = [];
+    if (!url) return;
     const index = this.favoritesQueue.indexOf(url);
     if (index > -1) {
       this.favoritesQueue.splice(index, 1);
     }
   }
 
+  removeFromResontesQueue(url) {
+    return this.removeFromFavoritesQueue(url);
+  }
+
   replaceFavoritesQueueItem(oldUrl, newUrl, favorites) {
+    if (!this.favoritesQueue && this.resontesQueue) this.favoritesQueue = this.resontesQueue;
+    if (!Array.isArray(this.favoritesQueue)) this.favoritesQueue = [];
+    if (!oldUrl) return;
     const index = this.favoritesQueue.indexOf(oldUrl);
     if (index > -1) {
       if (newUrl) {
@@ -669,6 +711,10 @@ class AudioCache {
         this.favoritesQueue.splice(index, 1);
       }
     }
+  }
+
+  replaceResontesQueueItem(oldUrl, newUrl, resontes) {
+    return this.replaceFavoritesQueueItem(oldUrl, newUrl, resontes);
   }
 
   async markAsFullyListened(url) {
@@ -763,7 +809,7 @@ class AudioCache {
           logCache('error', `IndexedDB storeMetadata error: ${request.error}`);
           try {
             if (typeof window.showStatus === 'function') {
-              window.showStatus('Error al guardar metadatos en almacenamiento offline: ' + request.error, 'error', 8000, 'error');
+              window.showStatus('Failed to save offline metadata: ' + request.error, 'error', 8000, 'error');
             }
           } catch {}
           reject(request.error);
@@ -772,7 +818,7 @@ class AudioCache {
         logCache('error', `IndexedDB storeMetadata exception: ${err}`);
         try {
           if (typeof window.showStatus === 'function') {
-            window.showStatus('Error al guardar metadatos en almacenamiento offline: ' + err, 'error', 8000, 'error');
+            window.showStatus('Failed to save offline metadata: ' + err, 'error', 8000, 'error');
           }
         } catch {}
         reject(err);
@@ -791,7 +837,7 @@ class AudioCache {
           logCache('error', `IndexedDB getMetadata error: ${request.error}`);
           try {
             if (typeof window.showStatus === 'function') {
-              window.showStatus('Error al leer metadatos de almacenamiento offline: ' + request.error, 'error', 8000, 'error');
+              window.showStatus('Failed to read offline metadata: ' + request.error, 'error', 8000, 'error');
             }
           } catch {}
           reject(request.error);
@@ -800,7 +846,7 @@ class AudioCache {
         logCache('error', `IndexedDB getMetadata exception: ${err}`);
         try {
           if (typeof window.showStatus === 'function') {
-            window.showStatus('Error al leer metadatos de almacenamiento offline: ' + err, 'error', 8000, 'error');
+            window.showStatus('Failed to read offline metadata: ' + err, 'error', 8000, 'error');
           }
         } catch {}
         reject(err);
@@ -855,7 +901,7 @@ class AudioCache {
 
       // Evict non-favorites only (favorites are pinned forever)
       const nonFavorites = metadata
-        .filter(item => !item.isFavorite)
+        .filter(item => !(item.isFavorite || item.isResonte))
         .sort((a, b) => (a.lastAccessed || 0) - (b.lastAccessed || 0));
 
       if (nonFavorites.length === 0) {
@@ -865,9 +911,9 @@ class AudioCache {
           if (!increased) {
             try {
               if (typeof window.showStatus === 'function') {
-                window.showStatus('La caché está llena solo con favoritos. No se puede liberar espacio para nuevos archivos.', 'warning', 8000, 'warning');
+                window.showStatus("Cache is full with resonates only. Can't free space for new files.", 'warning', 8000, 'warning');
               } else {
-                alert('La caché está llena solo con favoritos. No se puede liberar espacio para nuevos archivos.');
+                alert("Cache is full with resonates only. Can't free space for new files.");
               }
             } catch {}
           }
@@ -875,9 +921,9 @@ class AudioCache {
         }
         try {
           if (typeof window.showStatus === 'function') {
-            window.showStatus('La caché está llena solo con favoritos. No se puede liberar espacio para nuevos archivos.', 'warning', 8000, 'warning');
+            window.showStatus("Cache is full with resonates only. Can't free space for new files.", 'warning', 8000, 'warning');
           } else {
-            alert('La caché está llena solo con favoritos. No se puede liberar espacio para nuevos archivos.');
+            alert("Cache is full with resonates only. Can't free space for new files.");
           }
         } catch {}
         return false;
@@ -910,7 +956,7 @@ class AudioCache {
 
       // Evict non-favorites to make room (favorites are never evicted)
       const nonFavorites = metadata
-        .filter(item => !item.isFavorite)
+        .filter(item => !(item.isFavorite || item.isResonte))
         .sort((a, b) => (a.lastAccessed || 0) - (b.lastAccessed || 0));
 
       let runningTotal = totalSize;
@@ -986,10 +1032,10 @@ class AudioCache {
 
   notifyCacheLimitReached(size, isFavorite) {
     const base = isFavorite
-      ? 'No hay espacio para guardar este favorito offline.'
-      : 'Cache offline lleno. No se pudo guardar este audio.';
+      ? 'Not enough space to save this resonte offline.'
+      : "Offline cache is full. Couldn't save this audio.";
 
-    const msg = `${base} Tamaño: ${this.formatBytes(size)}.`;
+    const msg = `${base} Size: ${this.formatBytes(size)}.`;
     try {
       if (typeof window.showStatus === 'function') {
         window.showStatus(msg, 'warning', 6000, 'warning');
@@ -1034,12 +1080,12 @@ class AudioCache {
     const humanRequired = requiredBytes ? this.formatBytes(requiredBytes) : null;
 
     const message = humanRequired
-      ? `Almacenamiento offline lleno (${humanCurrent}). ¿Aumentar el límite +3GB (a ${humanNext}) para guardar ${humanRequired}?`
-      : `Almacenamiento offline lleno (${humanCurrent}). ¿Aumentar el límite +3GB (a ${humanNext})?`;
+      ? `Offline storage is full (${humanCurrent}). Increase the limit by +3GB (to ${humanNext}) to save ${humanRequired}?`
+      : `Offline storage is full (${humanCurrent}). Increase the limit by +3GB (to ${humanNext})?`;
 
     try {
       if (typeof window.showStatus === 'function') {
-        window.showStatus('Almacenamiento offline lleno. Se requiere tu confirmación.', 'warning', 5000, 'warning');
+        window.showStatus('Offline storage is full. Confirmation required.', 'warning', 5000, 'warning');
       }
     } catch {
       // ignore
@@ -1061,7 +1107,7 @@ class AudioCache {
     logCache('info', `User increased offline cache limit to ${humanNext} (reason: ${reason}${reasonUrl ? `, url: ${reasonUrl}` : ''})`);
     try {
       if (typeof window.showStatus === 'function') {
-        window.showStatus(`Límite de almacenamiento offline aumentado a ${humanNext}`, 'info', 4000, 'info');
+        window.showStatus(`Offline storage limit increased to ${humanNext}`, 'info', 4000, 'info');
       }
     } catch {
       // ignore

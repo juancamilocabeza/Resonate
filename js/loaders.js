@@ -1,8 +1,8 @@
 const Loaders = (() => {
   const defaultStyles = {
     spinner: {
-      border: "var(--loader-border-width, 4px) solid #f3f3f3",
-      borderTop: "var(--loader-border-width, 4px) solid rgba(61, 169, 255, 0.67)",
+      border: "var(--loader-border-width, 4px) solid rgba(var(--primary-rgb), 0.18)",
+      borderTop: "var(--loader-border-width, 4px) solid var(--primary)",
       borderRadius: "50%",
       width: "var(--loader-size, 40px)",
       height: "var(--loader-size, 40px)",
@@ -26,14 +26,14 @@ const Loaders = (() => {
       alignItems: "center",
       gap: "12px",
       padding: "16px 20px",
-      backgroundColor: "rgba(12, 12, 12, 0.65)",
+      backgroundColor: "var(--card)",
       borderRadius: "12px",
-      border: "1px solid rgba(110, 231, 183, 0.3)",
+      border: "1px solid var(--surface-border)",
       boxShadow: "0 10px 30px rgba(0, 0, 0, 0.35)",
       minWidth: "140px",
     },
     progressText: {
-      color: "#f8fafc",
+      color: "var(--fg)",
       fontSize: "14px",
       fontWeight: "700",
       letterSpacing: "0.6px",
@@ -59,7 +59,10 @@ const Loaders = (() => {
     search: "Loading results. Wait, your multimedia experience is on the way.",
     playback: "Preparing your track for optimal playback.",
     album: "Loading your album for seamless listening.",
-    favorite: "Loading your favorite tracks for reliable playback.",
+    // Legacy context key (kept for backward compatibility)
+    favorite: "Loading your resonates for reliable playback.",
+    // Preferred context key
+    resontes: "Loading your resonates for reliable playback.",
     default: "Resonate is ensuring audio quality for an offline experience."
   };
 

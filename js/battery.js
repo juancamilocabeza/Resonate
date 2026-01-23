@@ -19,7 +19,7 @@ const Battery = (() => {
   async function init() {
     // Verificar soporte de Battery Status API
     if (!navigator.getBattery && !navigator.battery) {
-      console.info('Battery Status API no disponible en este navegador');
+      console.info('Battery Status API is not available in this browser');
       return false;
     }
 
@@ -28,7 +28,7 @@ const Battery = (() => {
       batteryManager = await navigator.getBattery?.() || navigator.battery;
       
       if (!batteryManager) {
-        console.info('Battery Status API sin soporte');
+        console.info('Battery Status API is not supported');
         return false;
       }
 
@@ -43,7 +43,7 @@ const Battery = (() => {
 
       return true;
     } catch (error) {
-      console.info('No se pudo inicializar Battery Status API:', error.message);
+      console.info('Failed to initialize Battery Status API:', error.message);
       return false;
     }
   }
@@ -121,8 +121,8 @@ const Battery = (() => {
   function showBatteryNotification(level, isEcoMode) {
     const percent = Math.round(level * 100);
     const message = isEcoMode 
-      ? `🔋 Batería baja (${percent}%). Activado modo ahorro de energía`
-      : `⚡ Cargando. Desactivado modo ahorro de energía`;
+      ? `Low battery (${percent}%). Energy Saver enabled`
+      : `Charging. Energy Saver disabled`;
 
     // Log para debugging
     window.logger?.info(message, 'Battery');
@@ -138,14 +138,14 @@ const Battery = (() => {
    */
   function logBatteryStatus(level, charging, dischargingTime) {
     const percent = Math.round(level * 100);
-    const status = charging ? 'Cargando' : 'Descargando';
+    const status = charging ? 'Charging' : 'Discharging';
     const timeRemaining = dischargingTime === Infinity 
-      ? 'Desconocido' 
+      ? 'Unknown' 
       : `${Math.round(dischargingTime / 3600)}h`;
 
     if (window.logger?.debug) {
       window.logger.debug(
-        `Battery: ${percent}% | ${status} | Tiempo restante: ${timeRemaining}`,
+        `Battery: ${percent}% | ${status} | Time remaining: ${timeRemaining}`,
         'Battery'
       );
     }

@@ -1,3 +1,30 @@
+function scheduleResontesPreloadOnce() {
+  if (!window.state || !window.state.resontesPreloadEnabled) return;
+  if (typeof audioCache === 'undefined' || !audioCache || typeof audioCache.preloadResontes !== 'function') return;
+
+  schedule(async () => {
+    try {
+      await audioCache.preloadResontes(window.state.resontes);
+      window.logger?.info('Resontes preload attempted once at startup', 'CACHE');
+    } catch (error) {
+      window.logger?.warn(`Failed to preload resontes: ${error.message}`, 'CACHE');
+    }
+  }, INIT_TIMING.FAVORITES_PRELOAD_DELAY_MS);
+}
+function tryLoadResontesWithRetry() {
+  if (typeof window.loadResontes === 'function') {
+    window.loadResontes();
+    return;
+  }
+
+  schedule(() => {
+    if (typeof window.loadResontes === 'function') {
+      window.loadResontes();
+    } else {
+      window.logger?.error('loadResontes function not available', 'INIT');
+    }
+  }, INIT_TIMING.LOAD_FAVORITES_RETRY_DELAY_MS);
+}
 // Application initialization
 
 const INIT_TIMING = {
@@ -282,36 +309,50 @@ async function initAudioCacheIfAvailable() {
 }
 
 function tryLoadFavoritesWithRetry() {
+  // Prefer new resontes API, fallback to legacy favorites.
+  if (typeof window.loadResontes === 'function') {
+    window.loadResontes();
+    return;
+  }
+
   if (typeof window.loadFavorites === 'function') {
     window.loadFavorites();
     return;
   }
 
   schedule(() => {
-    if (typeof window.loadFavorites === 'function') {
+    if (typeof window.loadResontes === 'function') {
+      window.loadResontes();
+    } else if (typeof window.loadFavorites === 'function') {
       window.loadFavorites();
     } else {
-      window.logger?.error('loadFavorites function not available', 'INIT');
+      window.logger?.error('loadResontes/loadFavorites function not available', 'INIT');
     }
   }, INIT_TIMING.LOAD_FAVORITES_RETRY_DELAY_MS);
 }
 
 function scheduleFavoritesPreloadOnce() {
-  if (!window.state || !window.state.favoritesPreloadEnabled) return;
+  if (!window.state) return;
+  const enabled = (typeof window.state.resontesPreloadEnabled === 'boolean')
+    ? window.state.resontesPreloadEnabled
+    : !!window.state.favoritesPreloadEnabled;
+  if (!enabled) return;
   if (typeof audioCache === 'undefined' || !audioCache || typeof audioCache.preloadFavorites !== 'function') return;
 
   schedule(async () => {
     try {
-      await audioCache.preloadFavorites(window.state.favorites);
-      window.logger?.info('Favorites preload attempted once at startup', 'CACHE');
+      await audioCache.preloadFavorites(window.state.resontes || window.state.favorites);
+      window.logger?.info('Resontes preload attempted once at startup', 'CACHE');
     } catch (error) {
-      window.logger?.warn(`Failed to preload favorites: ${error.message}`, 'CACHE');
+      window.logger?.warn(`Failed to preload resontes: ${error.message}`, 'CACHE');
     }
   }, INIT_TIMING.FAVORITES_PRELOAD_DELAY_MS);
 }
 
 function scheduleFavoritesQueuePreparation() {
-  if (!window.state || !window.state.favorites || window.state.favorites.length === 0) return;
+  if (!window.state) return;
+  const resontes = window.state.resontes || window.state.favorites;
+  if (!Array.isArray(resontes) || resontes.length === 0) return;
 
   schedule(async () => {
     try {
@@ -321,22 +362,22 @@ function scheduleFavoritesQueuePreparation() {
         const snap = window.state && window.state.savedPlaybackQueueSnapshot ? window.state.savedPlaybackQueueSnapshot : null;
         if (snap && snap.context === 'favorites' && Number.isFinite(Number(snap.currentIndex))) {
           const idx = Math.max(0, Math.floor(Number(snap.currentIndex)));
-          startIndex = (idx + 1) % window.state.favorites.length;
+          startIndex = (idx + 1) % resontes.length;
           // Best-effort: restore the playbackManager context too.
           try {
             if (typeof playbackManager !== 'undefined' && playbackManager && typeof playbackManager.setContext === 'function') {
-              playbackManager.setContext('favorites', window.state.favorites, idx);
+              playbackManager.setContext('favorites', resontes, idx);
             }
           } catch {}
         }
       } catch {}
 
-      await loadPlaybackQueue('favorites', window.state.favorites, startIndex);
+      await loadPlaybackQueue('favorites', resontes, startIndex);
       if (window.state.playbackQueue.length > 0) {
-        safeShowStatus('Tap play to start your favorites', 'info', 3000);
+        safeShowStatus('Tap Play to start your resonates', 'info', 3000);
       }
     } catch (error) {
-      window.logger?.error(`Error preparing favorites queue: ${error.message}`, 'PLAYBACK');
+      window.logger?.error(`Error preparing resontes queue: ${error.message}`, 'PLAYBACK');
     }
   }, INIT_TIMING.FAVORITES_QUEUE_PREP_DELAY_MS);
 }
@@ -695,34 +736,52 @@ async function initializeApp() {
   logInitDebug('Initializing audio cache...');
   await initAudioCacheIfAvailable();
 
-  // Load favorites if available, otherwise retry
-  tryLoadFavoritesWithRetry();
-  // Preparar el CTA (se mostrará si hay favoritos precargados)
-  //createStartFavoritesCTA();
+  // Load resontes if available, otherwise retry
+  tryLoadResontesWithRetry();
+  // Preparar el CTA (se mostrará si hay resontes precargados)
+  //createStartResontesCTA();
   // setupLoadingSafety() is called only when actual loading operations are in progress
 
-  // Pre-cargar favoritos para reproducción offline (single guarded run)
-  scheduleFavoritesPreloadOnce();
+  // Pre-cargar resontes para reproducción offline (single guarded run)
+  scheduleResontesPreloadOnce();
 
-  // Inicializar el componente FavoritesToggle
-  if (typeof window.ensureFavoritesToggleInitialized === 'function') {
+  // Inicializar el componente ResontesToggle
+  if (typeof window.ensureResontesToggleInitialized === 'function') {
+    window.ensureResontesToggleInitialized();
+    window.logger.info('ResontesToggle component initialized', 'UI');
+  } else if (window && typeof window.ResontesToggle === 'function') {
+    try {
+      resontesToggleInstance = new window.ResontesToggle();
+      window.logger.info('ResontesToggle component initialized (fallback)', 'UI');
+    } catch (e) {
+      window.logger.warn('ResontesToggle fallback init failed', 'UI');
+    }
+  } else if (typeof window.ensureFavoritesToggleInitialized === 'function') {
+    // Back-compat (older builds): favorites toggle initializer.
     window.ensureFavoritesToggleInitialized();
-    window.logger.info('FavoritesToggle component initialized', 'UI');
-  } else if (typeof FavoritesToggle !== 'undefined') {
-    favoritesToggleInstance = new FavoritesToggle();
     window.logger.info('FavoritesToggle component initialized (fallback)', 'UI');
   } else {
-    window.logger.warn('FavoritesToggle class not available', 'UI');
+    window.logger.warn('Resonates toggle class not available', 'UI');
   }
 
-  // Inicializar el listener de event delegation para botones play en favoritos
-  if (typeof window.initializeFavoritesPlayListener === 'function') {
-    console.log('Calling initializeFavoritesPlayListener...');
-    window.initializeFavoritesPlayListener();
-    window.logger.info('Favorites play button listener initialized', 'UI');
-  } else {
-    console.warn('initializeFavoritesPlayListener function not available - window.initializeFavoritesPlayListener:', typeof window.initializeFavoritesPlayListener);
-    window.logger.warn('initializeFavoritesPlayListener function not available', 'UI');
+  // Inicializar el listener de event delegation para botones play en resontes
+  {
+    const initPlayListener = (typeof window.initializeResontesPlayListener === 'function')
+      ? window.initializeResontesPlayListener
+      : ((typeof window.initializeFavoritesPlayListener === 'function')
+        ? window.initializeFavoritesPlayListener
+        : null);
+
+    if (initPlayListener) {
+      try {
+        initPlayListener();
+        window.logger.info('Resonates play listener initialized', 'UI');
+      } catch (e) {
+        window.logger.warn('Resonates play listener init failed', 'UI');
+      }
+    } else {
+      window.logger.warn('Resonates play listener not available', 'UI');
+    }
   }
 
   // Cargar estado de reproducción guardado (última sesión)
@@ -732,7 +791,7 @@ async function initializeApp() {
   try {
     if (!window.__resonateRestoreAfterFavoritesHandlerInstalled) {
       window.__resonateRestoreAfterFavoritesHandlerInstalled = true;
-      window.addEventListener('resonate:favorites-loaded', async () => {
+      window.addEventListener('resonate:resontes-loaded', async () => {
         try {
           const url = new URL(window.location.href);
           const hasSharedPlay = !!url.searchParams.get('play');
@@ -740,7 +799,7 @@ async function initializeApp() {
 
           const snap = window.state && window.state.savedPlaybackQueueSnapshot ? window.state.savedPlaybackQueueSnapshot : null;
           if (!snap || !snap.context) return;
-          if (String(snap.context) !== 'favorites') return;
+          if (String(snap.context) !== 'resontes') return;
 
           if (typeof window.restorePlaybackQueueFromSnapshot !== 'function') return;
 
@@ -749,11 +808,11 @@ async function initializeApp() {
 
           // Best-effort: rebuild FIFO queue to continue after the restored index.
           try {
-            const favorites = window.state && Array.isArray(window.state.favorites) ? window.state.favorites : [];
+            const resontes = window.state && Array.isArray(window.state.resontes) ? window.state.resontes : [];
             const idx = Number.isFinite(Number(snap.currentIndex)) ? Math.max(0, Math.floor(Number(snap.currentIndex))) : 0;
-            const startIndex = favorites.length ? ((idx + 1) % favorites.length) : 0;
-            if (favorites.length && typeof loadPlaybackQueue === 'function') {
-              loadPlaybackQueue('favorites', favorites, startIndex);
+            const startIndex = resontes.length ? ((idx + 1) % resontes.length) : 0;
+            if (resontes.length && typeof loadPlaybackQueue === 'function') {
+              loadPlaybackQueue('resontes', resontes, startIndex);
             }
           } catch {}
         } catch {
@@ -770,14 +829,14 @@ async function initializeApp() {
     if (!hasSharedPlay && window.state && window.state.savedPlaybackQueueSnapshot && typeof window.restorePlaybackQueueFromSnapshot === 'function') {
       const restored = await window.restorePlaybackQueueFromSnapshot(window.state.savedPlaybackQueueSnapshot);
 
-      // If we restored a favorites context, rebuild FIFO queue so continuous playback doesn't stall.
+      // If we restored a resontes context, rebuild FIFO queue so continuous playback doesn't stall.
       try {
         const snap = window.state.savedPlaybackQueueSnapshot;
-        if (restored && snap && snap.context === 'favorites' && Array.isArray(window.state.favorites) && window.state.favorites.length) {
+        if (restored && snap && snap.context === 'resontes' && Array.isArray(window.state.resontes) && window.state.resontes.length) {
           const idx = Number.isFinite(Number(snap.currentIndex)) ? Math.max(0, Math.floor(Number(snap.currentIndex))) : 0;
-          const startIndex = (idx + 1) % window.state.favorites.length;
+          const startIndex = (idx + 1) % window.state.resontes.length;
           if (typeof loadPlaybackQueue === 'function') {
-            loadPlaybackQueue('favorites', window.state.favorites, startIndex);
+            loadPlaybackQueue('resontes', window.state.resontes, startIndex);
           }
         }
       } catch {}
@@ -853,12 +912,12 @@ async function initializeApp() {
   if (elements.playAllFavoritesBtn) {
     elements.playAllFavoritesBtn.addEventListener('click', async () => {
       if (!window.state || window.state.favorites.length === 0) {
-        showStatus('Add some favorites first to play', 'info');
+        showStatus('Add some resonates first to play', 'info');
         return;
       }
 
       window.state.userInteracted = true;
-      showStatus('Starting your favorites collection', 'info');
+      showStatus('Starting your resonates', 'info');
       await playFromFavoritesQueue();
     });
   }
@@ -920,10 +979,10 @@ async function initializeApp() {
     });
   }
 
-  if (elements.shuffleFavoritesBtn) {
-    elements.shuffleFavoritesBtn.addEventListener('click', () => {
+  if (elements.shuffleResontesBtn) {
+    elements.shuffleResontesBtn.addEventListener('click', () => {
       window.logger.info('Shuffle toggle clicked', 'UI');
-      toggleShuffleFavorites();
+      toggleShuffleResontes();
     });
   }
 
@@ -957,14 +1016,22 @@ async function initializeApp() {
           const files = await fetchOptimizedPlayableFiles(window.state.currentTrack.id);
           if (files.length > 0) {
             window.state.currentTrack.url = files[0].url;
-            toggleFavorite(window.state.currentTrack);
+            if (typeof window.toggleResonteTrack === 'function') {
+              window.toggleResonteTrack(window.state.currentTrack);
+            } else {
+              toggleFavorite(window.state.currentTrack);
+            }
           }
         } catch (error) {
           window.logger.error(`Error fetching URL for favorite: ${error.message}`, 'UI');
-          showStatus('Couldn\'t add that to favorites', 'error');
+          showStatus("Couldn't add to resonates", 'error');
         }
       } else if (window.state) {
-        toggleFavorite(window.state.currentTrack);
+        if (typeof window.toggleResonteTrack === 'function') {
+          window.toggleResonteTrack(window.state.currentTrack);
+        } else {
+          toggleFavorite(window.state.currentTrack);
+        }
       }
     });
   }
@@ -1121,15 +1188,21 @@ async function initializeApp() {
   window.playNextInContext = playNextInContext;
   window.forcePlay = forcePlay;
   window.toggleShuffleFavorites = toggleShuffleFavorites;
+  // Preferred naming
+  window.toggleShuffleResontes = toggleShuffleFavorites;
   window.addAlbumToFavorites = addAlbumToFavorites;
   window.removeAlbumFromFavorites = removeAlbumFromFavorites;
   window.isAlbumInFavorites = isAlbumInFavorites;
+  window.addAlbumToResontes = addAlbumToFavorites;
+  window.removeAlbumFromResontes = removeAlbumFromFavorites;
+  window.isAlbumInResontes = isAlbumInFavorites;
   window.audioCache = typeof audioCache !== 'undefined' ? audioCache : null;
   // Note: playOptimizedFavorite, playAlbumFromFavorites, playSpecificSearchTrack, and playRandomSearchResults are exposed in search.js
   window.installPWA = typeof window.installPWA !== 'undefined' ? window.installPWA : null;
   window.preloadNextTrack = preloadNextTrack;
   window.loadPlaybackQueue = loadPlaybackQueue;
   window.playFromFavoritesQueue = playFromFavoritesQueue;
+  window.playFromResontesQueue = playFromFavoritesQueue;
   window.updateProgressBar = updateProgressBar;
   window.dispatchEvent(new Event('resonate:results-rendered'));
 
@@ -1309,11 +1382,19 @@ function waitForAllScripts() {
       attempts++;
       logInitDebug(`Checking scripts (attempt ${attempts})`);
 
+      const coreGlobalsReady =
+        typeof window.state !== 'undefined' &&
+        typeof window.elements !== 'undefined' &&
+        typeof window.showStatus !== 'undefined';
+
+      // Prefer the explicit marker, but fall back to core globals so we don't deadlock
+      // if the marker is missing for any reason.
+      const uiReady =
+        window.uiScriptLoaded === true ||
+        (coreGlobalsReady && (typeof window.loadFavorites === 'function' || typeof window.loadResontes === 'function'));
+
       // Esperar específicamente a que ui.js se haya cargado completamente
-      if (window.uiScriptLoaded === true &&
-          typeof window.state !== 'undefined' &&
-          typeof window.elements !== 'undefined' &&
-          typeof window.showStatus !== 'undefined') {
+      if (uiReady && coreGlobalsReady) {
         logInitInfo('Critical scripts loaded, proceeding...');
         resolve();
       } else if (attempts >= maxAttempts) {
@@ -1350,20 +1431,20 @@ function waitForAllScripts() {
                 </p>
 
                 <div style="display:flex;gap:10px;flex-wrap:wrap;margin:16px 0">
-                  <button onclick="location.reload()" style="padding:12px 16px;font-size:16px;cursor:pointer;background:#3da9ff;color:white;border:none;border-radius:10px">
+                  <button onclick="location.reload()" style="padding:12px 16px;font-size:16px;cursor:pointer;background:var(--primary,#3da9ff);color:var(--on-accent,#fff);border:none;border-radius:10px">
                     Retry
                   </button>
-                  <button onclick="location.href='/'" style="padding:12px 16px;font-size:16px;cursor:pointer;background:#e5e5e5;color:#111;border:none;border-radius:10px">
+                  <button onclick="location.href='/'" style="padding:12px 16px;font-size:16px;cursor:pointer;background:var(--btn,#e5e5e5);color:var(--fg,#111);border:1px solid var(--surface-border,rgba(0,0,0,0.12));border-radius:10px">
                     Go to home
                   </button>
                 </div>
 
                 <details style="margin-top:12px">
                   <summary style="cursor:pointer">Show diagnostics</summary>
-                  <pre style="white-space:pre-wrap;word-break:break-word;background:#111;color:#e5e5e5;padding:12px;border-radius:10px;overflow:auto;margin-top:10px">${JSON.stringify(diagnostics, null, 2)}</pre>
+                  <pre style="white-space:pre-wrap;word-break:break-word;background:var(--bg,#111);color:var(--fg,#e5e5e5);padding:12px;border-radius:10px;overflow:auto;margin-top:10px;border:1px solid var(--surface-border,rgba(255,255,255,0.12))">${JSON.stringify(diagnostics, null, 2)}</pre>
                 </details>
 
-                <p style="margin:16px 0 0 0;color:#666;line-height:1.5">
+                <p style="margin:16px 0 0 0;color:var(--muted,#666);line-height:1.5">
                   Tip: if this keeps happening, try disabling ad-blocker for this site, or clear the site data/cache and retry.
                 </p>
               </div>

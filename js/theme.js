@@ -70,6 +70,18 @@
     const themeColorMeta = document.querySelector('meta[name="theme-color"]');
     if (!themeColorMeta) return;
 
+    // Prefer the computed CSS variable so meta theme-color always matches the palette.
+    try {
+      const cssPrimary = getComputedStyle(document.documentElement)
+        .getPropertyValue('--primary')
+        .trim();
+
+      if (cssPrimary && (cssPrimary.startsWith('#') || cssPrimary.startsWith('rgb'))) {
+        themeColorMeta.setAttribute('content', cssPrimary);
+        return;
+      }
+    } catch {}
+
     const colors = {
       'day': '#10b981',
       'night': '#3da9ff',

@@ -1,3 +1,107 @@
+/* FAVORITES: Ajuste visual para listado de pistas y cabecera de álbum */
+.favorites-album-header {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--fg);
+  margin: 18px 0 6px 0;
+  padding-left: 8px;
+  letter-spacing: 0.01em;
+}
+.favorites-album-header:first-child {
+  margin-top: 0;
+}
+/* Card visual para cada álbum de favoritos */
+.favorites-album-card {
+  background: var(--surface-2, #fff);
+  border-radius: 14px;
+  border: 1px solid var(--border, #e0e0e0);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+  margin-bottom: 24px;
+  padding: 0 0 8px 0;
+  transition: box-shadow 0.2s;
+}
+.favorites-album-card:hover {
+  box-shadow: 0 4px 18px 0 rgba(0,0,0,0.13);
+}
+.favorites-album-card .tracks-container {
+  background: none;
+  border: none;
+  border-radius: 0;
+  margin: 0;
+  box-shadow: none;
+  padding: 0 8px 8px 8px;
+}
+.favorites-list .tlv2-row {
+  border-bottom: 1px solid var(--surface-border-subtle, #ececec);
+}
+.favorites-list .tlv2-row:last-child {
+  border-bottom: none;
+}
+.favorites-list .tlv2-row {
+  background: transparent;
+}
+#description-container {
+  display: flex;
+  flex-direction: row;
+  gap: 0.5em;
+  align-items: center;
+  margin-bottom: 0.5em;
+}
+#description-container .btn-secondary {
+  margin: 0;
+}
+/* === Estilos para el listado de pistas del álbum actual === */
+
+.album-tracklist-container {
+  margin-top: 1em;
+  text-align: left;
+  width: 100%;
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
+  background: #f9f9f9;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.10);
+  border-radius: 14px;
+  padding: 0.5em 0.2em 1em 0.2em;
+}
+
+#album-tracklist {
+  max-height: 60vh;
+  min-height: 120px;
+  overflow-y: auto;
+  margin-bottom: 1em;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  background: #fff;
+  scrollbar-width: thin;
+  scrollbar-color: #b3b3b3 #f0f0f0;
+}
+
+#album-tracklist::-webkit-scrollbar {
+  width: 8px;
+}
+#album-tracklist::-webkit-scrollbar-thumb {
+  background: #b3b3b3;
+  border-radius: 4px;
+}
+#album-tracklist::-webkit-scrollbar-track {
+  background: #f0f0f0;
+  border-radius: 4px;
+}
+
+/* Ajuste para el listado de pistas dentro del contenedor */
+.album-tracklist-container .tracks-list {
+  max-height: none;
+  padding: 0.5em 0.2em;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 8px rgba(0,0,0,0.06);
+}
+.album-tracklist-empty {
+  padding: 0.8em;
+  color: #888;
+  font-style: italic;
+}
 /* Modal de descripción */
 .description-modal {
   position: fixed;
@@ -410,24 +514,29 @@ body {
 @media (max-width: 1023px) {
   /* Favorites becomes the primary view; hide other sections to let it span the screen */
   .favorites-embedded-open .discovery-section,
-  .favorites-embedded-open .main-player-section {
+  .favorites-embedded-open .main-player-section,
+  .resontes-open .discovery-section,
+  .resontes-open .main-player-section {
     display: none;
   }
 
-  .favorites-embedded-open .content-layout {
+  .favorites-embedded-open .content-layout,
+  .resontes-open .content-layout {
     display: flex;
     flex-direction: column;
     min-height: 0;
   }
 
-  .favorites-embedded-open .favorites-list {
+  .favorites-embedded-open .favorites-list,
+  .resontes-open .resontes-list {
     display: flex;
     flex: 1 1 auto;
     min-height: 0;
     margin-top: 0;
   }
 
-  .favorites-embedded-open .favorites-list.active {
+  .favorites-embedded-open .favorites-list.active,
+  .resontes-open .resontes-list.active {
     height: 100%;
     max-height: none;
   }
@@ -1184,6 +1293,19 @@ button:active:not(:disabled) {
   color: var(--control-fg);
 }
 
+/* Playback control "Resonate" button (#favorite-btn) uses currentColor SVG */
+.main-player-section .controls #favorite-btn {
+  color: var(--muted);
+}
+
+.main-player-section .controls #favorite-btn.active {
+  color: var(--primary);
+}
+
+.main-player-section .controls #favorite-btn:hover:not(:disabled) {
+  color: var(--primary);
+}
+
 .favorite-item:hover {
   background: var(--result-hover);
   padding-left: 20px;
@@ -1195,7 +1317,7 @@ button:active:not(:disabled) {
 }
 
 .favorite-btn.active:hover {
-  background: rgba(255, 107, 107, 0.25);
+  background: rgba(var(--primary-rgb), 0.14);
 }
 
 /* Shuffle button */
@@ -1383,7 +1505,55 @@ select:focus {
   font-size: 18px;
 }
 
+.resontes-toggle .resontes-icon {
+  font-size: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.resontes-toggle .resontes-icon .resonate-icon {
+  width: 30px;
+  height: 30px;
+  display: block;
+}
+
+/* Resonate logo sizing across Resonates buttons */
+.main-player-section .controls #favorite-btn .resonate-icon {
+  width: 34px;
+  height: 34px;
+  display: block;
+}
+
+.card-btn .resonate-icon,
+.result-favorite .resonate-icon {
+  width: 34px;
+  height: 34px;
+  display: block;
+}
+
+/* Dense grids (Resonates/Favorites panels): slightly smaller to avoid clipping */
+.favorites-list-content .card-btn .resonate-icon,
+.resontes-list-content .card-btn .resonate-icon {
+  width: 30px;
+  height: 30px;
+}
+
+.tracks-container .tlv2-resonte .resonate-icon,
+.tracks-container .track-resonte .resonate-icon,
+.track-favorite .resonate-icon {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+
 .favorites-toggle.active .favorites-icon {
+  animation: heartBeat 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  filter: drop-shadow(0 2px 6px rgba(var(--primary-rgb), 0.4));
+}
+
+.resontes-toggle.active .resontes-icon {
   animation: heartBeat 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
   filter: drop-shadow(0 2px 6px rgba(var(--primary-rgb), 0.4));
 }
@@ -1401,7 +1571,8 @@ select:focus {
   font-weight: 600;
 }
 
-.favorites-count {
+.favorites-count,
+.resontes-count {
   color: #fff;
   background: var(--primary);
   font-size: 11px;
@@ -1419,15 +1590,14 @@ select:focus {
 
 /* Favorites toggle button styling */
 
-.favorites-icon {
+.favorites-icon,
+.resontes-icon {
   font-size: 14px;
   font-weight: 900;
   transition: var(--transition-bounce);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--favorite);
-  filter: drop-shadow(0 1px 2px rgba(var(--primary-rgb), 0.2));
   flex-shrink: 0;
   padding: 0;
   margin: 0;
@@ -1436,12 +1606,36 @@ select:focus {
   width: 16px;
 }
 
-.favorites-toggle.active .favorites-icon {
+/* Favorites (legacy) keep the red accent */
+.favorites-icon {
+  color: var(--favorite);
+  filter: drop-shadow(0 1px 2px rgba(var(--primary-rgb), 0.2));
+}
+
+/* Resonates icon should inherit the button color (SVG uses currentColor) */
+.resontes-icon {
+  color: inherit;
+  filter: drop-shadow(0 1px 2px rgba(var(--primary-rgb), 0.14));
+}
+
+/* Ensure the header toggle actually changes color in active state */
+#resontes-toggle {
+  color: var(--muted);
+}
+
+#resontes-toggle.active,
+.resontes-toggle.active {
+  color: var(--primary);
+}
+
+.favorites-toggle.active .favorites-icon,
+.resontes-toggle.active .resontes-icon {
   animation: heartBeat 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
   filter: drop-shadow(0 2px 6px rgba(var(--primary-rgb), 0.4));
 }
 
-.favorites-count {
+.favorites-count,
+.resontes-count {
   color: var(--muted);
   background: transparent;
   font-size: 11px;
@@ -1482,7 +1676,8 @@ select:focus {
   }
 }
 
-.favorites-count {
+.favorites-count,
+.resontes-count {
   padding: 0;
   border-radius: 0;
   min-width: auto;
@@ -1493,7 +1688,8 @@ select:focus {
   margin-left: 2px;
 }
 
-.favorites-toggle.active .favorites-count {
+.favorites-toggle.active .favorites-count,
+.resontes-toggle.active .resontes-count {
   background: transparent;
   color: var(--muted);
 }
@@ -1503,7 +1699,8 @@ select:focus {
   display: none;
 }
 
-.favorites-list {
+.favorites-list,
+.resontes-list {
   border: 1px solid var(--surface-border);
   border-radius: 8px;
   margin-top: 6px;
@@ -1517,7 +1714,8 @@ select:focus {
   padding: 0;
 }
 
-.favorites-list.active {
+.favorites-list.active,
+.resontes-list.active {
   display: flex;
   flex-direction: column;
   position: relative;
@@ -1547,7 +1745,8 @@ select:focus {
   }
 }
 
-.favorites-list-content {
+.favorites-list-content,
+.resontes-list-content {
   /* Keep existing list padding behavior but inside the content region */
   padding: 0 10px;
 }
@@ -1627,13 +1826,15 @@ select:focus {
 
 /* Close buttons in panel toolbars: treat as subtle icon buttons */
 #search-results-close,
-#favorites-close {
+#favorites-close,
+#resontes-close {
   color: var(--muted);
   background: transparent;
 }
 
 #search-results-close:hover,
-#favorites-close:hover {
+#favorites-close:hover,
+#resontes-close:hover {
   background: rgba(var(--primary-rgb), 0.12);
   color: var(--fg);
 }
@@ -1967,13 +2168,14 @@ select:focus {
   height: auto;
   max-width: 1024px;
   margin: 0 auto;
-  padding: var(--spacing-md);
+  /* Match Resonates list horizontal padding for identical card layout */
+  padding: 0 10px;
   width: 100%;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: var(--spacing-sm);
-  padding-bottom: calc(var(--spacing-md) + env(safe-area-inset-bottom, 0) + var(--vv-bottom-inset, 0px));
+  padding-bottom: calc(10px + env(safe-area-inset-bottom, 0) + var(--vv-bottom-inset, 0px));
 }
 
 .search-result {
@@ -2107,7 +2309,7 @@ select:focus {
 
 .result-favorite:hover {
   background: var(--card);
-  color: var(--favorite);
+  color: var(--primary);
   transform: scale(1.08);
 }
 
@@ -2117,8 +2319,8 @@ select:focus {
 }
 
 .result-favorite.active {
-  color: var(--favorite);
-  background: var(--favorite-bg);
+  color: var(--primary);
+  background: rgba(var(--primary-rgb), 0.14);
 }
 
 .result-favorite.active:hover {
@@ -2193,10 +2395,10 @@ body.offline-mode .share-track-button {
   flex-direction: column;
   gap: 8px;
   margin: 8px auto 0;
-  max-width: 1024px;
-  padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 6px;
+  max-width: 100%;
+  padding: 8px 0;
+  background: transparent;
+  border-radius: 0;
 }
 
 .track-item:last-child {
@@ -2209,9 +2411,14 @@ body.offline-mode .share-track-button {
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 12px;
-  padding: 8px 10px;
+  padding: 10px 12px;
   border-radius: 6px;
+  background: #f6faff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  margin-bottom: 8px;
   transition: var(--transition-all-norm);
+  background: #d0f0ff;
+  box-shadow: 0 0 0 2px #1890ff66;
 }
 
 .track-item:hover {
@@ -2222,6 +2429,11 @@ body.offline-mode .share-track-button {
 .track-item-info {
   flex: 1;
   min-width: 0;
+  font-size: 1em;
+  font-weight: 600;
+  color: #1a1a1a;
+  letter-spacing: 0.01em;
+  padding-left: 0.2em;
   display: flex;
   align-items: center;
 }
@@ -2433,21 +2645,51 @@ body.offline-mode .share-track-button {
 }
 
 /* Favorites grid must always be 2 columns (content wrapper) */
-.favorites-list-content .card-grid {
+.favorites-list-content .card-grid,
+.resontes-list-content .card-grid {
   grid-template-columns: repeat(2, minmax(160px, 1fr));
 }
 
-/* Favorites panel: compact card styling for better visual harmony */
-.favorites-list-content .card-grid { gap: 8px; }
-.favorites-list-content .content-card { border-radius: 10px; }
-.favorites-list-content .card-media { aspect-ratio: 4 / 5; }
-.favorites-list-content .card-chips { top: 6px; left: 6px; gap: 5px; }
-.favorites-list-content .chip { font-size: 10px; padding: 2px 6px; }
-.favorites-list-content .card-body { padding: 8px 10px; gap: 4px; }
-.favorites-list-content .card-title { font-size: 13px; line-height: 1.2; -webkit-line-clamp: 4; line-clamp: 4; }
-.favorites-list-content .content-card .result-meta { padding-top: 2px; }
-.favorites-list-content .card-actions { padding: 8px 10px; min-height: 40px; gap: 6px; }
-.favorites-list-content .card-btn { width: 40px; height: 40px; min-width: 40px; min-height: 40px; border-radius: 8px; }
+/* Compact card styling: Search + Resonates should look identical */
+.search-results-list .card-grid,
+.favorites-list-content .card-grid,
+.resontes-list-content .card-grid { gap: 8px; }
+
+.search-results-list .content-card,
+.favorites-list-content .content-card,
+.resontes-list-content .content-card { border-radius: 10px; }
+
+.search-results-list .card-media,
+.favorites-list-content .card-media,
+.resontes-list-content .card-media { aspect-ratio: 4 / 5; }
+
+.search-results-list .card-chips,
+.favorites-list-content .card-chips,
+.resontes-list-content .card-chips { top: 6px; left: 6px; gap: 5px; }
+
+.search-results-list .chip,
+.favorites-list-content .chip,
+.resontes-list-content .chip { font-size: 10px; padding: 2px 6px; }
+
+.search-results-list .card-body,
+.favorites-list-content .card-body,
+.resontes-list-content .card-body { padding: 8px 10px; gap: 4px; }
+
+.search-results-list .card-title,
+.favorites-list-content .card-title,
+.resontes-list-content .card-title { font-size: 13px; line-height: 1.2; -webkit-line-clamp: 4; line-clamp: 4; }
+
+.search-results-list .content-card .result-meta,
+.favorites-list-content .content-card .result-meta,
+.resontes-list-content .content-card .result-meta { padding-top: 2px; }
+
+.search-results-list .card-actions,
+.favorites-list-content .card-actions,
+.resontes-list-content .card-actions { padding: 8px 10px; min-height: 40px; gap: 6px; }
+
+.search-results-list .card-btn,
+.favorites-list-content .card-btn,
+.resontes-list-content .card-btn { width: 40px; height: 40px; min-width: 40px; min-height: 40px; border-radius: 8px; }
 
 .content-card {
   display: grid;
@@ -2459,6 +2701,11 @@ body.offline-mode .share-track-button {
   box-shadow: var(--shadow-subtle);
   transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease;
   height: 100%;
+}
+
+/* Cards that use an overlay action bar don't need a third row */
+.content-card.actions-overlay {
+  grid-template-rows: auto 1fr;
 }
 
 .content-card:hover {
@@ -2532,7 +2779,8 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
 
 /* Favorites: keep titles compact even on desktop */
 @media (min-width: 1024px) {
-  .favorites-list-content .card-title { -webkit-line-clamp: 4; line-clamp: 4; }
+  .favorites-list-content .card-title,
+  .resontes-list-content .card-title { -webkit-line-clamp: 4; line-clamp: 4; }
 }
 .card-subtitle { display: none; }
 .result-meta { grid-column: 1 / -1; grid-row: 2; display: block; }
@@ -2545,7 +2793,63 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
 .card-btn:hover { background: var(--card); transform: translateY(-1px); }
 .card-btn:active { transform: scale(0.95); }
 .card-btn:focus-visible { outline: none; box-shadow: var(--focus-ring-shadow); }
-.card-btn.favorite.active { color: var(--favorite); background: var(--favorite-bg); }
+.card-btn.favorite.active,
+.card-btn.resonte.active {
+  color: var(--primary);
+  background: rgba(var(--primary-rgb), 0.14);
+}
+
+/* Compact overlay actions bar (Resonate / Share / Expand) */
+.search-results-list .card-media,
+.favorites-list-content .card-media,
+.resontes-list-content .card-media {
+  position: relative;
+}
+
+.search-results-list .card-actions.card-actions-overlay,
+.favorites-list-content .card-actions.card-actions-overlay,
+.resontes-list-content .card-actions.card-actions-overlay {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  min-height: 0;
+  background: rgba(0, 0, 0, 0.38);
+  border: 1px solid var(--surface-border);
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+}
+
+.search-results-list .card-actions.card-actions-overlay .card-btn,
+.favorites-list-content .card-actions.card-actions-overlay .card-btn,
+.resontes-list-content .card-actions.card-actions-overlay .card-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transform: none;
+}
+
+.search-results-list .card-actions.card-actions-overlay .card-btn:hover,
+.favorites-list-content .card-actions.card-actions-overlay .card-btn:hover,
+.resontes-list-content .card-actions.card-actions-overlay .card-btn:hover {
+  background: rgba(var(--primary-rgb), 0.18);
+}
+
+.search-results-list .card-actions.card-actions-overlay .card-btn.share,
+.search-results-list .card-actions.card-actions-overlay .card-btn.expand,
+.favorites-list-content .card-actions.card-actions-overlay .card-btn.share,
+.favorites-list-content .card-actions.card-actions-overlay .card-btn.expand,
+.resontes-list-content .card-actions.card-actions-overlay .card-btn.share,
+.resontes-list-content .card-actions.card-actions-overlay .card-btn.expand {
+  font-size: 16px;
+}
 
 /* Premium desktop: de-emphasize actions until hover/focus (keeps scanability) */
 @media (min-width: 1024px) {
@@ -2590,7 +2894,8 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
   .favorites-list-content { padding: 0 12px; }
   .card-grid { grid-template-columns: repeat(3, minmax(160px, 1fr)); gap: 14px; }
   /* Keep favorites stable: 2 columns to match search card sizing */
-  .favorites-list-content .card-grid { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
+  .favorites-list-content .card-grid,
+  .resontes-list-content .card-grid { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
 }
 @media (min-width: 1024px) {
   .search-results-list { max-width: 1200px; padding: 0 24px; }
@@ -2598,7 +2903,8 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
   .card-grid { grid-template-columns: repeat(4, minmax(180px, 1fr)); gap: 16px; }
   .search-results-list .card-grid { grid-template-columns: repeat(5, minmax(160px, 1fr)); }
   /* Desktop requirement: favorites always 2 columns */
-  .favorites-list-content .card-grid { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
+  .favorites-list-content .card-grid,
+  .resontes-list-content .card-grid { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
 }
 
 /* Extra desktop (1280px and up) - Wider container and denser grid */
@@ -2608,7 +2914,8 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
   .search-results-list { max-width: 1200px; }
   .card-grid { grid-template-columns: repeat(5, minmax(200px, 1fr)); gap: 18px; }
   /* Keep favorites stable: 2 columns on wide desktop too */
-  .favorites-list-content .card-grid { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
+  .favorites-list-content .card-grid,
+  .resontes-list-content .card-grid { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
 }
 
 /* Mobile tightening for 2-column search grid (3 action buttons fit without wrapping) */
@@ -3839,21 +4146,109 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
 /* ===== Tracklist V2 (scoped under .tracks-container) ===== */
 .tracks-container .tlv2 { padding: 8px 4px; border-top: 1px solid var(--surface-border-subtle); }
 .tracks-container .tlv2-list { display: flex; flex-direction: column; gap: 6px; }
-.tracks-container .tlv2-row { display: grid; grid-template-columns: 36px 1fr auto; align-items: center; gap: 8px; padding: 6px 4px; border-radius: 8px; }
-.tracks-container .tlv2-row:hover { background: var(--surface-hover); }
-.tracks-container .tlv2-left { display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 12px; }
-.tracks-container .tlv2-number { display: inline-block; min-width: 20px; text-align: center; }
-.tracks-container .tlv2-info { display: flex; flex-direction: column; min-width: 0; }
-.tracks-container .tlv2-title { font-size: 14px; line-height: 1.2; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tracks-container .tlv2-creator { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tracks-container .tlv2-right { display: inline-flex; align-items: center; gap: 8px; }
-.tracks-container .tlv2-duration { font-size: 12px; color: var(--muted); }
-.tracks-container .tlv2-action { background: transparent; border: none; color: var(--control-fg); cursor: pointer; padding: 4px 6px; border-radius: 6px; transition: var(--transition-default); }
-.tracks-container .tlv2-action:hover { background: var(--btn-hover); }
-.tracks-container .tlv2-action:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-.tracks-container .tlv2-fav.active { color: var(--favorite); }
-.tracks-container .tlv2-offline { font-size: 12px; color: var(--muted); }
-.tracks-container .tlv2-download { font-size: 13px; }
+
+/* Tracklist V2: estilos globales para todos los contextos */
+.tracks-container .tlv2-row {
+  display: grid;
+  grid-template-columns: 36px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  border-radius: 8px;
+  background: transparent;
+  transition: background 0.15s;
+}
+.tracks-container .tlv2-row:hover,
+.tracks-container .tlv2-row:focus-visible {
+  background: var(--surface-hover);
+}
+.tracks-container .tlv2-row:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.tracks-container .tlv2-left {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+.tracks-container .tlv2-number {
+  display: inline-block;
+  min-width: 20px;
+  text-align: center;
+}
+.tracks-container .tlv2-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.tracks-container .tlv2-title {
+  font-size: 14px;
+  line-height: 1.2;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tracks-container .tlv2-creator {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tracks-container .tlv2-description {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+  white-space: normal;
+  word-break: break-word;
+}
+.tracks-container .tlv2-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.tracks-container .tlv2-duration {
+  font-size: 12px;
+  color: var(--muted);
+}
+.tracks-container .tlv2-action {
+  background: transparent;
+  border: none;
+  color: var(--control-fg);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+  font-size: 15px;
+}
+.tracks-container .tlv2-action:hover,
+.tracks-container .tlv2-action:focus-visible {
+  background: var(--btn-hover);
+}
+.tracks-container .tlv2-fav.active {
+  color: var(--favorite);
+}
+
+/* Tracklist V2: Resonates button (uses inline SVG with currentColor) */
+.tracks-container .tlv2-resonte,
+.tracks-container .track-resonte {
+  color: var(--muted);
+}
+
+.tracks-container .tlv2-resonte.active,
+.tracks-container .track-resonte.active {
+  color: var(--primary);
+}
+.tracks-container .tlv2-offline {
+  font-size: 12px;
+  color: var(--muted);
+}
+.tracks-container .tlv2-download {
+  font-size: 13px;
+}
 
 /* Ensure expanded tracklists span the full width of the card grid */
 .card-grid .tracks-container {
