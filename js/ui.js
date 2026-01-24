@@ -2500,7 +2500,14 @@ function displaySearchResults(searchData, clearExisting = true) {
 
 
   if (!searchData) return;
-  const { results, hasMore, total } = searchData;
+  const { hasMore, total } = searchData;
+  const deferred = searchData.deferredMetadata === true;
+  const resultsRaw = Array.isArray(searchData.results) ? searchData.results : [];
+  const results = deferred
+    ? resultsRaw.map(r => {
+      try { return Object.assign({}, r, { __metaPending: true }); } catch { return r; }
+    })
+    : resultsRaw;
   const offlineOnly = !!(state.searchUi && state.searchUi.offlineOnly);
 
   if (clearExisting) {
@@ -2772,62 +2779,93 @@ try {
         const q = String(query || '').trim();
         const p = Number(page);
         if (!q || !Number.isFinite(p)) return;
-        if (!state || String(state.currentSearchQuery || '').trim() !== q) return;
+        if (!state) return;
+        // Be tolerant: search.js may normalize the query differently than the UI input.
+        // We prefer not to bail out here; instead we only update cards that still exist.
+        const currentQ = String(state.currentSearchQuery || '').trim();
+        const normalizeQ = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+        const mismatch = currentQ && q && normalizeQ(currentQ) !== normalizeQ(q);
 
         const cacheKey = `search:${q}:${p}`;
         const cached = window.enhancedCache && window.enhancedCache.get('search', cacheKey);
         if (!cached || cached.deferredMetadata !== false || !Array.isArray(cached.results)) return;
 
-        const resultsPerPage = (SEARCH_CONFIG && typeof SEARCH_CONFIG.resultsPerPage === 'number')
-          ? SEARCH_CONFIG.resultsPerPage
-          : 20;
-        const startIndex = p * resultsPerPage;
-
-        // Update state in-place for this page slice.
-        for (let i = 0; i < cached.results.length; i++) {
-          const idx = startIndex + i;
-          if (!state.searchResults || idx < 0 || idx >= state.searchResults.length) continue;
-          state.searchResults[idx] = cached.results[i];
-        }
-
-        // Update cards in DOM (type chip, track count, expand visibility).
-        for (let i = 0; i < cached.results.length; i++) {
-          const idx = startIndex + i;
-          const item = cached.results[i];
-          const card = elements.searchResultsList
-            ? elements.searchResultsList.querySelector(`.content-card[data-context="search"][data-global-index="${idx}"]`)
-            : null;
-          if (!card) continue;
-
-          const isAlbum = !item.isTrackList && ((item.trackCount || 0) > 1 || item.isAlbum === true);
-          const typeChip = card.querySelector('.chip-type');
-          if (typeChip) typeChip.textContent = isAlbum ? 'Album' : 'Single';
-
-          const trackCountChip = card.querySelector('.chip-track-count');
-          const tc = (typeof item.trackCount === 'number' && isFinite(item.trackCount)) ? item.trackCount : null;
-          if (tc && tc > 0) {
-            if (trackCountChip) {
-              trackCountChip.textContent = `${tc} tracks`;
-            } else {
-              const chips = card.querySelector('.card-chips');
-              if (chips) {
-                const chip = document.createElement('span');
-                chip.className = 'chip chip-quiet chip-track-count';
-                chip.textContent = `${tc} tracks`;
-                chips.appendChild(chip);
+        // Update state by identifier so playback/type classification stays correct
+        // even when pagination math or filters differ from cache layout.
+        try {
+          if (Array.isArray(state.searchResults)) {
+            for (const enriched of cached.results) {
+              if (!enriched || !enriched.identifier) continue;
+              const idx = state.searchResults.findIndex(r => r && r.identifier === enriched.identifier);
+              if (idx >= 0) {
+                const merged = Object.assign({}, state.searchResults[idx], enriched);
+                try { delete merged.__metaPending; } catch {}
+                state.searchResults[idx] = merged;
               }
             }
           }
+        } catch {}
 
-          const expandBtn = card.querySelector('.card-btn.expand');
-          if (expandBtn) {
-            expandBtn.style.display = (isAlbum && tc && tc > 1) ? 'flex' : 'none';
+        // Update cards in DOM (type chip, track count, expand visibility).
+        for (let i = 0; i < cached.results.length; i++) {
+          const item = cached.results[i];
+          if (!item || !item.identifier) continue;
+
+          const safeId = String(item.identifier);
+          const root = elements.searchResultsList || document;
+          const cards = Array.from(root.querySelectorAll(
+            `.content-card[data-album-id="${CSS.escape(safeId)}"]`
+          ));
+          if (!cards.length) continue;
+
+          const isAlbum = ((item.trackCount || 0) > 1 || item.isAlbum === true);
+
+          for (const card of cards) {
+            const typeChip = card.querySelector('.chip-type');
+            if (typeChip) typeChip.textContent = isAlbum ? 'Album' : 'Single';
+
+            const trackCountChip = card.querySelector('.chip-track-count');
+            const tc = (typeof item.trackCount === 'number' && isFinite(item.trackCount)) ? item.trackCount : null;
+            if (tc && tc > 0) {
+              if (trackCountChip) {
+                trackCountChip.textContent = `${tc} tracks`;
+              } else {
+                const chips = card.querySelector('.card-chips');
+                if (chips) {
+                  const chip = document.createElement('span');
+                  chip.className = 'chip chip-quiet chip-track-count';
+                  chip.textContent = `${tc} tracks`;
+                  chips.appendChild(chip);
+                }
+              }
+            } else if (trackCountChip) {
+              // If we previously showed a count and now know it's invalid, clear it.
+              try { trackCountChip.remove(); } catch {}
+            }
+
+            const expandBtn = card.querySelector('.card-btn.expand');
+            if (expandBtn) {
+              expandBtn.style.display = (tc && tc > 1) ? 'flex' : 'none';
+            }
           }
         }
+
+        // If the query mismatched but we still updated cards, keep going silently.
+        // (This happens when the search layer normalizes the query differently.)
+        void mismatch;
       } catch {
         // best-effort
       }
     };
+
+    // Drain any enrichment notifications that happened before ui.js loaded.
+    try {
+      const pending = Array.isArray(window.__pendingSearchEnriched) ? window.__pendingSearchEnriched.slice(0) : [];
+      window.__pendingSearchEnriched = [];
+      for (const evt of pending) {
+        try { window.onSearchPageEnriched(evt); } catch {}
+      }
+    } catch {}
   }
 } catch {}
 
@@ -2862,7 +2900,7 @@ async function loadAlbumInfoBackground(identifier, resultEl) {
 
     const metaElement = resultEl.querySelector('.result-meta');
     if (metaElement) {
-      const forceSingle = resultEl.dataset.isTrackList === 'true';
+      const forceSingle = (resultEl.dataset.isTrackList === 'true') && trackCount <= 1;
       if (trackCount === 0) {
         metaElement.innerHTML = '<span style="color: var(--muted); font-size: 10px;">No playable tracks</span>';
       } else {
@@ -2885,7 +2923,7 @@ async function loadAlbumInfoBackground(identifier, resultEl) {
     // Mostrar/ocultar el botón de expandir basado en si es un álbum
     const expandButton = resultEl.querySelector('.favorite-actions button:last-child');
     if (expandButton) {
-      const forceSingle = resultEl.dataset.isTrackList === 'true';
+      const forceSingle = (resultEl.dataset.isTrackList === 'true') && trackCount <= 1;
       // Never show expand for explicit track-list items
       expandButton.style.display = (!forceSingle && trackCount > 1) ? 'inline-block' : 'none';
     }
@@ -3067,7 +3105,8 @@ function createSearchResultElement(result, globalIndex) {
   // Show expand button immediately for all results
   // Respect explicit track-list override: list and behave as single
   // Hide expand control up-front for track-list results
-  expandBtn.style.display = result.isTrackList ? 'none' : 'inline-block';
+  const initialForceSingle = (result.isTrackList === true) && (result.trackCount === 1 || result.isAlbum === false);
+  expandBtn.style.display = initialForceSingle ? 'none' : 'inline-block';
 
   // Add cover to the left, then info and actions
   resultEl.appendChild(coverContainer);
@@ -3237,8 +3276,9 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
   chips.className = 'card-chips';
   const chipType = document.createElement('span');
   chipType.className = 'chip chip-type';
-  const isAlbum = !item.isTrackList && ( !!item.isAlbum || (typeof item.trackCount === 'number' && item.trackCount > 1) || !!item.isAlbumTrack );
-  chipType.textContent = isAlbum ? 'Album' : 'Single';
+  const isAlbum = ( !!item.isAlbum || (typeof item.trackCount === 'number' && item.trackCount > 1) || !!item.isAlbumTrack );
+  const isPendingMeta = (context === 'search' && item && item.__metaPending === true);
+  chipType.textContent = isAlbum ? 'Album' : (isPendingMeta ? '…' : 'Single');
   chips.appendChild(chipType);
 
   // Offline chip (when we can determine it cheaply)

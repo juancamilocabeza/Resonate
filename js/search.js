@@ -9,7 +9,7 @@ const SEARCH_DEFAULTS = {
 };
 
 const SEARCH_LIMITS = {
-  metadataBatchSize: 2,
+  metadataBatchSize: 4,
   maxResultsToPreload: 3,
   maxResultsToLoad: 10,
   playlistBatchSize: 2,
@@ -62,10 +62,13 @@ async function enrichSearchResultsWithMetadata(processedResults, query, { signal
         const files = await fetchOptimizedPlayableFiles(item.identifier);
         const count = Array.isArray(files) ? files.length : 0;
         if (count > 0) {
+          const isTrackList = item.isTrackList === true && count <= 1;
           return {
             ...item,
-            // Respect explicit track-list flag: render as single even if multiple files
-            isAlbum: item.isTrackList ? false : (count > 1),
+            // Only force "single" for track-list items when there is a single playable file.
+            // If multiple playable files exist, treat as an album.
+            isTrackList,
+            isAlbum: (count > 1),
             trackCount: count
           };
         }
@@ -101,12 +104,21 @@ async function enrichSearchResultsWithMetadata(processedResults, query, { signal
   return enrichedResults;
 }
 
-function scheduleSearchPageEnrichment({ normalizedQuery, page, processedResults, hasMore, total, generation }) {
+function scheduleSearchPageEnrichment({ normalizedQuery, page, processedResults, hasMore, total, priority = 'idle' }) {
   try {
     const cacheKey = getSearchCacheKey(normalizedQuery, page);
-    scheduleTaskIdle(async () => {
+    const schedule = (task) => {
+      if (priority === 'immediate') {
+        setTimeout(() => {
+          try { task(); } catch {}
+        }, 0);
+        return;
+      }
+      scheduleTaskIdle(task, { timeout: 1500 });
+    };
+
+    schedule(async () => {
       try {
-        if (generation !== searchInFlight.prefetchGeneration) return;
         const existing = window.enhancedCache && window.enhancedCache.get('search', cacheKey);
         if (existing && existing.deferredMetadata !== true) return; // already full
 
@@ -119,15 +131,19 @@ function scheduleSearchPageEnrichment({ normalizedQuery, page, processedResults,
         };
         if (window.enhancedCache) window.enhancedCache.set('search', cacheKey, full);
 
+        // Notify UI: if ui.js isn't loaded yet, queue it for later.
         try {
           if (typeof window.onSearchPageEnriched === 'function') {
             window.onSearchPageEnriched({ query: normalizedQuery, page });
+          } else {
+            if (!Array.isArray(window.__pendingSearchEnriched)) window.__pendingSearchEnriched = [];
+            window.__pendingSearchEnriched.push({ query: normalizedQuery, page, ts: Date.now() });
           }
         } catch {}
       } catch {
         // background enrichment is best-effort
       }
-    }, { timeout: 1500 });
+    });
   } catch {
     // ignore
   }
@@ -356,12 +372,19 @@ async function performOptimizedSearch(query, page = 0, options = {}) {
         })(),
         // Heuristic: mark explicit "track list" items to be rendered as singles
         isTrackList: (() => {
-          const t = normalizeString(item.title || '');
-          const d = normalizeString(item.description || '');
-          const cues = [
-            'track list', 'tracklist', 'lista de temas', 'lista de canciones', 'track-list'
-          ];
-          return cues.some(c => t.includes(c) || d.includes(c));
+          // NOTE: Descriptions for real albums commonly include a "Tracklist" section.
+          // To avoid false positives, we only classify as track-list when the TITLE itself
+          // is essentially just "tracklist" / "lista de canciones".
+          const t = normalizeString(item.title || '').trim();
+          if (!t) return false;
+
+          const re = /^(track\s*list|tracklist|track-list|lista\s+de\s+(temas|canciones))\b/;
+          const match = t.match(re);
+          if (!match) return false;
+
+          const remainder = t.slice(match[0].length);
+          const remainderClean = remainder.replace(/[\s\-–—:]+/g, '');
+          return remainderClean.length === 0;
         })(),
         isAlbum: null,
         trackCount: null,
@@ -395,7 +418,7 @@ async function performOptimizedSearch(query, page = 0, options = {}) {
           processedResults,
           hasMore,
           total,
-          generation: searchInFlight.prefetchGeneration
+          priority: page === 0 ? 'immediate' : 'idle'
         });
         return fastResult;
       }
@@ -470,7 +493,7 @@ async function performOptimizedSearch(query, page = 0, options = {}) {
               processedResults: processedFallbackResults,
               hasMore,
               total,
-              generation: searchInFlight.prefetchGeneration
+              priority: page === 0 ? 'immediate' : 'idle'
             });
             return fastResult;
           }
@@ -939,7 +962,19 @@ function createPlayableFiles(audioFiles, identifier, metadata) {
       // Create normalized key based on title and artist for better deduplication
       const normalizedTitle = (file.title || '').toLowerCase().trim().replace(/\s+/g, ' ');
       const normalizedArtist = (file.creator || '').toLowerCase().trim().replace(/\s+/g, ' ');
-      const trackKey = `${normalizedTitle}|${normalizedArtist}`;
+      // Include a stable per-track discriminator to avoid collapsing entire albums
+      // when title/artist fall back to the album-level metadata.
+      const tn = (typeof file.trackNumber === 'number' && isFinite(file.trackNumber) && file.trackNumber > 0)
+        ? String(file.trackNumber)
+        : '';
+      const stem = String(file.fileName || '')
+        .toLowerCase()
+        .replace(/\.(mp3|ogg)$/i, '')
+        .trim()
+        .replace(/\s+/g, ' ');
+      const trackKey = tn
+        ? `${normalizedArtist}|${tn}|${normalizedTitle}`
+        : `${normalizedArtist}|${stem}|${normalizedTitle}`;
       const existing = seenTracks.get(trackKey);
       if (!existing) {
         // First time seeing this track
@@ -1328,9 +1363,7 @@ async function playOptimizedResonte(resonteIndex = 0) {
         creator: resonte.creator || 'Unknown',
         id: resonte.id,
         isAlbumTrack: resonte.isAlbumTrack || false,
-        albumId: resonte.albumId || resonte.id,
-        trackIndex: resonte.trackIndex || 0,
-        totalTracks: resonte.totalTracks || 1
+        albumId: resonte.albumId || resonte.id
       };
       if (!track.url || track.url === '') {
         throw new Error('Audio URL not available in resonte');
