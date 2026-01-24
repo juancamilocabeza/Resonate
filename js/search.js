@@ -220,7 +220,8 @@ async function performOptimizedSearch(query, page = 0, options = {}) {
   const abortPrevious = options.abortPrevious !== false;
   const showLoader = options.showLoader !== false;
   const activateUI = options.activateUI !== false;
-  const deferMetadata = options.deferMetadata === true;
+  // Default to fast-first-render; metadata enrichment runs in idle time.
+  const deferMetadata = options.deferMetadata !== false;
 
   // Prevent search when offline
   const st = getSearchStateRef();
@@ -298,7 +299,8 @@ async function performOptimizedSearch(query, page = 0, options = {}) {
       const encodedQuery = encodeURIComponent(optimizedQuery);
       const resultsPerPage = getSearchConfigNumber('resultsPerPage', SEARCH_DEFAULTS.resultsPerPage);
       const timeout = getSearchConfigNumber('timeout', SEARCH_DEFAULTS.timeout);
-      const url = `https://archive.org/advancedsearch.php?q=${encodedQuery}&fl[]=identifier,title,creator,description&rows=${resultsPerPage}&page=${page + 1}&output=json&sort[]=downloads+desc`;
+      // Include fields needed for client-side sorting (popularidad/fecha) without extra fetch.
+      const url = `https://archive.org/advancedsearch.php?q=${encodedQuery}&fl[]=identifier,title,creator,description,downloads,addeddate,year&rows=${resultsPerPage}&page=${page + 1}&output=json&sort[]=downloads+desc`;
       const fetchFn = getSearchFetchFn();
       const response = await fetchFn(url, {
         signal,
@@ -310,12 +312,48 @@ async function performOptimizedSearch(query, page = 0, options = {}) {
       if (!(response && response.ok)) throw new Error('Network error');
       const data = await response.json();
       const results = (data.response && data.response.docs) ? data.response.docs : [];
+
+      // CA2: if there are no hits, try a relaxed query (tokens OR across key fields).
+      // This only runs on the first page to avoid doubling network cost on infinite scroll.
+      let effectiveResults = results;
+      if (page === 0 && effectiveResults.length === 0) {
+        try {
+          const relaxedQuery = buildRelaxedArchiveQuery(query);
+          const relaxedEncoded = encodeURIComponent(relaxedQuery);
+          const relaxedUrl = `https://archive.org/advancedsearch.php?q=${relaxedEncoded}&fl[]=identifier,title,creator,description,downloads,addeddate,year&rows=${resultsPerPage}&page=1&output=json&sort[]=downloads+desc`;
+          const relaxedResp = await fetchFn(relaxedUrl, { signal, timeout, headers: { 'Accept': 'application/json' } });
+          if (relaxedResp && relaxedResp.ok) {
+            const relaxedData = await relaxedResp.json();
+            const relaxedDocs = (relaxedData.response && relaxedData.response.docs) ? relaxedData.response.docs : [];
+            if (relaxedDocs.length > 0) {
+              effectiveResults = relaxedDocs;
+              // Prefer total from relaxed query if we fell back.
+              if (relaxedData.response && typeof relaxedData.response.numFound === 'number') {
+                data.response = data.response || {};
+                data.response.numFound = relaxedData.response.numFound;
+              }
+            }
+          }
+        } catch {
+          // best-effort: if relaxed fails, continue with empty results
+        }
+      }
+
       // Post-process results for improved relevance in client
-      const processedResults = results.map(item => ({
+      const processedResults = effectiveResults.map(item => ({
         identifier: item.identifier,
         title: item.title || 'Untitled',
         creator: item.creator || 'Unknown',
         description: item.description || '', // Ensure description is included
+        downloads: (() => {
+          const n = typeof item.downloads === 'number' ? item.downloads : parseFloat(item.downloads);
+          return Number.isFinite(n) ? n : null;
+        })(),
+        addeddate: item.addeddate || null,
+        year: (() => {
+          const n = typeof item.year === 'number' ? item.year : parseInt(item.year, 10);
+          return Number.isFinite(n) ? n : null;
+        })(),
         // Heuristic: mark explicit "track list" items to be rendered as singles
         isTrackList: (() => {
           const t = normalizeString(item.title || '');
@@ -336,14 +374,18 @@ async function performOptimizedSearch(query, page = 0, options = {}) {
       const total = (data.response && data.response.numFound) ? data.response.numFound : 0;
       const hasMore = (typeof total === 'number' && isFinite(total) && total > 0)
         ? ((page + 1) * resultsPerPage) < total
-        : (results.length === resultsPerPage);
+        : (effectiveResults.length === resultsPerPage);
+
+      const directMatchCount = countDirectMatches(processedResults, normalizedQuery);
+      const similarOnly = processedResults.length > 0 && directMatchCount === 0;
 
       if (deferMetadata) {
         const fastResult = {
           results: processedResults,
           hasMore,
           total,
-          deferredMetadata: true
+          deferredMetadata: true,
+          similarOnly
         };
         if (window.enhancedCache) window.enhancedCache.set('search', cacheKey, fastResult);
         // Enrich in idle time so infinite-scroll can append instantly.
@@ -360,7 +402,7 @@ async function performOptimizedSearch(query, page = 0, options = {}) {
 
       // Full (blocking) enrichment: filter non-playables and compute track counts.
       const enrichedResults = await enrichSearchResultsWithMetadata(processedResults, normalizedQuery, { signal });
-      const searchResult = { results: enrichedResults, hasMore, total, deferredMetadata: false };
+      const searchResult = { results: enrichedResults, hasMore, total, deferredMetadata: false, similarOnly };
       if (window.enhancedCache) window.enhancedCache.set('search', cacheKey, searchResult);
       return searchResult;
     } catch (error) {
@@ -375,7 +417,7 @@ async function performOptimizedSearch(query, page = 0, options = {}) {
         const simpleQuery = encodeURIComponent(`(${query}) AND mediatype:audio`);
         const resultsPerPage = getSearchConfigNumber('resultsPerPage', SEARCH_DEFAULTS.resultsPerPage);
         const timeout = getSearchConfigNumber('timeout', SEARCH_DEFAULTS.timeout);
-        const fallbackUrl = `https://archive.org/advancedsearch.php?q=${simpleQuery}&fl[]=identifier,title,creator&rows=${resultsPerPage}&page=${page + 1}&output=json&sort[]=downloads+desc`;
+        const fallbackUrl = `https://archive.org/advancedsearch.php?q=${simpleQuery}&fl[]=identifier,title,creator,description,downloads,addeddate,year&rows=${resultsPerPage}&page=${page + 1}&output=json&sort[]=downloads+desc`;
         const fetchFn2 = getSearchFetchFn();
         const fallbackResponse = await fetchFn2(fallbackUrl, {
           signal,
@@ -388,22 +430,38 @@ async function performOptimizedSearch(query, page = 0, options = {}) {
             identifier: item.identifier,
             title: item.title || 'Untitled',
             creator: item.creator || 'Unknown',
-            description: '',
+            description: item.description || '',
+            downloads: (() => {
+              const n = typeof item.downloads === 'number' ? item.downloads : parseFloat(item.downloads);
+              return Number.isFinite(n) ? n : null;
+            })(),
+            addeddate: item.addeddate || null,
+            year: (() => {
+              const n = typeof item.year === 'number' ? item.year : parseInt(item.year, 10);
+              return Number.isFinite(n) ? n : null;
+            })(),
             isAlbum: null,
             trackCount: null,
-            relevanceScore: 0.5 // Neutral score for fallback results
+            relevanceScore: calculateRelevanceScore(item, query)
           }));
+          if (processedFallbackResults.length > 1) {
+            processedFallbackResults.sort((a, b) => b.relevanceScore - a.relevanceScore);
+          }
           const total = (fallbackData.response && fallbackData.response.numFound) ? fallbackData.response.numFound : 0;
           const hasMore = (typeof total === 'number' && isFinite(total) && total > 0)
             ? ((page + 1) * resultsPerPage) < total
             : (fallbackResults.length === resultsPerPage);
+
+          const directMatchCount = countDirectMatches(processedFallbackResults, normalizedQuery);
+          const similarOnly = processedFallbackResults.length > 0 && directMatchCount === 0;
 
           if (deferMetadata) {
             const fastResult = {
               results: processedFallbackResults,
               hasMore,
               total,
-              deferredMetadata: true
+              deferredMetadata: true,
+              similarOnly
             };
             if (window.enhancedCache) window.enhancedCache.set('search', cacheKey, fastResult);
             scheduleSearchPageEnrichment({
@@ -418,7 +476,7 @@ async function performOptimizedSearch(query, page = 0, options = {}) {
           }
 
           const enrichedFallback = await enrichSearchResultsWithMetadata(processedFallbackResults, normalizedQuery, { signal });
-          const searchResult = { results: enrichedFallback, hasMore, total, deferredMetadata: false };
+          const searchResult = { results: enrichedFallback, hasMore, total, deferredMetadata: false, similarOnly };
           if (window.enhancedCache) window.enhancedCache.set('search', cacheKey, searchResult);
           return searchResult;
         }
@@ -454,30 +512,69 @@ async function performOptimizedSearch(query, page = 0, options = {}) {
 
 // Auxiliary function to calculate relevance in client
 function calculateRelevanceScore(item, query) {
-  let score = 0;
   const q = normalizeString(query);
-  const titleNorm = normalizeString(item.title);
-  const creatorNorm = normalizeString(item.creator);
-  const descriptionNorm = normalizeString(item.description);
-  if (titleNorm.includes(q)) {
-    score += 3;
+  if (!q) return 0;
+
+  const titleNorm = normalizeString(item.title || '');
+  const creatorNorm = normalizeString(item.creator || '');
+  const descriptionNorm = normalizeString(item.description || '');
+
+  const tokens = tokenizeNormalized(q);
+  const hasTokens = tokens.length > 0;
+
+  let score = 0;
+
+  // Phrase matches (strong signals)
+  if (titleNorm === q) score += 20;
+  if (creatorNorm === q) score += 14;
+  if (titleNorm.startsWith(q)) score += 10;
+  if (titleNorm.includes(q)) score += 10;
+  if (creatorNorm.includes(q)) score += 6;
+  if (descriptionNorm.includes(q)) score += 2;
+  if (titleNorm.includes(q) && creatorNorm.includes(q)) score += 4;
+
+  // Token coverage
+  if (hasTokens) {
+    let titleHits = 0;
+    let creatorHits = 0;
+    let descHits = 0;
+    for (const tok of tokens) {
+      if (!tok) continue;
+      if (titleNorm.includes(tok)) titleHits++;
+      if (creatorNorm.includes(tok)) creatorHits++;
+      if (descriptionNorm.includes(tok)) descHits++;
+
+      if (titleNorm.startsWith(tok)) score += 1.5;
+    }
+    score += titleHits * 4;
+    score += creatorHits * 2.5;
+    score += descHits * 0.75;
+
+    // Reward higher coverage (more tokens matched somewhere)
+    const coverage = Math.min(1, (titleHits + creatorHits + descHits) / Math.max(1, tokens.length));
+    score += coverage * 6;
   }
-  if (creatorNorm.includes(q)) {
-    score += 2;
+
+  // Lightweight typo similarity (only if we didn't get any direct signal)
+  if (score < 2) {
+    if (isTypoSimilar(q, titleNorm)) score += 2;
+    if (isTypoSimilar(q, creatorNorm)) score += 1.5;
+    if (hasTokens) {
+      const bestTitle = bestTokenTypoBoost(tokens, titleNorm);
+      const bestCreator = bestTokenTypoBoost(tokens, creatorNorm);
+      score += bestTitle;
+      score += bestCreator * 0.75;
+    }
   }
-  if (descriptionNorm.includes(q)) {
-    score += 1;
-  }
-  if (titleNorm.startsWith(q)) {
-    score += 2;
-  }
-  if (titleNorm.includes(q) && creatorNorm.includes(q)) {
-    score += 2;
-  }
-  if (!titleNorm.includes(q) && !creatorNorm.includes(q)) {
-    if (isTypoSimilar(q, titleNorm)) score += 1;
-    if (isTypoSimilar(q, creatorNorm)) score += 1;
-  }
+
+  // Tiny tie-breakers: keep stable ordering for obviously related content
+  try {
+    if (item && item.downloads != null) {
+      const d = typeof item.downloads === 'number' ? item.downloads : parseFloat(item.downloads);
+      if (Number.isFinite(d) && d > 0) score += Math.min(2, Math.log10(d + 1) / 2);
+    }
+  } catch {}
+
   return score;
 }
 
@@ -500,6 +597,76 @@ function normalizeString(value) {
     .replace(/\p{Diacritic}/gu, '')
     .toLowerCase()
     .trim();
+}
+
+function tokenizeNormalized(norm) {
+  const s = String(norm || '').trim();
+  if (!s) return [];
+  // Keep simple and fast: split by whitespace and common separators.
+  const raw = s.split(/[\s\-_/.,;:()\[\]{}"'`~!@#$%^&*+=?|\\]+/g).filter(Boolean);
+  // Remove very short tokens that add noise.
+  const tokens = raw.filter(t => t.length >= 2);
+  // Cap to avoid worst-case O(n*m) work for long queries.
+  return tokens.slice(0, 8);
+}
+
+function bestTokenTypoBoost(tokens, textNorm) {
+  try {
+    if (!Array.isArray(tokens) || tokens.length === 0) return 0;
+    const words = tokenizeNormalized(textNorm);
+    if (words.length === 0) return 0;
+    let boost = 0;
+    for (const tok of tokens) {
+      if (!tok) continue;
+      // Only compare against a small subset for perf.
+      const sample = words.length > 16 ? words.slice(0, 16) : words;
+      for (const w of sample) {
+        if (w === tok) { boost = Math.max(boost, 1); break; }
+        if (Math.abs(w.length - tok.length) > 2) continue;
+        if (damerauLevenshtein(tok, w) <= getTypoThreshold(tok.length)) {
+          boost = Math.max(boost, 0.75);
+          break;
+        }
+      }
+      if (boost >= 1) break;
+    }
+    return boost;
+  } catch {
+    return 0;
+  }
+}
+
+function countDirectMatches(processedResults, rawQuery) {
+  try {
+    const q = normalizeString(rawQuery);
+    if (!q) return 0;
+    let count = 0;
+    for (const r of (processedResults || [])) {
+      const t = normalizeString(r && r.title ? r.title : '');
+      const c = normalizeString(r && r.creator ? r.creator : '');
+      if (t.includes(q) || c.includes(q)) count++;
+    }
+    return count;
+  } catch {
+    return 0;
+  }
+}
+
+function buildRelaxedArchiveQuery(query) {
+  const q = normalizeString(query);
+  const tokens = tokenizeNormalized(q);
+  if (tokens.length === 0) {
+    return `(${query}) AND mediatype:audio`;
+  }
+  const escapeToken = (t) => {
+    // Very small escaping to reduce syntax errors; Archive/Solr is permissive.
+    return String(t).replace(/[()]/g, ' ');
+  };
+  const clauses = tokens.map(t => {
+    const tok = escapeToken(t);
+    return `(title:(${tok}) OR creator:(${tok}) OR description:(${tok}))`;
+  });
+  return `(${clauses.join(' OR ')}) AND mediatype:audio`;
 }
 
 function damerauLevenshtein(a, b) {

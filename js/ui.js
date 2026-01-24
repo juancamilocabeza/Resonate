@@ -2396,8 +2396,19 @@ function performCompleteCleanup() {
   }
 
   // Limpiar cualquier observador de lazy loading
-  const lazyObserver = elements.searchResultsList.querySelector('.lazy-load-observer');
-  if (lazyObserver) lazyObserver.remove();
+  try {
+    if (state._searchLazyObserver) {
+      try { state._searchLazyObserver.disconnect(); } catch {}
+      state._searchLazyObserver = null;
+    }
+    if (state._searchLazyObserverEl) {
+      try { state._searchLazyObserverEl.remove(); } catch {}
+      state._searchLazyObserverEl = null;
+    } else {
+      const lazyObserver = elements.searchResultsList.querySelector('.lazy-load-observer');
+      if (lazyObserver) lazyObserver.remove();
+    }
+  } catch {}
 
   // Limpiar el DOM
   elements.searchResultsList.innerHTML = '';
@@ -2474,13 +2485,54 @@ function displaySearchResults(searchData, clearExisting = true) {
   } catch {}
 
   if (results.length === 0 && clearExisting) {
+    const currentQuery = (elements.searchInput && elements.searchInput.value) ? elements.searchInput.value.trim() : '';
+    const suggestions = getNoResultsSuggestions(currentQuery);
+    const suggestionsHtml = suggestions.length
+      ? `<div class="no-results-hint" style="margin-top: 10px;">Try one of these:</div>
+         <div class="search-history-list" role="list">${suggestions.map(q => (
+           `<div class="search-history-item" role="listitem" data-query="${escapeHtml(q)}">
+              <span class="history-query">${escapeHtml(q)}</span>
+            </div>`
+         )).join('')}</div>`
+      : '';
+
     elements.searchResultsList.innerHTML = `
       <div class="no-results">
         <div class="no-results-icon">🔍</div>
         <div class="no-results-title">No Results Found</div>
         <div class="no-results-hint">Try different keywords or check your spelling</div>
+        ${suggestionsHtml}
       </div>
     `;
+
+    // Wire suggestion clicks to run a new search.
+    try {
+      const nodes = elements.searchResultsList.querySelectorAll('.search-history-item[data-query]');
+      nodes.forEach(n => {
+        n.addEventListener('click', () => {
+          const q = String(n.getAttribute('data-query') || '').trim();
+          if (!q) return;
+          elements.searchInput.value = q;
+          state.currentSearchPage = 0;
+          state.currentSearchQuery = q;
+          state.searchRequestId = (state.searchRequestId || 0) + 1;
+          const requestId = state.searchRequestId;
+          elements.searchResults.classList.add('active');
+          state.searchActive = true;
+          setSearchOpenState(true);
+          scheduleSearchInsetsBurst();
+          (window.performOptimizedSearch || performOptimizedSearch)(q, 0).then(result => {
+            if ((state.searchRequestId || 0) !== requestId) return;
+            if (((elements.searchInput.value || '').trim()) !== q) return;
+            displaySearchResults(result);
+            addToSearchHistory(q);
+          }).catch(() => {
+            showStatus('Search encountered an error', 'error');
+          });
+        });
+      });
+    } catch {}
+
     elements.searchResults.classList.add('active');
     state.searchActive = true;
     setSearchOpenState(true);
@@ -2520,6 +2572,44 @@ function displaySearchResults(searchData, clearExisting = true) {
   } catch {}
 }
 
+function getNoResultsSuggestions(query) {
+  try {
+    const q = String(query || '').trim();
+    if (!q) return [];
+    const qn = q.toLowerCase();
+    const history = loadSearchHistory();
+    if (!Array.isArray(history) || history.length === 0) return [];
+    // Prefer recent history containing the query or sharing tokens.
+    const tokens = qn.split(/\s+/g).filter(t => t.length >= 2).slice(0, 6);
+    const scored = history.map(h => {
+      const hn = String(h || '').toLowerCase();
+      let score = 0;
+      if (hn.includes(qn)) score += 5;
+      for (const t of tokens) {
+        if (hn.includes(t)) score += 1;
+      }
+      return { h, score };
+    }).filter(x => x.score > 0);
+    scored.sort((a, b) => b.score - a.score);
+    return scored.slice(0, 5).map(x => x.h);
+  } catch {
+    return [];
+  }
+}
+
+function escapeHtml(s) {
+  try {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  } catch {
+    return '';
+  }
+}
+
 function rerenderSearchResultsFromState(clearExisting = true) {
   const base = Array.isArray(state.searchResults) ? state.searchResults : [];
 
@@ -2555,35 +2645,52 @@ function rerenderSearchResultsFromState(clearExisting = true) {
 }
 
 function setupLazyLoadingObserver() {
-  // Crear elemento observador
-  const observerElement = document.createElement('div');
-  observerElement.className = 'lazy-load-observer';
-  elements.searchResultsList.appendChild(observerElement);
+  try {
+    if (!elements.searchResultsList) return;
 
-  // Configurar Intersection Observer
-  const observer = new IntersectionObserver(async (entries) => {
-    if (entries[0].isIntersecting &&
-      state.currentSearchHasMore &&
-      !state.isLoadingMore) {
-
-      state.isLoadingMore = true;
-      state.currentSearchPage++;
-
-      try {
-        const result = await (window.performOptimizedSearch || performOptimizedSearch)(state.currentSearchQuery, state.currentSearchPage);
-        displaySearchResults(result, false);
-      } catch (error) {
-        console.error('Error en lazy loading:', error);
-      } finally {
-        state.isLoadingMore = false;
+    // Ensure a single sentinel element
+    if (state._searchLazyObserverEl && state._searchLazyObserverEl.parentNode) {
+      // keep existing
+    } else {
+      const existingEl = elements.searchResultsList.querySelector('.lazy-load-observer');
+      if (existingEl) {
+        state._searchLazyObserverEl = existingEl;
+      } else {
+        const observerElement = document.createElement('div');
+        observerElement.className = 'lazy-load-observer';
+        elements.searchResultsList.appendChild(observerElement);
+        state._searchLazyObserverEl = observerElement;
       }
     }
-  }, {
-    rootMargin: '100px', // Cargar antes de llegar al final
-    threshold: 0.1
-  });
 
-  observer.observe(observerElement);
+    // Ensure a single observer instance
+    if (!state._searchLazyObserver) {
+      state._searchLazyObserver = new IntersectionObserver(async (entries) => {
+        try {
+          if (!entries || !entries[0] || !entries[0].isIntersecting) return;
+          if (!state.currentSearchHasMore || state.isLoadingMore) return;
+
+          state.isLoadingMore = true;
+          state.currentSearchPage++;
+
+          const result = await (window.performOptimizedSearch || performOptimizedSearch)(state.currentSearchQuery, state.currentSearchPage);
+          displaySearchResults(result, false);
+        } catch (error) {
+          console.error('Error en lazy loading:', error);
+        } finally {
+          state.isLoadingMore = false;
+        }
+      }, {
+        rootMargin: '100px',
+        threshold: 0.1
+      });
+    }
+
+    try { state._searchLazyObserver.disconnect(); } catch {}
+    state._searchLazyObserver.observe(state._searchLazyObserverEl);
+  } catch {
+    // ignore
+  }
 }
 
 // Load album info and update result element metadata
