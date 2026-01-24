@@ -1,3 +1,28 @@
+// Silence console output in production (SW context)
+(() => {
+  try {
+    const loc = self.location;
+    const isDev =
+      loc.protocol === 'file:' ||
+      loc.hostname === 'localhost' ||
+      loc.hostname === '127.0.0.1' ||
+      (loc.hostname && loc.hostname.includes('dev.')) ||
+      loc.port === '3000' ||
+      loc.port === '8080';
+
+    if (!isDev && self.console) {
+      const noop = () => {};
+      self.console.debug = noop;
+      self.console.log = noop;
+      self.console.info = noop;
+      self.console.warn = noop;
+      self.console.error = noop;
+    }
+  } catch {
+    // ignore
+  }
+})();
+
 // sw.js - Enhanced Service Worker for audio and metadata caching
 const CACHE_NAMES = {
   APP: 'resonate-v17p1',

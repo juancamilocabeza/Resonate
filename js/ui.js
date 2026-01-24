@@ -976,7 +976,7 @@ function ensureSearchInputControllerBound() {
       displaySearchResults(result);
       addToSearchHistory(queryAtDispatch);
     }).catch(error => {
-      console.error('Search error:', error);
+      window.logger?.error({ message: 'Search error', error }, 'NETWORK');
       showStatus('Search encountered an error', 'error');
     });
 
@@ -1037,7 +1037,7 @@ function ensureSearchInputControllerBound() {
           displaySearchResults(result);
           addToSearchHistory(queryAtDispatch);
         }).catch(error => {
-          console.error('Search error:', error);
+          window.logger?.error({ message: 'Search error', error }, 'NETWORK');
           showStatus('Search encountered an error', 'error');
         });
       } else {
@@ -1193,9 +1193,9 @@ function updateDescriptionUI(track) {
     elements.toggleDescriptionBtn.style.display = 'inline-flex';
     elements.toggleDescriptionBtn.textContent = 'Info';
     elements.toggleDescriptionBtn.disabled = false;
-    console.log('[updateDescriptionUI] Showing description button');
+    window.logger?.debug('[updateDescriptionUI] Showing description button', 'UI');
     elements.toggleDescriptionBtn.onclick = function() {
-      console.log('[updateDescriptionUI] Description button clicked; opening modal');
+      window.logger?.debug('[updateDescriptionUI] Description button clicked; opening modal', 'UI');
       if (modal && modalDesc) {
         modalDesc.innerHTML = sanitizeHTML(bestDescription);
         modal.style.display = 'flex';
@@ -1203,12 +1203,12 @@ function updateDescriptionUI(track) {
     };
     if (closeModalBtn && modal) {
       closeModalBtn.onclick = function() {
-        console.log('[updateDescriptionUI] Closing description modal');
+        window.logger?.debug('[updateDescriptionUI] Closing description modal', 'UI');
         modal.style.display = 'none';
       };
     }
   } else {
-    console.log('[updateDescriptionUI] Hiding description button; no description available');
+    window.logger?.debug('[updateDescriptionUI] Hiding description button; no description available', 'UI');
     if (elements.toggleDescriptionBtn) elements.toggleDescriptionBtn.style.display = 'none';
     if (modal) modal.style.display = 'none';
     if (modalDesc) modalDesc.innerHTML = '';
@@ -1412,7 +1412,9 @@ function maybeLogSearchPerfFirstPaint({ requestId, query } = {}) {
         state._searchPerf.logged = true;
         const msg = `Search first render: ${Math.round(elapsed)}ms (${perf.query})`;
         if (window.logger?.info) window.logger.info(msg, 'PERF');
-        else console.log(msg);
+        else {
+          // Logger is loaded before ui.js; avoid console usage.
+        }
       } catch {}
     });
   } catch {}
@@ -2386,7 +2388,7 @@ function updateMediaPositionState() {
       position: elements.audio.currentTime
     });
   } catch (error) {
-    console.error('Error updating Media Session position:', error);
+    window.logger?.warn({ message: 'Error updating Media Session position', error }, 'PLAYBACK');
   }
 }
 
@@ -2409,7 +2411,7 @@ function updateMediaSessionMetadata(track, identifier) {
 
     updateMediaPositionState();
   } catch (error) {
-    console.error('Error updating Media Session:', error);
+    window.logger?.warn({ message: 'Error updating Media Session', error }, 'PLAYBACK');
   }
 }
 
@@ -2457,7 +2459,7 @@ function performCompleteCleanup() {
   // Limpiar el DOM
   elements.searchResultsList.innerHTML = '';
 
-  console.log('Cleanup complete: search results hidden and state reset');
+  window.logger?.debug('Cleanup complete: search results hidden and state reset', 'UI');
 }
 
 // Keyboard navigation for search results
@@ -2744,7 +2746,7 @@ function setupLazyLoadingObserver() {
           });
           displaySearchResults(result, false);
         } catch (error) {
-          console.error('Error en lazy loading:', error);
+          window.logger?.warn({ message: 'Error en lazy loading', error }, 'NETWORK');
         } finally {
           state.isLoadingMore = false;
         }
@@ -2856,7 +2858,7 @@ async function loadAlbumInfoBackground(identifier, resultEl) {
     const isAlbum = metadata.length > 1;
     const trackCount = metadata.length;
 
-    console.log(`Album check for ${identifier}: ${trackCount} tracks, isAlbum: ${isAlbum}`);
+    window.logger?.debug(`Album check for ${identifier}: ${trackCount} tracks, isAlbum: ${isAlbum}`, 'NETWORK');
 
     const metaElement = resultEl.querySelector('.result-meta');
     if (metaElement) {
@@ -2888,8 +2890,7 @@ async function loadAlbumInfoBackground(identifier, resultEl) {
       expandButton.style.display = (!forceSingle && trackCount > 1) ? 'inline-block' : 'none';
     }
   } catch (error) {
-    console.error('Error loading album info for:', identifier, error);
-    console.error('Error details:', error.message, error.stack);
+    window.logger?.warn({ message: 'Error loading album info', identifier, error }, 'NETWORK');
 
     const metaElement = resultEl.querySelector('.result-meta');
     if (metaElement) {
@@ -3007,7 +3008,7 @@ function createFavoriteActions(result, hasFavoriteTrack, options = {}) {
 function createSearchResultElement(result, globalIndex) {
   // Validate input
   if (!result || !result.identifier) {
-    console.warn('Invalid result data provided to createSearchResultElement');
+    window.logger?.warn('Invalid result data provided to createSearchResultElement', 'UI');
     return document.createElement('div'); // Return empty div as fallback
   }
 
@@ -3130,7 +3131,7 @@ function createSearchResultElement(result, globalIndex) {
         }
       }
     } catch (error) {
-      console.error('Error managing favorite:', error);
+      window.logger?.error({ message: 'Error managing favorite', error }, 'UI');
       showStatus('Couldn\'t update resonates', 'error');
     }
   });
@@ -3497,7 +3498,7 @@ function containerForFavorites() {
 // Toggle album tracks visibility
 function toggleAlbumTracks(albumId, tracksContainer, expandButton) {
   if (!tracksContainer || !tracksContainer.parentNode) {
-    console.error('Tracks container is not a child of the expected parent node.');
+    window.logger?.error('Tracks container is not a child of the expected parent node.', 'UI');
     return;
   }
 
@@ -3548,7 +3549,7 @@ function displayAlbumTracks(albumId, tracksContainer) {
 
         const playFromTrackRow = () => {
           if (isFavoritesContext) {
-            console.log('🎵 Track clicked in favorites context - calling playFromFavoritesQueue with track:', track.title);
+            window.logger?.debug(`Track clicked in favorites context - calling playFromFavoritesQueue with track: ${track.title}`, 'PLAYBACK');
             if (typeof window.playFromFavoritesQueue === 'function') {
               window.playFromFavoritesQueue(track);
             } else if (typeof playFromFavoritesQueue === 'function') {
@@ -3611,7 +3612,7 @@ function displayAlbumTracks(albumId, tracksContainer) {
       tracksContainer.appendChild(tracksList);
     })
     .catch(error => {
-      console.error('Error loading album tracks:', error);
+      window.logger?.error({ message: 'Error loading album tracks', error }, 'NETWORK');
       tracksContainer.innerHTML = '<div class="no-results">Error loading tracks</div>';
     });
 }
@@ -4036,7 +4037,7 @@ function showOfflineHints() {
         showStatus('Cache has saved many tracks', 'info', 4000);
       }
     }).catch(error => {
-      console.warn('Failed to get cache stats:', error);
+      window.logger?.warn({ message: 'Failed to get cache stats', error }, 'CACHE');
     });
   }
 }
@@ -4214,9 +4215,9 @@ function savePlaybackState() {
     try {
       localStorage.setItem('resonate_playback_state', JSON.stringify(playbackState));
       state.savedPlaybackState = playbackState;
-      console.log('Playback state saved');
+      window.logger?.debug('Playback state saved', 'PLAYBACK');
     } catch (e) {
-      console.warn('Failed to save playback state:', e);
+      window.logger?.warn({ message: 'Failed to save playback state', error: e }, 'PLAYBACK');
     }
   }
 }
@@ -4342,7 +4343,7 @@ function loadSavedPlaybackState() {
       state.savedPlaybackQueueSnapshot = null;
     }
   } catch (error) {
-    console.warn('Error loading saved playback state:', error);
+    window.logger?.warn({ message: 'Error loading saved playback state', error }, 'PLAYBACK');
     state.savedPlaybackState = null;
     state.savedPlaybackQueueSnapshot = null;
   }
@@ -4604,7 +4605,7 @@ function showServiceWorkerUpdateBanner({ currentVersion = null, newVersion = nul
       hide(false);
       await applyServiceWorkerUpdateAcrossTabs();
     } catch (e) {
-      console.warn('Apply update failed:', e);
+      window.logger?.warn({ message: 'Apply update failed', error: e }, 'SYSTEM');
       showStatus('Update failed', 'warning', 3500);
     }
   });
@@ -5347,7 +5348,7 @@ window.ensureResontesToggleInitialized = function ensureResontesToggleInitialize
     resontesToggleInstance = new FavoritesToggle(elements.resontesToggle, elements.resontesList);
     return resontesToggleInstance;
   } catch (e) {
-    try { console.warn('Failed to initialize ResontesToggle:', e); } catch {}
+    window.logger?.warn({ message: 'Failed to initialize ResontesToggle', error: e }, 'UI');
     return null;
   }
 };
@@ -5360,7 +5361,7 @@ function toggleResontesList() {
   if (resontesToggleInstance) {
     resontesToggleInstance.toggle();
   } else {
-    console.warn('Resonates toggle instance not initialized');
+    window.logger?.warn('Resonates toggle instance not initialized', 'UI');
   }
 }
 
@@ -5395,20 +5396,20 @@ function updateFavoritesCount() {
 }
 
 function hideResontesList() {
-  console.log('hideResontesList called - resontesToggleInstance:', !!resontesToggleInstance);
+  window.logger?.debug({ message: 'hideResontesList called', hasToggle: !!resontesToggleInstance }, 'UI');
   // Siempre ejecutar el ocultamiento, sin importar el estado previo
   if (resontesToggleInstance) {
-    console.log('Calling resontesToggleInstance.hide()');
+    window.logger?.debug('Calling resontesToggleInstance.hide()', 'UI');
     resontesToggleInstance.hide();
   }
   // Siempre ejecutar el fallback para asegurar que se oculta
-  console.log('Executing fallback - removing active class');
+  window.logger?.debug('Executing fallback - removing active class', 'UI');
   state.resontesVisible = false;
   if (elements.resontesList) {
     elements.resontesList.classList.remove('active');
-    console.log('Resonates list active class removed, has active:', elements.resontesList.classList.contains('active'));
+    window.logger?.debug({ message: 'Resonates list active class removed', hasActive: elements.resontesList.classList.contains('active') }, 'UI');
   } else {
-    console.warn('elements.resontesList not found');
+    window.logger?.warn('elements.resontesList not found', 'UI');
   }
   try { setBodyUiState('resontes-embedded-open', false); } catch {}
   try {
@@ -5503,7 +5504,7 @@ async function handleStartFavoritesCTA() {
       forcePlay();
     }
   } catch (err) {
-    console.error('Error starting playback from CTA:', err);
+    window.logger?.error({ message: 'Error starting playback from CTA', error: err }, 'PLAYBACK');
     showStatus(typeof err === 'string' ? err : `Error: ${err && err.message ? err.message : err}`, 'error');
   }
 }
@@ -5520,7 +5521,7 @@ async function registerServiceWorker() {
   if ('serviceWorker' in navigator) {
     try {
       const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
-      console.log('Service Worker registered with scope:', registration.scope);
+      window.logger?.info(`Service Worker registered with scope: ${registration.scope}`, 'SYSTEM');
 
       // Update coordination across tabs (Mode B prompt)
       ensureServiceWorkerUpdateCoordinationHandlers();
@@ -5556,13 +5557,13 @@ async function registerServiceWorker() {
         });
       } catch {}
     } catch (error) {
-      console.error('Service Worker registration failed:', error);
+      window.logger?.error({ message: 'Service Worker registration failed', error }, 'SYSTEM');
       if (error.message.includes('Failed to fetch')) {
-        console.error('Ensure the Service Worker file is accessible and the server is running.');
+        window.logger?.warn('Ensure the Service Worker file is accessible and the server is running.', 'SYSTEM');
       }
     }
   } else {
-    console.warn('Service Workers are not supported in this browser.');
+    window.logger?.warn('Service Workers are not supported in this browser.', 'SYSTEM');
   }
 }
 
@@ -5984,7 +5985,7 @@ function showPWAInstallBanner() {
     try {
       localStorage.setItem('resonate_pwa_banner_dismissed', 'true');
     } catch (e) {
-      console.warn('Could not save PWA banner preference');
+      window.logger?.warn({ message: 'Could not save PWA banner preference', error: e }, 'UI');
     }
   });
 
@@ -5994,7 +5995,7 @@ function showPWAInstallBanner() {
       try {
         localStorage.setItem('resonate_pwa_banner_dismissed', 'true');
       } catch (e) {
-        console.warn('Could not save PWA banner preference');
+        window.logger?.warn({ message: 'Could not save PWA banner preference', error: e }, 'UI');
       }
     });
   }
@@ -6135,11 +6136,11 @@ function displaySearchHistory() {
             if ((elements.searchInput.value || '').trim() !== queryAtDispatch) return;
             displaySearchResults(result);
           }).catch(error => {
-            console.error('Search error:', error);
+            window.logger?.error({ message: 'Search error', error }, 'NETWORK');
             showStatus('Search error', 'error');
           });
         } else {
-          console.error('performOptimizedSearch is not available');
+          window.logger?.error('performOptimizedSearch is not available', 'SYSTEM');
           showStatus('Search unavailable', 'error');
         }
       }
@@ -6275,7 +6276,7 @@ function applyTrackMetaTagsForIdentifier(identifier, title, creator = '', trackI
   // Basic meta
   updateMetaTag('name', 'description', description);
 
-  console.log('Meta tags updated for sharing:', { title: normalizedTitle, creator: normalizedCreator, imageUrl, shareUrl });
+  window.logger?.debug({ message: 'Meta tags updated for sharing', title: normalizedTitle, creator: normalizedCreator, imageUrl, shareUrl }, 'NETWORK');
 }
 
 // Update Open Graph meta tags for rich previews
@@ -6367,7 +6368,8 @@ async function shareTrack(identifier, title = 'Track', creator = null, albumTitl
   textParts.push('Enjoy it freely on Resonate Player');
   const shareText = textParts.join('\n\n');
 
-  console.log('Attempting to share:', {
+  window.logger?.debug({
+    message: 'Attempting to share',
     shareUrl,
     title: shareDataTitle,
     shareText,
@@ -6375,13 +6377,13 @@ async function shareTrack(identifier, title = 'Track', creator = null, albumTitl
     albumTitle: normalizedAlbumTitle,
     kind: shareKind,
     trackIndex: shareUrlTrackIndex
-  });
+  }, 'NETWORK');
 
   // Keep meta tags in sync for rich previews
   applyTrackMetaTagsForIdentifier(identifier, shareDataTitle, resolvedCreator, shareUrlTrackIndex);
 
   if (!navigator.share) {
-    console.log('Web Share API no disponible');
+    window.logger?.info('Web Share API no disponible', 'SYSTEM');
     showStatus('Sharing not available', 'warning', 4000);
     return;
   }
@@ -6390,9 +6392,9 @@ async function shareTrack(identifier, title = 'Track', creator = null, albumTitl
   let coverFile = null;
   try {
     coverFile = await getCoverImageForSharing(identifier);
-    console.log('Cover image obtained for sharing');
+    window.logger?.debug('Cover image obtained for sharing', 'NETWORK');
   } catch (error) {
-    console.warn('Could not get cover image:', error.message);
+    window.logger?.warn({ message: 'Could not get cover image', error }, 'NETWORK');
   }
 
   const isShareCancelled = (err) => {
@@ -6409,7 +6411,7 @@ async function shareTrack(identifier, title = 'Track', creator = null, albumTitl
   };
 
   try {
-    console.log('Using Web Share API with enriched message');
+    window.logger?.debug('Using Web Share API with enriched message', 'NETWORK');
 
     const baseShareData = {
       title: shareDataTitle,
@@ -6421,9 +6423,9 @@ async function shareTrack(identifier, title = 'Track', creator = null, albumTitl
     // navigator.canShare({ files }) is missing or returns false.
     if (coverFile) {
       try {
-        console.log('Attempting to include cover image in share');
+        window.logger?.debug('Attempting to include cover image in share', 'NETWORK');
         await navigator.share({ ...baseShareData, files: [coverFile] });
-        console.log('Web Share API success (with cover file)');
+        window.logger?.info('Web Share API success (with cover file)', 'NETWORK');
         showStatus('Track shared successfully', 'info', 6000);
         return;
       } catch (errorWithFile) {
@@ -6434,36 +6436,36 @@ async function shareTrack(identifier, title = 'Track', creator = null, albumTitl
         // If file sharing isn't supported, retry once without the cover.
         if (isLikelyFileShareUnsupported(errorWithFile)) {
           try {
-            console.log('File share unsupported, retrying without cover');
+            window.logger?.debug('File share unsupported, retrying without cover', 'NETWORK');
             await navigator.share(baseShareData);
-            console.log('Web Share API success (without cover)');
+            window.logger?.info('Web Share API success (without cover)', 'NETWORK');
             showStatus('Track shared successfully', 'info', 6000);
             return;
           } catch (errorWithoutFile) {
             if (isShareCancelled(errorWithoutFile)) {
               return;
             }
-            console.log('Web Share API failed:', errorWithoutFile && errorWithoutFile.message ? errorWithoutFile.message : errorWithoutFile);
+            window.logger?.warn({ message: 'Web Share API failed', error: errorWithoutFile }, 'NETWORK');
             showStatus('Sharing not available', 'warning', 4000);
             return;
           }
         }
 
-        console.log('Web Share API failed:', errorWithFile && errorWithFile.message ? errorWithFile.message : errorWithFile);
+        window.logger?.warn({ message: 'Web Share API failed', error: errorWithFile }, 'NETWORK');
         showStatus('Sharing not available', 'warning', 4000);
         return;
       }
     }
 
     await navigator.share(baseShareData);
-    console.log('Web Share API success');
+    window.logger?.info('Web Share API success', 'NETWORK');
     showStatus('Track shared successfully', 'info', 6000);
   } catch (error) {
     // If user cancels, don't spam.
     if (isShareCancelled(error)) {
       return;
     }
-    console.log('Web Share API failed:', error && error.message ? error.message : error);
+    window.logger?.warn({ message: 'Web Share API failed', error }, 'NETWORK');
     showStatus('Sharing not available', 'warning', 4000);
   }
 }
@@ -6475,7 +6477,7 @@ async function getCoverImageForSharing(identifier) {
   try {
     const response = await fetch(coverUrl);
     if (!response.ok) {
-      console.warn('Cover image request failed:', response.status, identifier);
+      window.logger?.warn({ message: 'Cover image request failed', status: response.status, identifier }, 'NETWORK');
       return null;
     }
 
@@ -6492,7 +6494,7 @@ async function getCoverImageForSharing(identifier) {
     return new File([blob], filename, { type: fileType });
   } catch (error) {
     // Best-effort only: sharing should still work without the cover.
-    console.warn('Cover image fetch failed (continuing without image):', error && error.message ? error.message : error);
+    window.logger?.warn({ message: 'Cover image fetch failed (continuing without image)', error }, 'NETWORK');
     return null;
   }
 }
@@ -6598,11 +6600,11 @@ async function updateServiceWorker() {
         showStatus('Checking for updates…', 'info', 2500);
       }
     } catch (err) {
-      console.warn('Manual SW update error:', err);
+      window.logger?.warn({ message: 'Manual SW update error', error: err }, 'SYSTEM');
       showStatus('Service Worker update failed', 'warning', 3500);
     }
   } catch (e) {
-    console.error('updateServiceWorker unexpected error:', e);
+    window.logger?.error({ message: 'updateServiceWorker unexpected error', error: e }, 'SYSTEM');
   }
 }
 

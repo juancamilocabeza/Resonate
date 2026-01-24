@@ -113,17 +113,21 @@ function showAutoplayCta(message = 'Tap Play to start') {
 
 function logPlayback(level, message, error) {
   try {
-    if (window.logger && typeof window.logger.playback === 'function') {
-      const combined = error ? `${message} ${error && error.message ? `(${error.message})` : ''}` : message;
-      window.logger.playback(combined, level);
+    if (window.logger && typeof window.logger._call === 'function') {
+      const combined = error
+        ? (error instanceof Error ? { message, error } : { message, data: error })
+        : message;
+      window.logger._call(level, combined, 'PLAYBACK');
       return;
     }
   } catch {}
 
-  const method = String(level || 'info').toLowerCase();
-  const fn = console[method] || console.log;
-  if (error) fn(message, error);
-  else fn(message);
+  try {
+    if (window.logger && typeof window.logger._call === 'function') {
+      const combined = error ? { message, error } : message;
+      window.logger._call(level, combined, 'PLAYBACK');
+    }
+  } catch {}
 }
 
 function signalServiceWorkerSafeActivation() {
@@ -1331,7 +1335,7 @@ class EnhancedPlaybackController {
     try {
       await this.currentHandler.handleTrackEnd();
     } catch (error) {
-      console.error('Error in track end handling:', error);
+      logPlayback('error', 'Error in track end handling', error);
       this.stateManager.recordFailure();
 
       if (this.stateManager.shouldEnterSafeMode()) {
@@ -1344,7 +1348,7 @@ class EnhancedPlaybackController {
       setTimeout(() => {
         if (this.currentHandler) {
           this.currentHandler.handleTrackEnd().catch((err) => {
-            console.error('Fallback track end handling failed:', err);
+            logPlayback('error', 'Fallback track end handling failed', err);
           });
         }
       }, 2000);
@@ -1464,7 +1468,7 @@ function downloadBlobWithProgress(url, timeoutMs, onProgress) {
         if (typeof onProgress === 'function') {
           onProgress(xhr.response.size, xhr.response.size);
         }
-        console.debug(`[XHR] Download complete: ${xhr.response.size} bytes`);
+        logPlayback('debug', `[XHR] Download complete: ${xhr.response.size} bytes`);
         resolve(xhr.response);
       } else {
         reject(new Error(`HTTP Error: ${xhr.status}`));
@@ -1611,12 +1615,12 @@ async function loadAudioWithCache(track) {
     const nudgeProgress = (step = 2) => {
       lastProgress = Math.min(endProgress - 1, lastProgress + step);
       updateLoaderProgress(lastProgress);
-      console.debug(`[Loader] nudge -> ${lastProgress}%`);
+      logPlayback('debug', `[Loader] nudge -> ${lastProgress}%`);
     };
 
     // Start fallback timer immediately if we don't know the total size
     if (!totalBytes) {
-      console.debug('[Loader] No total size from HEAD, starting fallback progress timer');
+      logPlayback('debug', '[Loader] No total size from HEAD, starting fallback progress timer');
       fallbackTimer = setInterval(() => nudgeProgress(5), 180); // More aggressive
     }
 
@@ -1637,7 +1641,7 @@ async function loadAudioWithCache(track) {
         PLAYBACK_CONSTANTS.PREFETCH_TIMEOUT_MS,
         (loaded, total) => {
           hasReceivedProgress = true;
-          console.debug(`[Loader] onprogress: loaded=${loaded}, total=${total}`);
+          logPlayback('debug', `[Loader] onprogress: loaded=${loaded}, total=${total}`);
           const hasTotal = (total || totalBytes);
           // Stop timers when real progress with total arrives
           if (hasTotal) {
@@ -1654,7 +1658,7 @@ async function loadAudioWithCache(track) {
             const pct = startProgress + Math.round(ratio * (endProgress - startProgress));
             lastProgress = pct;
             updateLoaderProgress(pct);
-            console.debug(`[Loader] progress -> ${pct}% (${loaded}/${denom})`);
+            logPlayback('debug', `[Loader] progress -> ${pct}% (${loaded}/${denom})`);
           }
         }
       );
@@ -1664,7 +1668,7 @@ async function loadAudioWithCache(track) {
         clearInterval(guardTimer);
         guardTimer = null;
       }
-      console.debug(`[Loader] Download complete. hasReceivedProgress=${hasReceivedProgress}, blob.size=${blob?.size}`);
+      logPlayback('debug', `[Loader] Download complete. hasReceivedProgress=${hasReceivedProgress}, blob.size=${blob?.size}`);
 
       // If progress events lacked total but HEAD had it, push based on final size
       if (totalBytes && blob && blob.size) {
@@ -1672,16 +1676,16 @@ async function loadAudioWithCache(track) {
         const pct = startProgress + Math.round(ratio * (endProgress - startProgress));
         lastProgress = pct;
         updateLoaderProgress(pct);
-        console.debug(`[Loader] final progress -> ${pct}% based on blob.size`);
+        logPlayback('debug', `[Loader] final progress -> ${pct}% based on blob.size`);
       } else {
         // Ensure we're at least at 85% before handing off to canplay
         lastProgress = Math.max(lastProgress, endProgress);
         updateLoaderProgress(lastProgress);
-        console.debug(`[Loader] forced to endProgress (${endProgress}%)`);
+        logPlayback('debug', `[Loader] forced to endProgress (${endProgress}%)`);
       }
     } catch (xhrError) {
       stopFallback();
-      console.debug(`[Loader] XHR failed, falling back to fetch`, xhrError);
+      logPlayback('debug', '[Loader] XHR failed, falling back to fetch', xhrError);
       // Fallback to fetch if XHR fails
       const response = await fetchWithTimeout(track.url, { timeout: PLAYBACK_CONSTANTS.PREFETCH_TIMEOUT_MS });
       if (!response.ok) {
@@ -1966,7 +1970,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
               id: state.currentTrack.id
             });
           } catch (error) {
-            console.error('Error executing onplay callback:', error);
+            logPlayback('error', 'Error executing onplay callback', error);
           }
         }
 
@@ -2206,7 +2210,7 @@ async function resumeSavedPlayback() {
     localStorage.removeItem('resonate_playback_state');
 
   } catch (error) {
-    console.error('Error resuming saved playback:', error);
+    logPlayback('error', 'Error resuming saved playback', error);
     showStatus(`Couldn't resume your last track`, 'error');
     // Try force play as fallback
     forcePlay();
@@ -2230,7 +2234,7 @@ function togglePlay() {
   if (audio.paused && !audio.src && state.currentTrack && state.currentTrack.url) {
     // Resume last track
     playAudioTrackOptimized(state.currentTrack, state.currentTrack.id, state.currentTrack.trackIndex, state.currentTrack.totalTracks).catch(error => {
-      console.error('Error resuming track:', error);
+      logPlayback('error', 'Error resuming track', error);
       forcePlay();
     });
     return;
@@ -2624,7 +2628,7 @@ async function playNextInContext(maxRetries = 3) {
           await playAudioTrackOptimized(nextItem, playbackManager.getCurrentAlbumId(), albumContext.currentIndex, albumContext.items.length);
           return;
         } catch (error) {
-          console.error('Error playing album track:', error);
+          logPlayback('error', 'Error playing album track', error);
           if (maxRetries > 0) {
             showStatus('Skipping this problematic track', 'error', 1500);
             const budget = tryConsumeAutoSkipBudget('album-track-error');
@@ -2682,7 +2686,7 @@ async function playNextInContext(maxRetries = 3) {
           await playAudioTrackOptimized(actualNextTrack, actualNextTrack.id, actualNextTrack.trackIndex, actualNextTrack.totalTracks);
           return;
         } catch (error) {
-          console.error('Error playing from FIFO queue:', error);
+          logPlayback('error', 'Error playing from FIFO queue', error);
           guard++;
           if (maxRetries > 0) {
             showStatus('Track issue detected, trying next', 'error', 1500);
@@ -2727,7 +2731,7 @@ async function playNextInContext(maxRetries = 3) {
           await playAudioTrackOptimized(actualNextTrack, actualNextTrack.id, actualNextTrack.trackIndex, actualNextTrack.totalTracks);
           return;
         } catch (error) {
-          console.error('Error playing from regenerated queue:', error);
+          logPlayback('error', 'Error playing from regenerated queue', error);
           guard++;
           if (maxRetries > 0) {
             showStatus('Track issue detected, trying next', 'error', 1500);
@@ -2768,7 +2772,7 @@ async function playNextInContext(maxRetries = 3) {
       } else if (context === 'favorites') {
         // Use cache for favorites
         if (!nextItem.url) {
-          console.error('Favorite without valid URL:', nextItem);
+          logPlayback('error', 'Favorite without valid URL', nextItem);
           scheduleAutoAdvance('favorite-missing-url', 1000, () => {
             playNextInContext().catch((e) => logPlayback('warn', 'Retry after missing URL failed', e));
           });
@@ -2787,7 +2791,7 @@ async function playNextInContext(maxRetries = 3) {
         };
 
         if (!track.url || track.url === '') {
-          console.error('Empty audio URL in resonte:', track);
+          logPlayback('error', 'Empty audio URL in resonte', track);
           showStatus('Audio link isn\'t available', 'error', 2000);
           scheduleAutoAdvance('favorite-empty-url', 1000, () => {
             playNextInContext().catch((e) => logPlayback('warn', 'Retry after empty URL failed', e));
@@ -2812,7 +2816,7 @@ async function playNextInContext(maxRetries = 3) {
       }
 
     } catch (error) {
-      console.error('Error playing next track:', error);
+      logPlayback('error', 'Error playing next track', error);
 
       // Transparente: siempre intentar la siguiente pista sin mostrar error
       scheduleAutoAdvance('play-next-error', 100, () => {
@@ -2820,7 +2824,7 @@ async function playNextInContext(maxRetries = 3) {
       });
     }
   } catch (error) {
-    console.error('Critical error in playNextInContext:', error);
+    logPlayback('error', 'Critical error in playNextInContext', error);
   } finally {
     state.isLoading = false;
   }
@@ -2839,7 +2843,7 @@ async function playPreviousInContext() {
       await playAudioTrackOptimized(previousTrack, previousTrack.id, previousTrack.trackIndex, previousTrack.totalTracks);
       return;
     } catch (error) {
-      console.error('Error playing from history:', error);
+      logPlayback('error', 'Error playing from history', error);
     }
   }
 
@@ -2888,7 +2892,7 @@ async function playPreviousInContext() {
     } else if (context === 'favorites') {
       // Use cache for favorites
       if (!prevItem.url) {
-        console.error('Favorite without valid URL:', prevItem);
+        logPlayback('error', 'Favorite without valid URL', prevItem);
         setTimeout(() => playPreviousInContext(), 1000);
         return;
       }
@@ -2918,7 +2922,7 @@ async function playPreviousInContext() {
         await playAudioTrackOptimized(prevItem, playbackManager.getCurrentAlbumId(), ctx.currentIndex, ctx.items.length);
         return;
       } catch (error) {
-        console.error('Error playing previous album track:', error);
+        logPlayback('error', 'Error playing previous album track', error);
         // Try the fallback of going back further in the context
         setTimeout(() => playPreviousInContext(), 1000);
       }
@@ -2927,7 +2931,7 @@ async function playPreviousInContext() {
         await playAudioTrackOptimized(prevItem, playbackManager.getCurrentAlbumId(), ctx.currentIndex, ctx.items.length);
         return;
       } catch (error) {
-        console.error('Error playing previous album track:', error);
+        logPlayback('error', 'Error playing previous album track', error);
         setTimeout(() => playPreviousInContext(), 1000);
       }
     } else if (context === 'searchPlaylist') {
@@ -2937,7 +2941,7 @@ async function playPreviousInContext() {
     
     // Try/catch global para la función completa
   } catch (error) {
-    console.error('Error playing previous track:', error);
+    logPlayback('error', 'Error playing previous track', error);
     setTimeout(() => playPreviousInContext(), 1000);
   }
 }
@@ -3379,7 +3383,7 @@ async function playTrack(trackId) {
     audioElement.src = trackUrl;
     await audioElement.play();
   } catch (error) {
-    console.error('Error during playback:', error);
+    logPlayback('error', 'Error during playback', error);
   } finally {
     if (window.Loaders) {
       window.Loaders.hideLoader();

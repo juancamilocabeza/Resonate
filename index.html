@@ -140,6 +140,65 @@
     </footer>
   </div>
   <audio id="audio" preload="metadata"></audio>
+  <script>
+    // Production console silencer (early, before any app scripts).
+    // Debug can be explicitly enabled with ?debug=true or ?log=DEBUG (or localStorage overrides).
+    (function () {
+      try {
+        var loc = window.location;
+        var isDev =
+          loc.protocol === 'file:' ||
+          loc.hostname === 'localhost' ||
+          loc.hostname === '127.0.0.1' ||
+          (loc.hostname && loc.hostname.indexOf('dev.') !== -1) ||
+          loc.port === '3000' ||
+          loc.port === '8080' ||
+          (loc.hash && loc.hash.indexOf('#dev') !== -1);
+
+        var params = null;
+        try { params = new URLSearchParams(loc.search || ''); } catch (e) { params = null; }
+        var debugParam = params ? params.get('debug') : null;
+        var logParam = params ? params.get('log') : null;
+
+        var storedDebug = null;
+        var storedLevel = null;
+        try { storedDebug = localStorage.getItem('resonate_debug'); } catch (e) {}
+        try { storedLevel = localStorage.getItem('resonate_log_level'); } catch (e) {}
+
+        var isTruthy = function (v) {
+          v = String(v || '').trim().toLowerCase();
+          return v === '1' || v === 'true' || v === 'yes' || v === 'on';
+        };
+
+        var debugEnabled =
+          isTruthy(debugParam) ||
+          isTruthy(storedDebug) ||
+          (typeof logParam === 'string' && logParam.length > 0) ||
+          (typeof storedLevel === 'string' && storedLevel.length > 0 && String(storedLevel).toUpperCase() !== 'NONE');
+
+        if (!isDev && !debugEnabled && window.console) {
+          var c = window.console;
+          if (!window.__resonate_original_console__) {
+            window.__resonate_original_console__ = {
+              debug: typeof c.debug === 'function' ? c.debug.bind(c) : (typeof c.log === 'function' ? c.log.bind(c) : function () {}),
+              log: typeof c.log === 'function' ? c.log.bind(c) : function () {},
+              info: typeof c.info === 'function' ? c.info.bind(c) : (typeof c.log === 'function' ? c.log.bind(c) : function () {}),
+              warn: typeof c.warn === 'function' ? c.warn.bind(c) : (typeof c.log === 'function' ? c.log.bind(c) : function () {}),
+              error: typeof c.error === 'function' ? c.error.bind(c) : (typeof c.log === 'function' ? c.log.bind(c) : function () {})
+            };
+          }
+          var noop = function () {};
+          c.debug = noop;
+          c.log = noop;
+          c.info = noop;
+          c.warn = noop;
+          c.error = noop;
+        }
+      } catch (e) {
+        // ignore
+      }
+    })();
+  </script>
   <script src="js/theme.js"></script>
   <script src="js/description-utils.js"></script>
   <script src="js/logger.js"></script>

@@ -24,6 +24,7 @@ class Logger {
     this.CATEGORIES = LOGGER_CATEGORIES;
 
     this.config = {
+      enabled: config.enabled !== false,
       level: this._normalizeLevel(config.level || 'DEBUG'),
       environment: config.environment || 'development',
       verbose: config.verbose !== false,
@@ -36,6 +37,7 @@ class Logger {
 
   setConfig(newConfig) {
     const merged = { ...this.config, ...(newConfig || {}) };
+    merged.enabled = merged.enabled !== false;
     merged.level = this._normalizeLevel(merged.level);
     merged.categories = Array.isArray(merged.categories)
       ? merged.categories.map(this._normalizeCategory)
@@ -49,7 +51,18 @@ class Logger {
     this.config.level = this._normalizeLevel(level);
   }
 
+  enable(level) {
+    this.config.enabled = true;
+    if (level) this.setLevel(level);
+  }
+
+  disable() {
+    this.config.enabled = false;
+  }
+
   shouldLog(level, category = 'SYSTEM') {
+    if (!this.config.enabled) return false;
+
     const normalizedLevel = this._normalizeLevel(level);
     const normalizedCategory = this._normalizeCategory(category);
 
@@ -126,7 +139,28 @@ class Logger {
       }
       if (typeof message === 'string') return message;
       if (message === null || message === undefined) return String(message);
-      return JSON.stringify(message);
+      const seen = typeof WeakSet !== 'undefined' ? new WeakSet() : null;
+      const replacer = (_key, value) => {
+        try {
+          if (value instanceof Error) {
+            return {
+              name: value.name,
+              message: value.message,
+              stack: value.stack
+            };
+          }
+
+          if (seen && value && typeof value === 'object') {
+            if (seen.has(value)) return '[circular]';
+            seen.add(value);
+          }
+        } catch {
+          // ignore
+        }
+        return value;
+      };
+
+      return JSON.stringify(message, replacer);
     } catch {
       try {
         return String(message);
@@ -159,6 +193,8 @@ class Logger {
   }
 
   _output(level, message, category) {
+    if (!this.config.enabled) return;
+
     const timestamp = this.config.timestamps ? `[${new Date().toISOString()}]` : '';
     const normalizedCategory = this._normalizeCategory(category);
     const prefix = normalizedCategory ? `[${normalizedCategory}]` : '';
@@ -166,58 +202,141 @@ class Logger {
     const formatted = `${timestamp}${prefix} ${formattedMessage}`;
 
     // Output basado en el nivel
+    const c = Logger._console || console;
     switch (level) {
       case 'DEBUG':
-        console.debug(formatted);
+        try { c.debug(formatted); } catch {}
         break;
       case 'INFO':
-        console.log(formatted);
+        try { c.log(formatted); } catch {}
         break;
       case 'WARN':
-        console.warn(formatted);
+        try { c.warn(formatted); } catch {}
         break;
       case 'ERROR':
-        console.error(formatted);
+        try { c.error(formatted); } catch {}
         break;
     }
+  }
+}
+
+// Capture a stable reference to the original console early.
+// This allows us to silence global console in production while still
+// having a safe target when debug is explicitly enabled.
+Logger._console = (() => {
+  try {
+    if (!globalThis) return null;
+    const c = globalThis.__resonate_original_console__ || globalThis.console;
+    if (!c) return null;
+    return {
+      debug: typeof c.debug === 'function' ? c.debug.bind(c) : (typeof c.log === 'function' ? c.log.bind(c) : () => {}),
+      log: typeof c.log === 'function' ? c.log.bind(c) : () => {},
+      info: typeof c.info === 'function' ? c.info.bind(c) : (typeof c.log === 'function' ? c.log.bind(c) : () => {}),
+      warn: typeof c.warn === 'function' ? c.warn.bind(c) : (typeof c.log === 'function' ? c.log.bind(c) : () => {}),
+      error: typeof c.error === 'function' ? c.error.bind(c) : (typeof c.log === 'function' ? c.log.bind(c) : () => {})
+    };
+  } catch {
+    return null;
+  }
+})();
+
+function safeGetLocalStorageItem(key) {
+  try {
+    return globalThis.localStorage ? globalThis.localStorage.getItem(key) : null;
+  } catch {
+    return null;
+  }
+}
+
+function isTruthy(value) {
+  const v = String(value || '').trim().toLowerCase();
+  return v === '1' || v === 'true' || v === 'yes' || v === 'on';
+}
+
+function silenceConsole() {
+  try {
+    const c = globalThis.console;
+    if (!c) return;
+    const noop = () => {};
+    // Keep a reference in case someone wants to restore manually from DevTools.
+    if (!globalThis.__resonate_original_console__) {
+      globalThis.__resonate_original_console__ = {
+        debug: typeof c.debug === 'function' ? c.debug.bind(c) : (typeof c.log === 'function' ? c.log.bind(c) : () => {}),
+        log: typeof c.log === 'function' ? c.log.bind(c) : () => {},
+        info: typeof c.info === 'function' ? c.info.bind(c) : (typeof c.log === 'function' ? c.log.bind(c) : () => {}),
+        warn: typeof c.warn === 'function' ? c.warn.bind(c) : (typeof c.log === 'function' ? c.log.bind(c) : () => {}),
+        error: typeof c.error === 'function' ? c.error.bind(c) : (typeof c.log === 'function' ? c.log.bind(c) : () => {})
+      };
+    }
+    c.debug = noop;
+    c.log = noop;
+    c.info = noop;
+    c.warn = noop;
+    c.error = noop;
+  } catch {
+    // ignore
   }
 }
 
 // Factory function para crear logger con configuración basada en entorno
 function createLogger() {
   // Determinar entorno para configuración de logging
+  const loc = window.location;
   const isDevelopment =
-    window.location.protocol === 'file:' ||
-    window.location.hostname === 'localhost' ||
-    window.location.hostname === '127.0.0.1' ||
-    window.location.hostname.includes('dev.') ||
-    window.location.port === '3000' ||
-    window.location.port === '8080' ||
-    window.location.search.includes('debug=true') ||
-    window.location.hash.includes('#dev');
+    loc.protocol === 'file:' ||
+    loc.hostname === 'localhost' ||
+    loc.hostname === '127.0.0.1' ||
+    loc.hostname.includes('dev.') ||
+    loc.port === '3000' ||
+    loc.port === '8080' ||
+    loc.hash.includes('#dev');
+
+  const urlParams = (() => {
+    try {
+      return new URLSearchParams(loc.search);
+    } catch {
+      return new URLSearchParams();
+    }
+  })();
+
+  const debugParam = urlParams.get('debug');
+  const logLevelParam = urlParams.get('log');
+  const storedDebug = safeGetLocalStorageItem('resonate_debug');
+  const storedLevel = safeGetLocalStorageItem('resonate_log_level');
+  const debugExplicitlyEnabled =
+    isTruthy(debugParam) ||
+    isTruthy(storedDebug) ||
+    (typeof logLevelParam === 'string' && logLevelParam.length > 0) ||
+    (typeof storedLevel === 'string' && storedLevel.length > 0 && storedLevel.toUpperCase() !== 'NONE');
 
   const config = {
-    level: isDevelopment ? 'DEBUG' : 'INFO', // DEBUG for development, INFO for production
+    // In production we default to fully silent; enable logs only with explicit debug flags.
+    enabled: isDevelopment || debugExplicitlyEnabled,
+    level: isDevelopment ? 'DEBUG' : 'NONE',
     environment: isDevelopment ? 'development' : 'production',
     verbose: isDevelopment,
     timestamps: isDevelopment,
     categories: ['ALL']
   };
 
-  // Permitir override via URL params
-  const urlParams = new URLSearchParams(window.location.search);
-  const logLevel = urlParams.get('log');
-  if (logLevel && ['DEBUG', 'INFO', 'WARN', 'ERROR', 'NONE'].includes(logLevel.toUpperCase())) {
-    config.level = logLevel.toUpperCase();
+  // Explicit overrides (only take effect if provided)
+  if (logLevelParam && ['DEBUG', 'INFO', 'WARN', 'ERROR', 'NONE'].includes(logLevelParam.toUpperCase())) {
+    config.level = logLevelParam.toUpperCase();
+    // If user asked for a log level in prod, enable logging.
+    if (!isDevelopment) config.enabled = config.level !== 'NONE';
   }
 
-  // Permitir override via localStorage
-  const storedLevel = localStorage.getItem('resonate_log_level');
   if (storedLevel) {
     const upper = storedLevel.toUpperCase();
     if (upper in LOGGER_LEVELS) {
       config.level = upper;
+      if (!isDevelopment) config.enabled = upper !== 'NONE';
     }
+  }
+
+  // Hard guarantee: in production, silence the global console unless debug is explicitly enabled.
+  if (!isDevelopment && !debugExplicitlyEnabled) {
+    silenceConsole();
   }
 
   return new Logger(config);
