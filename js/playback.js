@@ -1373,32 +1373,76 @@ window.enhancedPlaybackController = enhancedPlaybackController;
 
 // Fetch with timeout for network operations
 async function fetchWithTimeout(resource, options = {}, timeout = 8000) {
-  const requestedTimeout = (options && typeof options.timeout === 'number') ? options.timeout : 20000;
+  const resourceStr = String(resource || '');
+  const externalSignal = options && options.signal;
+
+  const baseTimeout = (options && typeof options.timeout === 'number')
+    ? options.timeout
+    : (typeof timeout === 'number' ? timeout : 20000);
+
+  // Archive.org search can legitimately take longer than 20s.
+  const isArchiveAdvancedSearch = /archive\.org\/advancedsearch\.php/i.test(resourceStr);
+  const requestedTimeout = isArchiveAdvancedSearch ? Math.max(baseTimeout, 45000) : baseTimeout;
+
   const controller = new AbortController();
-  const id = setTimeout(() => controller.abort('Timeout exceeded'), requestedTimeout);
+  let timedOut = false;
+
+  const onExternalAbort = () => {
+    try {
+      // Preserve the original abort reason when possible.
+      controller.abort(externalSignal && 'reason' in externalSignal ? externalSignal.reason : 'Aborted');
+    } catch {
+      try { controller.abort(); } catch {}
+    }
+  };
+
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      onExternalAbort();
+    } else {
+      try { externalSignal.addEventListener('abort', onExternalAbort, { once: true }); } catch {}
+    }
+  }
+
+  const id = setTimeout(() => {
+    timedOut = true;
+    try { controller.abort('Timeout exceeded'); } catch { try { controller.abort(); } catch {} }
+  }, requestedTimeout);
 
   // Clone options to avoid leaking non-standard props to fetch
   const fetchOpts = { ...(options || {}) };
   delete fetchOpts.timeout;
+  delete fetchOpts.signal;
   fetchOpts.signal = controller.signal;
 
   try {
     const response = await fetch(resource, fetchOpts);
-    clearTimeout(id);
     return response;
   } catch (error) {
-    clearTimeout(id);
-    if (error && (error.name === 'AbortError' || String(error).includes('Timeout'))) {
-      console.error(`Timeout: The request took more than ${requestedTimeout}ms.`, error);
-      throw new Error(`Timeout exceeded: ${resource}`);
+    // If the caller aborted (e.g., user typed a new query), surface an AbortError.
+    if (!timedOut && externalSignal && externalSignal.aborted) {
+      throw new DOMException('Aborted', 'AbortError');
     }
+
+    if (timedOut || (error && String(error).includes('Timeout'))) {
+      throw new Error(`Timeout exceeded: ${resourceStr}`);
+    }
+
     // Normalize network failures into a predictable error to avoid noisy logs upstream
     if (error && error instanceof TypeError && String(error.message).includes('Failed to fetch')) {
       throw new Error('Network request failed');
     }
     throw error;
+  } finally {
+    clearTimeout(id);
+    if (externalSignal && externalSignal.removeEventListener) {
+      try { externalSignal.removeEventListener('abort', onExternalAbort); } catch {}
+    }
   }
 }
+
+// Expose for other scripts (search.js) when loaded as a global script.
+try { window.fetchWithTimeout = fetchWithTimeout; } catch {}
 
 // Reliable download with progress events (XMLHttpRequest gives lengthComputable)
 function downloadBlobWithProgress(url, timeoutMs, onProgress) {

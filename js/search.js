@@ -364,6 +364,11 @@ async function performOptimizedSearch(query, page = 0, options = {}) {
       if (window.enhancedCache) window.enhancedCache.set('search', cacheKey, searchResult);
       return searchResult;
     } catch (error) {
+      // If the user typed a new query, the previous one is expected to abort.
+      if (error && (error.name === 'AbortError' || String(error).includes('AbortError'))) {
+        logSearch('Search aborted', 'debug', 'NETWORK');
+        return { results: [], hasMore: false };
+      }
       logSearch(error, 'error', 'NETWORK');
       // Fallback: try simple query if optimized fails
       try {
@@ -418,6 +423,10 @@ async function performOptimizedSearch(query, page = 0, options = {}) {
           return searchResult;
         }
       } catch (fallbackError) {
+        if (fallbackError && (fallbackError.name === 'AbortError' || String(fallbackError).includes('AbortError'))) {
+          logSearch('Search aborted', 'debug', 'NETWORK');
+          return { results: [], hasMore: false };
+        }
         logSearch(fallbackError, 'error', 'NETWORK');
       }
       if (activateUI) {
