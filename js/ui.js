@@ -964,6 +964,7 @@ function ensureSearchInputControllerBound() {
     const queryAtDispatch = q;
     state.searchRequestId = (state.searchRequestId || 0) + 1;
     const requestId = state.searchRequestId;
+    try { markSearchPerfStart(queryAtDispatch, requestId); } catch {}
 
     elements.searchResults.classList.add('active');
     setSearchOpenState(true);
@@ -1022,6 +1023,7 @@ function ensureSearchInputControllerBound() {
         lastSubmit = { query: queryAtDispatch, at: Date.now() };
         state.searchRequestId = (state.searchRequestId || 0) + 1;
         const requestId = state.searchRequestId;
+        try { markSearchPerfStart(queryAtDispatch, requestId); } catch {}
 
         elements.searchResults.classList.add('active');
         setSearchOpenState(true);
@@ -1369,10 +1371,52 @@ function updateTitleTicker(titleText) {
 window.updateTitleTicker = updateTitleTicker;
 
 const SEARCH_CONFIG = {
-  resultsPerPage: 20,
+  // Smaller page improves time-to-first-render; infinite scroll keeps it unbounded.
+  resultsPerPage: 12,
   timeout: 20000,
   enableLazyLoading: true
 };
+
+function nowPerfMs() {
+  try {
+    return (typeof performance !== 'undefined' && performance && typeof performance.now === 'function')
+      ? performance.now()
+      : Date.now();
+  } catch {
+    return Date.now();
+  }
+}
+
+function markSearchPerfStart(query, requestId) {
+  try {
+    state._searchPerf = {
+      query: String(query || '').trim(),
+      requestId: Number(requestId) || 0,
+      startedAtMs: nowPerfMs(),
+      logged: false
+    };
+  } catch {}
+}
+
+function maybeLogSearchPerfFirstPaint({ requestId, query } = {}) {
+  try {
+    const perf = state._searchPerf;
+    if (!perf || perf.logged) return;
+    if (Number(perf.requestId) !== Number(requestId)) return;
+    if (String(perf.query || '') !== String(query || '')) return;
+
+    requestAnimationFrame(() => {
+      try {
+        if (!state._searchPerf || state._searchPerf.logged) return;
+        const elapsed = Math.max(0, nowPerfMs() - perf.startedAtMs);
+        state._searchPerf.logged = true;
+        const msg = `Search first render: ${Math.round(elapsed)}ms (${perf.query})`;
+        if (window.logger?.info) window.logger.info(msg, 'PERF');
+        else console.log(msg);
+      } catch {}
+    });
+  } catch {}
+}
 
 // Loader Manager - Simplified single-state loader with auto-cleanup
 // LoaderManager removed - no loaders in this version
@@ -2455,6 +2499,7 @@ function displaySearchResults(searchData, clearExisting = true) {
 
   if (!searchData) return;
   const { results, hasMore, total } = searchData;
+  const offlineOnly = !!(state.searchUi && state.searchUi.offlineOnly);
 
   if (clearExisting) {
     elements.searchResultsList.innerHTML = '';
@@ -2465,6 +2510,13 @@ function displaySearchResults(searchData, clearExisting = true) {
   } else {
     state.searchResults = [...state.searchResults, ...results];
     state.currentSearchHasMore = hasMore;
+  }
+
+  // Perf: log submit → first paint for the initial page render.
+  if (clearExisting) {
+    try {
+      maybeLogSearchPerfFirstPaint({ requestId: state.searchRequestId || 0, query: state.currentSearchQuery || '' });
+    } catch {}
   }
 
   // Ensure toolbar bindings exist
@@ -2517,6 +2569,7 @@ function displaySearchResults(searchData, clearExisting = true) {
           state.currentSearchQuery = q;
           state.searchRequestId = (state.searchRequestId || 0) + 1;
           const requestId = state.searchRequestId;
+          try { markSearchPerfStart(q, requestId); } catch {}
           elements.searchResults.classList.add('active');
           state.searchActive = true;
           setSearchOpenState(true);
@@ -2547,8 +2600,17 @@ function displaySearchResults(searchData, clearExisting = true) {
   // Grid always (favorites + search): improves consistency and theming
   state.viewMode = 'grid';
 
-  // Render from state (supports toolbar filters without mutating base results)
-  rerenderSearchResultsFromState(clearExisting);
+  // Render strategy:
+  // - Full render when starting a new search
+  // - Full render when offline-only filter is active (needs full filtering)
+  // - Incremental append for lazy-load pages (avoid O(n^2) rerender/duplication)
+  if (clearExisting || offlineOnly) {
+    rerenderSearchResultsFromState(true);
+  } else {
+    // Append only the new page.
+    renderCardGrid(elements.searchResultsList, results, 'search', false);
+    // If offline-only is toggled later, rerenderSearchResultsFromState will rebuild.
+  }
 
   // Configurar lazy loading si hay más resultados
   if (hasMore && SEARCH_CONFIG.enableLazyLoading) {
@@ -2636,10 +2698,11 @@ function rerenderSearchResultsFromState(clearExisting = true) {
 
   renderCardGrid(elements.searchResultsList, viewItems, 'search', clearExisting);
 
-  // Refresh count label
+  // Refresh count label only for offline-only filtered view.
+  // Otherwise, keep the main label managed by displaySearchResults (supports X / total).
   try {
-    if (elements.searchResultsCount) {
-      elements.searchResultsCount.textContent = `${viewItems.length} results`;
+    if (elements.searchResultsCount && (state.searchUi && state.searchUi.offlineOnly)) {
+      elements.searchResultsCount.textContent = `${viewItems.length} / ${base.length}`;
     }
   } catch {}
 }
@@ -2673,7 +2736,12 @@ function setupLazyLoadingObserver() {
           state.isLoadingMore = true;
           state.currentSearchPage++;
 
-          const result = await (window.performOptimizedSearch || performOptimizedSearch)(state.currentSearchQuery, state.currentSearchPage);
+          const result = await (window.performOptimizedSearch || performOptimizedSearch)(state.currentSearchQuery, state.currentSearchPage, {
+            showLoader: false,
+            activateUI: false,
+            abortPrevious: false,
+            deferMetadata: true
+          });
           displaySearchResults(result, false);
         } catch (error) {
           console.error('Error en lazy loading:', error);
@@ -2692,6 +2760,74 @@ function setupLazyLoadingObserver() {
     // ignore
   }
 }
+
+// When background enrichment completes (search.js), update the already-rendered cards
+// without forcing a full rerender.
+try {
+  if (typeof window.onSearchPageEnriched !== 'function') {
+    window.onSearchPageEnriched = function onSearchPageEnriched({ query, page } = {}) {
+      try {
+        const q = String(query || '').trim();
+        const p = Number(page);
+        if (!q || !Number.isFinite(p)) return;
+        if (!state || String(state.currentSearchQuery || '').trim() !== q) return;
+
+        const cacheKey = `search:${q}:${p}`;
+        const cached = window.enhancedCache && window.enhancedCache.get('search', cacheKey);
+        if (!cached || cached.deferredMetadata !== false || !Array.isArray(cached.results)) return;
+
+        const resultsPerPage = (SEARCH_CONFIG && typeof SEARCH_CONFIG.resultsPerPage === 'number')
+          ? SEARCH_CONFIG.resultsPerPage
+          : 20;
+        const startIndex = p * resultsPerPage;
+
+        // Update state in-place for this page slice.
+        for (let i = 0; i < cached.results.length; i++) {
+          const idx = startIndex + i;
+          if (!state.searchResults || idx < 0 || idx >= state.searchResults.length) continue;
+          state.searchResults[idx] = cached.results[i];
+        }
+
+        // Update cards in DOM (type chip, track count, expand visibility).
+        for (let i = 0; i < cached.results.length; i++) {
+          const idx = startIndex + i;
+          const item = cached.results[i];
+          const card = elements.searchResultsList
+            ? elements.searchResultsList.querySelector(`.content-card[data-context="search"][data-global-index="${idx}"]`)
+            : null;
+          if (!card) continue;
+
+          const isAlbum = !item.isTrackList && ((item.trackCount || 0) > 1 || item.isAlbum === true);
+          const typeChip = card.querySelector('.chip-type');
+          if (typeChip) typeChip.textContent = isAlbum ? 'Album' : 'Single';
+
+          const trackCountChip = card.querySelector('.chip-track-count');
+          const tc = (typeof item.trackCount === 'number' && isFinite(item.trackCount)) ? item.trackCount : null;
+          if (tc && tc > 0) {
+            if (trackCountChip) {
+              trackCountChip.textContent = `${tc} tracks`;
+            } else {
+              const chips = card.querySelector('.card-chips');
+              if (chips) {
+                const chip = document.createElement('span');
+                chip.className = 'chip chip-quiet chip-track-count';
+                chip.textContent = `${tc} tracks`;
+                chips.appendChild(chip);
+              }
+            }
+          }
+
+          const expandBtn = card.querySelector('.card-btn.expand');
+          if (expandBtn) {
+            expandBtn.style.display = (isAlbum && tc && tc > 1) ? 'flex' : 'none';
+          }
+        }
+      } catch {
+        // best-effort
+      }
+    };
+  }
+} catch {}
 
 // Load album info and update result element metadata
 async function loadAlbumInfoBackground(identifier, resultEl) {
@@ -3099,7 +3235,7 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
   const chips = document.createElement('div');
   chips.className = 'card-chips';
   const chipType = document.createElement('span');
-  chipType.className = 'chip';
+  chipType.className = 'chip chip-type';
   const isAlbum = !item.isTrackList && ( !!item.isAlbum || (typeof item.trackCount === 'number' && item.trackCount > 1) || !!item.isAlbumTrack );
   chipType.textContent = isAlbum ? 'Album' : 'Single';
   chips.appendChild(chipType);
@@ -3121,7 +3257,7 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
 
   if (item.trackCount) {
     const chipTrackCount = document.createElement('span');
-    chipTrackCount.className = 'chip chip-quiet';
+    chipTrackCount.className = 'chip chip-quiet chip-track-count';
     chipTrackCount.textContent = `${item.trackCount} tracks`;
     chips.appendChild(chipTrackCount);
   }
@@ -3179,8 +3315,7 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
     favBtn.setAttribute('aria-label', label);
   } catch {}
 
-  // Background album info population (track count / album flag)
-  try { loadAlbumInfoBackground(identifier, card); } catch (e) {}
+  // Background enrichment updates cards via window.onSearchPageEnriched.
 
   // Event wiring
   if (context === 'search') {
@@ -5988,6 +6123,7 @@ function displaySearchHistory() {
         const queryAtDispatch = query;
         state.searchRequestId = (state.searchRequestId || 0) + 1;
         const requestId = state.searchRequestId;
+        try { markSearchPerfStart(queryAtDispatch, requestId); } catch {}
 
         elements.searchResults.classList.add('active');
         state.searchActive = true;
