@@ -1027,6 +1027,7 @@ h3 {
   position: relative;
   cursor: pointer;
   user-select: none;
+  box-sizing: border-box;
   box-shadow: none;
   background: transparent;
 }
