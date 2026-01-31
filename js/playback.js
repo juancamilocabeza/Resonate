@@ -1529,6 +1529,87 @@ function formatTime(seconds) {
 
 let activeLoaderProgress = 0;
 
+// In-memory preloaded blob URLs for near-instant next-track playback
+const PRELOADED_BLOB_URL_LIMIT = 2;
+const preloadedBlobUrlMap = new Map();
+let preloadAudioElement = null;
+
+function ensurePreloadAudioElement() {
+  if (preloadAudioElement) return preloadAudioElement;
+  try {
+    preloadAudioElement = new Audio();
+    preloadAudioElement.preload = 'auto';
+    preloadAudioElement.muted = true;
+  } catch {
+    preloadAudioElement = null;
+  }
+  return preloadAudioElement;
+}
+
+function setPreloadedBlobUrl(url, blobUrl) {
+  if (!url || !blobUrl) return;
+  try {
+    // If already cached, replace and revoke old
+    if (preloadedBlobUrlMap.has(url)) {
+      const existing = preloadedBlobUrlMap.get(url);
+      if (existing && existing.startsWith('blob:')) {
+        try { URL.revokeObjectURL(existing); } catch {}
+      }
+      preloadedBlobUrlMap.delete(url);
+    }
+
+    preloadedBlobUrlMap.set(url, blobUrl);
+
+    // Enforce limit (evict oldest)
+    while (preloadedBlobUrlMap.size > PRELOADED_BLOB_URL_LIMIT) {
+      const oldestKey = preloadedBlobUrlMap.keys().next().value;
+      const oldestUrl = preloadedBlobUrlMap.get(oldestKey);
+      preloadedBlobUrlMap.delete(oldestKey);
+      if (oldestUrl && oldestUrl.startsWith('blob:')) {
+        try { URL.revokeObjectURL(oldestUrl); } catch {}
+      }
+    }
+  } catch {
+    // best-effort
+  }
+}
+
+function consumePreloadedBlobUrl(url) {
+  if (!url) return null;
+  if (!preloadedBlobUrlMap.has(url)) return null;
+  const blobUrl = preloadedBlobUrlMap.get(url);
+  preloadedBlobUrlMap.delete(url);
+  try {
+    if (preloadAudioElement && preloadAudioElement.src === blobUrl) {
+      preloadAudioElement.removeAttribute('src');
+      preloadAudioElement.load();
+    }
+  } catch {}
+  return blobUrl || null;
+}
+
+async function prewarmAudioFromCache(url) {
+  try {
+    if (!url) return;
+    if (!audioCache || typeof audioCache.isCached !== 'function' || typeof audioCache.get !== 'function') return;
+    if (preloadedBlobUrlMap.has(url)) return;
+    const cached = await audioCache.isCached(url);
+    if (!cached) return;
+    const result = await audioCache.get(url, false);
+    if (!result || !result.blob) return;
+    const blobUrl = URL.createObjectURL(result.blob);
+    setPreloadedBlobUrl(url, blobUrl);
+
+    const preloader = ensurePreloadAudioElement();
+    if (preloader) {
+      preloader.src = blobUrl;
+      preloader.load();
+    }
+  } catch (err) {
+    logPlayback('debug', 'Prewarm cache failed', err);
+  }
+}
+
 // Update loader percentage when available; monotonic to avoid regressions
 function updateLoaderProgress(value) {
   const numeric = Number.isFinite(Number(value)) ? Number(value) : 0;
@@ -1566,6 +1647,15 @@ async function loadAudioWithCache(track) {
 
   try {
     updateLoaderProgress(10);
+
+    // Fast path: consume any prewarmed blob URL
+    const preloadedBlobUrl = consumePreloadedBlobUrl(track.url);
+    if (preloadedBlobUrl) {
+      logPlayback('info', `Playing from prewarmed cache: ${track.title || track.url}`);
+      updateLoaderProgress(85);
+      return preloadedBlobUrl;
+    }
+
     // Intentar obtener de la caché primero
     const cacheResult = typeof audioCache !== 'undefined' && audioCache && typeof audioCache.get === 'function' ? await audioCache.get(track.url, true) : null;
 
@@ -1787,7 +1877,9 @@ function preloadNextTrack() {
     const queue = Array.isArray(state.playbackQueue) ? state.playbackQueue : [];
     const upcoming = queue.slice(0, 2).filter(t => t && t.url);
     for (const track of upcoming) {
-      audioCache.prefetchAudio(track.url, false).catch((err) => logPlayback('debug', 'Failed to prefetch upcoming track', err));
+      audioCache.prefetchAudio(track.url, false)
+        .then(() => prewarmAudioFromCache(track.url))
+        .catch((err) => logPlayback('debug', 'Failed to prefetch upcoming track', err));
     }
 
     // Also prefetch the immediate previous candidate (top of history) to make Prev feel instant.
@@ -1795,7 +1887,9 @@ function preloadNextTrack() {
       const history = Array.isArray(state.playbackHistory) ? state.playbackHistory : [];
       const prevCandidate = history.length > 0 ? history[history.length - 1] : null;
       if (prevCandidate && prevCandidate.url) {
-        audioCache.prefetchAudio(prevCandidate.url, false).catch((err) => logPlayback('debug', 'Failed to prefetch previous candidate', err));
+        audioCache.prefetchAudio(prevCandidate.url, false)
+          .then(() => prewarmAudioFromCache(prevCandidate.url))
+          .catch((err) => logPlayback('debug', 'Failed to prefetch previous candidate', err));
       }
     } catch {
       // ignore
@@ -2081,7 +2175,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
         state.currentAudioUrl = audioUrl;
         state.currentBlobUrl = (typeof audioUrl === 'string' && audioUrl.startsWith('blob:')) ? audioUrl : null;
         audio.src = audioUrl;
-        audio.preload = 'metadata';
+        audio.preload = 'auto';
         audio.load();
         updateLoaderProgress(88);
 
@@ -3020,14 +3114,150 @@ function updateBufferedProgress() {
   if (!window.elements.audio || !window.elements.progressBuffered) return;
   
   const buffered = window.elements.audio.buffered;
+  const duration = window.elements.audio.duration;
+  if (!duration || !isFinite(duration)) {
+    window.elements.progressBuffered.style.width = '0%';
+    return;
+  }
+
   if (buffered.length > 0) {
     const bufferedEnd = buffered.end(buffered.length - 1);
-    const duration = window.elements.audio.duration;
-    if (duration && isFinite(duration)) {
-      const bufferedPercent = (bufferedEnd / duration) * 100;
-      window.elements.progressBuffered.style.width = `${bufferedPercent}%`;
-    }
+    const bufferedPercent = (bufferedEnd / duration) * 100;
+    window.elements.progressBuffered.style.width = `${bufferedPercent}%`;
+    return;
   }
+
+  // Reset when nothing is buffered yet (avoid stale UI from previous track)
+  window.elements.progressBuffered.style.width = '0%';
+}
+
+// Buffering monitoring: show subtle loader during stalls and attempt soft recovery
+function setupBufferingMonitoring() {
+  if (!window.elements || !window.elements.audio) return;
+  if (window._resonateBufferingHandlersInstalled) return;
+  window._resonateBufferingHandlersInstalled = true;
+
+  const audio = window.elements.audio;
+  const BUFFERING_SHOW_DELAY_MS = 350;
+  const BUFFERING_STALL_TIMEOUT_MS = 20000;
+  const BUFFERING_RECOVERY_COOLDOWN_MS = 12000;
+
+  let isBuffering = false;
+  let showTimer = null;
+  let stallTimer = null;
+  let lastTimeUpdateAt = Date.now();
+  let lastPosition = 0;
+  let lastRecoveryAt = 0;
+
+  const isLoadingNow = () => !!(window.state && window.state.isLoading);
+
+  const clearTimers = () => {
+    if (showTimer) {
+      clearTimeout(showTimer);
+      showTimer = null;
+    }
+    if (stallTimer) {
+      clearTimeout(stallTimer);
+      stallTimer = null;
+    }
+  };
+
+  const showBuffering = () => {
+    if (isBuffering || isLoadingNow()) return;
+    isBuffering = true;
+    try {
+      if (window.Loaders && typeof window.Loaders.showLoader === 'function') {
+        window.Loaders.showLoader({ type: 'spinner', showProgress: false, context: 'buffering' });
+      }
+    } catch {}
+  };
+
+  const hideBuffering = () => {
+    if (!isBuffering) return;
+    isBuffering = false;
+    if (isLoadingNow()) return;
+    try {
+      if (window.Loaders && typeof window.Loaders.hideLoader === 'function') {
+        window.Loaders.hideLoader();
+      }
+    } catch {}
+  };
+
+  const attemptRecovery = () => {
+    if (isLoadingNow()) return;
+    if (audio.paused || audio.ended) return;
+    const now = Date.now();
+    if (now - lastRecoveryAt < BUFFERING_RECOVERY_COOLDOWN_MS) return;
+    lastRecoveryAt = now;
+    logPlayback('warn', 'Buffering stall detected; attempting recovery');
+    try {
+      const maybePromise = audio.play();
+      if (maybePromise && typeof maybePromise.catch === 'function') {
+        maybePromise.catch(() => {});
+      }
+    } catch {}
+  };
+
+  const scheduleShow = () => {
+    if (showTimer) clearTimeout(showTimer);
+    showTimer = setTimeout(() => {
+      if (isLoadingNow()) return;
+      if (audio.paused || audio.ended) return;
+      if (audio.readyState < 3) showBuffering();
+    }, BUFFERING_SHOW_DELAY_MS);
+  };
+
+  const scheduleStallCheck = () => {
+    if (stallTimer) clearTimeout(stallTimer);
+    stallTimer = setTimeout(() => {
+      if (isLoadingNow()) return;
+      if (audio.paused || audio.ended) return;
+      const noProgress = (Date.now() - lastTimeUpdateAt) >= BUFFERING_STALL_TIMEOUT_MS;
+      if (noProgress && audio.readyState < 3) {
+        attemptRecovery();
+      }
+    }, BUFFERING_STALL_TIMEOUT_MS);
+  };
+
+  const onWaiting = () => {
+    if (isLoadingNow()) return;
+    scheduleShow();
+    scheduleStallCheck();
+  };
+
+  const onStalled = () => {
+    if (isLoadingNow()) return;
+    scheduleShow();
+    scheduleStallCheck();
+  };
+
+  const onTimeUpdate = () => {
+    lastTimeUpdateAt = Date.now();
+    if (audio.currentTime !== lastPosition) {
+      lastPosition = audio.currentTime;
+      hideBuffering();
+    }
+  };
+
+  const onPlayable = () => {
+    hideBuffering();
+    clearTimers();
+  };
+
+  const onPause = () => {
+    hideBuffering();
+    clearTimers();
+  };
+
+  audio.addEventListener('waiting', onWaiting);
+  audio.addEventListener('stalled', onStalled);
+  audio.addEventListener('timeupdate', onTimeUpdate);
+  audio.addEventListener('playing', onPlayable);
+  audio.addEventListener('canplay', onPlayable);
+  audio.addEventListener('canplaythrough', onPlayable);
+  audio.addEventListener('seeked', onPlayable);
+  audio.addEventListener('pause', onPause);
+  audio.addEventListener('ended', onPause);
 }
 
 // Enhanced track listening statistics and playback control

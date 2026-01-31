@@ -888,6 +888,10 @@ async function initializeApp() {
     setupListenTracking();
   }
 
+  if (typeof setupBufferingMonitoring === 'function') {
+    setupBufferingMonitoring();
+  }
+
   // Prepare favorites queue (no autoplay)
   scheduleFavoritesQueuePreparation();
 

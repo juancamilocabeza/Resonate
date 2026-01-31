@@ -58,6 +58,7 @@ const Loaders = (() => {
   const loaderExplanations = {
     search: "Loading results. Wait, your multimedia experience is on the way.",
     playback: "Preparing your track for optimal playback.",
+    buffering: "Buffering to keep playback smooth.",
     album: "Loading your album for seamless listening.",
     // Legacy context key (kept for backward compatibility)
     favorite: "Loading your resonates for reliable playback.",
