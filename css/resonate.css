@@ -1,3 +1,8 @@
+.modal-description .info-body--full {
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--fg);
+}
 /* FAVORITES: Ajuste visual para listado de pistas y cabecera de álbum */
 .favorites-album-header {
   font-weight: 600;
