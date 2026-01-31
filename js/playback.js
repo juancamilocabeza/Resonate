@@ -3000,9 +3000,33 @@ function updateProgressBar() {
     if (window.elements.progress) window.elements.progress.style.width = `${progressPercent}%`;
     if (window.elements.currentTime) window.elements.currentTime.textContent = formatTime(window.elements.audio.currentTime);
     if (window.elements.totalTime) window.elements.totalTime.textContent = formatTime(window.elements.audio.duration);
+    
+    // Update buffered visual
+    updateBufferedProgress();
+    
+    // Update ARIA attributes
+    if (window.elements.progressBar) {
+      window.elements.progressBar.setAttribute('aria-valuenow', Math.round(progressPercent));
+      window.elements.progressBar.setAttribute('aria-valuetext', 
+        `${formatTime(window.elements.audio.currentTime)} de ${formatTime(window.elements.audio.duration)}`);
+    }
 
     // Actualizar Media Session
     updateMediaPositionState();
+  }
+}
+
+function updateBufferedProgress() {
+  if (!window.elements.audio || !window.elements.progressBuffered) return;
+  
+  const buffered = window.elements.audio.buffered;
+  if (buffered.length > 0) {
+    const bufferedEnd = buffered.end(buffered.length - 1);
+    const duration = window.elements.audio.duration;
+    if (duration && isFinite(duration)) {
+      const bufferedPercent = (bufferedEnd / duration) * 100;
+      window.elements.progressBuffered.style.width = `${bufferedPercent}%`;
+    }
   }
 }
 
@@ -3174,7 +3198,24 @@ function setupProgressBarInteraction() {
     }
   };
 
+  const tooltip = document.getElementById('progress-tooltip');
   let isDragging = false;
+
+  // Dynamic offset calculation
+  const getOffsets = () => {
+    const currentTimeEl = window.elements.currentTime;
+    const totalTimeEl = window.elements.totalTime;
+    const offsetLeft = currentTimeEl ? currentTimeEl.offsetWidth + 8 : 0; // +8 for margin
+    const offsetRight = totalTimeEl ? totalTimeEl.offsetWidth + 8 : 0;
+    return { offsetLeft, offsetRight };
+  };
+
+  // Haptic feedback (mobile)
+  const triggerHaptic = () => {
+    if ('vibrate' in navigator) {
+      navigator.vibrate(10); // Subtle 10ms vibration
+    }
+  };
 
   const startDrag = (e) => {
     if (!window.elements.audio || !window.elements.audio.duration || !isFinite(window.elements.audio.duration)) return;
@@ -3191,6 +3232,7 @@ function setupProgressBarInteraction() {
       if (window.logger && typeof window.logger.error === 'function') window.logger.error(`Error adding dragging class: ${err.message}`, 'PLAYBACK');
     }
 
+    triggerHaptic();
     // Actualizar inmediatamente al comenzar el arrastre
     updateProgressOnDrag(e);
 
@@ -3214,6 +3256,10 @@ function setupProgressBarInteraction() {
     }
     const progressSection = resolveProgressSection();
     if (progressSection) progressSection.classList.remove('dragging');
+    if (tooltip) {
+      tooltip.style.opacity = '0';
+      tooltip.style.visibility = 'hidden';
+    }
   };
 
   const updateProgressOnDrag = (e) => {
@@ -3228,10 +3274,8 @@ function setupProgressBarInteraction() {
       clientX = e.clientX;
     }
 
-    // Adjust for the 42px offset occupied by current-time text
-    // The clickable area is progressBarRect.width - 42px (current-time width) - 5px (total-time margin)
-    const offsetLeft = 42; // Width of current-time element
-    const offsetRight = 5; // Right margin for total-time
+    // Calculate click position with dynamic offset compensation
+    const { offsetLeft, offsetRight } = getOffsets();
     const effectiveWidth = progressBarRect.width - offsetLeft - offsetRight;
 
     const clickPosition = Math.max(0, Math.min(1, (clientX - (progressBarRect.left + offsetLeft)) / effectiveWidth));
@@ -3243,7 +3287,103 @@ function setupProgressBarInteraction() {
 
     // Update audio on both drag and click
     window.elements.audio.currentTime = seekTime;
+    
+    // Update ARIA
+    window.elements.progressBar.setAttribute('aria-valuenow', Math.round(clickPosition * 100));
+    window.elements.progressBar.setAttribute('aria-valuetext', 
+      `${formatTime(seekTime)} de ${formatTime(window.elements.audio.duration)}`);
   };
+
+  // Tooltip on hover/drag
+  const showTooltip = (e) => {
+    if (!tooltip || !window.elements.audio.duration || !isFinite(window.elements.audio.duration)) return;
+    
+    const progressBarRect = window.elements.progressBar.getBoundingClientRect();
+    
+    let clientX;
+    if (e.type.includes('touch')) {
+      if (e.touches && e.touches.length > 0) {
+        clientX = e.touches[0].clientX;
+      } else {
+        return;
+      }
+    } else {
+      clientX = e.clientX;
+    }
+    
+    const { offsetLeft, offsetRight } = getOffsets();
+    const effectiveWidth = progressBarRect.width - offsetLeft - offsetRight;
+    const hoverPosition = Math.max(0, Math.min(1, (clientX - (progressBarRect.left + offsetLeft)) / effectiveWidth));
+    const hoverTime = hoverPosition * window.elements.audio.duration;
+    
+    tooltip.textContent = formatTime(hoverTime);
+    tooltip.style.left = `${offsetLeft + (hoverPosition * effectiveWidth)}px`;
+    tooltip.style.opacity = '1';
+    tooltip.style.visibility = 'visible';
+  };
+
+  const hideTooltip = () => {
+    if (tooltip && !isDragging) {
+      tooltip.style.opacity = '0';
+      tooltip.style.visibility = 'hidden';
+    }
+  };
+
+  // Keyboard navigation
+  window.elements.progressBar.addEventListener('keydown', (e) => {
+    if (!window.elements.audio.duration || !isFinite(window.elements.audio.duration)) return;
+    
+    let seekDelta = 0;
+    
+    switch(e.key) {
+      case 'ArrowLeft':
+        seekDelta = -5; // 5 seconds back
+        break;
+      case 'ArrowRight':
+        seekDelta = 5; // 5 seconds forward
+        break;
+      case 'Home':
+        window.elements.audio.currentTime = 0;
+        updateProgressBar();
+        e.preventDefault();
+        return;
+      case 'End':
+        window.elements.audio.currentTime = window.elements.audio.duration - 1;
+        updateProgressBar();
+        e.preventDefault();
+        return;
+      case 'PageUp':
+        seekDelta = 10; // 10 seconds forward
+        break;
+      case 'PageDown':
+        seekDelta = -10; // 10 seconds back
+        break;
+      default:
+        return;
+    }
+    
+    if (seekDelta !== 0) {
+      const newTime = Math.max(0, Math.min(window.elements.audio.duration, 
+        window.elements.audio.currentTime + seekDelta));
+      window.elements.audio.currentTime = newTime;
+      updateProgressBar();
+      triggerHaptic();
+      e.preventDefault();
+    }
+  });
+
+  // Mouse events
+  window.elements.progressBar.addEventListener('mousemove', showTooltip);
+  window.elements.progressBar.addEventListener('mouseleave', hideTooltip);
+  
+  // Focus/blur for visual feedback
+  window.elements.progressBar.addEventListener('focus', () => {
+    window.elements.progressBar.classList.add('focused');
+  });
+  
+  window.elements.progressBar.addEventListener('blur', () => {
+    window.elements.progressBar.classList.remove('focused');
+  });
 
   // Configure events - remove duplicates
   if (window.elements.progressBar) {
@@ -3259,6 +3399,7 @@ function setupProgressBarInteraction() {
   if (window.elements.progressBar) {
     window.elements.progressBar.addEventListener('click', (e) => {
       if (!isDragging) { // Solo procesar clicks que no sean parte de un arrastre
+        triggerHaptic();
         updateProgressOnDrag(e);
       }
     });

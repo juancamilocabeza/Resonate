@@ -140,6 +140,8 @@ const elements = {
   creator: document.getElementById('creator'),
   progressBar: document.getElementById('progress-bar'),
   progress: document.getElementById('progress'),
+  progressBuffered: document.getElementById('progress-buffered'),
+  progressTooltip: document.getElementById('progress-tooltip'),
   currentTime: document.getElementById('current-time'),
   totalTime: document.getElementById('total-time'),
   playBtn: document.getElementById('play-btn'),

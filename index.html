@@ -112,9 +112,19 @@
             </div>
           </div>
           <div class="progress-section">
-            <div class="progress-bar" id="progress-bar">
+            <div class="progress-bar" 
+                 id="progress-bar"
+                 role="slider"
+                 aria-label="Posición de reproducción"
+                 aria-valuemin="0"
+                 aria-valuemax="100"
+                 aria-valuenow="0"
+                 aria-valuetext="0 segundos de 0 segundos"
+                 tabindex="0">
               <span class="current-time" id="current-time">0:00</span>
+              <div class="progress-buffered" id="progress-buffered"></div>
               <div class="progress" id="progress"></div>
+              <div class="progress-tooltip" id="progress-tooltip">0:00</div>
               <span class="total-time" id="total-time">0:00</span>
             </div>
           </div>

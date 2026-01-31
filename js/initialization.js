@@ -947,6 +947,7 @@ async function initializeApp() {
   if (elements.audio) {
     elements.audio.addEventListener('timeupdate', updateProgressBar);
     elements.audio.addEventListener('loadedmetadata', updateProgressBar);
+    elements.audio.addEventListener('progress', updateBufferedProgress);
     elements.audio.addEventListener('play', () => {
       // Keep icon consistent with playback.js
       elements.playBtn.textContent = '⏸';

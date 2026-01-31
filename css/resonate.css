@@ -446,14 +446,36 @@ body.tracks-open #tracks-list-container .tracks-overlay-close.search-control-btn
   border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
+[data-theme="day"] .progress-buffered {
+  background: rgba(16, 185, 129, 0.15);
+}
+
 [data-theme="day"] .progress {
-  background: #10b981;
-  box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+  background: linear-gradient(90deg, #10b981, #059669);
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.5);
+}
+
+[data-theme="day"] .progress::after {
+  background: #059669;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.5), 0 0 0 2px rgba(255, 255, 255, 1);
+}
+
+[data-theme="day"] .progress-tooltip {
+  background: rgba(5, 150, 105, 0.95);
+}
+
+[data-theme="day"] .progress-tooltip::after {
+  border-top-color: rgba(5, 150, 105, 0.95);
 }
 
 [data-theme="day"] .current-time,
 [data-theme="day"] .total-time {
   color: #059669;
+}
+
+[data-theme="day"] .progress-bar:focus,
+[data-theme="day"] .progress-bar.focused {
+  outline-color: #059669;
 }
 
 [data-theme="day"] .progress-section:hover {
@@ -1044,20 +1066,43 @@ h3 {
   overflow: visible;
   cursor: pointer;
   position: relative;
-  transition: height var(--transition-fast);
+  transition: height var(--transition-fast), box-shadow 0.2s ease;
   -webkit-user-select: none;
   -moz-user-select: none;
   user-select: none;
   touch-action: none;
+  outline: none;
 }
 
 .progress-bar:hover {
   height: 14px;
 }
 
+/* Focus indicator for keyboard navigation */
+.progress-bar:focus,
+.progress-bar.focused {
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.3);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Buffered progress (shows loaded audio) */
+.progress-buffered {
+  height: 100%;
+  background: rgba(var(--primary-rgb), 0.15);
+  border-radius: 3px;
+  width: 0%;
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 2;
+  transition: width 0.3s ease;
+}
+
+/* Progress Fill (Inner Bar) */
 .progress {
   height: 100%;
-  background: var(--accent-alt);
+  background: linear-gradient(90deg, var(--accent-alt), var(--accent));
   border-radius: 3px;
   width: 0%;
   will-change: width;
@@ -1065,22 +1110,72 @@ h3 {
   position: absolute;
   left: 0;
   top: 0;
-  box-shadow: 0 0 8px rgba(var(--primary-rgb), 0.32);
+  box-shadow: 0 0 12px rgba(var(--primary-rgb), 0.4);
   z-index: 3;
 }
 
+/* Progress Thumb (Now Visible) */
 .progress::after {
   content: '';
   position: absolute;
-  right: -5px;
+  right: -6px;
   top: 50%;
-  transform: translateY(-50%);
-  width: 10px;
-  height: 10px;
+  transform: translateY(-50%) scale(0);
+  width: 12px;
+  height: 12px;
   background: var(--accent);
   border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 2px rgba(255, 255, 255, 0.9);
   opacity: 0;
-  transition: opacity 0.2s;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 10;
+}
+
+.progress-bar:hover .progress::after,
+.progress-bar.dragging .progress::after,
+.progress-bar:focus .progress::after,
+.progress-bar.focused .progress::after {
+  opacity: 1;
+  transform: translateY(-50%) scale(1);
+}
+
+.progress-bar.dragging .progress::after {
+  transform: translateY(-50%) scale(1.2);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4), 0 0 0 3px rgba(255, 255, 255, 0.9);
+}
+
+/* Progress Tooltip */
+.progress-tooltip {
+  position: absolute;
+  top: -35px;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease, visibility 0.15s ease;
+  z-index: 100;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.progress-tooltip::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 4px solid rgba(0, 0, 0, 0.85);
 }
 
 .current-time,
@@ -1093,6 +1188,7 @@ h3 {
   pointer-events: none;
   z-index: 1;
   letter-spacing: 0.5px;
+  transition: color 0.2s ease;
 }
 
 .current-time {
@@ -1105,6 +1201,13 @@ h3 {
   right: 0;
   top: 100%;
   margin-top: 4px;
+}
+
+.progress-bar:hover .current-time,
+.progress-bar:hover .total-time,
+.progress-bar:focus .current-time,
+.progress-bar:focus .total-time {
+  color: var(--accent);
 }
 
 /* ===== CONTROLS =====
