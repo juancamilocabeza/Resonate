@@ -17,6 +17,44 @@ try {
 // Refresca todos los iconos de resonte en todos los listados
 window.resonateLogoSVG = `<svg class="resonate-icon" width="24" height="24" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false"><circle cx="256" cy="256" r="200" stroke="currentColor" stroke-width="32" fill="none"></circle><path d="M96 256 C140 256, 180 180, 220 180 C260 180, 300 332, 340 332 C380 332, 416 256, 416 256" stroke="currentColor" stroke-width="32" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>`;
 
+// Auto-collapse all expanded albums
+window.collapseAllExpandedAlbums = function collapseAllExpandedAlbums() {
+  try {
+    if (!window.__resonateExpandedAlbums || window.__resonateExpandedAlbums.size === 0) return;
+    
+    window.__resonateExpandedAlbums.forEach(albumId => {
+      const cards = document.querySelectorAll(`[data-album-id="${CSS.escape(albumId)}"]`);
+      cards.forEach(card => {
+        const tracksContainer = card.nextElementSibling;
+        const expandBtn = card.querySelector('.card-btn.expand, .result-expand, button[aria-label*="Hide"]');
+        
+        if (tracksContainer && tracksContainer.classList.contains('tracks-container') && !tracksContainer.classList.contains('collapsing')) {
+          // Collapse it
+          if (expandBtn) {
+            const icon = expandBtn.querySelector('.expand-icon');
+            if (icon) icon.textContent = '▼';
+            expandBtn.title = 'Show album tracks';
+            expandBtn.setAttribute('aria-label', 'Show album tracks');
+            expandBtn.setAttribute('aria-expanded', 'false');
+            expandBtn.classList.remove('expanded');
+          }
+          tracksContainer.classList.add('collapsing');
+          
+          // Cancel any in-flight fetch
+          if (typeof window.cancelTracklistFetch === 'function') {
+            window.cancelTracklistFetch(albumId);
+          }
+        }
+      });
+    });
+    
+    // Clear the set
+    window.__resonateExpandedAlbums.clear();
+  } catch (e) {
+    // Best effort
+  }
+};
+
 window.refreshAllResonteButtons = function refreshAllResonteButtons() {
   // Tracklist V2
   document.querySelectorAll('.track-resonte, .tlv2-resonte').forEach(btn => {
@@ -3970,6 +4008,22 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
       toggleAlbumTracks(identifier, tracksContainer, expandBtn);
     });
 
+    // Prefetch on hover for instant expansion
+    let hoverTimer = null;
+    card.addEventListener('mouseenter', () => {
+      if (isAlbum && typeof window.prefetchTracklistOnHover === 'function') {
+        hoverTimer = setTimeout(() => {
+          window.prefetchTracklistOnHover(identifier);
+        }, 300); // Small delay to avoid prefetching on quick mouse movements
+      }
+    });
+    card.addEventListener('mouseleave', () => {
+      if (hoverTimer) {
+        clearTimeout(hoverTimer);
+        hoverTimer = null;
+      }
+    });
+
     // Share
     shareBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -4081,6 +4135,41 @@ function toggleAlbumTracks(albumId, tracksContainer, expandButton) {
   const isCollapsed = tracksContainer.classList.contains('collapsing');
 
   if (isCollapsed) {
+    // Auto-collapse other expanded albums for cleaner UX
+    try {
+      if (window.__resonateExpandedAlbums) {
+        window.__resonateExpandedAlbums.forEach(otherId => {
+          if (otherId !== albumId) {
+            const otherCards = document.querySelectorAll(`[data-album-id="${CSS.escape(otherId)}"]`);
+            otherCards.forEach(otherCard => {
+              const otherContainer = otherCard.nextElementSibling;
+              const otherExpand = otherCard.querySelector('.card-btn.expand, .result-expand, button[aria-label*="Hide"]');
+              if (otherContainer && otherContainer.classList.contains('tracks-container') && !otherContainer.classList.contains('collapsing')) {
+                if (otherExpand) {
+                  const icon = otherExpand.querySelector('.expand-icon');
+                  if (icon) icon.textContent = '▼';
+                  otherExpand.title = 'Show album tracks';
+                  otherExpand.setAttribute('aria-label', 'Show album tracks');
+                  otherExpand.setAttribute('aria-expanded', 'false');
+                  otherExpand.classList.remove('expanded');
+                }
+                otherContainer.classList.add('collapsing');
+                // Cancel any in-flight fetch for this album
+                if (typeof window.cancelTracklistFetch === 'function') {
+                  window.cancelTracklistFetch(otherId);
+                }
+              }
+            });
+          }
+        });
+        // Clear and re-add current
+        window.__resonateExpandedAlbums.clear();
+        window.__resonateExpandedAlbums.add(albumId);
+      }
+    } catch (e) {
+      // Best effort
+    }
+
     // Expand: remove collapsing class to show with animation
     const icon = expandButton.querySelector('.expand-icon');
     if (icon) icon.textContent = '▲';
@@ -4091,6 +4180,19 @@ function toggleAlbumTracks(albumId, tracksContainer, expandButton) {
     
     try {
       if (!tracksContainer.dataset.tlv2Mounted) {
+        // Show improved skeleton loader
+        const loaderHTML = `
+          <div class="tracks-loading-skeleton">
+            <div class="skeleton-loader">
+              <div class="skeleton-track"></div>
+              <div class="skeleton-track"></div>
+              <div class="skeleton-track"></div>
+              <div class="skeleton-track"></div>
+            </div>
+          </div>
+        `;
+        tracksContainer.innerHTML = loaderHTML;
+        
         if (typeof window.displayAlbumTracksV2 === 'function') {
           window.displayAlbumTracksV2(albumId, tracksContainer);
           tracksContainer.dataset.tlv2Mounted = 'true';
@@ -4121,6 +4223,18 @@ function toggleAlbumTracks(albumId, tracksContainer, expandButton) {
     expandButton.setAttribute('aria-expanded', 'false');
     expandButton.classList.remove('expanded');
     tracksContainer.classList.add('collapsing');
+    
+    // Remove from expanded tracking
+    try {
+      if (window.__resonateExpandedAlbums) {
+        window.__resonateExpandedAlbums.delete(albumId);
+      }
+    } catch {}
+    
+    // Cancel any in-flight metadata fetch
+    if (typeof window.cancelTracklistFetch === 'function') {
+      window.cancelTracklistFetch(albumId);
+    }
   }
 }
 

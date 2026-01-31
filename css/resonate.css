@@ -2779,6 +2779,53 @@ body.offline-mode .share-track-button {
   margin: 0;
 }
 
+/* ===== Skeleton Loader for Tracks ===== */
+.tracks-loading-skeleton {
+  padding: 16px;
+  animation: fadeIn 0.2s ease-in;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.skeleton-loader {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.skeleton-track {
+  height: 48px;
+  background: linear-gradient(
+    90deg,
+    var(--surface-1, #f5f5f5) 0%,
+    var(--surface-2, #ebebeb) 50%,
+    var(--surface-1, #f5f5f5) 100%
+  );
+  background-size: 200% 100%;
+  border-radius: 8px;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Dark mode adjustments for skeleton */
+@media (prefers-color-scheme: dark) {
+  .skeleton-track {
+    background: linear-gradient(
+      90deg,
+      var(--surface-1, #2a2a2a) 0%,
+      var(--surface-2, #353535) 50%,
+      var(--surface-1, #2a2a2a) 100%
+    );
+  }
+}
+
 .favorites-list .tlv2,
 .resontes-list-content .tlv2,
 .content-card .tlv2 {

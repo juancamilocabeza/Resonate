@@ -29,8 +29,13 @@ window.SEARCH_FILTERS_CONFIG = window.SEARCH_FILTERS_CONFIG || {
 // AbortController state for cancellable operations
 const searchControllers = {
   currentSearch: null,
-  activeMetadata: new Map()
+  activeMetadata: new Map(),
+  tracklistFetches: new Map(),
+  hoverPrefetch: new Map()
 };
+
+// Track expanded albums for auto-collapse
+window.__resonateExpandedAlbums = new Set();
 
 // In-flight de-duplication + background prefetch controllers
 const searchInFlight = {
@@ -1812,15 +1817,19 @@ function prioritizeResults(items, query) {
   });
 }
 
-async function fetchOptimizedPlayableFiles(identifier) {
+async function fetchOptimizedPlayableFiles(identifier, options = {}) {
   const cached = window.enhancedCache && window.enhancedCache.get('metadata', identifier);
   if (cached) {
     return cached;
   }
 
+  // If prefetch, don't block on in-flight; just skip
+  const isPrefetch = !!(options && options.prefetch);
+  const signal = options && options.signal;
+
   const inFlight = searchInFlight.metadata.get(identifier);
   if (inFlight) {
-    return inFlight;
+    return isPrefetch ? cached || [] : inFlight;
   }
 
   const metadataPromise = (async () => {
@@ -1832,15 +1841,16 @@ async function fetchOptimizedPlayableFiles(identifier) {
     }
   
     // Create AbortController for this metadata fetch
-    const controller = new AbortController();
-    searchControllers.activeMetadata.set(identifier, controller);
+    const controller = signal ? null : new AbortController();
+    if (controller) searchControllers.activeMetadata.set(identifier, controller);
 
     const url = `https://archive.org/metadata/${identifier}`;
     try {
       // Force longer timeout for metadata fetching
       const metadataTimeout = getSearchConfigNumber('metadataTimeout', SEARCH_DEFAULTS.metadataTimeout);
+      const fetchSignal = signal || (controller ? controller.signal : undefined);
       const { response, usedProxy } = await fetchArchiveMetadataWithFallback(url, { 
-        signal: controller.signal,
+        signal: fetchSignal,
         timeout: metadataTimeout,
         headers: { 'Accept': 'application/json' }
       });
@@ -2197,6 +2207,11 @@ async function playOptimizedSearchResult(result, index, allResults) {
       // Ocultar listas después de obtener los archivos pero antes de reproducir
       if (typeof window.hideSearchResults === 'function') window.hideSearchResults();
       if (typeof window.hideFavoritesList === 'function') window.hideFavoritesList();
+      
+      // Auto-collapse expanded albums when playback starts
+      if (typeof window.collapseAllExpandedAlbums === 'function') {
+        window.collapseAllExpandedAlbums();
+      }
 
       if (files.length > 1) {
         // Es un álbum
@@ -2585,6 +2600,64 @@ window.performOptimizedSearch = performOptimizedSearch;
 window.performFastSearch = performFastSearch;
 window.fetchOptimizedPlayableFiles = fetchOptimizedPlayableFiles;
 window.playOptimizedSearchResult = playOptimizedSearchResult;
+
+// Prefetch tracklist on hover for instant expansion
+window.prefetchTracklistOnHover = function prefetchTracklistOnHover(identifier) {
+  try {
+    if (!identifier) return;
+    const id = String(identifier);
+    
+    // Skip if already cached or being prefetched
+    if (window.enhancedCache && window.enhancedCache.get('metadata', id)) return;
+    if (searchControllers.hoverPrefetch.has(id)) return;
+    
+    // Skip if offline
+    if (!isSearchNetworkAvailable()) return;
+    
+    // Create controller for this prefetch
+    const controller = new AbortController();
+    searchControllers.hoverPrefetch.set(id, controller);
+    
+    // Start prefetch (low priority, best effort)
+    fetchOptimizedPlayableFiles(id, { prefetch: true, signal: controller.signal })
+      .then(() => {
+        searchControllers.hoverPrefetch.delete(id);
+      })
+      .catch((err) => {
+        searchControllers.hoverPrefetch.delete(id);
+        // Silent failure for prefetch
+        if (!isAbortError(err)) {
+          debugSearch('hover_prefetch_failed', { identifier: id, error: err.message });
+        }
+      });
+  } catch (e) {
+    // Best effort, ignore errors
+  }
+};
+
+// Cancel tracklist fetch when collapsed
+window.cancelTracklistFetch = function cancelTracklistFetch(identifier) {
+  try {
+    if (!identifier) return;
+    const id = String(identifier);
+    
+    // Cancel active metadata fetch
+    const controller = searchControllers.activeMetadata.get(id);
+    if (controller) {
+      try { controller.abort(); } catch {}
+      searchControllers.activeMetadata.delete(id);
+    }
+    
+    // Cancel hover prefetch
+    const hoverController = searchControllers.hoverPrefetch.get(id);
+    if (hoverController) {
+      try { hoverController.abort(); } catch {}
+      searchControllers.hoverPrefetch.delete(id);
+    }
+  } catch (e) {
+    // Best effort
+  }
+};
 window.playSpecificSearchTrack = playSpecificSearchTrack;
 window.playAlbumFromResontes = playAlbumFromResontes;
 // Back-compat: some UI surfaces still call the old function name.
