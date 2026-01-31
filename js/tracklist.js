@@ -41,16 +41,30 @@
 
       const list = document.createElement('div');
       list.className = 'tlv2-list';
-      if (isPlaybackPanel) {
-        // The current-album tracks panel handles scrolling.
-        list.style.maxHeight = 'none';
-        list.style.overflowY = 'visible';
-      } else {
-        list.style.maxHeight = '340px';
-        list.style.overflowY = 'auto';
-      }
-
+      
+      // Determinar contexto PRIMERO
       const resonteContext = isResontesContext(tracksContainer);
+      
+      // Garantizar scroll consistente en TODOS los contextos
+      if (isPlaybackPanel) {
+        // Playback panel: El contenedor padre maneja el scroll, pero este debe ser scrollable también
+        list.style.maxHeight = 'none';
+        list.style.overflowY = 'auto';
+        list.style.overflowX = 'hidden';
+        list.style.WebkitOverflowScrolling = 'touch'; // Para iOS
+      } else if (resonteContext) {
+        // Resonates: permitir scroll si hay muchas pistas
+        list.style.maxHeight = '60vh';
+        list.style.overflowY = 'auto';
+        list.style.overflowX = 'hidden';
+        list.style.WebkitOverflowScrolling = 'touch';
+      } else {
+        // Search results: scroll consistente con altura limitada
+        list.style.maxHeight = '60vh';
+        list.style.overflowY = 'auto';
+        list.style.overflowX = 'hidden';
+        list.style.WebkitOverflowScrolling = 'touch';
+      }
 
       // INTEGRACIÓN: Precachear favoritas o resultados según contexto
       if (typeof window.audioCache === 'object' && window.audioCache) {
@@ -191,7 +205,23 @@
         row.addEventListener('click', (e) => {
           if (e.target && e.target.closest && e.target.closest('button')) return;
           e.stopPropagation();
+          // Ensure the row is visible and scrolled into view
+          try {
+            row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          } catch {}
           playFromRow();
+        });
+
+        // Keyboard navigation support for accessibility
+        row.setAttribute('role', 'button');
+        row.setAttribute('tabindex', '0');
+        row.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.target && e.target.closest && e.target.closest('button')) return;
+            playFromRow();
+          }
         });
 
         // Events

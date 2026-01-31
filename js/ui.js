@@ -44,7 +44,7 @@ window.refreshAllResonteButtons = function refreshAllResonteButtons() {
         }
       }
 
-      // 2) URL-based match (works across different sort orders)
+      // 2) URL-based match
       if (!isResonte && trackLike && typeof window.isTrackResonte === 'function') {
         isResonte = !!window.isTrackResonte(trackLike);
       } else if (!isResonte && trackLike && typeof window.isTrackFavorite === 'function') {
@@ -340,7 +340,12 @@ function initializePanelToolbarsOnce() {
       });
     }
   } catch {}
-
+  
+  // Search filters toolbar (chips)
+  try {
+    ensureSearchFilterDefaults();
+    ensureSearchFiltersHeader();
+  } catch {}
   // Favorites toolbar
   try {
     if (elements.resontesClose) {
@@ -379,6 +384,251 @@ function initializePanelToolbarsOnce() {
       updateClearBtn();
     }
   } catch {}
+}
+
+function ensureSearchFilterDefaults() {
+  try {
+    state.searchUi = state.searchUi || {};
+    const cfg = window.SEARCH_FILTERS_CONFIG || {};
+    if (!state.searchUi.mediatype) state.searchUi.mediatype = cfg.mediatypeDefault || 'audio';
+    if (typeof state.searchUi.isSearching !== 'boolean') state.searchUi.isSearching = false;
+    if (typeof state.searchUi.offlineOnly !== 'boolean') state.searchUi.offlineOnly = false;
+    if (typeof state.searchUi.typeFilter !== 'string') state.searchUi.typeFilter = '';
+  } catch {
+    // ignore
+  }
+}
+
+function runSearchWithCurrentFilters({ keepKeyboard = true } = {}) {
+  try {
+    // Prefer the current input value (what the user is actually typing) over
+    // the last completed search query (which can be stale if the user typed
+    // something new but hasn't pressed Enter yet).
+    const inputValue = (elements.searchInput ? elements.searchInput.value : '') || '';
+    const q = (String(inputValue).trim() || String(state.currentSearchQuery || '').trim());
+    if (!q) return;
+
+    // Keep state consistent with what we're about to fetch.
+    state.currentSearchQuery = q;
+
+    dispatchSearchWithFastPath(q, { keepKeyboard, addToHistory: false });
+  } catch {
+    // ignore
+  }
+}
+
+function abortUiSearchControllers() {
+  try {
+    if (!state) return;
+    const ctrls = state._uiSearchControllers;
+    if (!ctrls) return;
+    if (ctrls.fast) {
+      try { ctrls.fast.abort(); } catch {}
+    }
+    if (ctrls.optimized) {
+      try { ctrls.optimized.abort(); } catch {}
+    }
+  } catch {
+    // ignore
+  }
+}
+
+function dispatchSearchWithFastPath(queryAtDispatch, { keepKeyboard = true, addToHistory = true } = {}) {
+  try {
+    const q = String(queryAtDispatch || '').trim();
+    if (!q) return;
+
+    state.currentSearchPage = 0;
+    state.currentSearchQuery = q;
+    state.currentSearchHasMore = false;
+    state.isLoadingMore = false;
+
+    abortUiSearchControllers();
+    state._uiSearchControllers = {
+      fast: new AbortController(),
+      optimized: new AbortController()
+    };
+
+    try { if (typeof window.abortAllSearchOperations === 'function') window.abortAllSearchOperations(); } catch {}
+
+    state.searchRequestId = (state.searchRequestId || 0) + 1;
+    const requestId = state.searchRequestId;
+    try { markSearchPerfStart(q, requestId); } catch {}
+
+    try {
+      ensureSearchFilterDefaults();
+      state.searchUi.isSearching = true;
+      state.searchUi.isUpgrading = false;
+      ensureSearchFiltersHeader();
+    } catch {}
+
+    try { elements.searchResults?.classList?.add('active'); } catch {}
+    state.searchActive = true;
+    setSearchOpenState(true);
+    scheduleSearchInsetsBurst();
+
+    if (!keepKeyboard) {
+      try { elements.searchInput?.blur?.(); } catch {}
+    }
+
+    let displayedKind = null; // 'fast' | 'optimized'
+    let historyAdded = false;
+
+    const stillCurrent = () => {
+      if ((state.searchRequestId || 0) !== requestId) return false;
+      try {
+        const inputNow = (elements.searchInput && elements.searchInput.value) ? elements.searchInput.value.trim() : '';
+        if (inputNow && inputNow !== q) return false;
+      } catch {}
+      return true;
+    };
+
+    const maybeAddHistory = () => {
+      if (!addToHistory) return;
+      if (historyAdded) return;
+      historyAdded = true;
+      try { addToSearchHistory(q); } catch {}
+    };
+
+    const showResult = (result, kind) => {
+      if (!stillCurrent()) return;
+      if (!result) return;
+      if (kind === 'fast' && displayedKind === 'optimized') return;
+      if (kind === displayedKind) return;
+
+      // Once something is visible, don't keep the UI locked as "searching".
+      try {
+        ensureSearchFilterDefaults();
+        state.searchUi.isSearching = false;
+        state.searchUi.isUpgrading = (kind === 'fast');
+        ensureSearchFiltersHeader();
+      } catch {}
+
+      displaySearchResults(result, true);
+      displayedKind = kind;
+
+      if (kind === 'optimized') {
+        try {
+          state.searchUi.isUpgrading = false;
+          ensureSearchFiltersHeader();
+        } catch {}
+      }
+      maybeAddHistory();
+    };
+
+    const fastFn = (window.performFastSearch || null);
+    const fastPromise = (typeof fastFn === 'function')
+      ? fastFn(q, {
+        signal: state._uiSearchControllers.fast.signal,
+        rows: 6,
+        timeout: 3500
+      })
+      : Promise.resolve(null);
+
+    const optimizedFn = (window.performOptimizedSearch || performOptimizedSearch);
+    const optimizedPromise = optimizedFn(q, 0, {
+      signal: state._uiSearchControllers.optimized.signal,
+      abortPrevious: false,
+      showLoader: false,
+      activateUI: false,
+      deferMetadata: true,
+      enrichmentPriority: 'idle'
+    });
+
+    fastPromise.then((fastResult) => {
+      if (!fastResult) return;
+      showResult(fastResult, 'fast');
+    }).catch(() => {
+      // Best-effort; ignore fast failures.
+    });
+
+    optimizedPromise.then((optResult) => {
+      if (!optResult) return;
+      showResult(optResult, 'optimized');
+    }).catch((error) => {
+      window.logger?.error({ message: 'Search error', error }, 'NETWORK');
+      if (stillCurrent() && displayedKind == null) {
+        try { showStatus('Search encountered an error', 'error'); } catch {}
+      }
+    }).finally(() => {
+      try {
+        if ((state.searchRequestId || 0) === requestId) {
+          ensureSearchFilterDefaults();
+          state.searchUi.isSearching = false;
+          state.searchUi.isUpgrading = false;
+          ensureSearchFiltersHeader();
+        }
+      } catch {}
+    });
+  } catch {
+    // ignore
+  }
+}
+
+function ensureSearchFiltersHeader() {
+  try {
+    if (!elements.searchResultsHeader) return;
+    ensureSearchFilterDefaults();
+
+    const ui = state.searchUi || {};
+    const isSearching = !!ui.isSearching;
+
+    try {
+      elements.searchResultsHeader.dataset.filtersBusy = isSearching ? 'true' : 'false';
+      elements.searchResultsHeader.setAttribute('aria-busy', isSearching ? 'true' : 'false');
+    } catch {}
+
+    // Render local (client-side) type filters for the current loaded results.
+    try {
+      const summary = elements.searchResultsHeader.querySelector('.search-results-summary');
+      if (summary) {
+        let host = summary.querySelector('.search-filter-summary');
+        if (!host) {
+          host = document.createElement('div');
+          host.className = 'search-filter-summary';
+          host.setAttribute('role', 'group');
+          host.setAttribute('aria-label', 'Search filters');
+          summary.appendChild(host);
+        }
+
+        const active = (state.searchUi && typeof state.searchUi.typeFilter === 'string') ? state.searchUi.typeFilter : '';
+        const defs = [
+          { id: '', label: 'All' },
+          { id: 'single', label: 'Single' },
+          { id: 'album', label: 'Album' }
+        ];
+
+        host.innerHTML = defs.map(d => {
+          const isActive = d.id === active || (!d.id && !active);
+          const pressed = isActive ? 'true' : 'false';
+          const cls = `search-option-btn${isActive ? ' active' : ''}`;
+          return `<button type="button" class="${cls}" data-type-filter="${escapeHtml(d.id)}" aria-pressed="${pressed}">${escapeHtml(d.label)}</button>`;
+        }).join('');
+
+        if (!host.dataset.bound) {
+          host.dataset.bound = 'true';
+          host.addEventListener('click', (e) => {
+            const btn = e && e.target ? e.target.closest('button[data-type-filter]') : null;
+            if (!btn) return;
+            try { e.preventDefault(); e.stopPropagation(); } catch {}
+            const next = String(btn.getAttribute('data-type-filter') || '').trim();
+            ensureSearchFilterDefaults();
+            state.searchUi.typeFilter = next;
+            try { ensureSearchFiltersHeader(); } catch {}
+            rerenderSearchResultsFromState(true);
+          });
+        }
+      }
+    } catch {}
+
+    // Clean up any older expanded filters container if present.
+    try {
+      const old = elements.searchResultsHeader.querySelector('.search-filters');
+      if (old && old.parentNode) old.parentNode.removeChild(old);
+    } catch {}
+  } catch {
+    // ignore
+  }
 }
 
 function isTypingContext() {
@@ -958,27 +1208,8 @@ function ensureSearchInputControllerBound() {
     }
     lastSubmit = { query: q, at: now };
 
-    state.currentSearchPage = 0;
-    state.currentSearchQuery = q;
-
-    const queryAtDispatch = q;
-    state.searchRequestId = (state.searchRequestId || 0) + 1;
-    const requestId = state.searchRequestId;
-    try { markSearchPerfStart(queryAtDispatch, requestId); } catch {}
-
-    elements.searchResults.classList.add('active');
-    setSearchOpenState(true);
-    scheduleSearchInsetsBurst();
-
-    (window.performOptimizedSearch || performOptimizedSearch)(queryAtDispatch, 0).then(result => {
-      if ((state.searchRequestId || 0) !== requestId) return;
-      if (((input.value || '').trim()) !== queryAtDispatch) return;
-      displaySearchResults(result);
-      addToSearchHistory(queryAtDispatch);
-    }).catch(error => {
-      window.logger?.error({ message: 'Search error', error }, 'NETWORK');
-      showStatus('Search encountered an error', 'error');
-    });
+    const keepKeyboard = !(isCoarsePointer || config.closeKeyboardOnSubmit);
+    dispatchSearchWithFastPath(q, { keepKeyboard, addToHistory: true });
 
     updateSearchClearButton();
   });
@@ -1021,25 +1252,10 @@ function ensureSearchInputControllerBound() {
       if (state.currentSearchQuery) {
         const queryAtDispatch = state.currentSearchQuery;
         lastSubmit = { query: queryAtDispatch, at: Date.now() };
-        state.searchRequestId = (state.searchRequestId || 0) + 1;
-        const requestId = state.searchRequestId;
-        try { markSearchPerfStart(queryAtDispatch, requestId); } catch {}
-
-        elements.searchResults.classList.add('active');
-        setSearchOpenState(true);
-        scheduleSearchInsetsBurst();
 
         if (isCoarsePointer || config.closeKeyboardOnSubmit) closeSearchKeyboard();
-
-        (window.performOptimizedSearch || performOptimizedSearch)(queryAtDispatch, 0).then(result => {
-          if ((state.searchRequestId || 0) !== requestId) return;
-          if (((input.value || '').trim()) !== queryAtDispatch) return;
-          displaySearchResults(result);
-          addToSearchHistory(queryAtDispatch);
-        }).catch(error => {
-          window.logger?.error({ message: 'Search error', error }, 'NETWORK');
-          showStatus('Search encountered an error', 'error');
-        });
+        const keepKeyboard = !(isCoarsePointer || config.closeKeyboardOnSubmit);
+        dispatchSearchWithFastPath(queryAtDispatch, { keepKeyboard, addToHistory: true });
       } else {
         showHistoryPanel();
       }
@@ -1227,147 +1443,137 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // Title Ticker Management
-let titleTickerTimeoutId = null;
-let titleTickerToken = 0;
-const TITLE_TICKER_START_DELAY_MS = 1000;
-const TITLE_TICKER_ECO_MIN_DURATION_S = 30;
-const TITLE_TICKER_ECO_MULTIPLIER = 2;
-let titleTickerInteractionInit = false;
+let titleTickerTimeout = null;
+let tickerToken = 0;
 
-function getActiveThemeName() {
-  try {
-    return document.documentElement.getAttribute('data-theme') || 'night';
-  } catch {
-    return 'night';
+function getActiveTheme() {
+  return document.documentElement.getAttribute('data-theme') || 'night';
+}
+
+function isEnergySaverMode() {
+  return getActiveTheme() === 'energy-saver';
+}
+
+function calculateTickerDuration(textLength) {
+  // UX-optimized speeds for readability:
+  // - Normal modes (day/night): ~1.5 chars/second (comfortable reading speed)
+  // - Energy-saver: ~0.8 chars/second (slower to save energy, click to toggle)
+  
+  if (isEnergySaverMode()) {
+    // Energy-saver: slower for battery saving, user can click to toggle
+    const duration = Math.ceil(textLength * 1.2); // ~0.83 chars/sec
+    return Math.max(20, duration); // Minimum 20s
   }
+  
+  // Normal modes: comfortable reading speed
+  const duration = Math.ceil(textLength * 0.65); // ~1.54 chars/sec
+  return Math.max(10, duration); // Minimum 10s
 }
 
-function isEnergySaverThemeActive() {
-  return getActiveThemeName() === 'energy-saver';
-}
-
-function initTitleTickerInteractions() {
-  if (titleTickerInteractionInit) return;
-  titleTickerInteractionInit = true;
-  if (!elements.title) return;
-
-  // In energy-saver: ticker only starts when the user taps the title.
-  elements.title.addEventListener('click', () => {
-    if (!elements.title) return;
-    if (!isEnergySaverThemeActive()) return;
-
-    const overflowRaw = elements.title.style.getPropertyValue('--title-overflow') || '';
-    const overflowPx = Number.parseFloat(String(overflowRaw).replace('px', ''));
-    if (!Number.isFinite(overflowPx) || overflowPx <= 0) return;
-
-    const span = elements.title.querySelector('.title-text');
-    if (span) {
-      const duration = span.style.getPropertyValue('animation-duration');
-      if (duration) {
-        // Ensure eco wildcard rules don't clamp the ticker duration.
-        span.style.setProperty('animation-duration', duration, 'important');
-      }
-    }
-
-    // Toggle for convenience; when active, ticker remains infinite.
-    if (elements.title.classList.contains('ticker')) {
-      elements.title.classList.remove('ticker');
-      return;
-    }
-
-    if (span) {
-      void span.offsetWidth;
-    }
-    elements.title.classList.add('ticker');
-  });
-}
-
-initTitleTickerInteractions();
-function updateTitleTicker(titleText) {
+function clearTitleTicker() {
   if (!elements.title) return;
   
-  // Remover cualquier clase de ticker anterior
   elements.title.classList.remove('ticker');
   elements.title.style.removeProperty('--title-overflow');
-
-  // Cancel any scheduled ticker activation from a previous title.
-  if (titleTickerTimeoutId) {
-    clearTimeout(titleTickerTimeoutId);
-    titleTickerTimeoutId = null;
+  
+  if (titleTickerTimeout) {
+    clearTimeout(titleTickerTimeout);
+    titleTickerTimeout = null;
   }
-  const myToken = ++titleTickerToken;
+}
+
+function updateTitleTicker(titleText) {
+  if (!elements || !elements.title) return;
+  
+  clearTitleTicker();
+  
+  const currentToken = ++tickerToken;
   
   if (!titleText) {
-    try {
-      const existingSpan = elements.title.querySelector('.title-text');
-      if (existingSpan) existingSpan.textContent = '';
-      else elements.title.textContent = '';
-    } catch {}
+    elements.title.textContent = '';
     return;
   }
 
-  // Ensure we always animate an inner span to avoid layout jumps.
-  let titleSpan = elements.title.querySelector('.title-text');
-  if (!titleSpan) {
-    titleSpan = document.createElement('span');
-    titleSpan.className = 'title-text';
-    // Wrap existing content instead of clearing first to avoid visible flicker.
+  // Create or get span wrapper
+  let span = elements.title.querySelector('.title-text');
+  if (!span) {
+    span = document.createElement('span');
+    span.className = 'title-text';
+    
     while (elements.title.firstChild) {
-      titleSpan.appendChild(elements.title.firstChild);
+      span.appendChild(elements.title.firstChild);
     }
-    elements.title.appendChild(titleSpan);
+    elements.title.appendChild(span);
   }
-  titleSpan.textContent = titleText;
-  titleSpan.style.removeProperty('animation-duration');
   
-  // Esperar un tick para asegurar que el DOM/layout se actualice primero
-  setTimeout(() => {
-    if (!elements.title) return;
-    if (myToken !== titleTickerToken) return;
-
-    const liveSpan = elements.title.querySelector('.title-text');
-    if (!liveSpan) return;
-
-    // Obtener el ancho disponible del contenedor padre
-    const container = elements.title.parentElement;
-    if (!container) return;
+  span.textContent = titleText;
+  span.style.removeProperty('animation-duration');
+  
+  // Simple character-based check (more reliable than measuring)
+  // Typical container is ~320-1100px, at 24px font ~50 chars fit in 1000px
+  const charThreshold = 45; // Conservative threshold for overflow detection
+  
+  if (titleText.length > charThreshold) {
+    // Estimate overflow based on character count
+    const estimatedWidth = titleText.length * 15; // ~15px per char at 24px font
+    const containerWidth = elements.title.clientWidth || 1000;
+    const overflowPx = Math.max(0, estimatedWidth - containerWidth);
+    const duration = calculateTickerDuration(titleText.length);
     
-    const containerWidth = elements.title.clientWidth || container.clientWidth;
-    const titleWidth = liveSpan.scrollWidth;
+    console.log('TitleTicker:', { 
+      containerWidth, 
+      estimatedWidth, 
+      overflow: overflowPx, 
+      chars: titleText.length,
+      text: titleText 
+    });
     
-    // Activar ticker si el texto es más ancho que el contenedor
-    if (titleWidth > containerWidth) {
-      // Calcular duración basada en la longitud del texto
-      const baseDuration = Math.max(15, Math.ceil((titleText.length / 30) * 15));
-      const isEco = isEnergySaverThemeActive();
-      const duration = isEco
-        ? Math.max(TITLE_TICKER_ECO_MIN_DURATION_S, Math.ceil(baseDuration * TITLE_TICKER_ECO_MULTIPLIER))
-        : baseDuration;
-
-      // Eco mode clamps animation durations globally; force our duration to win.
-      liveSpan.style.setProperty('animation-duration', duration + 's', isEco ? 'important' : '');
-
-      // Animate only the overflow distance; keeps start position stable.
-      const overflowPx = Math.max(0, titleWidth - containerWidth);
-      elements.title.style.setProperty('--title-overflow', overflowPx + 'px');
-
-      // Night/Day: show first, then auto-start ticker.
-      // Energy-saver: never auto-start; user can tap to start.
-      if (!isEco) {
-        titleTickerTimeoutId = setTimeout(() => {
-          if (!elements.title) return;
-          if (myToken !== titleTickerToken) return;
-
-          // Force reflow so animation restarts reliably when class is added.
+    if (overflowPx > 0) {
+      elements.title.style.setProperty('--title-overflow', `${overflowPx}px`);
+      span.style.setProperty(
+        'animation-duration',
+        `${duration}s`,
+        isEnergySaverMode() ? 'important' : ''
+      );
+      
+      // Start ticker automatically in all modes (including energy-saver)
+      // Energy-saver is slower but still auto-starts for mobile readability
+      setTimeout(() => {
+        if (currentToken !== tickerToken || !elements.title) return;
+        const liveSpan = elements.title.querySelector('.title-text');
+        if (liveSpan) {
           void liveSpan.offsetWidth;
-
           elements.title.classList.add('ticker');
-          titleTickerTimeoutId = null;
-        }, TITLE_TICKER_START_DELAY_MS);
-      }
+        }
+      }, isEnergySaverMode() ? 1500 : 1000); // Slight delay in eco mode
     }
-  }, 0);
+  }
 }
+
+// Energy-saver mode: click to pause/resume ticker
+if (elements && elements.title) {
+  elements.title.addEventListener('click', () => {
+    if (!isEnergySaverMode() || !elements.title) return;
+    
+    const overflowPx = parseFloat(elements.title.style.getPropertyValue('--title-overflow') || '0');
+    if (overflowPx <= 0) return;
+    
+    const span = elements.title.querySelector('.title-text');
+    if (!span) return;
+    
+    if (elements.title.classList.contains('ticker')) {
+      elements.title.classList.remove('ticker');
+    } else {
+      const duration = span.style.getPropertyValue('animation-duration');
+      if (duration) {
+        span.style.setProperty('animation-duration', duration, 'important');
+      }
+      void span.offsetWidth;
+      elements.title.classList.add('ticker');
+    }
+  });
+}
+
 window.updateTitleTicker = updateTitleTicker;
 
 const SEARCH_CONFIG = {
@@ -1393,10 +1599,99 @@ function markSearchPerfStart(query, requestId) {
       query: String(query || '').trim(),
       requestId: Number(requestId) || 0,
       startedAtMs: nowPerfMs(),
-      logged: false
+      viewStartedAtMs: null,
+      viewMsTotal: 0,
+      logged: false,
+      firstRenderMs: null,
+      badgeApplied: false
     };
   } catch {}
+
+  // UX: avoid a blank panel while waiting for the first results.
+  try {
+    // Make sure the header is visible early (so users see the busy state).
+    if (elements && elements.searchResultsHeader) elements.searchResultsHeader.hidden = false;
+
+    const list = elements && elements.searchResultsList ? elements.searchResultsList : null;
+    if (!list) return;
+
+    // Don't overwrite existing results (keeps perceived latency low on subsequent searches).
+    const hasCards = !!list.querySelector('.content-card');
+    if (hasCards) return;
+
+    // Only show a placeholder when we truly have nothing rendered.
+    list.innerHTML = `<div class="search-loading"><div class="loader"></div><span class="loader-text">Searching…</span></div>`;
+  } catch {}
 }
+
+function shouldShowSearchPerfBadge() {
+  try {
+    const url = new URL(window.location.href);
+    return url.searchParams.get('searchPerf') === '1' || url.searchParams.get('searchDebug') === '1';
+  } catch {
+    return false;
+  }
+}
+
+function formatSearchViewMs(ms) {
+  const n = typeof ms === 'number' && isFinite(ms) ? ms : 0;
+  const s = Math.max(0, n / 1000);
+  // One decimal is enough for UX/perf debugging.
+  return `${Math.round(s * 10) / 10}s`;
+}
+
+function updateSearchPerfBadge() {
+  try {
+    if (!shouldShowSearchPerfBadge()) return;
+    if (!elements || !elements.searchResultsCount) return;
+    const perf = state._searchPerf;
+    if (!perf) return;
+
+    const current = String(elements.searchResultsCount.textContent || '').trim();
+    const base = (current.split('•')[0] || '').trim() || current;
+
+    const parts = [base];
+    if (typeof perf.firstRenderMs === 'number') parts.push(`${perf.firstRenderMs}ms`);
+    if (typeof perf.viewMsTotal === 'number' && perf.viewMsTotal > 0) parts.push(`view ${formatSearchViewMs(perf.viewMsTotal)}`);
+
+    if (parts.length > 1) {
+      elements.searchResultsCount.textContent = parts.join(' • ');
+      perf.badgeApplied = true;
+    }
+  } catch {}
+}
+
+function __resonateOnSearchPanelActiveChange(isActive) {
+  try {
+    const perf = state._searchPerf;
+    if (!perf) return;
+
+    if (isActive) {
+      // Start (or restart) view timer.
+      if (perf.viewStartedAtMs == null) perf.viewStartedAtMs = nowPerfMs();
+      return;
+    }
+
+    // Stop timer and accumulate.
+    if (typeof perf.viewStartedAtMs === 'number') {
+      const elapsed = Math.max(0, nowPerfMs() - perf.viewStartedAtMs);
+      perf.viewMsTotal = (typeof perf.viewMsTotal === 'number' ? perf.viewMsTotal : 0) + elapsed;
+      perf.viewStartedAtMs = null;
+
+      try {
+        const msg = `Search view time: ${Math.round(perf.viewMsTotal)}ms (${perf.query})`;
+        if (window.logger?.info) window.logger.info(msg, 'PERF');
+      } catch {}
+
+      updateSearchPerfBadge();
+    }
+  } catch {}
+}
+
+// Expose hook used by search.js when it activates/deactivates the search panel.
+try {
+  if (typeof window !== 'undefined') window.__resonateOnSearchPanelActiveChange = __resonateOnSearchPanelActiveChange;
+} catch {}
 
 function maybeLogSearchPerfFirstPaint({ requestId, query } = {}) {
   try {
@@ -1410,11 +1705,15 @@ function maybeLogSearchPerfFirstPaint({ requestId, query } = {}) {
         if (!state._searchPerf || state._searchPerf.logged) return;
         const elapsed = Math.max(0, nowPerfMs() - perf.startedAtMs);
         state._searchPerf.logged = true;
+        state._searchPerf.firstRenderMs = Math.round(elapsed);
         const msg = `Search first render: ${Math.round(elapsed)}ms (${perf.query})`;
         if (window.logger?.info) window.logger.info(msg, 'PERF');
         else {
           // Logger is loaded before ui.js; avoid console usage.
         }
+
+        // Optional: surface timing in the UI count label (debug/perf only).
+        try { updateSearchPerfBadge(); } catch {}
       } catch {}
     });
   } catch {}
@@ -2317,41 +2616,54 @@ function showStatus(message, type = 'info', duration = null, priority = 'normal'
   return;
 }
 
-function setArtwork(track, identifier) {
+async function setArtwork(track, identifier) {
   if (!track || !elements.art) return;
 
   // Clear existing artwork
   elements.art.innerHTML = '';
 
-  // Create artwork element
-  const img = new Image();
-  img.alt = 'Album cover';
-  img.style.width = '100%';
-  img.style.height = '100%';
-  img.style.objectFit = 'cover';
-  img.style.borderRadius = '12px';
-
-  // Evitar que el identificador sea undefined
+  // Get safe identifier
   const safeIdentifier = identifier || (track && track.id) || (track && track.identifier) || 'default';
-  const archiveCoverUrl = `https://archive.org/services/img/${safeIdentifier}`;
 
-  // Create load handler function
-  const handleLoad = () => {
-    elements.art.appendChild(img);
-  };
+  try {
+    // Load cover using centralized manager
+    const coverUrl = window.CoverManager?.getCoverUrl
+      ? window.CoverManager.getCoverUrl(safeIdentifier)
+      : `https://archive.org/services/img/${encodeURIComponent(safeIdentifier)}`;
 
-  // Configure event listeners BEFORE setting src
-  img.onload = handleLoad;
-  img.onerror = () => {
-    // Let the image fail naturally - no fallback
-  };
-
-  // Set src AFTER configuring event listeners
-  img.src = archiveCoverUrl;
-
-  // Handle case where image is already complete (cached)
-  if (img.complete && img.naturalHeight !== 0) {
-    handleLoad();
+    if (window.CoverManager?.loadCover) {
+      const img = await window.CoverManager.loadCover(safeIdentifier, {
+        alt: 'Album cover',
+        width: '100%',
+        height: '100%',
+        objectFit: 'cover',
+        borderRadius: '12px',
+        showFallback: false
+      });
+      elements.art.appendChild(img);
+    } else if (coverUrl) {
+      const img = new Image();
+      img.alt = 'Album cover';
+      img.style.width = '100%';
+      img.style.height = '100%';
+      img.style.objectFit = 'cover';
+      img.style.borderRadius = '12px';
+      img.src = coverUrl;
+      elements.art.appendChild(img);
+    }
+  } catch (error) {
+    window.logger?.warn({ message: 'Failed to load artwork', error }, 'UI');
+    const fallbackUrl = `https://archive.org/services/img/${encodeURIComponent(safeIdentifier)}`;
+    try {
+      const img = new Image();
+      img.alt = 'Album cover';
+      img.style.width = '100%';
+      img.style.height = '100%';
+      img.style.objectFit = 'cover';
+      img.style.borderRadius = '12px';
+      img.src = fallbackUrl;
+      elements.art.appendChild(img);
+    } catch {}
   }
 }
 
@@ -2515,7 +2827,8 @@ function displaySearchResults(searchData, clearExisting = true) {
     state.searchResults = results;
     state.currentSearchPage = 0;
     state.currentSearchHasMore = hasMore;
-    state.currentSearchQuery = elements.searchInput.value.trim();
+    // Keep the executed query stable (input may change while results are inflight)
+    state.currentSearchQuery = (state.currentSearchQuery || (elements.searchInput ? elements.searchInput.value : '') || '').trim();
   } else {
     state.searchResults = [...state.searchResults, ...results];
     state.currentSearchHasMore = hasMore;
@@ -2530,6 +2843,12 @@ function displaySearchResults(searchData, clearExisting = true) {
 
   // Ensure toolbar bindings exist
   try { initializePanelToolbarsOnce(); } catch {}
+  
+  // Ensure filters are visible for result views
+  try {
+    ensureSearchFilterDefaults();
+    ensureSearchFiltersHeader();
+  } catch {}
 
   // Update toolbar visibility + count
   try {
@@ -2537,7 +2856,10 @@ function displaySearchResults(searchData, clearExisting = true) {
     if (elements.searchResultsCount) {
       const totalCount = (typeof total === 'number' && isFinite(total) && total > 0) ? total : null;
       const visibleCount = Array.isArray(state.searchResults) ? state.searchResults.length : 0;
-      elements.searchResultsCount.textContent = totalCount ? `${visibleCount} / ${totalCount}` : `${visibleCount} results`;
+      // Always include a label for clarity (especially for the X / total format).
+      elements.searchResultsCount.textContent = totalCount
+        ? `Results: ${visibleCount} / ${totalCount}`
+        : `Results: ${visibleCount}`;
     }
     if (elements.searchOfflineOnly) {
       elements.searchOfflineOnly.checked = !!(state.searchUi && state.searchUi.offlineOnly);
@@ -2574,23 +2896,7 @@ function displaySearchResults(searchData, clearExisting = true) {
           const q = String(n.getAttribute('data-query') || '').trim();
           if (!q) return;
           elements.searchInput.value = q;
-          state.currentSearchPage = 0;
-          state.currentSearchQuery = q;
-          state.searchRequestId = (state.searchRequestId || 0) + 1;
-          const requestId = state.searchRequestId;
-          try { markSearchPerfStart(q, requestId); } catch {}
-          elements.searchResults.classList.add('active');
-          state.searchActive = true;
-          setSearchOpenState(true);
-          scheduleSearchInsetsBurst();
-          (window.performOptimizedSearch || performOptimizedSearch)(q, 0).then(result => {
-            if ((state.searchRequestId || 0) !== requestId) return;
-            if (((elements.searchInput.value || '').trim()) !== q) return;
-            displaySearchResults(result);
-            addToSearchHistory(q);
-          }).catch(() => {
-            showStatus('Search encountered an error', 'error');
-          });
+          dispatchSearchWithFastPath(q, { keepKeyboard: true, addToHistory: true });
         });
       });
     } catch {}
@@ -2612,8 +2918,10 @@ function displaySearchResults(searchData, clearExisting = true) {
   // Render strategy:
   // - Full render when starting a new search
   // - Full render when offline-only filter is active (needs full filtering)
+  // - Full render when a local type filter is active (needs full filtering)
   // - Incremental append for lazy-load pages (avoid O(n^2) rerender/duplication)
-  if (clearExisting || offlineOnly) {
+  const typeFilterActive = !!(state.searchUi && state.searchUi.typeFilter);
+  if (clearExisting || offlineOnly || typeFilterActive) {
     rerenderSearchResultsFromState(true);
   } else {
     // Append only the new page.
@@ -2638,7 +2946,15 @@ function displaySearchResults(searchData, clearExisting = true) {
   // Background prefetch: keep 2 pages ahead for infinite scroll
   try {
     if (typeof window.prefetchNextSearchPages === 'function') {
-      window.prefetchNextSearchPages(state.currentSearchQuery, state.currentSearchPage, state.currentSearchHasMore, 2);
+      const rid = state.searchRequestId || 0;
+      const ahead = clearExisting ? 1 : 2;
+      const delayMs = clearExisting ? 1200 : 400;
+      setTimeout(() => {
+        try {
+          if ((state.searchRequestId || 0) !== rid) return;
+          window.prefetchNextSearchPages(state.currentSearchQuery, state.currentSearchPage, state.currentSearchHasMore, ahead);
+        } catch {}
+      }, delayMs);
     }
   } catch {}
 }
@@ -2705,15 +3021,172 @@ function rerenderSearchResultsFromState(clearExisting = true) {
     });
   }
 
-  renderCardGrid(elements.searchResultsList, viewItems, 'search', clearExisting);
+  // Local type filter (Single/Album)
+  const typeFilter = (state.searchUi && typeof state.searchUi.typeFilter === 'string') ? state.searchUi.typeFilter.trim().toLowerCase() : '';
+  if (typeFilter) {
+    viewItems = viewItems.filter(item => itemMatchesSearchTypeFilter(item, typeFilter));
+  }
 
-  // Refresh count label only for offline-only filtered view.
-  // Otherwise, keep the main label managed by displaySearchResults (supports X / total).
+  // Filtered empty-state: avoid a blank panel when the base results exist.
   try {
-    if (elements.searchResultsCount && (state.searchUi && state.searchUi.offlineOnly)) {
-      elements.searchResultsCount.textContent = `${viewItems.length} / ${base.length}`;
+    if (elements.searchResultsList && base.length > 0 && viewItems.length === 0) {
+      const hasOffline = !!(state.searchUi && state.searchUi.offlineOnly);
+      const hasType = !!(state.searchUi && state.searchUi.typeFilter);
+      if (hasOffline || hasType) {
+        const activeParts = [];
+        if (hasOffline) activeParts.push('Offline only');
+        if (hasType) activeParts.push(getSearchTypeFilterLabel(state.searchUi.typeFilter));
+        const activeLabel = activeParts.length ? activeParts.join(' • ') : 'Filters';
+
+        elements.searchResultsList.innerHTML = `
+          <div class="no-results">
+            <div class="no-results-icon">🔎</div>
+            <div class="no-results-title">No matches in loaded results</div>
+            <div class="no-results-hint">${activeLabel}. Keep scrolling to load more results, or clear the filter.</div>
+            <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px;">
+              ${hasOffline ? '<button type="button" class="search-option-btn" data-action="clear-offline">Show online too</button>' : ''}
+              ${hasType ? '<button type="button" class="search-option-btn" data-action="clear-type">Show all types</button>' : ''}
+            </div>
+          </div>
+        `;
+
+        try {
+          const clearOff = elements.searchResultsList.querySelector('button[data-action="clear-offline"]');
+          if (clearOff) {
+            clearOff.addEventListener('click', (e) => {
+              try { e.preventDefault(); e.stopPropagation(); } catch {}
+              state.searchUi = state.searchUi || {};
+              state.searchUi.offlineOnly = false;
+              try { ensureSearchFiltersHeader(); } catch {}
+              rerenderSearchResultsFromState(true);
+            });
+          }
+        } catch {}
+
+        try {
+          const clearType = elements.searchResultsList.querySelector('button[data-action="clear-type"]');
+          if (clearType) {
+            clearType.addEventListener('click', (e) => {
+              try { e.preventDefault(); e.stopPropagation(); } catch {}
+              state.searchUi = state.searchUi || {};
+              state.searchUi.typeFilter = '';
+              try { ensureSearchFiltersHeader(); } catch {}
+              rerenderSearchResultsFromState(true);
+            });
+          }
+        } catch {}
+        return;
+      }
     }
   } catch {}
+
+  // Progressive render for better time-to-first-visualization.
+  // Paint first 6 cards immediately; append the rest in chunks.
+  try {
+    const host = elements.searchResultsList;
+    const token = (state._searchProgressiveRenderToken = (state._searchProgressiveRenderToken || 0) + 1);
+    const firstCount = 6;
+    const chunkSize = 24;
+
+    if (clearExisting && host && viewItems.length > firstCount) {
+      const first = viewItems.slice(0, firstCount);
+      const rest = viewItems.slice(firstCount);
+      renderCardGrid(host, first, 'search', true);
+
+      const appendChunks = (offset) => {
+        if ((state._searchProgressiveRenderToken || 0) !== token) return;
+        const slice = rest.slice(offset, offset + chunkSize);
+        if (!slice.length) return;
+        renderCardGrid(host, slice, 'search', false);
+        const next = offset + chunkSize;
+        if (next < rest.length) {
+          requestAnimationFrame(() => appendChunks(next));
+        }
+      };
+
+      requestAnimationFrame(() => appendChunks(0));
+    } else {
+      renderCardGrid(host, viewItems, 'search', clearExisting);
+    }
+  } catch {
+    renderCardGrid(elements.searchResultsList, viewItems, 'search', clearExisting);
+  }
+
+  // Refresh count label for filtered views (offline/type).
+  // Otherwise, keep the main label managed by displaySearchResults (supports X / total).
+  try {
+    if (elements.searchResultsCount) {
+      const showFilteredCount = !!((state.searchUi && state.searchUi.offlineOnly) || (state.searchUi && state.searchUi.typeFilter));
+      if (showFilteredCount) {
+        const parts = [`Results: ${viewItems.length} / ${base.length}`];
+        const t = (state.searchUi && state.searchUi.typeFilter) ? getSearchTypeFilterLabel(state.searchUi.typeFilter) : '';
+        if (t) parts.push(t);
+        if (state.searchUi && state.searchUi.offlineOnly) parts.push('Offline');
+        elements.searchResultsCount.textContent = parts.join(' • ');
+      }
+    }
+  } catch {}
+}
+
+function getSearchTypeFilterLabel(typeId) {
+  const id = String(typeId || '').trim().toLowerCase();
+  if (!id) return '';
+  if (id === 'single') return 'Single';
+  if (id === 'album') return 'Album';
+  return id;
+}
+
+function itemMatchesSearchTypeFilter(item, typeId) {
+  try {
+    const id = String(typeId || '').trim().toLowerCase();
+    if (!id) return true;
+
+    // Deterministic classification when enrichment is available.
+    // search.js sets:
+    // - trackCount: number of playable audio files
+    // - isAlbum: true when trackCount > 1
+    const tc = (item && typeof item.trackCount === 'number' && isFinite(item.trackCount)) ? item.trackCount : null;
+    const isAlbum = (item && item.isAlbum === true) || (tc != null && tc > 1);
+    const isSingle = (tc != null && tc === 1) || (item && item.isAlbum === false);
+    const isKnownUnplayable = (tc != null && tc <= 0) || (item && item.unplayable === true);
+
+    if (id === 'album') {
+      if (isKnownUnplayable) return false;
+      if (tc != null || item.isAlbum === true || item.isAlbum === false) return isAlbum;
+      // If not enriched yet, fall back to heuristics below.
+    }
+
+    if (id === 'single') {
+      if (isKnownUnplayable) return false;
+      if (tc != null || item.isAlbum === true || item.isAlbum === false) return isSingle;
+      // If not enriched yet, fall back to heuristics below.
+    }
+
+    const title = String(item && item.title ? item.title : '').toLowerCase();
+    const desc = String(item && item.description ? item.description : '').toLowerCase();
+    const creator = String(item && item.creator ? item.creator : '').toLowerCase();
+    const colRaw = item && item.collection != null ? item.collection : '';
+    const col = Array.isArray(colRaw) ? colRaw.join(' ').toLowerCase() : String(colRaw || '').toLowerCase();
+    const blob = `${title} ${desc} ${creator} ${col}`;
+
+    const hasWord = (re) => {
+      try { return re.test(blob); } catch { return false; }
+    };
+
+    if (id === 'album') {
+      // Heuristic: if we don't have trackCount yet, infer from text.
+      return hasWord(/\balbum\b/i) || hasWord(/\bfull\s+album\b/i) || hasWord(/\bdiscography\b/i) || hasWord(/\b(lp|ep)\b/i);
+    }
+
+    if (id === 'single') {
+      // Heuristic: if we don't have trackCount yet, infer from text.
+      return hasWord(/\bsingle\b/i) || hasWord(/\b7\s*\"\b/i) || hasWord(/\b45\s*rpm\b/i) || hasWord(/\b45rpm\b/i);
+    }
+
+    return true;
+  } catch {
+    return true;
+  }
 }
 
 function setupLazyLoadingObserver() {
@@ -2786,7 +3259,8 @@ try {
         const normalizeQ = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
         const mismatch = currentQ && q && normalizeQ(currentQ) !== normalizeQ(q);
 
-        const cacheKey = `search:${q}:${p}`;
+        const keyFn = window.__resonateGetSearchCacheKey;
+        const cacheKey = (typeof keyFn === 'function') ? keyFn(q, p) : `search:${q}:${p}`;
         const cached = window.enhancedCache && window.enhancedCache.get('search', cacheKey);
         if (!cached || cached.deferredMetadata !== false || !Array.isArray(cached.results)) return;
 
@@ -2803,6 +3277,26 @@ try {
                 state.searchResults[idx] = merged;
               }
             }
+          }
+        } catch {}
+
+        // If the user is filtering by Single/Album, enrichment can change membership
+        // (trackCount becomes known). Rerender (debounced) to keep results accurate.
+        try {
+          const tf = (state.searchUi && typeof state.searchUi.typeFilter === 'string') ? state.searchUi.typeFilter.trim().toLowerCase() : '';
+          const needsRerender = (tf === 'single' || tf === 'album');
+          if (needsRerender && typeof rerenderSearchResultsFromState === 'function') {
+            if (state._typeFilterRerenderTimer) {
+              try { clearTimeout(state._typeFilterRerenderTimer); } catch {}
+            }
+            state._typeFilterRerenderTimer = setTimeout(() => {
+              try {
+                // Only rerender if search panel is still active.
+                if (state.searchActive && elements && elements.searchResultsList) {
+                  rerenderSearchResultsFromState(true);
+                }
+              } catch {}
+            }, 120);
           }
         } catch {}
 
@@ -3067,31 +3561,12 @@ function createSearchResultElement(result, globalIndex) {
 
   const hasFavoriteTrack = isAlbumInFavorites(result.identifier);
 
-  // Create cover container
+  // Create cover container and add to DOM immediately (before async load)
   const coverContainer = document.createElement('div');
   coverContainer.className = 'result-cover';
-
-  // Load cover image
-  const img = new Image();
-  img.alt = `Album cover for ${result.title || 'Untitled'}`;
-  img.style.width = '100%';
-  img.style.height = '100%';
-  img.style.objectFit = 'cover';
-  img.style.borderRadius = '6px';
-
-  const archiveCoverUrl = `https://archive.org/services/img/${result.identifier}`;
-
-  // Configure event listeners BEFORE setting src
-  img.onload = () => {
-    coverContainer.appendChild(img);
-  };
-
-  img.onerror = () => {
-    // Let the image fail naturally - no fallback
-  };
-
-  // Set src AFTER configuring event listeners
-  img.src = archiveCoverUrl;
+  
+  // Add cover to the left FIRST (synchronously)
+  resultEl.appendChild(coverContainer);
 
   // Build structure using helper functions for favorites layout
   const infoDiv = createFavoriteInfo(result);
@@ -3108,13 +3583,58 @@ function createSearchResultElement(result, globalIndex) {
   const initialForceSingle = (result.isTrackList === true) && (result.trackCount === 1 || result.isAlbum === false);
   expandBtn.style.display = initialForceSingle ? 'none' : 'inline-block';
 
-  // Add cover to the left, then info and actions
-  resultEl.appendChild(coverContainer);
+  // Then add info and actions
   resultEl.appendChild(infoDiv);
   resultEl.appendChild(actionsDiv);
 
   // Load album info in background
   loadAlbumInfoBackground(result.identifier, resultEl);
+
+  // Load cover image asynchronously WITHOUT blocking UI
+  const coverUrl = window.CoverManager?.getCoverUrl
+    ? window.CoverManager.getCoverUrl(result.identifier)
+    : `https://archive.org/services/img/${encodeURIComponent(result.identifier)}`;
+
+  if (window.CoverManager?.loadCover) {
+    console.log(`[UI] Loading cover for search result: ${result.identifier}`);
+    window.CoverManager.loadCover(result.identifier, {
+      alt: `Album cover for ${result.title || 'Untitled'}`,
+      width: '100%',
+      height: '100%',
+      objectFit: 'cover',
+      borderRadius: '6px',
+      showFallback: false,
+      lazy: false
+    }).then(img => {
+      console.log(`[UI] Cover returned, appending to coverContainer`, img, coverContainer);
+      coverContainer.appendChild(img);
+      console.log(`[UI] Cover appended. Container children:`, coverContainer.children.length);
+    }).catch(err => {
+      console.error(`[UI] Failed to load search result cover:`, err);
+      window.logger?.warn({ message: 'Failed to load search result cover', error: err }, 'UI');
+      if (coverUrl) {
+        const img = new Image();
+        img.alt = `Album cover for ${result.title || 'Untitled'}`;
+        img.style.width = '100%';
+        img.style.height = '100%';
+        img.style.objectFit = 'cover';
+        img.style.borderRadius = '6px';
+        img.src = coverUrl;
+        console.log(`[UI] Fallback cover created and appending`);
+        coverContainer.appendChild(img);
+      }
+    });
+  } else if (coverUrl) {
+    console.log(`[UI] CoverManager not available, creating direct image for: ${result.identifier}`);
+    const img = new Image();
+    img.alt = `Album cover for ${result.title || 'Untitled'}`;
+    img.style.width = '100%';
+    img.style.height = '100%';
+    img.style.objectFit = 'cover';
+    img.style.borderRadius = '6px';
+    img.src = coverUrl;
+    coverContainer.appendChild(img);
+  }
 
   // Play UX: click cover or title/info area
   const playFromSearchResult = async (e) => {
@@ -3182,7 +3702,6 @@ function createSearchResultElement(result, globalIndex) {
     if (!tracksContainer || !tracksContainer.classList.contains('tracks-container')) {
       tracksContainer = document.createElement('div');
       tracksContainer.className = 'tracks-container';
-      tracksContainer.style.display = 'none';
       const parent = resultEl.parentNode;      if (parent) {        parent.insertBefore(tracksContainer, resultEl.nextSibling);      }
     }
 
@@ -3239,37 +3758,48 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
   // Media
   const media = document.createElement('div');
   media.className = 'card-media';
-  const img = new Image();
-  img.alt = `Cover for ${title}`;
-  img.loading = 'lazy';
-  img.src = `https://archive.org/services/img/${identifier}`;
-  img.onerror = () => {
-    const theme = (() => {
-      try {
-        const styles = getComputedStyle(document.documentElement);
-        const btn = styles.getPropertyValue('--btn').trim() || '#1f2937';
-        const card = styles.getPropertyValue('--card').trim() || '#111827';
-        const primary = styles.getPropertyValue('--primary').trim() || '#3da9ff';
-        return { btn, card, primary };
-      } catch {
-        return { btn: '#1f2937', card: '#111827', primary: '#3da9ff' };
-      }
-    })();
+  // Attach media early so async loads always have a target
+  card.appendChild(media);
+  
+  // Load cover image asynchronously WITHOUT blocking UI
+  const cardCoverUrl = window.CoverManager?.getCoverUrl
+    ? window.CoverManager.getCoverUrl(identifier)
+    : `https://archive.org/services/img/${encodeURIComponent(identifier)}`;
 
-    // Compact inline SVG placeholder to avoid external dependencies
-    const svg = encodeURIComponent(
-      `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'>` +
-      `<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>` +
-      `<stop offset='0%' stop-color='${theme.btn}'/><stop offset='100%' stop-color='${theme.card}'/></linearGradient></defs>` +
-      `<rect width='100%' height='100%' fill='url(#g)'/>` +
-      `<g fill='${theme.primary}' fill-opacity='0.78' font-family='sans-serif' font-weight='700'>` +
-      `<text x='50%' y='48%' dominant-baseline='middle' text-anchor='middle' font-size='22'>No Cover</text>` +
-      `<text x='50%' y='66%' dominant-baseline='middle' text-anchor='middle' font-size='12'>${(creator || '').toString().slice(0,24)}</text>` +
-      `</g></svg>`
-    );
-    img.src = `data:image/svg+xml;charset=utf-8,${svg}`;
-  };
-  media.appendChild(img);
+  if (window.CoverManager?.loadCover) {
+    window.CoverManager.loadCover(identifier, {
+      alt: `Cover for ${title}`,
+      width: '100%',
+      height: '100%',
+      objectFit: 'cover',
+      lazy: true,
+      showFallback: true,
+      fallbackType: 'svg',
+      fallbackTitle: title,
+      fallbackCreator: creator
+    }).then(img => {
+      media.appendChild(img);
+    }).catch(err => {
+      window.logger?.warn({ message: 'Failed to load content card cover', error: err }, 'UI');
+      if (cardCoverUrl) {
+        const img = new Image();
+        img.alt = `Cover for ${title}`;
+        img.style.width = '100%';
+        img.style.height = '100%';
+        img.style.objectFit = 'cover';
+        img.src = cardCoverUrl;
+        media.appendChild(img);
+      }
+    });
+  } else if (cardCoverUrl) {
+    const img = new Image();
+    img.alt = `Cover for ${title}`;
+    img.style.width = '100%';
+    img.style.height = '100%';
+    img.style.objectFit = 'cover';
+    img.src = cardCoverUrl;
+    media.appendChild(img);
+  }
 
   // Chips
   const chips = document.createElement('div');
@@ -3334,7 +3864,6 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
   actions.appendChild(shareBtn);
   actions.appendChild(expandBtn);
 
-  card.appendChild(media);
   card.appendChild(body);
 
   // Compact overlay action bar over the cover (search + resonates cards)
@@ -3428,7 +3957,6 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
       if (!tracksContainer || !tracksContainer.classList.contains('tracks-container')) {
         tracksContainer = document.createElement('div');
         tracksContainer.className = 'tracks-container';
-        tracksContainer.style.display = 'none';
         const parent = card.parentNode; if (parent) parent.insertBefore(tracksContainer, card.nextSibling);
       }
       toggleAlbumTracks(identifier, tracksContainer, expandBtn);
@@ -3511,7 +4039,6 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
       if (!tracksContainer || !tracksContainer.classList.contains('tracks-container')) {
         tracksContainer = document.createElement('div');
         tracksContainer.className = 'tracks-container';
-        tracksContainer.style.display = 'none';
         const parent = card.parentNode;
         if (parent) parent.insertBefore(tracksContainer, card.nextSibling);
       }
@@ -3542,10 +4069,12 @@ function toggleAlbumTracks(albumId, tracksContainer, expandButton) {
     return;
   }
 
-  if (tracksContainer.style.display === 'none') {
-    tracksContainer.style.display = 'block';
+  // Check if container is currently collapsed (has the collapsing class)
+  const isCollapsed = tracksContainer.classList.contains('collapsing');
+
+  if (isCollapsed) {
+    // Expand: remove collapsing class to show with animation
     expandButton.textContent = '▲';
-    // Forzar Tracklist V2 siempre
     try {
       if (!tracksContainer.dataset.tlv2Mounted) {
         if (typeof window.displayAlbumTracksV2 === 'function') {
@@ -3557,9 +4086,22 @@ function toggleAlbumTracks(albumId, tracksContainer, expandButton) {
     } catch (e) {
       tracksContainer.innerHTML = '<div class="no-results">No tracks found</div>';
     }
+    
+    // Trigger animation on next frame
+    requestAnimationFrame(() => {
+      tracksContainer.classList.remove('collapsing');
+    });
+    
+    // Scroll into view after animation starts
+    setTimeout(() => {
+      try {
+        tracksContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      } catch {}
+    }, 150);
   } else {
-    tracksContainer.style.display = 'none';
+    // Collapse: add collapsing class to hide with animation
     expandButton.textContent = '▼';
+    tracksContainer.classList.add('collapsing');
   }
 }
 
@@ -3771,7 +4313,8 @@ function getNavigatorConnection() {
 }
 
 function deriveNetworkLabel() {
-  if (!state.networkOnline) {
+  // Treat undefined as online; only explicit false means offline.
+  if (state.networkOnline === false) {
     state.networkType = 'offline';
     return 'Offline';
   }
@@ -3822,13 +4365,10 @@ let __resonateConnectivityHandlersAttached = false;
 function __resonateSetSearchOnlineState(isOnline) {
   // Keep search UX consistent with connectivity changes
   if (elements.searchInput) {
-    elements.searchInput.disabled = !isOnline;
-    elements.searchInput.placeholder = isOnline ? "Discover something new to play" : "Search unavailable offline";
-  }
-
-  if (!isOnline) {
-    // Hide any active search results when offline
-    if (typeof hideSearchResults === 'function') hideSearchResults();
+    // Avoid hard-disabling search: some environments report false offline.
+    // Search will still fail gracefully at request-time if the network is truly down.
+    elements.searchInput.disabled = false;
+    elements.searchInput.placeholder = isOnline ? "Discover something new to play" : "Offline (search may be unavailable)";
   }
 }
 
@@ -3880,7 +4420,9 @@ function __resonateAttachConnectivityHandlersOnce() {
 }
 
 function setupConnectivityMonitoring() {
-  state.networkOnline = navigator.onLine;
+  // navigator.onLine can be undefined or unreliable in some contexts.
+  // Default to online unless explicitly false.
+  state.networkOnline = navigator.onLine !== false;
 
   __resonateSetSearchOnlineState(state.networkOnline);
   __resonateAttachConnectivityHandlersOnce();
@@ -5558,6 +6100,46 @@ function addHideFavoritesOnPlay() {
 
 // Register service worker and handle updates
 async function registerServiceWorker() {
+  const shouldDisableSw = (() => {
+    try {
+      const loc = window.location;
+      const qs = new URLSearchParams(loc && loc.search ? loc.search : '');
+      if (qs.get('nosw') === '1') return true;
+
+      const host = String((loc && loc.hostname) ? loc.hostname : '').toLowerCase();
+      const proto = String((loc && loc.protocol) ? loc.protocol : '').toLowerCase();
+
+      // In local/dev environments we prefer to avoid SW caching issues
+      // (stale JS/CSS can make it look like changes “don’t work”).
+      if (proto === 'file:') return true;
+      if (host === 'localhost' || host === '127.0.0.1') return true;
+    } catch {
+      // ignore
+    }
+    return false;
+  })();
+
+  if (shouldDisableSw) {
+    try {
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        for (const reg of regs) {
+          try { await reg.unregister(); } catch {}
+        }
+      }
+    } catch {}
+    try {
+      if (typeof caches !== 'undefined' && caches && typeof caches.keys === 'function') {
+        const keys = await caches.keys();
+        for (const k of keys) {
+          try { await caches.delete(k); } catch {}
+        }
+      }
+    } catch {}
+    try { window.logger?.info('Service Worker disabled (dev/nosw)', 'SYSTEM'); } catch {}
+    return;
+  }
+
   if ('serviceWorker' in navigator) {
     try {
       const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
@@ -6158,31 +6740,7 @@ function displaySearchHistory() {
           }
         } catch {}
         // Trigger search
-        state.currentSearchPage = 0;
-        state.currentSearchQuery = query;
-
-        const queryAtDispatch = query;
-        state.searchRequestId = (state.searchRequestId || 0) + 1;
-        const requestId = state.searchRequestId;
-        try { markSearchPerfStart(queryAtDispatch, requestId); } catch {}
-
-        elements.searchResults.classList.add('active');
-        state.searchActive = true;
-        setSearchOpenState(true);
-        scheduleSearchInsetsBurst();
-        if (window.performOptimizedSearch) {
-          window.performOptimizedSearch(queryAtDispatch, 0).then(result => {
-            if ((state.searchRequestId || 0) !== requestId) return;
-            if ((elements.searchInput.value || '').trim() !== queryAtDispatch) return;
-            displaySearchResults(result);
-          }).catch(error => {
-            window.logger?.error({ message: 'Search error', error }, 'NETWORK');
-            showStatus('Search error', 'error');
-          });
-        } else {
-          window.logger?.error('performOptimizedSearch is not available', 'SYSTEM');
-          showStatus('Search unavailable', 'error');
-        }
+        dispatchSearchWithFastPath(query, { keepKeyboard: true, addToHistory: false });
       }
     });
 

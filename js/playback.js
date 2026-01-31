@@ -111,6 +111,40 @@ function showAutoplayCta(message = 'Tap Play to start') {
   }
 }
 
+/**
+ * Preload covers for upcoming tracks in the current context
+ * @param {Object} currentContext - Current playback context
+ * @param {number} currentIndex - Current track index
+ */
+async function preloadUpcomingCovers(currentContext, currentIndex = 0) {
+  try {
+    if (!currentContext || !currentContext.items || currentContext.items.length === 0) {
+      return;
+    }
+
+    // Get identifiers for next 2-3 tracks
+    const identifiersToPreload = [];
+    const maxPreload = 3;
+    
+    for (let i = 1; i <= maxPreload && (currentIndex + i) < currentContext.items.length; i++) {
+      const track = currentContext.items[currentIndex + i];
+      const identifier = track?.id || track?.identifier;
+      if (identifier && identifier !== 'default') {
+        identifiersToPreload.push(identifier);
+      }
+    }
+
+    if (identifiersToPreload.length > 0) {
+      // Preload in background without blocking
+      window.CoverManager.preloadCovers(identifiersToPreload).catch(err => {
+        logPlayback('warn', 'Cover preload failed', err);
+      });
+    }
+  } catch (error) {
+    logPlayback('warn', 'Error during cover preloading', error);
+  }
+}
+
 function logPlayback(level, message, error) {
   try {
     if (window.logger && typeof window.logger._call === 'function') {
@@ -1799,7 +1833,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
   state.isLoading = true;
 
   // Show loader based on context - ONLY playback shows progress
-  if (window.Loaders) {
+  if (window.Loaders && typeof window.Loaders.showLoader === 'function') {
     window.Loaders.showLoader({ type: 'spinner', showProgress: showProgress, context: 'playback' });
     resetLoaderProgress();
     updateLoaderProgress(10);
@@ -1830,7 +1864,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
   if (showProgress) startInitialRamp();
 
   if (!track || !track.url) {
-    if (window.Loaders) window.Loaders.hideLoader();
+    if (window.Loaders && typeof window.Loaders.hideLoader === 'function') window.Loaders.hideLoader();
     state.isLoading = false;
     throw new Error('Track not available');
   }
@@ -1838,7 +1872,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
   const elements = getElementsSafe();
   const audioEl = elements.audio;
   if (!audioEl) {
-    if (window.Loaders) window.Loaders.hideLoader();
+    if (window.Loaders && typeof window.Loaders.hideLoader === 'function') window.Loaders.hideLoader();
     state.isLoading = false;
     throw new Error('Audio element not available');
   }
@@ -1886,7 +1920,10 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
     window.elements.tracksListContainer.style.display = 'none';
   }
 
-  await setArtwork(track, identifier);
+  // Load artwork asynchronously (don't block playback)
+  setArtwork(track, identifier).catch(err => {
+    logPlayback('warn', 'Failed to set artwork', err);
+  });
   updateLoaderProgress(20);
 
   state.currentTrack = {
@@ -1908,6 +1945,17 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
     updateMetaTags(track, identifier);
   }
 
+  // Preload covers for upcoming tracks in background
+  try {
+    const context = playbackManager?.contextData?.album || playbackManager?.contextData?.favorites || playbackManager?.contextData?.search;
+    if (context && context.items && context.items.length > 0) {
+      const currentIdx = typeof context.currentIndex === 'number' ? context.currentIndex : trackIndex;
+      preloadUpcomingCovers(context, currentIdx);
+    }
+  } catch (error) {
+    logPlayback('warn', 'Failed to preload upcoming covers', error);
+  }
+
   safeShowStatus('Getting your track ready to play', 'info');
 
   return new Promise((resolve, reject) => {
@@ -1918,7 +1966,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
       cleanup();
       // Hide loader when track is ready to play
       updateLoaderProgress(100);
-      if (window.Loaders) window.Loaders.hideLoader();
+      if (window.Loaders && typeof window.Loaders.hideLoader === 'function') window.Loaders.hideLoader();
       
       audio.play().then(async () => {
         // Mark this track as consumed in the persistent shuffle deck (only once playback actually starts).
@@ -2002,7 +2050,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
 
     const onError = (e) => {
       cleanup();
-      if (window.Loaders) window.Loaders.hideLoader();
+      if (window.Loaders && typeof window.Loaders.hideLoader === 'function') window.Loaders.hideLoader();
       const errMsg = (e && e.target && e.target.error && e.target.error.message) ? e.target.error.message : 'Source not supported';
       state.isLoading = false;
       reject(new Error(`Audio error: ${errMsg}`));
@@ -2049,7 +2097,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
         audio.addEventListener('error', onError, { once: true });
       })
       .catch(error => {
-        if (window.Loaders) window.Loaders.hideLoader();
+        if (window.Loaders && typeof window.Loaders.hideLoader === 'function') window.Loaders.hideLoader();
         cleanup();
         state.isLoading = false;
         reject(error);
@@ -2103,7 +2151,7 @@ function playPrevious() {
   playPreviousInContext().catch((err) => {
     logPlayback('warn', 'Manual Prev failed', err);
     try {
-      if (window.Loaders) window.Loaders.hideLoader();
+      if (window.Loaders && typeof window.Loaders.hideLoader === 'function') window.Loaders.hideLoader();
     } catch {}
   });
 }
@@ -3372,7 +3420,7 @@ function setupMediaSession() {
 }
 
 async function playTrack(trackId) {
-  if (window.Loaders) {
+  if (window.Loaders && typeof window.Loaders.showLoader === 'function') {
     window.Loaders.showLoader({ type: 'spinner', showProgress: false, context: 'playback' });
   }
   try {
@@ -3385,7 +3433,7 @@ async function playTrack(trackId) {
   } catch (error) {
     logPlayback('error', 'Error during playback', error);
   } finally {
-    if (window.Loaders) {
+    if (window.Loaders && typeof window.Loaders.hideLoader === 'function') {
       window.Loaders.hideLoader();
     }
   }

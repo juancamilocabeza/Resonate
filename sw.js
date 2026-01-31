@@ -23,12 +23,13 @@
   }
 })();
 
-// sw.js - Enhanced Service Worker for audio and metadata caching
+// sw.js - Enhanced Service Worker for audio, metadata, and cover image caching
 const CACHE_NAMES = {
-  APP: 'resonate-v17p10',
-  STATIC: 'static-v17p10',
-  METADATA: 'metadata-v17p10',
-  SEARCH: 'search-v17p10'
+  APP: 'resonate-v17p11',
+  STATIC: 'static-v17p11',
+  METADATA: 'metadata-v17p11',
+  SEARCH: 'search-v17p11',
+  COVERS: 'covers-v1'
 };
 
 function deriveSwVersion() {
@@ -49,7 +50,8 @@ const AUDIO_CACHE_NAME = 'audio-cache-v1';
 
 const RUNTIME_CACHE_LIMITS = {
   SEARCH_MAX_ENTRIES: 80,
-  METADATA_MAX_ENTRIES: 300
+  METADATA_MAX_ENTRIES: 300,
+  COVERS_MAX_ENTRIES: 200
 };
 
 // Critical files for caching
@@ -68,6 +70,7 @@ const STATIC_FILES = [
   '/js/offline.js',
   '/js/battery.js',
   '/js/initialization.js',
+  '/js/cover-manager.js',
   '/icons/favicon.svg',
   '/icons/sprite.svg',
   '/icons/maskable_icon_x192.png',
@@ -112,6 +115,10 @@ function isArchiveOrg(url) {
 
 function isArchiveImageRequest(url) {
   return isArchiveOrg(url) && url.pathname.includes('/services/img/');
+}
+
+function isCoverRequest(url) {
+  return isArchiveImageRequest(url);
 }
 
 function isAudioRequest(request, url) {
@@ -434,6 +441,7 @@ self.addEventListener('activate', (event) => {
             cacheName !== CACHE_NAMES.APP &&
             cacheName !== CACHE_NAMES.STATIC &&
             cacheName !== CACHE_NAMES.METADATA &&
+            cacheName !== CACHE_NAMES.COVERS &&
             cacheName !== CACHE_NAMES.SEARCH &&
             cacheName !== AUDIO_CACHE_NAME
           ) {
@@ -464,44 +472,50 @@ self.addEventListener('fetch', (event) => {
     return; // let the browser fetch it directly
   }
 
+  // Never intercept same-origin API requests.
+  // These are dynamic and should always go to network (and avoid SW bugs/caching).
+  if (isSameOrigin(url) && url.pathname.startsWith('/api/')) {
+    return;
+  }
+
   // Only handle our own assets and archive.org. Avoid intercepting third-party
   // scripts (e.g. analytics) which can otherwise show confusing 503 errors.
   if (!isSameOrigin(url) && !isArchiveOrg(url)) {
     return;
-  }
-
-  // Skip service worker handling for Archive.org images - let them fail naturally
-  if (isArchiveImageRequest(url)) {
-    return;
-  }
-
-  event.respondWith(
-    (async () => {
-      // Some browsers request /favicon.ico even when an SVG favicon is declared.
-      // Serve our existing SVG favicon to avoid 404s and repeated network noise.
-      if (url.pathname === '/favicon.ico') {
-        return Response.redirect('/icons/favicon.svg', 302);
-      }
-
-      // App-shell routing for navigations (including deep links like /?play=...)
-      // Serve a stable cached HTML document regardless of query params.
-      const isNavigationRequest = event.request.mode === 'navigate' || event.request.destination === 'document';
-      if (isNavigationRequest && isSameOrigin(url)) {
-        const shellPath = '/index.html';
+  }Handle Archive.org cover images with caching strategy
+  if (isCoverRequest(url)) {
+    event.respondWith(
+      (async () => {
         try {
-          const cachedShell =
-            (await caches.match(shellPath, { ignoreSearch: true })) ||
-            (await caches.match('/', { ignoreSearch: true }));
-
-          if (cachedShell) {
-            // Important: keep the app shell fresh.
-            // Without revalidation, users can get stuck on an old cached index.html forever.
-            event.waitUntil(
-              (async () => {
-                try {
-                  const networkShell = await fetch(shellPath, { cache: 'no-cache' });
-                  if (networkShell && networkShell.ok) {
-                    const cache = await caches.open(CACHE_NAMES.STATIC);
+          // Cache-first strategy with 7-day TTL
+          const cache = await caches.open(CACHE_NAMES.COVERS);
+          const cachedResponse = await cache.match(event.request);
+          
+          if (cachedResponse) {
+            // Check cache age
+            const dateHeader = cachedResponse.headers.get('sw-cached-date');
+            if (dateHeader) {
+              const cacheAge = Date.now() - parseInt(dateHeader, 10);
+              const sevenDays = 7 * 24 * 60 * 60 * 1000;
+              
+              // If cache is fresh, return it
+              if (cacheAge < sevenDays) {
+                console.log('SW: Serving cached cover:', url.pathname);
+                return cachedResponse;
+              }
+            }
+          }
+          
+          // Fetch from network
+          const networkResponse = await fetch(event.request);
+          
+          if (networkResponse && networkResponse.ok) {
+            // Clone response and add cache date header
+            const headers = new Headers(networkResponse.headers);
+            // Do not intercept Archive.org cover images; let the browser handle them directly.
+            if (isCoverRequest(url)) {
+              return;
+            }
                     await cache.put(shellPath, networkShell.clone());
                   }
                 } catch {
