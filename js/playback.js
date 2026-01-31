@@ -3205,8 +3205,17 @@ function setupProgressBarInteraction() {
   const getOffsets = () => {
     const currentTimeEl = window.elements.currentTime;
     const totalTimeEl = window.elements.totalTime;
-    const offsetLeft = currentTimeEl ? currentTimeEl.offsetWidth + 8 : 0; // +8 for margin
-    const offsetRight = totalTimeEl ? totalTimeEl.offsetWidth + 8 : 0;
+    
+    // Check if elements are visible (not display:none)
+    const isCurrentTimeVisible = currentTimeEl && 
+      window.getComputedStyle(currentTimeEl).display !== 'none' &&
+      currentTimeEl.offsetWidth > 0;
+    const isTotalTimeVisible = totalTimeEl && 
+      window.getComputedStyle(totalTimeEl).display !== 'none' &&
+      totalTimeEl.offsetWidth > 0;
+    
+    const offsetLeft = isCurrentTimeVisible ? currentTimeEl.offsetWidth + 8 : 0;
+    const offsetRight = isTotalTimeVisible ? totalTimeEl.offsetWidth + 8 : 0;
     return { offsetLeft, offsetRight };
   };
 

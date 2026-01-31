@@ -624,6 +624,8 @@ body {
   /* Allow the player to fit within the fixed-height app without clipping */
   flex: 1 1 auto;
   min-height: 0;
+  min-width: 0;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
@@ -833,7 +835,18 @@ h3 {
   justify-content: center;
   flex: 1 1 auto;
   min-height: 0;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
   animation: artLoad 0.5s ease forwards;
+}
+
+.player-content {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+  box-sizing: border-box;
 }
 
 .art {
@@ -912,6 +925,9 @@ h3 {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-sm);
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
 }
 
 #description-container {
@@ -952,6 +968,8 @@ h3 {
   width: 100%;
   overflow: hidden;
   position: relative;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .title {
@@ -967,6 +985,8 @@ h3 {
   width: 100%;
   display: inline-block;
   transition: none;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .title .title-text {
@@ -995,6 +1015,8 @@ h3 {
   margin: 0;
   text-align: center;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .description {
@@ -1018,11 +1040,12 @@ h3 {
 /* ===== PROGRESS BAR ===== */
 .progress-section {
   width: 100%;
-  margin: 0 0 8px 0;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
   flex-shrink: 0;
   display: block;
-  transition: var(--transition-all-slow);
-  padding: 10px 10px 28px 10px;
+  padding: 8px 10px 22px 10px;
   border-radius: 12px;
   position: relative;
   cursor: pointer;
@@ -1030,18 +1053,17 @@ h3 {
   box-sizing: border-box;
   box-shadow: none;
   background: transparent;
+  overflow: visible;
 }
 
 .progress-section:hover {
   background: rgba(var(--primary-rgb), 0.08);
-  transform: scale(1.02);
   box-shadow: 0 0 16px rgba(var(--primary-rgb), 0.12);
 }
 
 .progress-section:active,
 .progress-section.dragging {
   background: rgba(var(--primary-rgb), 0.1);
-  transform: scale(1.01);
   box-shadow: 0 0 24px rgba(var(--primary-rgb), 0.2);
 }
 
@@ -1061,6 +1083,8 @@ h3 {
 
 .progress-bar {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   height: var(--progress-height);
   background: var(--card);
   border-radius: 4px;
@@ -1073,6 +1097,8 @@ h3 {
   user-select: none;
   touch-action: none;
   outline: none;
+  box-sizing: border-box;
+  display: block;
 }
 
 .progress-bar:hover {
@@ -1093,11 +1119,13 @@ h3 {
   background: rgba(var(--primary-rgb), 0.15);
   border-radius: 3px;
   width: 0%;
+  max-width: 100%;
   position: absolute;
   left: 0;
   top: 0;
   z-index: 2;
   transition: width 0.3s ease;
+  will-change: width;
 }
 
 /* Progress Fill (Inner Bar) */
@@ -1106,6 +1134,7 @@ h3 {
   background: linear-gradient(90deg, var(--accent-alt), var(--accent));
   border-radius: 3px;
   width: 0%;
+  max-width: 100%;
   will-change: width;
   transition: width 0.1s linear;
   position: absolute;
@@ -1161,7 +1190,7 @@ h3 {
   opacity: 0;
   visibility: hidden;
   transition: opacity 0.15s ease, visibility 0.15s ease;
-  z-index: 100;
+  z-index: 1000;
   white-space: nowrap;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
@@ -1187,21 +1216,21 @@ h3 {
   font-weight: 600;
   position: absolute;
   pointer-events: none;
-  z-index: 1;
+  z-index: 10;
   letter-spacing: 0.5px;
   transition: color 0.2s ease;
+  white-space: nowrap;
+  min-width: 35px;
 }
 
 .current-time {
   left: 0;
-  top: 100%;
-  margin-top: 4px;
+  top: calc(100% + 2px);
 }
 
 .total-time {
   right: 0;
-  top: 100%;
-  margin-top: 4px;
+  top: calc(100% + 2px);
 }
 
 .progress-bar:hover .current-time,
@@ -1256,6 +1285,17 @@ h3 {
 @media (max-width: 400px) {
   .main-player-section .controls {
     gap: clamp(6px, 2vw, 12px);
+  }
+  
+  .progress-section {
+    padding: 5px 8px 16px 8px;
+    margin-bottom: 3px;
+    min-height: 32px;
+  }
+  
+  .current-time,
+  .total-time {
+    font-size: 11px;
   }
 }
 
@@ -3617,6 +3657,8 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
   .main-player-section {
     flex: 1 1 auto;
     min-height: 0;
+    min-width: 0;
+    max-width: 100%;
     overflow-y: auto;
     overflow-x: hidden;
     padding: var(--spacing-lg) 0;
@@ -4091,8 +4133,16 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
   }
 
   .progress-section {
-    padding: 6px;
+    padding: 6px 8px 16px 8px;
     margin: 0;
+  }
+  
+  .progress-bar {
+    height: 6px;
+  }
+  
+  .progress-bar:hover {
+    height: 6px;
   }
 
   .main-player-section .controls {
