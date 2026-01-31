@@ -2653,6 +2653,7 @@ body.offline-mode .share-track-button {
 /* Estilos homogéneos para tracklist en favoritos/resonates */
 .favorites-list .tracks-container,
 .resontes-list-content .tracks-container,
+.search-results-list .tracks-container,
 .content-card .tracks-container {
   background: var(--surface-subtle, rgba(255,255,255,0.02));
   border-radius: 8px;
@@ -2667,6 +2668,7 @@ body.offline-mode .share-track-button {
 
 .favorites-list .tracks-container.collapsing,
 .resontes-list-content .tracks-container.collapsing,
+.search-results-list .tracks-container.collapsing,
 .content-card .tracks-container.collapsing {
   max-height: 0;
   opacity: 0;
@@ -2733,28 +2735,50 @@ body.offline-mode .share-track-button {
   background: transparent;
   border: none;
   color: var(--accent, var(--primary));
-  font-size: 12px;
+  font-size: 14px;
   cursor: pointer;
   padding: 6px 8px;
-  border-radius: 4px;
+  border-radius: 6px;
   margin-top: 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.15s;
-  min-height: 32px;
-  min-width: 32px;
+  transition: all 0.2s ease;
+  min-height: 36px;
+  min-width: 36px;
+  position: relative;
+  overflow: hidden;
+}
+
+.expand-tracks .expand-icon,
+.card-actions .expand .expand-icon {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: inline-block;
+  font-size: 16px;
+}
+
+.expand-tracks.expanded .expand-icon,
+.card-actions .expand.expanded .expand-icon {
+  transform: rotate(180deg);
 }
 
 .expand-tracks:hover,
 .card-actions .expand:hover {
-  background: var(--surface-hover, rgba(255,255,255,0.1));
+  background: var(--surface-hover, rgba(var(--primary-rgb), 0.12));
+  transform: scale(1.05);
+}
+
+.expand-tracks:active,
+.card-actions .expand:active {
+  transform: scale(0.95);
+  background: rgba(var(--primary-rgb), 0.18);
 }
 
 .expand-tracks:focus-visible,
 .card-actions .expand:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(var(--primary-rgb), 0.1);
 }
   gap: 4px;
 }

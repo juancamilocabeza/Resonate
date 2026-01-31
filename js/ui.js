@@ -433,7 +433,7 @@ function abortUiSearchControllers() {
   }
 }
 
-function dispatchSearchWithFastPath(queryAtDispatch, { keepKeyboard = true, addToHistory = true } = {}) {
+function dispatchSearchWithFastPath(queryAtDispatch, { keepKeyboard = true, addToHistory = true, showLoader = false } = {}) {
   try {
     const q = String(queryAtDispatch || '').trim();
     if (!q) return;
@@ -529,7 +529,7 @@ function dispatchSearchWithFastPath(queryAtDispatch, { keepKeyboard = true, addT
     const optimizedPromise = optimizedFn(q, 0, {
       signal: state._uiSearchControllers.optimized.signal,
       abortPrevious: false,
-      showLoader: false,
+      showLoader: showLoader,
       activateUI: false,
       deferMetadata: true,
       enrichmentPriority: 'idle'
@@ -2809,7 +2809,11 @@ function navigateSearchResults(direction) {
 
 function displaySearchResults(searchData, clearExisting = true) {
   // Hide search loader when results arrive
-
+  try {
+    if (window.Loaders && typeof window.Loaders.hideLoader === 'function') {
+      window.Loaders.hideLoader();
+    }
+  } catch {}
 
   if (!searchData) return;
   const { hasMore, total } = searchData;
@@ -3701,7 +3705,7 @@ function createSearchResultElement(result, globalIndex) {
 
     if (!tracksContainer || !tracksContainer.classList.contains('tracks-container')) {
       tracksContainer = document.createElement('div');
-      tracksContainer.className = 'tracks-container';
+      tracksContainer.className = 'tracks-container collapsing';
       const parent = resultEl.parentNode;      if (parent) {        parent.insertBefore(tracksContainer, resultEl.nextSibling);      }
     }
 
@@ -3857,8 +3861,10 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
   shareBtn.textContent = '🔗';
   const expandBtn = document.createElement('button');
   expandBtn.className = 'card-btn expand';
-  expandBtn.title = '▼';
-  expandBtn.textContent = '▼';
+  expandBtn.innerHTML = '<span class="expand-icon">▼</span>';
+  expandBtn.title = 'Show album tracks';
+  expandBtn.setAttribute('aria-label', 'Show album tracks');
+  expandBtn.setAttribute('aria-expanded', 'false');
   expandBtn.style.display = isAlbum ? 'flex' : 'none';
   actions.appendChild(favBtn);
   actions.appendChild(shareBtn);
@@ -3956,7 +3962,7 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
       let tracksContainer = card.nextElementSibling;
       if (!tracksContainer || !tracksContainer.classList.contains('tracks-container')) {
         tracksContainer = document.createElement('div');
-        tracksContainer.className = 'tracks-container';
+        tracksContainer.className = 'tracks-container collapsing';
         const parent = card.parentNode; if (parent) parent.insertBefore(tracksContainer, card.nextSibling);
       }
       toggleAlbumTracks(identifier, tracksContainer, expandBtn);
@@ -4038,7 +4044,7 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
       let tracksContainer = card.nextElementSibling;
       if (!tracksContainer || !tracksContainer.classList.contains('tracks-container')) {
         tracksContainer = document.createElement('div');
-        tracksContainer.className = 'tracks-container';
+        tracksContainer.className = 'tracks-container collapsing';
         const parent = card.parentNode;
         if (parent) parent.insertBefore(tracksContainer, card.nextSibling);
       }
@@ -4074,7 +4080,13 @@ function toggleAlbumTracks(albumId, tracksContainer, expandButton) {
 
   if (isCollapsed) {
     // Expand: remove collapsing class to show with animation
-    expandButton.textContent = '▲';
+    const icon = expandButton.querySelector('.expand-icon');
+    if (icon) icon.textContent = '▲';
+    expandButton.title = 'Hide album tracks';
+    expandButton.setAttribute('aria-label', 'Hide album tracks');
+    expandButton.setAttribute('aria-expanded', 'true');
+    expandButton.classList.add('expanded');
+    
     try {
       if (!tracksContainer.dataset.tlv2Mounted) {
         if (typeof window.displayAlbumTracksV2 === 'function') {
@@ -4087,20 +4099,25 @@ function toggleAlbumTracks(albumId, tracksContainer, expandButton) {
       tracksContainer.innerHTML = '<div class="no-results">No tracks found</div>';
     }
     
-    // Trigger animation on next frame
+    // Trigger animation on next frame after content is ready
     requestAnimationFrame(() => {
       tracksContainer.classList.remove('collapsing');
+      
+      // Scroll into view after animation starts
+      setTimeout(() => {
+        try {
+          tracksContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } catch {}
+      }, 150);
     });
-    
-    // Scroll into view after animation starts
-    setTimeout(() => {
-      try {
-        tracksContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      } catch {}
-    }, 150);
   } else {
     // Collapse: add collapsing class to hide with animation
-    expandButton.textContent = '▼';
+    const icon = expandButton.querySelector('.expand-icon');
+    if (icon) icon.textContent = '▼';
+    expandButton.title = 'Show album tracks';
+    expandButton.setAttribute('aria-label', 'Show album tracks');
+    expandButton.setAttribute('aria-expanded', 'false');
+    expandButton.classList.remove('expanded');
     tracksContainer.classList.add('collapsing');
   }
 }
@@ -6739,8 +6756,8 @@ function displaySearchHistory() {
             setKeyboardOpenState(false);
           }
         } catch {}
-        // Trigger search
-        dispatchSearchWithFastPath(query, { keepKeyboard: true, addToHistory: false });
+        // Trigger search with showLoader enabled
+        dispatchSearchWithFastPath(query, { keepKeyboard: true, addToHistory: false, showLoader: true });
       }
     });
 
