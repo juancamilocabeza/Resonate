@@ -1022,7 +1022,7 @@ h3 {
   flex-shrink: 0;
   display: block;
   transition: var(--transition-all-slow);
-  padding: 10px;
+  padding: 10px 10px 28px 10px;
   border-radius: 12px;
   position: relative;
   cursor: pointer;
