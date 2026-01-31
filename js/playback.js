@@ -1999,10 +1999,10 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
   }
 
   // Mostrar/ocultar descripción usando UI avanzada
-  // Asignar la mejor descripción disponible antes de mostrar
-  track.description = window.getBestDescription
-    ? window.getBestDescription(track, track._albumDescription, '')
-    : (track.description || track._albumDescription || '');
+  // Mantener solo la descripción propia de la pista
+  track.description = (typeof track.description === 'string' && track.description.trim() !== '')
+    ? track.description
+    : '';
   if (window.updateDescriptionUI) {
     window.updateDescriptionUI(track);
   }

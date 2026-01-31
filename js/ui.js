@@ -1369,6 +1369,195 @@ function sanitizeHTML(html) {
   return tempDiv.innerHTML;
 }
 
+const INFO_UX_CONFIG = {
+  previewCharLimit: 800,
+  minPreviewCharLimit: 240
+};
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function extractTextFromHtml(html) {
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = html || '';
+  return (tempDiv.textContent || '').trim();
+}
+
+function normalizeDescriptionText(text) {
+  return String(text || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/[\t ]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+}
+
+function truncateText(text, limit) {
+  const safeLimit = Math.max(INFO_UX_CONFIG.minPreviewCharLimit, limit || INFO_UX_CONFIG.previewCharLimit);
+  if (!text || text.length <= safeLimit) return { text: text || '', truncated: false };
+  let cut = text.slice(0, safeLimit);
+  cut = cut.replace(/\s+\S*$/, '');
+  if (cut.length < safeLimit * 0.6) cut = text.slice(0, safeLimit);
+  return { text: `${cut.trim()}…`, truncated: true };
+}
+
+function formatPlainTextAsHtml(text) {
+  const normalized = normalizeDescriptionText(text);
+  if (!normalized) return '';
+  const paragraphs = normalized.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+  return paragraphs.map(p => `<p>${escapeHtml(p).replace(/\n/g, '<br>')}</p>`).join('');
+}
+
+function buildSearchSuggestionsHtml({ title, creator, album }) {
+  const baseQuery = [title, creator].filter(Boolean).join(' ').trim();
+  const creatorQuery = creator ? String(creator).trim() : '';
+  const albumQuery = album ? String(album).trim() : '';
+  const queryForWeb = baseQuery || albumQuery || creatorQuery || '';
+
+  const internalChips = [];
+  if (baseQuery) {
+    internalChips.push(
+      `<span class="info-chip info-chip--action" role="button" tabindex="0" data-action="search-internal" data-query="${escapeHtml(baseQuery)}">Resonate: ${escapeHtml(baseQuery)}</span>`
+    );
+  }
+  if (creatorQuery && creatorQuery !== baseQuery) {
+    internalChips.push(
+      `<span class="info-chip info-chip--action" role="button" tabindex="0" data-action="search-internal" data-query="${escapeHtml(creatorQuery)}">Resonate: ${escapeHtml(creatorQuery)}</span>`
+    );
+  }
+
+  const externalChips = [];
+  if (queryForWeb) {
+    const encoded = encodeURIComponent(queryForWeb);
+    externalChips.push(`<a class="info-chip" href="https://www.google.com/search?q=${encoded}" target="_blank" rel="noopener noreferrer">Google</a>`);
+    externalChips.push(`<a class="info-chip" href="https://es.wikipedia.org/wiki/Special:Search?search=${encoded}" target="_blank" rel="noopener noreferrer">Wikipedia</a>`);
+  }
+
+  if (!internalChips.length && !externalChips.length) return '';
+
+  return `
+    <div class="info-searches">
+      <div class="info-searches-title">Búsquedas sugeridas</div>
+      <div class="info-searches-chips">
+        ${internalChips.join('')}
+        ${externalChips.join('')}
+      </div>
+    </div>
+  `;
+}
+
+function buildInfoModalHtml({ title, creator, album, descriptionHtml, descriptionText }) {
+  const normalizedText = normalizeDescriptionText(descriptionText);
+  const preview = truncateText(normalizedText, INFO_UX_CONFIG.previewCharLimit);
+  const previewHtml = formatPlainTextAsHtml(preview.text);
+  const safeFullHtml = descriptionHtml || previewHtml || '<p>No hay información disponible.</p>';
+
+  const metaParts = [];
+  if (creator) metaParts.push(`<span class="info-meta-item">${escapeHtml(creator)}</span>`);
+
+  return `
+    <div class="info-header">
+      <div class="info-title" id="info-modal-title">${escapeHtml(title || 'Información')}</div>
+      <div class="info-meta">${metaParts.join('')}</div>
+    </div>
+    <div class="info-content">
+      <div class="info-body info-body--preview">${previewHtml || '<p>No hay información disponible.</p>'}</div>
+      <div class="info-body info-body--full" hidden>${safeFullHtml}</div>
+      ${preview.truncated ? '<span class="info-toggle" role="button" tabindex="0" data-action="toggle-info" aria-expanded="false">Ver más</span>' : ''}
+    </div>
+    ${buildSearchSuggestionsHtml({ title, creator, album })}
+  `;
+}
+
+function closeDescriptionModal() {
+  try {
+    if (elements.descriptionModal) elements.descriptionModal.style.display = 'none';
+  } catch {}
+}
+
+function bindInfoModalInteractions() {
+  if (!elements.modalDescription) return;
+  if (elements.modalDescription.dataset.infoUxBound === 'true') return;
+  elements.modalDescription.dataset.infoUxBound = 'true';
+
+  elements.modalDescription.addEventListener('click', (event) => {
+    const actionEl = event.target.closest('[data-action]');
+    if (!actionEl) return;
+    const action = actionEl.getAttribute('data-action');
+    if (action === 'toggle-info') {
+      const preview = elements.modalDescription.querySelector('.info-body--preview');
+      const full = elements.modalDescription.querySelector('.info-body--full');
+      if (!preview || !full) return;
+      const isExpanded = elements.modalDescription.dataset.infoExpanded === 'true';
+      if (isExpanded) {
+        full.hidden = true;
+        preview.hidden = false;
+        actionEl.textContent = 'Ver más';
+        actionEl.setAttribute('aria-expanded', 'false');
+        elements.modalDescription.dataset.infoExpanded = 'false';
+      } else {
+        full.hidden = false;
+        preview.hidden = true;
+        actionEl.textContent = 'Ver menos';
+        actionEl.setAttribute('aria-expanded', 'true');
+        elements.modalDescription.dataset.infoExpanded = 'true';
+      }
+    }
+    if (action === 'search-internal') {
+      const q = String(actionEl.getAttribute('data-query') || '').trim();
+      if (!q) return;
+      try {
+        if (elements.searchInput) elements.searchInput.value = q;
+        runSearchWithCurrentFilters({ keepKeyboard: false });
+      } catch {}
+      closeDescriptionModal();
+    }
+  });
+
+  elements.modalDescription.addEventListener('keydown', (event) => {
+    const isActivation = event.key === 'Enter' || event.key === ' ';
+    if (!isActivation) return;
+    const target = event.target;
+    if (!target || !target.getAttribute) return;
+    if (!target.getAttribute('data-action')) return;
+    event.preventDefault();
+    target.click();
+  });
+}
+
+function bindDescriptionModalShell() {
+  if (!elements.descriptionModal) return;
+  if (elements.descriptionModal.dataset.shellBound === 'true') return;
+  elements.descriptionModal.dataset.shellBound = 'true';
+
+  elements.descriptionModal.addEventListener('click', (event) => {
+    if (event.target === elements.descriptionModal) {
+      closeDescriptionModal();
+    }
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && elements.descriptionModal && elements.descriptionModal.style.display === 'flex') {
+      closeDescriptionModal();
+    }
+  });
+
+  if (elements.closeDescriptionModal) {
+    elements.closeDescriptionModal.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        closeDescriptionModal();
+      }
+    });
+  }
+}
+
 // Control de descripción de pista
 function updateDescriptionUI(track) {
   if (!elements.descriptionContainer || !elements.toggleDescriptionBtn) return;
@@ -1440,10 +1629,10 @@ function updateDescriptionUI(track) {
   const modalDesc = document.getElementById('modal-description');
   const closeModalBtn = document.getElementById('close-description-modal');
 
-  // Buscar la mejor descripción disponible
-  const bestDescription = window.getBestDescription
-    ? window.getBestDescription(track, track?._albumDescription, '')
-    : (track?.description || track?._albumDescription || '');
+  // Solo usar la descripción propia de la pista
+  const bestDescription = (track && typeof track.description === 'string')
+    ? track.description.trim()
+    : '';
 
   if (bestDescription && bestDescription.trim() !== '') {
     elements.toggleDescriptionBtn.style.display = 'inline-flex';
@@ -1453,14 +1642,25 @@ function updateDescriptionUI(track) {
     elements.toggleDescriptionBtn.onclick = function() {
       window.logger?.debug('[updateDescriptionUI] Description button clicked; opening modal', 'UI');
       if (modal && modalDesc) {
-        modalDesc.innerHTML = sanitizeHTML(bestDescription);
+        const sanitizedHtml = sanitizeHTML(bestDescription);
+        const textFromHtml = extractTextFromHtml(sanitizedHtml);
+        modalDesc.innerHTML = buildInfoModalHtml({
+          title: track?.title || track?.name || '',
+          creator: track?.creator || track?.artist || track?.author || '',
+          album: track?.album || track?.albumTitle || track?.collection || '',
+          descriptionHtml: sanitizedHtml,
+          descriptionText: textFromHtml
+        });
+        modalDesc.dataset.infoExpanded = 'false';
+        bindInfoModalInteractions();
+        bindDescriptionModalShell();
         modal.style.display = 'flex';
       }
     };
     if (closeModalBtn && modal) {
       closeModalBtn.onclick = function() {
         window.logger?.debug('[updateDescriptionUI] Closing description modal', 'UI');
-        modal.style.display = 'none';
+        closeDescriptionModal();
       };
     }
   } else {

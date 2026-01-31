@@ -2229,9 +2229,9 @@ async function playOptimizedSearchResult(result, index, allResults) {
         }
         if (window.playbackManager) window.playbackManager.setAlbumPlaylist(result.identifier, files, 0);
         // Don't preload entire album - only load queue after first track starts
-        // Propagar descripción del resultado al track si no la tiene
-        if (result.description && !firstTrack.description) {
-          firstTrack.description = result.description;
+        // Propagar descripción del resultado como descripción de álbum
+        if (result.description && !firstTrack._albumDescription) {
+          firstTrack._albumDescription = result.description;
         }
         await window.playAudioTrackOptimized(firstTrack, result.identifier, 0, files.length, true);
         window.loadPlaybackQueue?.('album', files, 1);
