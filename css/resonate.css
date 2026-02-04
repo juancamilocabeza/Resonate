@@ -57,34 +57,170 @@
   margin: 0;
 }
 
-/* Ensure the current-album track list flows below the buttons (not beside them) */
-#tracks-list-container {
-  border: 1px solid var(--surface-border);
+/* Shared overlay shell for panels (search/results/tracks) */
+.panel-overlay {
+  background: var(--card);
+  border: var(--panel-border, 2px solid rgba(128, 128, 128, 0.3));
+  box-shadow: var(--panel-shadow, 0 8px 28px rgba(0,0,0,0.45), 0 0 0 3px rgba(var(--primary-rgb), 0.18));
+  border-radius: var(--panel-radius, 16px);
+}
+
+/* Shared header styling for overlay panels */
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Shared tracklist base (aligned with Search list styles) */
+.tracklist {
+  border: none;
   border-radius: 8px;
-  overflow: hidden;
+  background: var(--surface-subtle, rgba(255,255,255,0.02));
+  box-shadow: none;
   box-sizing: border-box;
 }
 
-/* Current album: show Tracks as a fixed overlay panel (same UX as search results) */
-body.tracks-open #tracks-list-container {
+/* Current album tracks: inline panel (not modal) */
+.tracklist.tracks-inline {
   display: block;
-  position: fixed;
-  left: 10px;
-  right: 10px;
-  top: var(--tracks-panel-top, calc(54px + env(safe-area-inset-top, 0) + 10px));
-  bottom: var(--tracks-panel-bottom, calc(var(--footer-height, 44px) + env(safe-area-inset-bottom, 0) + var(--vv-bottom-inset, 0px) + 10px));
-  width: auto;
-  height: auto;
-  max-height: none;
-  background: var(--card);
-  z-index: 150;
+  position: relative;
+  width: 100%;
+  max-height: min(60vh, 520px);
+  margin-top: 10px;
+  padding: 12px 10px 10px;
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  scroll-behavior: smooth;
-  /* Mejorar scroll en mobile */
-  -webkit-touch-callout: none;
+}
+
+.tracklist .search-results-header {
+  margin: 0 0 12px 0;
+}
+
+.tracklist .tracks-overlay-count {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--fg);
+}
+
+.tracklist .tracks-overlay-list {
+  padding-bottom: 6px;
+}
+
+.tracklist__list {
+  overflow-x: hidden;
+  height: auto;
+  margin: 0 auto;
+  padding: 0 10px;
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  padding-bottom: calc(10px + env(safe-area-inset-bottom, 0) + var(--vv-bottom-inset, 0px));
+}
+
+/* Unified track row styling across contexts */
+.track-row {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: inset 0 0 0 1px rgba(var(--primary-rgb), 0.08);
+  border-radius: 10px;
+}
+
+.track-row:hover {
+  background: var(--surface-hover, rgba(var(--primary-rgb), 0.12));
+}
+
+.track-row-title {
+  font-weight: 600;
+  color: var(--fg);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  display: block;
+  min-width: 0;
+}
+
+/* Track title ticker inside Tracks overlay */
+@keyframes tracksTicker {
+  0% { transform: translateX(0%); }
+  100% { transform: translateX(-60%); }
+}
+
+.tracklist .track-item-info,
+.tracklist .tlv2-info,
+.tracks-container .tlv2-info,
+.tracks-container .track-item-info,
+.search-results .favorite-title,
+.search-results .result-title,
+.card-grid .card-title {
+  overflow: hidden;
+}
+
+body.tracks-open #tracks-list-container .track-title,
+.tracklist .track-title,
+.search-results .favorite-title,
+.search-results .result-title,
+.card-grid .card-title,
+body.tracks-open #tracks-list-container .tlv2-title,
+.tracklist .tlv2-title,
+body.tracks-open #tracks-list-container .track-row-title,
+.tracklist .track-row-title {
+  display: block;
+  white-space: nowrap;
+  text-overflow: clip;
+  overflow: hidden;
+  min-width: 0;
+}
+
+body.tracks-open #tracks-list-container .track-title .ticker-text,
+.tracklist .track-title .ticker-text,
+.search-results .favorite-title .ticker-text,
+.search-results .result-title .ticker-text,
+.card-grid .card-title .ticker-text,
+body.tracks-open #tracks-list-container .tlv2-title .ticker-text,
+.tracklist .tlv2-title .ticker-text,
+body.tracks-open #tracks-list-container .track-row-title .ticker-text,
+.tracklist .track-row-title .ticker-text {
+  display: inline-block;
+  white-space: nowrap;
+  text-overflow: clip;
+  will-change: transform;
+  padding-right: 24px;
+}
+
+body.tracks-open #tracks-list-container .track-title .ticker-text.ticker,
+body.tracks-open #tracks-list-container .tlv2-title .ticker-text.ticker,
+body.tracks-open #tracks-list-container .track-row-title .ticker-text.ticker,
+.tracklist .track-title .ticker-text.ticker,
+.tracklist .tlv2-title .ticker-text.ticker,
+.tracklist .track-row-title .ticker-text.ticker,
+.search-results .favorite-title .ticker-text.ticker,
+.search-results .result-title .ticker-text.ticker,
+.card-grid .card-title .ticker-text.ticker {
+  display: inline-block;
+  white-space: nowrap;
+  text-overflow: clip;
+  will-change: transform;
+  padding-right: 24px;
+  animation: tracksTicker var(--list-ticker-duration, 14s) linear infinite;
+}
+
+body.tracks-open #tracks-list-container .track-title:hover .ticker-text,
+body.tracks-open #tracks-list-container .tlv2-title:hover .ticker-text,
+body.tracks-open #tracks-list-container .track-row-title:hover .ticker-text,
+.tracklist .track-title:hover .ticker-text,
+.tracklist .tlv2-title:hover .ticker-text,
+.tracklist .track-row-title:hover .ticker-text,
+.search-results .favorite-title:hover .ticker-text,
+.search-results .result-title:hover .ticker-text,
+.card-grid .card-title:hover .ticker-text {
+  animation-play-state: paused;
 }
 
 /* Tracklist V2 inside the overlay should allow scrolling (parent handles size) */
@@ -92,6 +228,7 @@ body.tracks-open #tracks-list-container .tlv2-list {
   /* Let parent container handle overflow */
   overflow: auto;
   max-height: none;
+  padding: 4px 2px 6px 2px;
   /* Smooth scrolling for better UX */
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
@@ -103,6 +240,22 @@ body.tracks-open #tracks-list-container .tracks-overlay-close.search-control-btn
   min-width: 48px;
   border-radius: 8px;
   padding: 10px 14px;
+  background: var(--btn);
+  border: none;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  transition: background-color 0.2s, transform 0.15s;
+}
+
+body.tracks-open #tracks-list-container .tracks-overlay-close.search-control-btn:hover {
+  background: var(--card);
+}
+
+body.tracks-open #tracks-list-container .tracks-overlay-close.search-control-btn:active {
+  background: var(--card);
+  transform: scale(0.95);
 }
 /* === Estilos para el listado de pistas del álbum actual === */
 
@@ -215,8 +368,10 @@ body.tracks-open #tracks-list-container .tracks-overlay-close.search-control-btn
   font-size: 15px;
   line-height: 1.7;
   color: var(--fg);
-  text-align: justify;
-  text-justify: inter-word;
+  text-align: left;
+  text-justify: auto;
+  word-spacing: normal;
+  hyphens: auto;
 }
 .modal-description .info-body p {
   margin: 0 0 0.9em 0;
@@ -344,6 +499,10 @@ body.tracks-open #tracks-list-container .tracks-overlay-close.search-control-btn
   --surface-hover: rgba(255, 255, 255, 0.04);
   --surface-subtle: rgba(255, 255, 255, 0.03);
 
+  --panel-border: 2px solid rgba(128, 128, 128, 0.3);
+  --panel-shadow: 0 8px 28px rgba(0, 0, 0, 0.45), 0 0 0 3px rgba(var(--primary-rgb), 0.18), 0 0 0 9999px rgba(0, 0, 0, 0.55);
+  --panel-radius: 16px;
+
   --shadow-card-hover: 0 10px 24px rgba(0, 0, 0, 0.35);
 
   --focus-ring-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.22);
@@ -393,6 +552,9 @@ body.tracks-open #tracks-list-container .tracks-overlay-close.search-control-btn
   --transition-default: all var(--transition-normal);
   --transition-all-slow: all var(--transition-slow);
   --transition-all-norm: all 0.2s ease;
+
+  /* Ticker speed (track lists) */
+  --list-ticker-duration: 14s;
 
   /* Component Sizes - Mobile Optimized */
   /* Mobile cover: responsive to viewport height to avoid clipping controls */
@@ -463,6 +625,8 @@ body.tracks-open #tracks-list-container .tracks-overlay-close.search-control-btn
   --favorite-bg: rgba(var(--primary-rgb), 0.16);
 
   --on-accent: #000;
+
+  --list-ticker-duration: 14s;
 }
 
 /* ===== TEMA DÍA - Colores claros optimizados ===== */
@@ -519,6 +683,8 @@ body.tracks-open #tracks-list-container .tracks-overlay-close.search-control-btn
   --favorite-bg: rgba(var(--primary-rgb), 0.14);
 
   --on-accent: #fff;
+
+  --list-ticker-duration: 12s;
 }
 
 /* Ajustes adicionales para modo día */
@@ -607,6 +773,8 @@ body.tracks-open #tracks-list-container .tracks-overlay-close.search-control-btn
   --item-hover: rgba(255, 255, 255, 0.05);
   --neutral: #909090;
   --control-fg: var(--fg);
+
+  --list-ticker-duration: 20s;
 }
 
 /* Reduce animaciones en modo ahorro de energía */
@@ -618,6 +786,10 @@ body.tracks-open #tracks-list-container .tracks-overlay-close.search-control-btn
 /* Excluir ticker de optimizaciones en modo eco para mantener legibilidad */
 [data-theme="energy-saver"] .title.ticker .title-text {
   animation-duration: unset !important;
+}
+
+[data-theme="energy-saver"] .ticker-text.ticker {
+  animation-duration: var(--list-ticker-duration, 20s) !important;
 }
 
 /* Excluir spinner del loader para mantener animación visible */
@@ -789,11 +961,12 @@ header {
   .footer {
     text-align: center !important;
     width: 100% !important;
-    opacity: 0.6 !important;
+    opacity: 1 !important;
     font-size: 10px !important;
     padding: 8px 12px !important;
     left: 0 !important;
     right: 0 !important;
+    color: var(--primary) !important;
   }
 }
 
@@ -1801,6 +1974,14 @@ select:focus {
   flex-shrink: 0;
 }
 
+.resontes-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--muted);
+}
+
 .resontes-toggle .resontes-icon .resonate-icon {
   width: 30px;
   height: 30px;
@@ -1925,6 +2106,19 @@ select:focus {
   color: var(--primary);
 }
 
+#resontes-toggle.has-resontes,
+.resontes-toggle.has-resontes {
+  color: var(--primary);
+}
+
+.resontes-toggle.has-resontes .resontes-label {
+  color: var(--primary);
+}
+
+.resontes-toggle.active .resontes-label {
+  color: var(--primary);
+}
+
 .favorites-toggle.active .favorites-icon,
 .resontes-toggle.active .resontes-icon {
   animation: heartBeat 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -1933,20 +2127,21 @@ select:focus {
 
 .favorites-count,
 .resontes-count {
-  color: var(--muted);
-  background: transparent;
+  color: var(--primary);
+  background: rgba(var(--primary-rgb), 0.16);
   font-size: 11px;
-  font-weight: 400;
-  padding: 0;
-  margin-left: 2px;
-  border-radius: 0;
-  min-width: auto;
+  font-weight: 700;
+  padding: 2px 6px;
+  margin-left: 4px;
+  border-radius: 999px;
+  min-width: 22px;
   text-align: center;
-  display: inline;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   line-height: 1;
   box-shadow: none;
+  border: 1px solid rgba(var(--primary-rgb), 0.35);
 }
 
 @media (max-width: 768px) and (min-width: 481px) {
@@ -1987,8 +2182,14 @@ select:focus {
 
 .favorites-toggle.active .favorites-count,
 .resontes-toggle.active .resontes-count {
-  background: transparent;
-  color: var(--muted);
+  background: var(--primary);
+  color: var(--bg);
+}
+
+@media (max-width: 520px) {
+  .resontes-label {
+    display: none;
+  }
 }
 
 #play-all-favorites-btn {
@@ -2379,6 +2580,9 @@ select:focus {
   min-height: 160px;
   opacity: 1;
   background: var(--card);
+  border: var(--panel-border);
+  border-radius: var(--panel-radius);
+  box-shadow: var(--panel-shadow);
   z-index: 140;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
@@ -2961,55 +3165,6 @@ body.offline-mode .share-track-button {
   }
 }
 
-.favorites-list .tlv2,
-.resontes-list-content .tlv2,
-.content-card .tlv2 {
-  padding: 8px 4px;
-  border: none;
-}
-
-.favorites-list .tlv2-list,
-.resontes-list-content .tlv2-list,
-.content-card .tlv2-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-/* Estilos homogéneos para filas en todos los contextos */
-.favorites-list .tlv2-row,
-.resontes-list-content .tlv2-row,
-.search-result .tlv2-row,
-.content-card .tlv2-row {
-  display: grid;
-  grid-template-columns: 40px 40px 40px 1fr 60px;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 4px;
-  border-radius: 8px;
-  background: transparent;
-  transition: background 0.15s;
-  min-height: 44px;
-  cursor: pointer;
-  user-select: none;
-}
-
-.favorites-list .tlv2-row:hover,
-.resontes-list-content .tlv2-row:hover,
-.search-result .tlv2-row:hover,
-.content-card .tlv2-row:hover {
-  background: var(--surface-hover, rgba(255,255,255,0.05));
-}
-
-.favorites-list .tlv2-row:focus-visible,
-.resontes-list-content .tlv2-row:focus-visible,
-.search-result .tlv2-row:focus-visible,
-.content-card .tlv2-row:focus-visible {
-  background: var(--surface-hover, rgba(255,255,255,0.05));
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-}
-
 /* index.html: default hidden state (toggled visible by JS) */
 #tracks-list-container,
 #description-modal {
@@ -3587,7 +3742,7 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
 
 /* ===== FOOTER ===== */
 .footer {
-  color: var(--muted);
+  color: var(--primary);
   font-size: 10px;
   padding: 8px 0 !important;
   position: sticky;
@@ -3597,7 +3752,7 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
   background: var(--bg);
   z-index: 220;
   border-top: 1px solid rgba(255, 255, 255, 0.03);
-  opacity: 0.6;
+  opacity: 1;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -3627,7 +3782,7 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
     position: sticky;
     bottom: 0;
     padding: 10px 0 !important;
-    opacity: 0.6;
+    opacity: 1;
     font-size: 10px;
     width: 100% !important;
     left: 0 !important;
@@ -3636,6 +3791,7 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
     align-items: center !important;
     justify-content: center !important;
     text-align: center !important;
+    color: var(--primary);
   }
 
   h1 {
@@ -3803,10 +3959,11 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
     border-top: 1px solid rgba(255, 255, 255, 0.03);
     height: auto;
     margin-top: 0; /* Override mobile margin-top: auto */
-    opacity: 0.6;
+    opacity: 1;
     font-size: 10px;
     text-align: center;
     width: 100%;
+    color: var(--primary);
   }
 
   h1 {
@@ -4378,7 +4535,7 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
 
 /* Mejorar visibilidad e interacción del botón de descripción */
 #toggle-description-btn {
-  margin-bottom: 8px;
+  margin-bottom: 0;
 }
 /* ===== SEARCH HISTORY ===== */
 .search-history-item {
@@ -4694,14 +4851,14 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
 .search-loading { display: inline-flex; align-items: center; gap: 10px; padding: 10px 12px; color: var(--muted); }
 .loader-text { color: var(--muted); font-size: 13px; }
 
-/* ===== Tracklist V2 (scoped under .tracks-container) ===== */
-.tracks-container .tlv2 { 
+/* ===== Tracklist V2 (scoped under .tracklist) ===== */
+.tracklist .tlv2 { 
   padding: 8px 4px; 
   border-top: 1px solid var(--surface-border-subtle);
   overflow: hidden;
 }
 
-.tracks-container .tlv2-list { 
+.tracklist .tlv2-list { 
   display: flex; 
   flex-direction: column; 
   gap: 6px;
@@ -4715,36 +4872,36 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
 }
 
 /* Estilos de scroll para mejor visibilidad */
-.tracks-container .tlv2-list::-webkit-scrollbar {
+.tracklist .tlv2-list::-webkit-scrollbar {
   width: 8px;
 }
 
-.tracks-container .tlv2-list::-webkit-scrollbar-track {
+.tracklist .tlv2-list::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.tracks-container .tlv2-list::-webkit-scrollbar-thumb {
+.tracklist .tlv2-list::-webkit-scrollbar-thumb {
   background: var(--surface-border);
   border-radius: 4px;
 }
 
-.tracks-container .tlv2-list::-webkit-scrollbar-thumb:hover {
+.tracklist .tlv2-list::-webkit-scrollbar-thumb:hover {
   background: var(--muted);
 }
 
 /* Firefox scrollbar */
-.tracks-container .tlv2-list {
+.tracklist .tlv2-list {
   scrollbar-color: var(--surface-border) transparent;
   scrollbar-width: thin;
 }
 
 /* Tracklist V2: estilos globales para todos los contextos */
-.tracks-container .tlv2-row {
+.tracklist .tlv2-row {
   display: grid;
-  grid-template-columns: 40px 40px 40px 1fr 60px;
+  grid-template-columns: 36px 36px 36px minmax(0, 1fr) 52px;
   align-items: center;
   gap: 8px;
-  padding: 6px 4px;
+  padding: 8px 6px;
   border-radius: 8px;
   background: transparent;
   transition: background 0.15s;
@@ -4754,32 +4911,40 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
   /* Garantizar que sea clickeable incluso dentro de overflow */
   touch-action: manipulation;
 }
-.tracks-container .tlv2-row:hover,
-.tracks-container .tlv2-row:focus-visible {
+
+@media (max-width: 480px) {
+  .tracklist .tlv2-row {
+    grid-template-columns: 32px 32px 32px minmax(0, 1fr) 48px;
+    gap: 6px;
+    padding: 8px 6px;
+  }
+}
+.tracklist .tlv2-row:hover,
+.tracklist .tlv2-row:focus-visible {
   background: var(--surface-hover);
 }
-.tracks-container .tlv2-row:focus-visible {
+.tracklist .tlv2-row:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
-.tracks-container .tlv2-left {
+.tracklist .tlv2-left {
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--muted);
   font-size: 12px;
 }
-.tracks-container .tlv2-number {
+.tracklist .tlv2-number {
   display: inline-block;
   min-width: 20px;
   text-align: center;
 }
-.tracks-container .tlv2-info {
+.tracklist .tlv2-info {
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
-.tracks-container .tlv2-title {
+.tracklist .tlv2-title {
   font-size: 14px;
   line-height: 1.2;
   color: var(--fg);
@@ -4789,7 +4954,7 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
   min-width: 0;
 }
 
-/* Tracklist V2: fallback global (cuando el contenedor no usa .tracks-container) */
+/* Tracklist V2: fallback global (cuando el contenedor no usa .tracklist) */
 .tlv2-title {
   white-space: nowrap;
   overflow: hidden;
@@ -4808,30 +4973,30 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
     text-overflow: ellipsis;
   }
 }
-.tracks-container .tlv2-creator {
+.tracklist .tlv2-creator {
   font-size: 12px;
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.tracks-container .tlv2-description {
+.tracklist .tlv2-description {
   font-size: 12px;
   color: var(--muted);
   margin-top: 2px;
   white-space: normal;
   word-break: break-word;
 }
-.tracks-container .tlv2-right {
+.tracklist .tlv2-right {
   display: inline-flex;
   align-items: center;
   gap: 8px;
 }
-.tracks-container .tlv2-duration {
+.tracklist .tlv2-duration {
   font-size: 12px;
   color: var(--muted);
 }
-.tracks-container .tlv2-action {
+.tracklist .tlv2-action {
   background: transparent;
   border: none;
   color: var(--control-fg);
@@ -4841,29 +5006,29 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
   transition: background 0.15s, color 0.15s;
   font-size: 15px;
 }
-.tracks-container .tlv2-action:hover,
-.tracks-container .tlv2-action:focus-visible {
+.tracklist .tlv2-action:hover,
+.tracklist .tlv2-action:focus-visible {
   background: var(--btn-hover);
 }
-.tracks-container .tlv2-fav.active {
+.tracklist .tlv2-fav.active {
   color: var(--favorite);
 }
 
 /* Tracklist V2: Resonates button (uses inline SVG with currentColor) */
-.tracks-container .tlv2-resonte,
-.tracks-container .track-resonte {
+.tracklist .tlv2-resonte,
+.tracklist .track-resonte {
   color: var(--muted);
 }
 
-.tracks-container .tlv2-resonte.active,
-.tracks-container .track-resonte.active {
+.tracklist .tlv2-resonte.active,
+.tracklist .track-resonte.active {
   color: var(--primary);
 }
-.tracks-container .tlv2-offline {
+.tracklist .tlv2-offline {
   font-size: 12px;
   color: var(--muted);
 }
-.tracks-container .tlv2-download {
+.tracklist .tlv2-download {
   font-size: 13px;
 }
 

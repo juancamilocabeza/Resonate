@@ -39,6 +39,7 @@
         </button>
         <button id="resontes-toggle" class="theme-selector resontes-toggle" type="button" aria-label="View resonates" aria-expanded="false" aria-controls="resontes-list" aria-live="polite" title="Click to view your saved resonates">
           <span class="resontes-icon"><svg class="resonate-icon" viewBox="0 0 512 512" aria-hidden="true" focusable="false"><use href="/icons/sprite.svg#resonate-icon"></use></svg></span>
+          <span class="resontes-label">Resonates</span>
           <span class="resontes-count" id="resontes-count">0</span>
         </button>
         <span id="current-track-share" class="theme-selector" role="button" tabindex="0" aria-label="Share current track" title="Share this track">🔗</span>
@@ -62,8 +63,8 @@
             enterkeyhint="search">
           <button id="search-clear" class="search-clear-btn" type="button" aria-label="Clear search" title="Clear" hidden>✕</button>
           </div>
-          <div id="search-results" class="search-results">
-            <div id="search-results-header" class="search-results-header" hidden>
+          <div id="search-results" class="search-results panel-overlay">
+            <div id="search-results-header" class="search-results-header panel-header" hidden>
               <div class="search-results-summary" aria-live="polite">
                 <span id="search-results-count">Results:</span>
               </div>
@@ -83,7 +84,7 @@
           </div>
         </div>
         <div class="resontes-panel-inner" role="presentation">
-          <div id="resontes-header" class="search-results-header resontes-results-header" hidden>
+          <div id="resontes-header" class="search-results-header resontes-results-header panel-header" hidden>
             <div class="search-results-summary" aria-live="polite">
               <span id="resontes-count-label">Resonates</span>
             </div>
@@ -108,7 +109,7 @@
             <div id="description-container">
               <button id="toggle-description-btn" class="btn-secondary" type="button" aria-label="Show track description" title="Show description">Info</button>
               <button id="toggle-tracks-btn" class="btn-secondary" type="button" aria-label="Show album tracks" title="Show tracks">Tracks</button>
-              <div id="tracks-list-container" class="tracks-container"></div>
+              <div id="tracks-list-container" class="tracks-container tracklist"></div>
             </div>
           </div>
           <div class="progress-section">
@@ -214,6 +215,8 @@
   <script src="js/logger.js"></script>
   <script src="js/cover-manager.js"></script>
   <script src="js/cache.js"></script>
+  <script src="js/track-normalizer.js"></script>
+  <script src="js/album-tracks.js"></script>
   <script src="js/loaders.js"></script>
   <script src="js/playback.js"></script>
   <script src="js/search.js"></script>

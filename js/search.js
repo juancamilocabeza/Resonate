@@ -327,7 +327,9 @@ async function enrichSearchResultsWithMetadata(processedResults, query, { signal
     const batch = processedResults.slice(i, i + batchSize);
     const batchPromises = batch.map(async (item) => {
       try {
-        const files = await fetchOptimizedPlayableFiles(item.identifier);
+        const files = (window.AlbumTracks && typeof window.AlbumTracks.getTracks === 'function')
+          ? await window.AlbumTracks.getTracks(item.identifier, { preferCache: true, allowFetch: true })
+          : await fetchOptimizedPlayableFiles(item.identifier);
         const count = Array.isArray(files) ? files.length : 0;
         if (count > 0) {
           const isTrackList = item.isTrackList === true && count <= 1;
@@ -475,6 +477,28 @@ function shouldPreferArchiveProxy() {
   }
 }
 
+function disableArchiveProxyTemporarily(reason) {
+  try {
+    window.__resonateArchiveProxyDisabledUntil = Date.now() + 2 * 60 * 1000;
+    window.__resonateArchiveProxyDisabledReason = reason || 'proxy-unavailable';
+  } catch {}
+}
+
+function isProxyNetworkError(err) {
+  try {
+    const msg = String((err && err.message) ? err.message : err).toLowerCase();
+    return (
+      msg.includes('err_connection_refused') ||
+      msg.includes('connection refused') ||
+      msg.includes('failed to fetch') ||
+      msg.includes('networkerror') ||
+      msg.includes('load failed')
+    );
+  } catch {
+    return false;
+  }
+}
+
 function toArchiveProxyUrl(archiveUrl) {
   try {
     const u = new URL(String(archiveUrl || ''));
@@ -536,15 +560,19 @@ async function fetchArchiveMetadataWithFallback(url, init) {
         return { response: resp, usedProxy: isProxy };
       }
       if (isProxy && resp && resp.status === 404) {
+        disableArchiveProxyTemporarily('proxy-404');
         continue;
       }
 
       if (isProxy && resp && resp.status === 502) {
-        try { window.__resonateArchiveProxyDisabledUntil = Date.now() + 2 * 60 * 1000; } catch {}
+        disableArchiveProxyTemporarily('proxy-502');
       }
     } catch (err) {
       if (isAbortError(err)) throw err;
       lastError = err;
+      if (isProxy && isProxyNetworkError(err)) {
+        disableArchiveProxyTemporarily('proxy-network-error');
+      }
     }
   }
 
@@ -589,17 +617,21 @@ async function fetchArchiveAdvancedSearchWithFallback(url, init) {
       }
       // If proxy endpoint doesn't exist (static server), try direct next.
       if (isProxy && resp && resp.status === 404) {
+        disableArchiveProxyTemporarily('proxy-404');
         continue;
       }
 
       if (isProxy && resp && resp.status === 502) {
-        try { window.__resonateArchiveProxyDisabledUntil = Date.now() + 2 * 60 * 1000; } catch {}
+        disableArchiveProxyTemporarily('proxy-502');
       }
       // Otherwise treat non-OK as a failure and allow fallback.
     } catch (err) {
       if (isAbortError(err)) throw err;
       lastError = err;
       // Continue to next candidate.
+      if (isProxy && isProxyNetworkError(err)) {
+        disableArchiveProxyTemporarily('proxy-network-error');
+      }
     }
   }
 
@@ -650,6 +682,37 @@ function logSearch(message, level = 'debug', category = 'NETWORK') {
       ? console.warn
       : console.log;
   fn(message);
+}
+
+function markResultUnplayable(result) {
+  if (!result) return;
+  try {
+    result.unplayable = true;
+    result.trackCount = 0;
+    result.isAlbum = false;
+  } catch {}
+
+  const identifier = result.identifier || result.id || result.albumId || result.album_id;
+  if (!identifier) return;
+  const safeId = String(identifier);
+
+  try {
+    const cards = document.querySelectorAll(`.content-card[data-album-id="${CSS.escape(safeId)}"]`);
+    cards.forEach((card) => {
+      card.classList.add('unplayable');
+      card.setAttribute('aria-disabled', 'true');
+      card.setAttribute('tabindex', '-1');
+    });
+  } catch {}
+
+  try {
+    const legacy = document.querySelectorAll(`.search-result[data-album-id="${CSS.escape(safeId)}"]`);
+    legacy.forEach((el) => {
+      el.classList.add('unplayable');
+      el.setAttribute('aria-disabled', 'true');
+      el.setAttribute('tabindex', '-1');
+    });
+  } catch {}
 }
 
 function isSearchDebugEnabled() {
@@ -2082,10 +2145,60 @@ function createPlayableFiles(audioFiles, identifier, metadata) {
       album: metaRoot.title || identifier,
       isAlbumTrack: false,
       trackIndex: 0,
-      totalTracks: 1
+      totalTracks: 1,
+      fileName: audioFile.name
     }];
   }
+  try {
+    if (window.TrackNormalizer && typeof window.TrackNormalizer.normalizeTrackList === 'function') {
+      const metaRoot = (metadata && metadata.metadata) ? metadata.metadata : {};
+      const albumTitle = metaRoot && metaRoot.title ? metaRoot.title : identifier;
+      playableFiles = window.TrackNormalizer.normalizeTrackList(playableFiles, {
+        albumId: identifier,
+        albumTitle,
+        totalTracks: Array.isArray(playableFiles) ? playableFiles.length : 0
+      });
+    }
+  } catch {}
   return playableFiles;
+}
+
+async function buildSearchSinglesTrackList(results, { limit = SEARCH_LIMITS.maxResultsToLoad, signal } = {}) {
+  const items = Array.isArray(results) ? results : [];
+  const maxItems = Number.isFinite(limit) ? limit : items.length;
+  const singles = [];
+
+  for (const item of items) {
+    if (singles.length >= maxItems) break;
+    if (!item || item.unplayable === true) continue;
+    const isSingle = (item.trackCount === 1) || (item.isAlbum === false);
+    if (!isSingle) continue;
+
+    try {
+      const files = (window.AlbumTracks && typeof window.AlbumTracks.getTracks === 'function')
+        ? await window.AlbumTracks.getTracks(item.identifier, { preferCache: true, allowFetch: true, signal })
+        : await fetchOptimizedPlayableFiles(item.identifier, { signal });
+      if (!files || !files.length) continue;
+      let track = files[0];
+      if (!track || !track.url) continue;
+      if (item.description && !track._albumDescription) {
+        track._albumDescription = item.description;
+      }
+      if (window.TrackNormalizer && typeof window.TrackNormalizer.normalizeTrack === 'function') {
+        track = window.TrackNormalizer.normalizeTrack(track, {
+          albumId: item.identifier,
+          albumTitle: track.album || item.title || '',
+          trackIndex: 0,
+          totalTracks: 1
+        });
+      }
+      singles.push(track);
+    } catch {
+      // skip invalid single
+    }
+  }
+
+  return singles;
 }
 
 // Abort all active search operations (main search and metadata fetches)
@@ -2178,6 +2291,18 @@ async function playOptimizedSearchResult(result, index, allResults) {
     logSearch('Playback in progress, ignoring click', 'debug', 'PLAYBACK');
     return;
   }
+
+  if (result && (result.unplayable === true || result.trackCount === 0)) {
+    try { markResultUnplayable(result); } catch {}
+    window.showStatus?.('No playable audio files found for this result.', 'warning', 2500);
+    if (allResults && index < allResults.length - 1) {
+      setTimeout(() => {
+        playOptimizedSearchResult(allResults[index + 1], index + 1, allResults);
+      }, 600);
+    }
+    if (window.Loaders && typeof window.Loaders.hideLoader === 'function') window.Loaders.hideLoader();
+    return;
+  }
   
   try {
     if (window.Loaders && typeof window.Loaders.showLoader === 'function') {
@@ -2187,7 +2312,9 @@ async function playOptimizedSearchResult(result, index, allResults) {
     logSearch('Loading track...', 'info', 'UI');
     window.showStatus?.(`Loading track...`, 'info', null, 'normal', true);
     
-    const files = await fetchOptimizedPlayableFiles(result.identifier);
+    const files = (window.AlbumTracks && typeof window.AlbumTracks.getTracks === 'function')
+      ? await window.AlbumTracks.getTracks(result.identifier, { preferCache: true, allowFetch: true })
+      : await fetchOptimizedPlayableFiles(result.identifier);
     
     if (files.length > 0) {
       // Guard: skip if file or URL is missing/invalid
@@ -2237,25 +2364,23 @@ async function playOptimizedSearchResult(result, index, allResults) {
         window.loadPlaybackQueue?.('album', files, 1);
       } else {
         // Es un single: preparar cola solo con singles para reproducción continua
-        const singles = allResults.filter(item => (item.trackCount === 1) || (item.isAlbum === false));
-        // Fetch playable files for all singles and filter out those with invalid URLs
-        const validSingles = [];
-        for (const single of singles) {
-          try {
-            const singleFiles = await fetchOptimizedPlayableFiles(single.identifier);
-            if (singleFiles && singleFiles[0] && singleFiles[0].url && typeof singleFiles[0].url === 'string' && !singleFiles[0].url.includes('/undefined') && singleFiles[0].url.trim() !== '') {
-              validSingles.push(single);
-            }
-          } catch (e) {
-            // skip invalid
-          }
+        const singleTracks = await buildSearchSinglesTrackList(allResults);
+        const singleIndex = singleTracks.findIndex(item => String(item.albumId || item.id || '') === String(result.identifier));
+        if (window.playbackManager && singleTracks.length > 0) {
+          window.playbackManager.setContext('search', singleTracks, singleIndex >= 0 ? singleIndex : 0);
         }
-        const singleIndex = validSingles.findIndex(item => item.identifier === result.identifier);
-        if (window.playbackManager) {
-          window.playbackManager.setContext('search', validSingles, singleIndex);
+        if (singleTracks.length > 0) {
+          window.loadPlaybackQueue?.('search', singleTracks, singleIndex >= 0 ? singleIndex + 1 : 0);
         }
-        window.loadPlaybackQueue?.('search', validSingles, singleIndex + 1);
-        const track = files[0];
+        let track = files[0];
+        if (window.TrackNormalizer && typeof window.TrackNormalizer.normalizeTrack === 'function') {
+          track = window.TrackNormalizer.normalizeTrack(track, {
+            albumId: result.identifier,
+            albumTitle: track && track.album ? track.album : (result.title || ''),
+            trackIndex: 0,
+            totalTracks: 1
+          });
+        }
         if (!track || !track.url || typeof track.url !== 'string' || track.url.includes('/undefined') || track.url.trim() === '') {
           logSearch('Invalid or missing audio URL for single, skipping playback', 'warn', 'PLAYBACK');
           window.showStatus?.('Invalid audio file for this result, skipping.', 'warning', 2000);
@@ -2272,7 +2397,8 @@ async function playOptimizedSearchResult(result, index, allResults) {
     } else {
       // Some Archive items match metadata queries but have no playable audio files.
       // Treat this as a recoverable case: inform the user and try the next result.
-      logSearch('No playable audio files found for this result', 'warn', 'PLAYBACK');
+      try { markResultUnplayable(result); } catch {}
+      logSearch('No playable audio files found for this result', 'info', 'PLAYBACK');
       window.showStatus?.('No playable audio files found for this result. Trying next…', 'warning', 2500);
       if (allResults && index < allResults.length - 1) {
         setTimeout(() => {
@@ -2318,7 +2444,17 @@ async function playSpecificSearchTrack(track, albumId, trackIndex, totalTracks) 
     window.hideSearchResults?.();
     
     if (totalTracks > 1) {
-      const files = await fetchOptimizedPlayableFiles(albumId);
+      let files = (window.AlbumTracks && typeof window.AlbumTracks.getTracks === 'function')
+        ? await window.AlbumTracks.getTracks(albumId, { preferCache: true, allowFetch: true })
+        : await fetchOptimizedPlayableFiles(albumId);
+      try {
+        if (window.TrackNormalizer && typeof window.TrackNormalizer.normalizeTrackList === 'function') {
+          files = window.TrackNormalizer.normalizeTrackList(files, {
+            albumId,
+            totalTracks: Array.isArray(files) ? files.length : 0
+          });
+        }
+      } catch {}
       if (window.playbackManager) window.playbackManager.setAlbumPlaylist(albumId, files, trackIndex);
       const st2 = getSearchStateRef();
       if (st2) {
@@ -2334,7 +2470,17 @@ async function playSpecificSearchTrack(track, albumId, trackIndex, totalTracks) 
     if (window.Loaders) window.Loaders.hideLoader();
     
     // Loader se ocultar� cuando audio.play() inicie
-    await window.playAudioTrackOptimized(track, albumId, trackIndex, totalTracks, true);
+    let normalizedTrack = track;
+    try {
+      if (window.TrackNormalizer && typeof window.TrackNormalizer.normalizeTrack === 'function') {
+        normalizedTrack = window.TrackNormalizer.normalizeTrack(track, {
+          albumId,
+          trackIndex,
+          totalTracks
+        });
+      }
+    } catch {}
+    await window.playAudioTrackOptimized(normalizedTrack, albumId, trackIndex, totalTracks, true);
   } catch (error) {
     logSearch(error, 'error', 'PLAYBACK');
 
@@ -2364,7 +2510,19 @@ async function playAlbumFromResontes(albumId, options = {}) {
       if (!st3.contextRepeatCount) st3.contextRepeatCount = {};
       st3.contextRepeatCount[albumId] = 0;
     }
-    const files = await fetchOptimizedPlayableFiles(albumId);
+    const files = (window.AlbumTracks && typeof window.AlbumTracks.getTracks === 'function')
+      ? await window.AlbumTracks.getTracks(albumId, { preferCache: true, allowFetch: true })
+      : await fetchOptimizedPlayableFiles(albumId);
+    try {
+      if (window.TrackNormalizer && typeof window.TrackNormalizer.normalizeTrackList === 'function') {
+        const albumTitle = (files && files[0] && files[0].album) ? files[0].album : '';
+        files = window.TrackNormalizer.normalizeTrackList(files, {
+          albumId,
+          albumTitle,
+          totalTracks: Array.isArray(files) ? files.length : 0
+        });
+      }
+    } catch {}
     if (files.length > 0) {
       if (window.Loaders && typeof window.Loaders.showLoader === 'function') {
         window.Loaders.showLoader({ type: 'spinner', showProgress: false, context: 'album' });
@@ -2422,14 +2580,26 @@ async function playOptimizedResonte(resonteIndex = 0) {
       }
       logSearch('Loading resonate...', 'info', 'UI');
       window.showStatus?.('Loading resonate...', 'info', null, 'normal', true);
-      const track = {
+      let track = {
         url: resonte.url,
         title: resonte.title || 'Untitled',
         creator: resonte.creator || 'Unknown',
         id: resonte.id,
         isAlbumTrack: resonte.isAlbumTrack || false,
-        albumId: resonte.albumId || resonte.id
+        albumId: resonte.albumId || resonte.id,
+        trackIndex: resonte.trackIndex || 0,
+        totalTracks: resonte.totalTracks || 1,
+        trackId: resonte.trackId || resonte.id
       };
+      try {
+        if (window.TrackNormalizer && typeof window.TrackNormalizer.normalizeTrack === 'function') {
+          track = window.TrackNormalizer.normalizeTrack(track, {
+            albumId: track.albumId,
+            trackIndex: track.trackIndex,
+            totalTracks: track.totalTracks
+          });
+        }
+      } catch {}
       if (!track.url || track.url === '') {
         throw new Error('Audio URL not available in resonte');
       }
@@ -2477,14 +2647,22 @@ async function playRandomSearchResults() {
       window.toggleShuffleFavorites();
     }
 
-    // Continuous search context (no caps)
-    if (window.playbackManager) {
-      window.playbackManager.setContext('search', results, 0);
+    const singleTracks = await buildSearchSinglesTrackList(results);
+    if (!singleTracks.length) {
+      await playOptimizedSearchResult(results[0], 0, results);
+      logSearch('Playing tracks from search', 'info', 'UI');
+      window.showStatus?.(`Playing tracks from search`, 'info', 3000);
+      return;
     }
-    window.loadPlaybackQueue?.('search', results, 0);
 
-    // Start playing from the first result (shuffle will affect the subsequent selection)
-    await playOptimizedSearchResult(results[0], 0, results);
+    // Continuous search context with playable tracks
+    if (window.playbackManager) {
+      window.playbackManager.setContext('search', singleTracks, 0);
+    }
+    window.loadPlaybackQueue?.('search', singleTracks, 0);
+
+    const firstTrack = singleTracks[0];
+    await window.playAudioTrackOptimized(firstTrack, firstTrack.albumId || firstTrack.id, firstTrack.trackIndex || 0, firstTrack.totalTracks || 1, true);
     logSearch('Playing tracks from search', 'info', 'UI');
     window.showStatus?.(`Playing tracks from search`, 'info', 3000);
   } catch (error) {
@@ -2506,7 +2684,9 @@ async function prefetchNextSearchResults(allResults, currentIndex) {
     if (nextResult) {
       try {
         // Just fetch metadata (already cached in enhancedCache)
-        const files = await fetchOptimizedPlayableFiles(nextResult.identifier);
+        const files = (window.AlbumTracks && typeof window.AlbumTracks.getTracks === 'function')
+          ? await window.AlbumTracks.getTracks(nextResult.identifier, { preferCache: true, allowFetch: true })
+          : await fetchOptimizedPlayableFiles(nextResult.identifier);
         if (files && files.length > 0 && typeof audioCache !== 'undefined' && audioCache) {
           // Prefetch only the first track's audio in low-priority queue
           audioCache.prefetchAudio(files[0].url, false).catch(() => {});

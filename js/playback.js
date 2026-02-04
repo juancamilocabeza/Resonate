@@ -1596,7 +1596,7 @@ async function prewarmAudioFromCache(url) {
     const cached = await audioCache.isCached(url);
     if (!cached) return;
     const result = await audioCache.get(url, false);
-    if (!result || !result.blob) return;
+    if (!result || !result.blob || !result.blob.size) return;
     const blobUrl = URL.createObjectURL(result.blob);
     setPreloadedBlobUrl(url, blobUrl);
 
@@ -1674,8 +1674,11 @@ async function loadAudioWithCache(track) {
         updateLoaderProgress(pct);
       }
       
-      const blobUrl = URL.createObjectURL(cacheResult.blob);
-      return blobUrl;
+      if (cacheResult.blob.size > 0) {
+        const blobUrl = URL.createObjectURL(cacheResult.blob);
+        return blobUrl;
+      }
+      logPlayback('warn', 'Cached blob is empty, falling back to network');
     }
 
     // Si no está en caché y no hay conexión, no podemos cargarlo
@@ -1837,6 +1840,14 @@ async function loadAudioWithCache(track) {
       }).catch(error => {
         logPlayback('warn', 'Error saving to cache', error);
       });
+    }
+
+    if (!blob || !blob.size) {
+      if (state.networkOnline) {
+        logPlayback('warn', 'Downloaded blob is empty, falling back to streaming URL');
+        return track.url;
+      }
+      throw new Error('Downloaded blob is empty');
     }
 
     const blobUrl = URL.createObjectURL(blob);
@@ -2432,10 +2443,19 @@ function loadPlaybackQueue(context, items, startIndex = 0) {
     return;
   }
 
+  let normalizedItems = items;
+  try {
+    if (window.TrackNormalizer && typeof window.TrackNormalizer.normalizeTrackList === 'function') {
+      normalizedItems = window.TrackNormalizer.normalizeTrackList(items, {
+        totalTracks: Array.isArray(items) ? items.length : 0
+      });
+    }
+  } catch {}
+
   // Filter out items with invalid or undefined URLs.
   // NOTE: Do not require specific extensions here; archive.org URLs can include query strings
   // (e.g. .mp3?download=1) which would incorrectly fail an endsWith('.mp3') check.
-  const validItems = items.filter(item => item && item.url && typeof item.url === 'string' && !item.url.includes('/undefined') && item.url.trim() !== '');
+  const validItems = normalizedItems.filter(item => item && item.url && typeof item.url === 'string' && !item.url.includes('/undefined') && item.url.trim() !== '');
 
   if (validItems.length === 0) {
     // No valid items to load into FIFO
@@ -2566,6 +2586,23 @@ async function playFromResontesQueue(specificTrack = null) {
 // FUNCIÓN: Reproducir desde cola FIFO de favoritos
 async function playFromFavoritesQueue(specificTrack = null) {
   const resontes = getResontesList();
+  const trackKeyFor = (track) => {
+    try {
+      if (window.TrackNormalizer && typeof window.TrackNormalizer.getTrackKey === 'function') {
+        return window.TrackNormalizer.getTrackKey(track);
+      }
+    } catch {}
+    return track && (track.trackId || track.url || track.id) ? String(track.trackId || track.url || track.id) : '';
+  };
+
+  let favoritesItems = Array.isArray(resontes) ? resontes : [];
+  try {
+    if (window.TrackNormalizer && typeof window.TrackNormalizer.normalizeTrackList === 'function') {
+      favoritesItems = window.TrackNormalizer.normalizeTrackList(favoritesItems, {
+        totalTracks: favoritesItems.length
+      });
+    }
+  } catch {}
 
   // Si la lista de favoritos está vacía, sugerir acción al usuario
   if (state.isLoading || !Array.isArray(resontes) || resontes.length === 0) {
@@ -2611,7 +2648,7 @@ async function playFromFavoritesQueue(specificTrack = null) {
   // Prefetch configurable: precargar varios favoritos si es posible
   const PREFETCH_COUNT = 3; // configurable
   if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.prefetchAudio === 'function') {
-    const toPrefetch = resontes.slice(0, PREFETCH_COUNT).filter(f => f && f.url);
+    const toPrefetch = favoritesItems.slice(0, PREFETCH_COUNT).filter(f => f && f.url);
     toPrefetch.forEach(fav => {
       audioCache.prefetchAudio(fav.url, true).catch((err) => logPlayback('debug', 'Failed to prefetch favorite', err));
     });
@@ -2645,7 +2682,6 @@ async function playFromFavoritesQueue(specificTrack = null) {
 
   try {
     // Ensure favorites context is set for reliable auto-advance/looping
-    const favoritesItems = Array.isArray(resontes) ? resontes : [];
     if (!favoritesItems.length) {
       throw new Error('No resonates available');
     }
@@ -2655,7 +2691,21 @@ async function playFromFavoritesQueue(specificTrack = null) {
     if (specificTrack) {
       logPlayback('debug', `Using specific track: ${specificTrack.title || specificTrack.url || '[unknown]'}`);
       track = specificTrack;
-      const idx = favoritesItems.findIndex(f => (f && track && f.url && track.url && f.url === track.url) || (f && track && f.id && track.id && f.id === track.id));
+      try {
+        if (window.TrackNormalizer && typeof window.TrackNormalizer.normalizeTrack === 'function') {
+          track = window.TrackNormalizer.normalizeTrack(track, {
+            albumId: track.albumId || track.id,
+            trackIndex: track.trackIndex,
+            totalTracks: track.totalTracks
+          });
+        }
+      } catch {}
+      const trackKey = trackKeyFor(track);
+      const idx = favoritesItems.findIndex(f => {
+        const favKey = trackKeyFor(f);
+        if (trackKey && favKey) return favKey === trackKey;
+        return !!(f && track && f.url && track.url && f.url === track.url) || !!(f && track && f.id && track.id && f.id === track.id);
+      });
       const contextIndex = idx >= 0 ? idx : 0;
 
       playbackManager.setContext('favorites', favoritesItems, contextIndex);

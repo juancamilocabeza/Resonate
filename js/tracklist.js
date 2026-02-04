@@ -17,8 +17,35 @@
       tracksContainer.innerHTML = `<div class="search-loading"><div class="loader"></div><span class="loader-text">${message}</span></div>`;
 
       const isPlaybackPanel = !!(tracksContainer && tracksContainer.closest && tracksContainer.closest('#tracks-list-container'));
+      const resonteContext = isResontesContext(tracksContainer);
 
-      const files = await (window.fetchOptimizedPlayableFiles || fetchOptimizedPlayableFiles)(albumId);
+      const seedTracks = tracksContainer && Array.isArray(tracksContainer.__albumTracks)
+        ? tracksContainer.__albumTracks
+        : null;
+
+      let files = [];
+      if (window.AlbumTracks && typeof window.AlbumTracks.getTracks === 'function') {
+        files = await window.AlbumTracks.getTracks(albumId, {
+          sourceTracks: seedTracks,
+          preferCache: true,
+          allowFetch: true,
+          preferFullAlbum: !resonteContext
+        });
+      } else {
+        files = await (window.fetchOptimizedPlayableFiles || fetchOptimizedPlayableFiles)(albumId);
+        try {
+          if (window.TrackNormalizer && typeof window.TrackNormalizer.normalizeTrackList === 'function') {
+            const albumTitle = (files && files[0] && files[0].album) ? files[0].album : '';
+            files = window.TrackNormalizer.normalizeTrackList(files, {
+              albumId,
+              albumTitle,
+              totalTracks: Array.isArray(files) ? files.length : 0
+            });
+          }
+        } catch {}
+      }
+
+      try { tracksContainer.__albumTracks = files; } catch {}
 
       tracksContainer.innerHTML = '';
 
@@ -36,35 +63,13 @@
         } catch {}
       }
 
+      try { tracksContainer.classList.add('tracklist'); } catch {}
+
       const root = document.createElement('div');
-      root.className = 'tlv2';
+      root.className = 'tlv2 tracklist__body';
 
       const list = document.createElement('div');
-      list.className = 'tlv2-list';
-      
-      // Determinar contexto PRIMERO
-      const resonteContext = isResontesContext(tracksContainer);
-      
-      // Garantizar scroll consistente en TODOS los contextos
-      if (isPlaybackPanel) {
-        // Playback panel: El contenedor padre maneja el scroll, pero este debe ser scrollable también
-        list.style.maxHeight = 'none';
-        list.style.overflowY = 'auto';
-        list.style.overflowX = 'hidden';
-        list.style.WebkitOverflowScrolling = 'touch'; // Para iOS
-      } else if (resonteContext) {
-        // Resonates: permitir scroll si hay muchas pistas
-        list.style.maxHeight = '60vh';
-        list.style.overflowY = 'auto';
-        list.style.overflowX = 'hidden';
-        list.style.WebkitOverflowScrolling = 'touch';
-      } else {
-        // Search results: scroll consistente con altura limitada
-        list.style.maxHeight = '60vh';
-        list.style.overflowY = 'auto';
-        list.style.overflowX = 'hidden';
-        list.style.WebkitOverflowScrolling = 'touch';
-      }
+      list.className = 'tlv2-list tracklist__list';
 
       // INTEGRACIÓN: Precachear favoritas o resultados según contexto
       if (typeof window.audioCache === 'object' && window.audioCache) {
@@ -115,14 +120,7 @@
 
         // New layout: <share><resonte><#><title><duration>
         const row = document.createElement('div');
-        row.className = 'tlv2-row';
-        row.style.display = 'grid';
-        row.style.gridTemplateColumns = '40px 40px 40px 1fr 60px';
-        row.style.alignItems = 'center';
-        row.style.gap = '8px';
-        row.style.padding = '6px 4px';
-        row.style.borderRadius = '8px';
-        row.style.height = '44px';
+        row.className = 'tlv2-row track-row';
 
         // Share
         const shareBtn = document.createElement('button');
@@ -166,7 +164,7 @@
 
         // Left-aligned title
         const title = document.createElement('div');
-        title.className = 'tlv2-title';
+        title.className = 'tlv2-title track-row-title';
         title.textContent = track.title || 'Untitled';
         title.style.textAlign = 'left';
         row.appendChild(title);

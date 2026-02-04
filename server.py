@@ -228,12 +228,15 @@ class ResonateHandler(BaseHTTPRequestHandler):
             resp_cm = _open_with_context(ctx)
         except (ssl.SSLError, urllib.error.URLError) as e:
             # Corporate TLS interception can break cert validation for Python.
-            msg = str(e)
-            if allow_insecure or ("CERTIFICATE_VERIFY_FAILED" in msg) or ("certificate" in msg.lower() and "verify" in msg.lower()):
-                used_insecure = True
-                resp_cm = _open_with_context(ssl._create_unverified_context())  # noqa: SLF001
+            if isinstance(e, urllib.error.HTTPError):
+                resp_cm = e
             else:
-                raise
+                msg = str(e)
+                if allow_insecure or ("CERTIFICATE_VERIFY_FAILED" in msg) or ("certificate" in msg.lower() and "verify" in msg.lower()):
+                    used_insecure = True
+                    resp_cm = _open_with_context(ssl._create_unverified_context())  # noqa: SLF001
+                else:
+                    raise
 
         try:
             with resp_cm as resp:

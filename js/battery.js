@@ -35,11 +35,18 @@ const Battery = (() => {
       // Detectar estado inicial
       checkBatteryState();
 
-      // Configurar listeners para cambios
-      batteryManager.addEventListener('levelchange', checkBatteryState);
-      batteryManager.addEventListener('chargingtimechange', checkBatteryState);
-      batteryManager.addEventListener('dischargingtimechange', checkBatteryState);
-      batteryManager.addEventListener('chargingchange', checkBatteryState);
+      // Configurar listeners para cambios (fallbacks incluidos)
+      if (typeof batteryManager.addEventListener === 'function') {
+        batteryManager.addEventListener('levelchange', checkBatteryState);
+        batteryManager.addEventListener('chargingtimechange', checkBatteryState);
+        batteryManager.addEventListener('dischargingtimechange', checkBatteryState);
+        batteryManager.addEventListener('chargingchange', checkBatteryState);
+      } else {
+        batteryManager.onlevelchange = checkBatteryState;
+        batteryManager.onchargingtimechange = checkBatteryState;
+        batteryManager.ondischargingtimechange = checkBatteryState;
+        batteryManager.onchargingchange = checkBatteryState;
+      }
 
       return true;
     } catch (error) {

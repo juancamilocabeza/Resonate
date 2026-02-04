@@ -63,6 +63,8 @@ const STATIC_FILES = [
   '/js/theme.js',
   '/js/logger.js',
   '/js/cache.js',
+  '/js/track-normalizer.js',
+  '/js/album-tracks.js',
   '/js/playback.js',
   '/js/search.js',
   '/js/ui.js',

@@ -281,6 +281,7 @@ class AudioCache {
     this.lastLimitPromptAt = 0;
     this.limitPromptCooldownMs = CACHE_CONSTANTS.AUDIO_CACHE.LIMIT_PROMPT_COOLDOWN_MS;
     this.networkProfile = getNetworkProfile();
+    this.emptyAudioResponses = new Set();
   }
 
   async init() {
@@ -368,12 +369,19 @@ class AudioCache {
         await this.updateMetadata(url, { lastAccessed: nowMs() });
         // Convert Response to blob for playback compatibility
         const blob = await cachedResponse.blob();
+        if (!blob || !blob.size) {
+          logCache('warn', `Cached audio empty, removing: ${url}`);
+          try { await this.remove(url); } catch {}
+          return null;
+        }
         // Verificar integridad si existe hash
         try {
           const meta = await this.getMetadata(url);
           if (meta && meta.hash) {
             const actualHash = await this.computeBlobHash(blob);
-            if (actualHash !== meta.hash) {
+            if (!actualHash) {
+              logCache('warn', `Integridad omitida para ${url}: hash no disponible`);
+            } else if (actualHash !== meta.hash) {
               logCache('error', `Integridad fallida para ${url}: esperado ${meta.hash}, obtenido ${actualHash}`);
               if (typeof window.showStatus === 'function') {
                 window.showStatus('Corrupted audio detected and removed: ' + url, 'error', 8000, 'error');
@@ -432,6 +440,16 @@ class AudioCache {
 
       // Calcular hash para integridad
       const blob = await data.clone().blob();
+      if (!blob || !blob.size) {
+        try {
+          if (!this.emptyAudioResponses.has(url)) {
+            logCache('debug', `Skipping cache for empty audio response: ${url}`);
+            this.emptyAudioResponses.add(url);
+            if (this.emptyAudioResponses.size > 200) this.emptyAudioResponses.clear();
+          }
+        } catch {}
+        return;
+      }
       const hash = await this.computeBlobHash(blob);
 
       // Store in Cache API (best-effort + quota recovery)
@@ -503,8 +521,14 @@ class AudioCache {
         }
 
         logCache('info', `Pre-fetching audio: ${url}`);
-        const response = await fetch(url);
-        if (response && response.ok) {
+        let isCrossOrigin = false;
+        try {
+          const targetUrl = new URL(url, window.location.href);
+          isCrossOrigin = targetUrl.origin !== window.location.origin;
+        } catch {}
+
+        const response = await fetch(url, isCrossOrigin ? { mode: 'no-cors', credentials: 'omit' } : undefined);
+        if (response && (response.ok || response.type === 'opaque')) {
           await this.put(url, response, priority);
         } else {
           throw new Error(`Failed to fetch audio: ${response.status} ${response.statusText}`);
@@ -763,6 +787,10 @@ class AudioCache {
 
   async shouldPrefetch(priority = false) {
     try {
+      if (typeof navigator !== 'undefined' && navigator && navigator.onLine === false) {
+        return false;
+      }
+
       // Avoid aggressive downloads on slow or metered networks unless priority
       const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
       if (connection) {

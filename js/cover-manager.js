@@ -14,6 +14,14 @@
   const coverCache = new Map();
 
   /**
+   * Cache for failed covers to avoid repeated network errors
+   * Key: identifier, Value: timestamp
+   */
+  const failedCoverCache = new Map();
+
+  const FAILED_COVER_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+
+  /**
    * Base URL for Archive.org image service
    */
   const ARCHIVE_IMG_BASE = 'https://archive.org/services/img';
@@ -43,6 +51,19 @@
       return null;
     }
     return `${ARCHIVE_IMG_BASE}/${encodeURIComponent(identifier)}`;
+  }
+
+  function markCoverFailed(identifier) {
+    if (!identifier) return;
+    failedCoverCache.set(String(identifier), Date.now());
+  }
+
+  function wasCoverRecentlyFailed(identifier) {
+    if (!identifier) return false;
+    const key = String(identifier);
+    const ts = failedCoverCache.get(key);
+    if (!ts) return false;
+    return (Date.now() - ts) < FAILED_COVER_TTL_MS;
   }
 
   /**
@@ -172,6 +193,19 @@
       img.loading = 'lazy';
     }
     
+    // If we recently failed this cover, skip the network attempt
+    if (!opts.preload && wasCoverRecentlyFailed(identifier)) {
+      logWarn(`Cover recently failed, using fallback: ${identifier}`);
+      if (opts.showFallback && opts.fallbackType === 'svg') {
+        img.src = generateSvgFallback({
+          identifier,
+          title: opts.fallbackTitle || '',
+          creator: opts.fallbackCreator || ''
+        });
+      }
+      return Promise.resolve(img);
+    }
+
     // Get cover URL
     const coverUrl = getCoverUrl(identifier);
     console.log(`[CoverManager] Loading cover for ${identifier}: ${coverUrl}`);
@@ -198,11 +232,15 @@
     
     // Add error handler for fallback
     img.onerror = () => {
-      console.error(`[CoverManager] Cover load failed: ${identifier}`);
+      if (img.dataset && img.dataset.coverFallbackApplied === '1') return;
+      try { if (img.dataset) img.dataset.coverFallbackApplied = '1'; } catch {}
+
       logWarn(`Cover load failed: ${identifier}`);
+      markCoverFailed(identifier);
       
       // Apply fallback if enabled
       if (opts.showFallback && opts.fallbackType === 'svg') {
+        try { img.onerror = null; } catch {}
         img.src = generateSvgFallback({
           identifier,
           title: opts.fallbackTitle || '',

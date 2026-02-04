@@ -79,6 +79,19 @@ function setFooterHeightVar() {
   }
 }
 
+function setHeaderHeightVar() {
+  try {
+    const header = document.querySelector('header');
+    if (!header) return;
+    const rect = header.getBoundingClientRect();
+    const heightPx = Math.max(0, Math.round((rect && rect.height) || header.offsetHeight || 0));
+    if (!heightPx) return;
+    document.documentElement.style.setProperty('--header-height', `${heightPx}px`);
+  } catch {
+    // ignore
+  }
+}
+
 function setVisualViewportInsetsVars() {
   try {
     const vv = window.visualViewport;
@@ -163,6 +176,7 @@ window.subscribeViewportUpdates = function subscribeViewportUpdates(cb) {
 
 // Set early and keep updated on viewport changes
 setAppViewportHeightVar();
+setHeaderHeightVar();
 setFooterHeightVar();
 setVisualViewportInsetsVars();
 try {
@@ -173,6 +187,7 @@ try {
     requestAnimationFrame(() => {
       scheduled = false;
       setAppViewportHeightVar();
+      setHeaderHeightVar();
       setFooterHeightVar();
       setVisualViewportInsetsVars();
 
@@ -563,7 +578,11 @@ function tryHandleSharedLinkFromUrlString(targetUrlString) {
 
     // Keep the address bar in sync inside the app (best-effort).
     try {
-      window.history.pushState({}, '', url);
+      if (window.state && window.state.userInteracted) {
+        window.history.pushState({}, '', url);
+      } else {
+        window.history.replaceState({}, '', url);
+      }
     } catch {}
 
     safeShowStatus('Opening your shared track…', 'info', 2500);
@@ -1014,28 +1033,40 @@ async function initializeApp() {
     });
   }
 
-  if (elements.favoriteBtn) {
+  if (elements.favoriteBtn && !elements.favoriteBtn.dataset.resonateFavoriteBound) {
+    elements.favoriteBtn.dataset.resonateFavoriteBound = 'true';
     elements.favoriteBtn.addEventListener('click', async () => {
-      if (window.state && window.state.currentTrack && !window.state.currentTrack.url && window.state.currentTrack.id) {
+      const current = (window.state && window.state.currentTrack)
+        ? window.state.currentTrack
+        : ((window.state && window.state.savedPlaybackState && window.state.savedPlaybackState.track)
+          ? window.state.savedPlaybackState.track
+          : null);
+
+      if (!current) {
+        try { safeShowStatus('Play a track to add it to resonates', 'info', 2500); } catch {}
+        return;
+      }
+
+      if (!current.url && elements && elements.audio && elements.audio.currentSrc) {
+        current.url = elements.audio.currentSrc;
+      }
+
+      if (!current.url && current.id) {
         try {
-          const files = await fetchOptimizedPlayableFiles(window.state.currentTrack.id);
+          const files = await fetchOptimizedPlayableFiles(current.id);
           if (files.length > 0) {
-            window.state.currentTrack.url = files[0].url;
-            if (typeof window.toggleResonteTrack === 'function') {
-              window.toggleResonteTrack(window.state.currentTrack);
-            } else {
-              toggleFavorite(window.state.currentTrack);
-            }
+            current.url = files[0].url;
           }
         } catch (error) {
           window.logger.error(`Error fetching URL for favorite: ${error.message}`, 'UI');
-          showStatus("Couldn't add to resonates", 'error');
         }
-      } else if (window.state) {
+      }
+
+      if (current.url) {
         if (typeof window.toggleResonteTrack === 'function') {
-          window.toggleResonteTrack(window.state.currentTrack);
+          window.toggleResonteTrack(current);
         } else {
-          toggleFavorite(window.state.currentTrack);
+          toggleFavorite(current);
         }
       }
     });
@@ -1139,6 +1170,16 @@ async function initializeApp() {
   setupOfflineFunctionality();
 
   // EXPONER FUNCIONES GLOBALES CRÍTICAS (después de setupPWAInstall)
+  let __resonateHistoryEntryAdded = false;
+  const ensureHistoryEntry = () => {
+    if (__resonateHistoryEntryAdded) return;
+    if (!state || !state.userInteracted) return;
+    try {
+      window.history.pushState(null, '', window.location.href);
+      __resonateHistoryEntryAdded = true;
+    } catch {}
+  };
+
   window.addEventListener('popstate', (e) => {
     // Check if search results or favorites are visible
     const searchVisible = window.elements && window.elements.searchResults &&
@@ -1157,14 +1198,22 @@ async function initializeApp() {
       }
       if (favoritesVisible) window.hideFavoritesList();
       // Keep the user on the current page after closing overlays.
-      window.history.pushState(null, '', window.location.href);
+      if (__resonateHistoryEntryAdded && state && state.userInteracted) {
+        try { window.history.pushState(null, '', window.location.href); } catch {}
+      }
       return;
     }
     // Otherwise allow normal back/exit (lighter behavior for PWA)
   });
 
-  // One state entry so back can close overlays; we no longer hard-block exit.
-  window.history.pushState(null, '', window.location.href);
+  // Add a single history entry only after user interaction.
+  const onFirstInteraction = () => {
+    try { state.userInteracted = true; } catch {}
+    ensureHistoryEntry();
+  };
+  document.addEventListener('click', onFirstInteraction, { once: true, passive: true });
+  document.addEventListener('keydown', onFirstInteraction, { once: true, passive: true });
+  document.addEventListener('touchstart', onFirstInteraction, { once: true, passive: true });
 
   // Si la app está ejecutándose como PWA, eliminar el splash y mostrar la app inmediatamente
   if (isRunningAsPWA()) {
