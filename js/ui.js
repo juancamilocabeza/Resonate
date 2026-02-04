@@ -1652,7 +1652,7 @@ function updateDescriptionUI(track) {
                 <span class="tracks-overlay-count">Tracks</span>
               </div>
               <div class="search-results-controls" aria-label="Tracks controls">
-                <button class="search-control-btn tracks-overlay-close" type="button" aria-label="Close tracks" title="Close">✕</button>
+                <button class="search-clear-btn tracks-overlay-close" type="button" aria-label="Close tracks" title="Close">✕</button>
               </div>
             </div>
             <div class="tracklist__list tracks-overlay-list" role="list" aria-label="Album tracks"></div>

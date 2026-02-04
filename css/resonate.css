@@ -89,7 +89,7 @@
   width: 100%;
   max-height: min(60vh, 520px);
   margin-top: 10px;
-  padding: 12px 10px 10px;
+  padding: 0;
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
@@ -97,14 +97,14 @@
 }
 
 .tracklist .search-results-header {
-  margin: 0 0 12px 0;
+  margin: 0;
 }
 
 .tracklist .tracks-overlay-count {
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  color: var(--fg);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--muted);
 }
 
 .tracklist .tracks-overlay-list {
@@ -133,6 +133,23 @@
 }
 
 .track-row:hover {
+  background: var(--surface-hover, rgba(var(--primary-rgb), 0.12));
+}
+
+/* In-player Tracks overlay: match track cards styling */
+#tracks-list-container .tlv2-row,
+#tracks-list-container .track-row {
+  background: var(--surface-2, rgba(255,255,255,0.04));
+  border: 1px solid var(--surface-border-subtle, rgba(255,255,255,0.12));
+  box-shadow: inset 0 0 0 1px rgba(var(--primary-rgb), 0.08);
+  border-radius: 10px;
+  padding: 10px 8px;
+}
+
+#tracks-list-container .tlv2-row:hover,
+#tracks-list-container .tlv2-row:focus-visible,
+#tracks-list-container .track-row:hover,
+#tracks-list-container .track-row:focus-visible {
   background: var(--surface-hover, rgba(var(--primary-rgb), 0.12));
 }
 
@@ -234,29 +251,6 @@ body.tracks-open #tracks-list-container .tlv2-list {
   -webkit-overflow-scrolling: touch;
 }
 
-/* Tracks overlay: close button should match Search close look */
-body.tracks-open #tracks-list-container .tracks-overlay-close.search-control-btn {
-  height: 48px;
-  min-width: 48px;
-  border-radius: 8px;
-  padding: 10px 14px;
-  background: var(--btn);
-  border: none;
-  color: var(--accent);
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1;
-  transition: background-color 0.2s, transform 0.15s;
-}
-
-body.tracks-open #tracks-list-container .tracks-overlay-close.search-control-btn:hover {
-  background: var(--card);
-}
-
-body.tracks-open #tracks-list-container .tracks-overlay-close.search-control-btn:active {
-  background: var(--card);
-  transform: scale(0.95);
-}
 /* === Estilos para el listado de pistas del álbum actual === */
 
 .album-tracklist-container {
