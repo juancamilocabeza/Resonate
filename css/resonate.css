@@ -912,13 +912,14 @@ body {
 
 /* ===== HEADER & NAVIGATION ===== */
 header {
-  --header-status-slot: 64px;
+  --header-status-slot: 52px;
   flex-shrink: 0;
   display: grid;
   grid-template-columns: 1fr auto var(--header-status-slot);
   align-items: center;
   align-content: center;
   grid-auto-rows: 1fr;
+  column-gap: 0;
   position: sticky;
   top: 0;
   background: var(--bg);
@@ -1631,7 +1632,7 @@ h3 {
     gap: clamp(6px, 2vw, 12px);
   }
   header {
-    --header-status-slot: 56px;
+    --header-status-slot: 44px;
   }
   .offline-indicator,
   .network-indicator {
