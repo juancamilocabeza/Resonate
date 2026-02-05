@@ -297,10 +297,33 @@ function requestClearLegacySwAudioCacheOnce() {
     const swAudioCacheCleared = localStorage.getItem('resonate_sw_audio_cache_cleared');
     if (swAudioCacheCleared) return;
 
-    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-      navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_AUDIO_CACHE' });
-      window.logger?.info('Requested SW to clear old audio cache', 'INIT');
-      localStorage.setItem('resonate_sw_audio_cache_cleared', 'true');
+    const trySend = () => {
+      if (localStorage.getItem('resonate_sw_audio_cache_cleared')) return true;
+      if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_AUDIO_CACHE' });
+        window.logger?.info('Requested SW to clear old audio cache', 'INIT');
+        localStorage.setItem('resonate_sw_audio_cache_cleared', 'true');
+        return true;
+      }
+      return false;
+    };
+
+    if (trySend()) return;
+
+    if (navigator.serviceWorker) {
+      try {
+        navigator.serviceWorker.ready
+          .then(() => {
+            trySend();
+          })
+          .catch(() => {});
+      } catch {}
+
+      try {
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          trySend();
+        }, { once: true });
+      } catch {}
     }
   } catch (error) {
     window.logger?.warn(`Failed to clear SW cache: ${error.message}`, 'INIT');

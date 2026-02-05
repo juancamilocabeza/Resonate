@@ -484,72 +484,65 @@ self.addEventListener('fetch', (event) => {
   // scripts (e.g. analytics) which can otherwise show confusing 503 errors.
   if (!isSameOrigin(url) && !isArchiveOrg(url)) {
     return;
-  }Handle Archive.org cover images with caching strategy
+  }
+
+  // Handle Archive.org cover images with caching strategy
   if (isCoverRequest(url)) {
     event.respondWith(
       (async () => {
+        let cachedResponse = null;
         try {
-          // Cache-first strategy with 7-day TTL
           const cache = await caches.open(CACHE_NAMES.COVERS);
-          const cachedResponse = await cache.match(event.request);
-          
+          cachedResponse = await cache.match(event.request);
           if (cachedResponse) {
-            // Check cache age
             const dateHeader = cachedResponse.headers.get('sw-cached-date');
-            if (dateHeader) {
-              const cacheAge = Date.now() - parseInt(dateHeader, 10);
-              const sevenDays = 7 * 24 * 60 * 60 * 1000;
-              
-              // If cache is fresh, return it
-              if (cacheAge < sevenDays) {
-                console.log('SW: Serving cached cover:', url.pathname);
-                return cachedResponse;
-              }
+            const cacheAge = dateHeader ? (Date.now() - parseInt(dateHeader, 10)) : Number.POSITIVE_INFINITY;
+            const sevenDays = 7 * 24 * 60 * 60 * 1000;
+            if (cacheAge < sevenDays) {
+              console.log('SW: Serving cached cover:', url.pathname);
+              return cachedResponse;
             }
-          }
-          
-          // Fetch from network
-          const networkResponse = await fetch(event.request);
-          
-          if (networkResponse && networkResponse.ok) {
-            // Clone response and add cache date header
-            const headers = new Headers(networkResponse.headers);
-            // Do not intercept Archive.org cover images; let the browser handle them directly.
-            if (isCoverRequest(url)) {
-              return;
-            }
-                    await cache.put(shellPath, networkShell.clone());
-                  }
-                } catch {
-                  // ignore background update failures
-                }
-              })()
-            );
-
-            return cachedShell;
           }
         } catch {
           // ignore cache lookup failures
         }
 
         try {
-          const networkShell = await fetch(shellPath, { cache: 'no-cache' });
-          if (networkShell && networkShell.ok) {
+          const networkResponse = await fetch(event.request);
+          if (networkResponse && networkResponse.ok) {
             try {
-              const cache = await caches.open(CACHE_NAMES.STATIC);
-              await cache.put(shellPath, networkShell.clone());
+              const responseClone = networkResponse.clone();
+              const headers = new Headers(responseClone.headers);
+              headers.set('sw-cached-date', String(Date.now()));
+              const body = await responseClone.blob();
+              const cached = new Response(body, {
+                status: responseClone.status,
+                statusText: responseClone.statusText,
+                headers
+              });
+
+              const cache = await caches.open(CACHE_NAMES.COVERS);
+              await cache.put(event.request, cached.clone());
+              await trimCache(CACHE_NAMES.COVERS, RUNTIME_CACHE_LIMITS.COVERS_MAX_ENTRIES);
+              return cached;
             } catch {
-              // ignore cache put failures
+              // Fall back to network response if caching fails
+              return networkResponse;
             }
-            return networkShell;
           }
+          if (cachedResponse) return cachedResponse;
+          return networkResponse;
         } catch {
-          // ignore
+          if (cachedResponse) return cachedResponse;
+          return new Response('Cover not available offline', { status: 503, headers: { 'Content-Type': 'text/plain' } });
         }
+      })()
+    );
+    return;
+  }
 
-        return offlineHtmlResponse('Offline', 'Unable to load app', 'Please check your connection and reload.');
-      }
-
+  event.respondWith(
+    (async () => {
       // CACHE-FIRST strategy for our static assets
       if (isStaticAsset(url)) {
         const path = url.pathname;
@@ -606,6 +599,7 @@ self.addEventListener('fetch', (event) => {
 const AUDIO_DB_NAME = 'ResonateAudioCache';
 const AUDIO_DB_VERSION = 9;
 const FAILED_STORE = 'failedDownloads';
+const METADATA_STORE = 'audioMetadata';
 
 function openAudioDb() {
   return new Promise((resolve, reject) => {
@@ -619,6 +613,53 @@ function openAudioDb() {
     };
     req.onsuccess = () => resolve(req.result);
   });
+}
+
+async function storeRecoveredMetadata(entry, response) {
+  try {
+    const db = await openAudioDb();
+    if (!db.objectStoreNames.contains(METADATA_STORE)) {
+      db.close();
+      return;
+    }
+
+    let size = 0;
+    try {
+      const clone = response.clone();
+      const buffer = await clone.arrayBuffer();
+      size = buffer.byteLength || 0;
+    } catch {
+      const len = response && response.headers ? response.headers.get('content-length') : null;
+      size = len ? parseInt(len, 10) || 0 : 0;
+    }
+
+    await new Promise((resolve) => {
+      try {
+        const tx = db.transaction([METADATA_STORE], 'readwrite');
+        const store = tx.objectStore(METADATA_STORE);
+        const payload = {
+          url: entry.url,
+          size,
+          lastAccessed: Date.now(),
+          cachedAt: Date.now(),
+          isFavorite: !!entry.isFavorite,
+          isResonte: !!entry.isFavorite,
+          trackId: entry.trackId,
+          albumId: entry.albumId,
+          downloadOffline: entry.downloadOffline === true
+        };
+        store.put(payload);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => resolve();
+      } catch {
+        resolve();
+      }
+    });
+
+    db.close();
+  } catch {
+    // ignore metadata reconciliation failures
+  }
 }
 
 async function withStore(mode, fn) {
@@ -668,6 +709,7 @@ async function processFailedDownloads() {
         const response = await fetch(item.url, { mode: 'cors' });
         if (!response || !response.ok) throw new Error(`Retry failed: ${response && response.status}`);
         await cache.put(item.url, response.clone());
+        await storeRecoveredMetadata(item, response);
         await deleteFailedDownload(item.url);
         console.log('SW: recovered failed download', item.url);
       } catch (err) {

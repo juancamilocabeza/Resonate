@@ -5046,6 +5046,7 @@ function attachNetworkInformationListener() {
 
 // Connectivity monitoring
 let __resonateConnectivityHandlersAttached = false;
+let __resonateOfflineHintsShown = false;
 
 function __resonateSetSearchOnlineState(isOnline) {
   // Keep search UX consistent with connectivity changes
@@ -5067,6 +5068,7 @@ function __resonateAttachConnectivityHandlersOnce() {
   window.addEventListener('online', () => {
     state.networkOnline = true;
     showStatus('Connection is restored', 'info', 2000);
+    __resonateOfflineHintsShown = false;
 
     __resonateSetSearchOnlineState(true);
     updateOfflineIndicator();
@@ -5099,8 +5101,11 @@ function __resonateAttachConnectivityHandlersOnce() {
       showStatus('Using cached version of track', 'info', 2000);
     }
 
-    // Show offline-specific UI hints
-    showOfflineHints();
+    // Show offline-specific UI hints (once per offline session)
+    if (!__resonateOfflineHintsShown) {
+      __resonateOfflineHintsShown = true;
+      showOfflineHints();
+    }
   });
 }
 
@@ -5234,16 +5239,11 @@ function createNetworkIndicator() {
   indicator.setAttribute('aria-live', 'polite');
   indicator.textContent = deriveNetworkLabel();
 
-  const headerControls = document.querySelector('.header-controls');
-  if (headerControls) {
-    headerControls.appendChild(indicator);
+  const header = document.querySelector('header');
+  if (header) {
+    header.appendChild(indicator);
   } else {
-    const header = document.querySelector('header');
-    if (header) {
-      header.appendChild(indicator);
-    } else {
-      document.body.insertBefore(indicator, document.body.firstChild);
-    }
+    document.body.insertBefore(indicator, document.body.firstChild);
   }
 }
 
@@ -5252,12 +5252,13 @@ function createOfflineIndicator() {
   const indicator = document.createElement('div');
   indicator.id = 'offline-indicator';
   indicator.className = 'offline-indicator hidden';
+  indicator.setAttribute('role', 'status');
+  indicator.setAttribute('aria-live', 'polite');
   indicator.innerHTML = `
     <div class="offline-icon"></div>
     <div class="offline-text">No connection</div>
   `;
 
-  // Add to header or main container
   const header = document.querySelector('header');
   if (header) {
     header.appendChild(indicator);
@@ -5274,7 +5275,7 @@ function updateOfflineIndicator() {
   if (!state.networkOnline) {
     indicator.classList.remove('hidden');
     indicator.classList.add('active');
-    indicator.querySelector('.offline-text').textContent = 'No connection';
+    indicator.querySelector('.offline-text').textContent = 'Offline';
 
     // Add offline class to body for styling
     document.body.classList.add('offline-mode');
@@ -5289,7 +5290,8 @@ function updateOfflineIndicator() {
 
 // Show offline-specific hints and information
 function showOfflineHints() {
-  const favoritesCount = state.favorites ? state.favorites.length : 0;
+  const resontes = state.resontes || state.favorites || [];
+  const favoritesCount = Array.isArray(resontes) ? resontes.length : 0;
 
   if (favoritesCount > 0) {
     showStatus('You have resonates available offline', 'info', 5000);

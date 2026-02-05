@@ -912,10 +912,13 @@ body {
 
 /* ===== HEADER & NAVIGATION ===== */
 header {
+  --header-status-slot: 64px;
   flex-shrink: 0;
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr auto var(--header-status-slot);
   align-items: center;
+  align-content: center;
+  grid-auto-rows: 1fr;
   position: sticky;
   top: 0;
   background: var(--bg);
@@ -931,20 +934,64 @@ header {
 /* index.html: remove inline styles */
 #app-title {
   cursor: pointer;
+  flex: 1 1 auto;
+  min-width: 0;
+  grid-column: 1;
+  grid-row: 1;
 }
 
 /* Header Controls Container */
 .header-controls {
   display: flex;
   align-items: center;
-  gap: 28px;
+  gap: 14px;
   flex-shrink: 0;
-  max-width: 360px;
+  max-width: none;
+  margin-left: auto;
+  justify-content: flex-end;
+  grid-column: 2;
+  grid-row: 1;
+}
+
+/* Header-only button polish */
+.header-controls .theme-selector {
+  background: rgba(var(--primary-rgb), 0.08);
+  border: 1px solid rgba(var(--primary-rgb), 0.22);
+  border-radius: 999px;
+  padding: 0 8px;
+  gap: 6px;
+  height: 40px;
+  min-height: 40px;
+  width: 64px;
+  min-width: 64px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+
+.header-controls #resontes-toggle .resontes-label {
+  display: none;
+}
+
+.header-controls .theme-selector:hover {
+  background: rgba(var(--primary-rgb), 0.16);
+  border-color: rgba(var(--primary-rgb), 0.32);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+}
+
+.header-controls .theme-selector:active {
+  transform: translateY(1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
 }
 
 @media (max-width: 480px) {
   .header-controls {
-    gap: 18px;
+    gap: 10px;
+  }
+  .header-controls .theme-selector {
+    height: 36px;
+    min-height: 36px;
+    width: 52px;
+    min-width: 52px;
+    padding: 0 6px;
   }
   header {
     padding: 6px var(--spacing-sm);
@@ -1008,17 +1055,29 @@ header {
 .offline-indicator {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  font-weight: 500;
+  height: 40px;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
   color: var(--error);
-  position: absolute;
-  right: 16px;
-  top: 50%;
-  transform: translateY(-50%);
+  position: static;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  border: none;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  width: 100%;
+  justify-content: flex-end;
+  min-width: var(--header-status-slot);
+  text-align: right;
   opacity: 0;
   visibility: hidden;
   transition: var(--transition-all-slow);
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
 }
 
 .offline-indicator.active {
@@ -1032,8 +1091,9 @@ header {
 }
 
 .offline-icon {
-  font-size: 14px;
+  display: none;
 }
+
 
 .offline-text {
   white-space: nowrap;
@@ -1043,12 +1103,34 @@ header {
 .network-indicator {
   display: inline-flex;
   align-items: center;
-  font-size: 12px;
-  font-weight: 500;
+  align-self: center;
+  height: 40px;
+  font-size: 10px;
+  font-weight: 700;
   color: var(--muted);
-  letter-spacing: -0.1px;
+  letter-spacing: 0.08em;
   white-space: nowrap;
-  line-height: 1.3;
+  line-height: 1;
+  position: static;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  border: none;
+  width: 100%;
+  min-width: 0;
+  text-align: right;
+  justify-content: flex-end;
+  opacity: 0.7;
+  pointer-events: none;
+  text-transform: uppercase;
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+}
+
+
+body.offline-mode .network-indicator {
+  display: none;
 }
 
 .offline-mode .app {
@@ -1547,6 +1629,13 @@ h3 {
 @media (max-width: 400px) {
   .main-player-section .controls {
     gap: clamp(6px, 2vw, 12px);
+  }
+  header {
+    --header-status-slot: 56px;
+  }
+  .offline-indicator,
+  .network-indicator {
+    height: 36px;
   }
   
   .progress-section {
@@ -2183,6 +2272,11 @@ select:focus {
 @media (max-width: 520px) {
   .resontes-label {
     display: none;
+  }
+  .offline-indicator {
+    gap: 6px;
+    padding: 3px 6px;
+    font-size: 11px;
   }
 }
 
@@ -4138,7 +4232,7 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
   }
   
   .header-controls {
-    gap: var(--spacing-sm);
+    gap: 12px;
   }
   
   /* Improve button sizing on mobile */

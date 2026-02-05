@@ -17,7 +17,7 @@
       indicator.classList.remove('hidden');
       indicator.classList.add('active');
       const textEl = indicator.querySelector('.offline-text');
-      if (textEl) textEl.textContent = 'No connection';
+      if (textEl) textEl.textContent = 'Offline';
       document.body.classList.add('offline-mode');
       return;
     }
@@ -27,31 +27,36 @@
     document.body.classList.remove('offline-mode');
   }
 
-  // Override the initial check to not show indicator on load
-  document.addEventListener('DOMContentLoaded', function () {
-    setTimeout(function () {
-      setIndicatorOffline(false);
+  function initFallbackIndicator() {
+    if (window.__resonateConnectivityStatusHandled) return;
+
+    const updateNow = () => {
+      const isOffline = typeof navigator !== 'undefined' && navigator && navigator.onLine === false;
+      setIndicatorOffline(isOffline);
       if (getIndicator()) {
-        console.log('Offline indicator fixed - hidden on load');
+        console.log('Offline indicator initialized');
       }
-    }, 100);
-  });
+    };
 
-  // Listen for online/offline events for indicators only
-  window.addEventListener('online', function () {
-    console.log('Network: Online event detected');
+    updateNow();
 
-    // Avoid duplicate toasts if UI layer handles connectivity status
-    if (!window.__resonateConnectivityStatusHandled && typeof showStatus === 'function') {
-      showStatus('Your connection is back online', 'info', 2000);
-    }
+    // Listen for online/offline events for indicators only
+    window.addEventListener('online', function () {
+      setIndicatorOffline(false);
+    });
 
-    setIndicatorOffline(false);
-  });
+    window.addEventListener('offline', function () {
+      setIndicatorOffline(true);
+    });
+  }
 
-  window.addEventListener('offline', function () {
-    setIndicatorOffline(true);
-  });
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () {
+      setTimeout(initFallbackIndicator, 100);
+    });
+  } else {
+    setTimeout(initFallbackIndicator, 0);
+  }
 
   console.log('Offline fix loaded');
 })();

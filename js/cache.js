@@ -527,8 +527,8 @@ class AudioCache {
           isCrossOrigin = targetUrl.origin !== window.location.origin;
         } catch {}
 
-        const response = await fetch(url, isCrossOrigin ? { mode: 'no-cors', credentials: 'omit' } : undefined);
-        if (response && (response.ok || response.type === 'opaque')) {
+        const response = await fetch(url, isCrossOrigin ? { mode: 'cors', credentials: 'omit' } : undefined);
+        if (response && response.ok) {
           await this.put(url, response, priority);
         } else {
           throw new Error(`Failed to fetch audio: ${response.status} ${response.statusText}`);
