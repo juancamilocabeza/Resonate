@@ -14,6 +14,8 @@ try {
   }
 } catch {}
 
+window.RES_SPRITE_URL = window.RES_SPRITE_URL || '/icons/sprite.svg?v=2';
+
 // Refresca todos los iconos de resonte en todos los listados
 window.resonateLogoSVG = `<svg class="resonate-icon" width="24" height="24" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false"><circle cx="256" cy="256" r="200" stroke="currentColor" stroke-width="32" fill="none"></circle><path d="M96 256 C140 256, 180 180, 220 180 C260 180, 300 332, 340 332 C380 332, 416 256, 416 256" stroke="currentColor" stroke-width="32" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>`;
 

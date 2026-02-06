@@ -15,6 +15,7 @@
     'night': 'Night',
     'energy-saver': 'Eco'
   };
+  const SPRITE_URL = '/icons/sprite.svg?v=2';
   let themeToggleEl = null;
   
   // Get saved theme or use default
@@ -123,7 +124,7 @@
         : theme === 'energy-saver'
           ? 'theme-leaf'
           : 'theme-moon';
-      useEl.setAttribute('href', `/icons/sprite.svg#${iconId}`);
+      useEl.setAttribute('href', `${SPRITE_URL}#${iconId}`);
     }
 
     let labelEl = themeToggleEl.querySelector('.theme-label');
