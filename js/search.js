@@ -2295,12 +2295,15 @@ async function playOptimizedSearchResult(result, index, allResults) {
   if (result && (result.unplayable === true || result.trackCount === 0)) {
     try { markResultUnplayable(result); } catch {}
     window.showStatus?.('No playable audio files found for this result.', 'warning', 2500);
-    if (allResults && index < allResults.length - 1) {
+    const hasNext = allResults && index < allResults.length - 1;
+    if (hasNext) {
       setTimeout(() => {
         playOptimizedSearchResult(allResults[index + 1], index + 1, allResults);
       }, 600);
     }
-    if (window.Loaders && typeof window.Loaders.hideLoader === 'function') window.Loaders.hideLoader();
+    if (!hasNext && window.Loaders && typeof window.Loaders.hideLoader === 'function') {
+      window.Loaders.hideLoader();
+    }
     return;
   }
   
@@ -2323,12 +2326,15 @@ async function playOptimizedSearchResult(result, index, allResults) {
         logSearch('Invalid or missing audio URL in search result, skipping playback', 'warn', 'PLAYBACK');
         window.showStatus?.('Invalid audio file for this result, skipping.', 'warning', 2000);
         // Try next result if available
-        if (allResults && index < allResults.length - 1) {
+        const hasNext = allResults && index < allResults.length - 1;
+        if (hasNext) {
           setTimeout(() => {
             playOptimizedSearchResult(allResults[index + 1], index + 1, allResults);
           }, 1000);
         }
-        if (window.Loaders && typeof window.Loaders.hideLoader === 'function') window.Loaders.hideLoader();
+        if (!hasNext && window.Loaders && typeof window.Loaders.hideLoader === 'function') {
+          window.Loaders.hideLoader();
+        }
         return;
       }
       // Ocultar listas después de obtener los archivos pero antes de reproducir
@@ -2384,12 +2390,15 @@ async function playOptimizedSearchResult(result, index, allResults) {
         if (!track || !track.url || typeof track.url !== 'string' || track.url.includes('/undefined') || track.url.trim() === '') {
           logSearch('Invalid or missing audio URL for single, skipping playback', 'warn', 'PLAYBACK');
           window.showStatus?.('Invalid audio file for this result, skipping.', 'warning', 2000);
-          if (allResults && index < allResults.length - 1) {
+          const hasNext = allResults && index < allResults.length - 1;
+          if (hasNext) {
             setTimeout(() => {
               playOptimizedSearchResult(allResults[index + 1], index + 1, allResults);
             }, 1000);
           }
-          if (window.Loaders && typeof window.Loaders.hideLoader === 'function') window.Loaders.hideLoader();
+          if (!hasNext && window.Loaders && typeof window.Loaders.hideLoader === 'function') {
+            window.Loaders.hideLoader();
+          }
           return;
         }
         await window.playAudioTrackOptimized(track, result.identifier, 0, 1, true);
@@ -2400,25 +2409,31 @@ async function playOptimizedSearchResult(result, index, allResults) {
       try { markResultUnplayable(result); } catch {}
       logSearch('No playable audio files found for this result', 'info', 'PLAYBACK');
       window.showStatus?.('No playable audio files found for this result. Trying next…', 'warning', 2500);
-      if (allResults && index < allResults.length - 1) {
+      const hasNext = allResults && index < allResults.length - 1;
+      if (hasNext) {
         setTimeout(() => {
           playOptimizedSearchResult(allResults[index + 1], index + 1, allResults);
         }, 1000);
       }
-      if (window.Loaders && typeof window.Loaders.hideLoader === 'function') window.Loaders.hideLoader();
+      if (!hasNext && window.Loaders && typeof window.Loaders.hideLoader === 'function') {
+        window.Loaders.hideLoader();
+      }
       return;
     }
   } catch (error) {
-    if (window.Loaders && typeof window.Loaders.hideLoader === 'function') window.Loaders.hideLoader();
     logSearch(error, 'error', 'PLAYBACK');
 
-    if (allResults && index < allResults.length - 1) {
+    const hasNext = allResults && index < allResults.length - 1;
+    if (hasNext) {
       logSearch('Issue with this track, trying next', 'warn', 'UI');
       window.showStatus?.(`Issue with this track, trying next`, 'error', 1500);
       setTimeout(() => {
         playOptimizedSearchResult(allResults[index + 1], index + 1, allResults);
       }, 1500);
     } else {
+      if (window.Loaders && typeof window.Loaders.hideLoader === 'function') {
+        window.Loaders.hideLoader();
+      }
       // Mensaje claro y sugerencia al usuario
       logSearch('Playback finished or unrecoverable error', 'error', 'UI');
       window.showStatus?.(
@@ -2467,9 +2482,7 @@ async function playSpecificSearchTrack(track, albumId, trackIndex, totalTracks) 
       // Start FIFO after the selected track to avoid replaying it on auto-advance.
       window.loadPlaybackQueue?.('album', files, trackIndex + 1);
     }
-    if (window.Loaders) window.Loaders.hideLoader();
-    
-    // Loader se ocultar� cuando audio.play() inicie
+    // Loader se oculta cuando audio.play() inicia
     let normalizedTrack = track;
     try {
       if (window.TrackNormalizer && typeof window.TrackNormalizer.normalizeTrack === 'function') {
@@ -2603,7 +2616,7 @@ async function playOptimizedResonte(resonteIndex = 0) {
       if (!track.url || track.url === '') {
         throw new Error('Audio URL not available in resonte');
       }
-      if (window.Loaders && typeof window.Loaders.hideLoader === 'function') window.Loaders.hideLoader();
+      // Loader se oculta cuando audio.play() inicia
       // CHECK IF PRELOADED RESONTES CACHE
       const resontesQueue = typeof window.audioCache !== 'undefined' && window.audioCache ? window.audioCache.getResontesQueue() : [];
       const isPreloaded = resontesQueue.includes(track.url);
@@ -2617,10 +2630,8 @@ async function playOptimizedResonte(resonteIndex = 0) {
         logSearch("Resonate isn't available offline. Skipping it", 'warn', 'UI');
         window.showStatus?.("Resonate isn't available offline. Skipping it", 'error', 2000);
         const nextIndex = (actualIndex + 1) % window.state.resontes.length;
-        if (window.Loaders && typeof window.Loaders.hideLoader === 'function') window.Loaders.hideLoader();
         return playOptimizedResonte(nextIndex);
       }
-      if (window.Loaders && typeof window.Loaders.hideLoader === 'function') window.Loaders.hideLoader();
       await window.playAudioTrackOptimized(track, resonte.id, resonte.trackIndex, resonte.totalTracks, true);
       if (typeof window.updateShuffleButton === 'function') window.updateShuffleButton();
     } catch (error) {
