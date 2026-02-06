@@ -53,6 +53,9 @@ const Loaders = (() => {
   };
 
   let activeLoader = null;
+  let activeLoaderShownAt = 0;
+  let hideTimer = null;
+  const MIN_VISIBLE_MS = 220;
 
   // Loader explanations by context
   const loaderExplanations = {
@@ -68,15 +71,26 @@ const Loaders = (() => {
   };
 
   function showLoader({ type = "spinner", target = document.body, progress = 0, showProgress = false, context = "default" } = {}) {
+    if (hideTimer) {
+      clearTimeout(hideTimer);
+      hideTimer = null;
+    }
+    activeLoaderShownAt = Date.now();
+
     // If a loader is already active in the same target, reuse it to avoid flicker.
     if (activeLoader && activeLoader.parentElement === target) {
       try {
         activeLoader._showProgress = showProgress;
         const progressEl = activeLoader._progressEl;
         const messageEl = activeLoader._messageEl;
+        const shouldShowMessage = showProgress || context === 'search' || context === 'album';
 
         if (progressEl) progressEl.style.display = showProgress ? '' : 'none';
-        if (messageEl) messageEl.style.display = showProgress ? '' : 'none';
+        if (messageEl) {
+          const explanation = loaderExplanations[context] || loaderExplanations.default;
+          messageEl.textContent = explanation;
+          messageEl.style.display = shouldShowMessage ? '' : 'none';
+        }
       } catch {
         // best-effort
       }
@@ -91,16 +105,16 @@ const Loaders = (() => {
     overlay._progressEl = progressEl;
     overlay._messageEl = messageEl;
     overlay._showProgress = showProgress;
+    overlay._context = context;
 
     // Hide progress if showProgress is false
     if (!showProgress && progressEl) {
       progressEl.style.display = 'none';
     }
-    // Always show message for search context
-    if (context === 'search' && messageEl) {
-      messageEl.style.display = '';
-    } else if (!showProgress && messageEl) {
-      messageEl.style.display = 'none';
+    // Always show message for search + album contexts
+    const shouldShowMessage = showProgress || context === 'search' || context === 'album';
+    if (messageEl) {
+      messageEl.style.display = shouldShowMessage ? '' : 'none';
     }
 
     target.appendChild(overlay);
@@ -110,10 +124,23 @@ const Loaders = (() => {
   }
 
   function hideLoader() {
-    if (activeLoader) {
-      activeLoader.remove();
-      activeLoader = null;
+    if (!activeLoader) return;
+    const elapsed = Date.now() - activeLoaderShownAt;
+    if (elapsed < MIN_VISIBLE_MS) {
+      if (hideTimer) clearTimeout(hideTimer);
+      hideTimer = setTimeout(() => {
+        try {
+          if (activeLoader) activeLoader.remove();
+        } catch {
+          // best-effort
+        }
+        activeLoader = null;
+        hideTimer = null;
+      }, MIN_VISIBLE_MS - elapsed);
+      return;
     }
+    activeLoader.remove();
+    activeLoader = null;
   }
 
   function createLoaderElement(type, context) {
