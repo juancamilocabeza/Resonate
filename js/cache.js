@@ -212,6 +212,16 @@ class AudioCache {
   // Número mínimo de pistas por contexto
   static MIN_TRACKS_PER_CONTEXT = 10;
 
+  getAdaptiveMinTracks(context, tracks) {
+    const total = Array.isArray(tracks) ? tracks.length : 0;
+    const base = AudioCache.MIN_TRACKS_PER_CONTEXT;
+    const isResonteContext = context === AudioCache.CONTEXTS.RESONTES || context === AudioCache.CONTEXTS.FAVORITES;
+    const ratio = isResonteContext ? 0.25 : 0.15;
+    const cap = isResonteContext ? 25 : 15;
+    if (!total) return base;
+    return Math.max(base, Math.min(cap, Math.ceil(total * ratio)));
+  }
+
   // Obtiene pistas cacheadas por contexto
   async getCachedTracksByContext(context) {
     if (!this.isInitialized) await this.init();
@@ -233,20 +243,21 @@ class AudioCache {
   async ensureMinTracksPerContext(context, tracks) {
     if (!tracks || tracks.length === 0) return;
     const cached = await this.getCachedTracksByContext(context);
-    if (cached.length >= AudioCache.MIN_TRACKS_PER_CONTEXT) return;
+    const targetMin = this.getAdaptiveMinTracks(context, tracks);
+    if (cached.length >= targetMin) return;
     // Prioriza favoritas si aplica
     let toCache = tracks;
-    if (context === AudioCache.CONTEXTS.FAVORITES) {
+    if (context === AudioCache.CONTEXTS.FAVORITES || context === AudioCache.CONTEXTS.RESONTES) {
       toCache = tracks.filter(t => t.isFavorite);
-      if (toCache.length < AudioCache.MIN_TRACKS_PER_CONTEXT) {
+      if (toCache.length < targetMin) {
         // Rellena con otras si faltan
         const others = tracks.filter(t => !t.isFavorite);
-        toCache = toCache.concat(others).slice(0, AudioCache.MIN_TRACKS_PER_CONTEXT);
+        toCache = toCache.concat(others).slice(0, targetMin);
       } else {
-        toCache = toCache.slice(0, AudioCache.MIN_TRACKS_PER_CONTEXT);
+        toCache = toCache.slice(0, targetMin);
       }
     } else {
-      toCache = toCache.slice(0, AudioCache.MIN_TRACKS_PER_CONTEXT);
+      toCache = toCache.slice(0, targetMin);
     }
     // Preload las necesarias
     await this.preloadTracks(toCache, true);
@@ -282,6 +293,9 @@ class AudioCache {
     this.limitPromptCooldownMs = CACHE_CONSTANTS.AUDIO_CACHE.LIMIT_PROMPT_COOLDOWN_MS;
     this.networkProfile = getNetworkProfile();
     this.emptyAudioResponses = new Set();
+    this.lastPrefetchBlockReason = null;
+    this.prefetchRetryState = { timerId: null, count: 0, pending: null, lastReason: null, lastScheduledAt: 0 };
+    this.prefetchRetryMaxCount = 4;
   }
 
   async init() {
@@ -295,6 +309,7 @@ class AudioCache {
       // Apply network-based concurrency
       this.applyNetworkProfile();
       this.attachNetworkProfileListener();
+      this.attachPrefetchRetryListener();
 
       this.isInitialized = true;
       logCache('info', `Audio cache initialized successfully (limit: ${this.formatBytes(this.maxCacheSize)})`);
@@ -314,6 +329,56 @@ class AudioCache {
     const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
     if (!connection || typeof connection.addEventListener !== 'function') return;
     connection.addEventListener('change', () => this.applyNetworkProfile());
+  }
+
+  attachPrefetchRetryListener() {
+    if (this._prefetchRetryListenerAttached) return;
+    this._prefetchRetryListenerAttached = true;
+    if (typeof window === 'undefined' || !window.addEventListener) return;
+    window.addEventListener('online', () => {
+      this.retryPendingPrefetches('online');
+    }, { passive: true });
+  }
+
+  scheduleSilentPrefetchRetry(task, reason) {
+    if (typeof task !== 'function') return;
+    const state = this.prefetchRetryState;
+    if (!state) return;
+    state.pending = task;
+    state.lastReason = reason || state.lastReason || 'unknown';
+    if (state.timerId) return;
+    const attempt = Math.max(0, state.count || 0);
+    const delay = Math.min(60000, 2000 * Math.pow(2, attempt));
+    state.lastScheduledAt = nowMs();
+    state.timerId = setTimeout(() => {
+      state.timerId = null;
+      this.retryPendingPrefetches('timer');
+    }, delay);
+  }
+
+  async retryPendingPrefetches(trigger) {
+    const state = this.prefetchRetryState;
+    if (!state || typeof state.pending !== 'function') return;
+    if (typeof navigator !== 'undefined' && navigator && navigator.onLine === false) {
+      this.scheduleSilentPrefetchRetry(state.pending, state.lastReason || 'offline');
+      return;
+    }
+
+    const task = state.pending;
+    state.pending = null;
+
+    try {
+      await task();
+      state.count = 0;
+    } catch (err) {
+      state.count = Math.min((state.count || 0) + 1, this.prefetchRetryMaxCount);
+      if (state.count >= this.prefetchRetryMaxCount) {
+        state.pending = null;
+        return;
+      }
+      state.pending = task;
+      this.scheduleSilentPrefetchRetry(task, state.lastReason || (err && err.message) || trigger || 'retry');
+    }
   }
 
   async initIndexedDB() {
@@ -510,6 +575,9 @@ class AudioCache {
       const shouldFetch = await this.shouldPrefetch(priority);
       if (!shouldFetch) {
         logCache('info', `Skipping prefetch due to network or quota limits: ${url}`);
+        if (priority) {
+          this.scheduleSilentPrefetchRetry(() => this.prefetchAudio(url, priority), this.lastPrefetchBlockReason);
+        }
         return;
       }
 
@@ -630,7 +698,8 @@ class AudioCache {
       const shouldFetch = await this.shouldPrefetch(true);
       if (!shouldFetch) {
         logCache('info', 'Skipping resontes preload due to network or quota limits');
-        throw new Error('Skipping resontes preload due to network or quota limits');
+        this.scheduleSilentPrefetchRetry(() => this.preloadResontes(resontes), this.lastPrefetchBlockReason);
+        return;
       }
 
       logCache('info', `Preloading ${resontes.length} resontes for offline playback`);
@@ -675,6 +744,7 @@ class AudioCache {
     const shouldFetch = await this.shouldPrefetch(priority);
     if (!shouldFetch) {
       logCache('info', 'Skipping track preload due to network or quota limits');
+      this.scheduleSilentPrefetchRetry(() => this.preloadTracks(tracks, priority), this.lastPrefetchBlockReason);
       return;
     }
 
@@ -787,22 +857,31 @@ class AudioCache {
 
   async shouldPrefetch(priority = false) {
     try {
+      this.lastPrefetchBlockReason = null;
       if (typeof navigator !== 'undefined' && navigator && navigator.onLine === false) {
+        this.lastPrefetchBlockReason = 'offline';
         return false;
       }
 
       // Avoid aggressive downloads on slow or metered networks unless priority
       const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
       if (connection) {
-        if (connection.saveData && !priority) return false;
+        if (connection.saveData && !priority) {
+          this.lastPrefetchBlockReason = 'save-data';
+          return false;
+        }
         const slowTypes = ['slow-2g', '2g'];
-        if (slowTypes.includes(connection.effectiveType) && !priority) return false;
+        if (slowTypes.includes(connection.effectiveType) && !priority) {
+          this.lastPrefetchBlockReason = 'slow-network';
+          return false;
+        }
       }
 
       // Stop if cache is near full
       const stats = await this.getUsageStats();
       if (stats.usagePercentage >= 95 && !priority) {
         logCache('info', 'Cache nearly full, skipping non-priority prefetch');
+        this.lastPrefetchBlockReason = 'cache-full';
         return false;
       }
 
