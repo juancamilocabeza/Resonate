@@ -4026,6 +4026,32 @@ function getShareCapabilities() {
   return { canShare, canCopy };
 }
 
+function getShareIconMarkup(mode) {
+  const shareSvg = `
+    <svg class="header-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3v10" />
+      <path d="M8 7l4-4 4 4" />
+      <path d="M5 11v7a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3v-7" />
+    </svg>
+  `;
+  const copySvg = `
+    <svg class="header-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="9" y="9" width="10" height="12" rx="2" />
+      <rect x="5" y="3" width="10" height="12" rx="2" />
+    </svg>
+  `;
+
+  const svg = mode === 'copy' ? copySvg : shareSvg;
+  return `<span class="header-icon" aria-hidden="true">${svg}</span>`;
+}
+
+function setShareButtonIcon(el, mode) {
+  if (!el) return;
+  try {
+    el.innerHTML = getShareIconMarkup(mode);
+  } catch {}
+}
+
 function applyShareButtonState(el) {
   if (!el) return;
 
@@ -4035,7 +4061,7 @@ function applyShareButtonState(el) {
     try { el.dataset.shareMode = 'share'; } catch {}
     try { el.title = 'Share'; } catch {}
     try { el.setAttribute('aria-label', 'Share'); } catch {}
-    try { el.textContent = '🔗'; } catch {}
+    setShareButtonIcon(el, 'share');
     try { el.classList.remove('disabled'); } catch {}
     if (el.tagName === 'BUTTON') el.disabled = false;
     try { el.removeAttribute('aria-disabled'); } catch {}
@@ -4047,7 +4073,7 @@ function applyShareButtonState(el) {
     try { el.dataset.shareMode = 'copy'; } catch {}
     try { el.title = 'Copy link'; } catch {}
     try { el.setAttribute('aria-label', 'Copy link'); } catch {}
-    try { el.textContent = '📋'; } catch {}
+    setShareButtonIcon(el, 'copy');
     try { el.classList.remove('disabled'); } catch {}
     if (el.tagName === 'BUTTON') el.disabled = false;
     try { el.removeAttribute('aria-disabled'); } catch {}
@@ -4058,6 +4084,7 @@ function applyShareButtonState(el) {
   try { el.dataset.shareMode = 'disabled'; } catch {}
   try { el.title = 'Sharing not available'; } catch {}
   try { el.setAttribute('aria-label', 'Sharing not available'); } catch {}
+  setShareButtonIcon(el, 'share');
   try { el.classList.add('disabled'); } catch {}
   if (el.tagName === 'BUTTON') el.disabled = true;
   try { el.setAttribute('aria-disabled', 'true'); } catch {}
@@ -4845,6 +4872,7 @@ function displayAlbumTracks(albumId, tracksContainer) {
         `;
 
         const favoriteBtn = trackItem.querySelector('.track-favorite');
+        const shareBtn = trackItem.querySelector('.track-share');
         favoriteBtn.addEventListener('click', (e) => {
           e.stopPropagation(); // Evitar que el clic se propague al resultado principal
           toggleFavorite(track);
@@ -4856,6 +4884,10 @@ function displayAlbumTracks(albumId, tracksContainer) {
           favoriteBtn.setAttribute('aria-label', label);
         });
 
+        if (shareBtn) {
+          applyShareButtonState(shareBtn);
+        }
+
         // Tap-to-play: click anywhere in the row except buttons
         trackItem.addEventListener('click', (e) => {
           if (e.target && e.target.closest && e.target.closest('button')) return;
@@ -4864,7 +4896,6 @@ function displayAlbumTracks(albumId, tracksContainer) {
         });
 
         // Share button listener
-        const shareBtn = trackItem.querySelector('.track-share');
         if (shareBtn) {
           shareBtn.addEventListener('click', (e) => {
             e.stopPropagation(); // Evitar que el clic se propague al resultado principal

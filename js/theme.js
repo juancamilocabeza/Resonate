@@ -94,9 +94,48 @@
   function setToggleLabel(theme) {
     if (!themeToggleEl) return;
     const label = THEME_LABELS[theme] || 'Theme';
-    themeToggleEl.textContent = label;
+    themeToggleEl.dataset.theme = theme;
+
+    let iconEl = themeToggleEl.querySelector('.theme-icon');
+    if (!iconEl) {
+      iconEl = document.createElement('span');
+      iconEl.className = 'theme-icon';
+      iconEl.setAttribute('aria-hidden', 'true');
+      themeToggleEl.appendChild(iconEl);
+    }
+
+    let svgEl = iconEl.querySelector('svg');
+    if (!svgEl) {
+      svgEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svgEl.setAttribute('viewBox', '0 0 24 24');
+      svgEl.setAttribute('aria-hidden', 'true');
+      svgEl.setAttribute('focusable', 'false');
+      svgEl.classList.add('theme-svg');
+      const useEl = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+      svgEl.appendChild(useEl);
+      iconEl.appendChild(svgEl);
+    }
+
+    const useEl = svgEl.querySelector('use');
+    if (useEl) {
+      const iconId = theme === 'day'
+        ? 'theme-sun'
+        : theme === 'energy-saver'
+          ? 'theme-leaf'
+          : 'theme-moon';
+      useEl.setAttribute('href', `/icons/sprite.svg#${iconId}`);
+    }
+
+    let labelEl = themeToggleEl.querySelector('.theme-label');
+    if (!labelEl) {
+      labelEl = document.createElement('span');
+      labelEl.className = 'theme-label';
+      themeToggleEl.appendChild(labelEl);
+    }
+    labelEl.textContent = label;
     themeToggleEl.setAttribute('aria-label', `Theme: ${label}. Press to cycle through themes.`);
     themeToggleEl.setAttribute('title', `Switch theme (current: ${label})`);
+    themeToggleEl.setAttribute('data-tooltip', label);
     // Mantener aria-current sincronizado para indicar tema activo
     themeToggleEl.setAttribute('aria-current', 'page');
   }

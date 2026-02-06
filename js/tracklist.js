@@ -126,7 +126,11 @@
         const shareBtn = document.createElement('button');
         shareBtn.className = 'tlv2-action tlv2-share';
         shareBtn.title = 'Share';
-        shareBtn.textContent = '🔗';
+        if (typeof window.applyShareButtonState === 'function') {
+          window.applyShareButtonState(shareBtn);
+        } else {
+          shareBtn.textContent = '🔗';
+        }
         shareBtn.style.display = 'flex';
         shareBtn.style.alignItems = 'center';
         shareBtn.style.justifyContent = 'center';

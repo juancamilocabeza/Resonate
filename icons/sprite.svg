@@ -4,4 +4,27 @@
     <circle cx="256" cy="256" r="200" />
     <path d="M96 256 C140 256, 180 180, 220 180 C260 180, 300 332, 340 332 C380 332, 416 256, 416 256" />
   </symbol>
+  <symbol id="theme-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 2v2" />
+    <path d="M12 20v2" />
+    <path d="M4.93 4.93l1.41 1.41" />
+    <path d="M17.66 17.66l1.41 1.41" />
+    <path d="M2 12h2" />
+    <path d="M20 12h2" />
+    <path d="M4.93 19.07l1.41-1.41" />
+    <path d="M17.66 6.34l1.41-1.41" />
+  </symbol>
+  <symbol id="theme-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 14.5A8.5 8.5 0 0 1 9.5 3a7 7 0 1 0 11.5 11.5Z" />
+  </symbol>
+  <symbol id="theme-leaf" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5 21c9-1 14-7 14-16-6 1-11 4-14 9-1 2-1 4 0 7Z" />
+    <path d="M5 21c3-3 7-6 12-8" />
+  </symbol>
+  <symbol id="share-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 3v10" />
+    <path d="M8 7l4-4 4 4" />
+    <path d="M5 11v7a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3v-7" />
+  </symbol>
 </svg>

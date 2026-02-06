@@ -34,15 +34,28 @@
         Resonate
       </h1>
       <div class="header-controls">
-        <button id="theme-toggle" class="theme-selector" type="button" aria-label="Theme toggle" aria-current="page" title="Switch theme">
-          Eco
+        <button id="theme-toggle" class="theme-selector" type="button" aria-label="Theme toggle" aria-current="page" title="Switch theme" data-tooltip="Theme">
+          <span class="theme-icon" aria-hidden="true">
+            <svg class="theme-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <use href="/icons/sprite.svg?v=2#theme-moon"></use>
+            </svg>
+          </span>
+          <span class="theme-label">Eco</span>
         </button>
-        <button id="resontes-toggle" class="theme-selector resontes-toggle" type="button" aria-label="View resonates" aria-expanded="false" aria-controls="resontes-list" aria-live="polite" title="Click to view your saved resonates">
-          <span class="resontes-icon"><svg class="resonate-icon" viewBox="0 0 512 512" aria-hidden="true" focusable="false"><use href="/icons/sprite.svg#resonate-icon"></use></svg></span>
+        <button id="resontes-toggle" class="theme-selector resontes-toggle" type="button" aria-label="View resonates" aria-expanded="false" aria-controls="resontes-list" aria-live="polite" title="Click to view your saved resonates" data-tooltip="Resonates">
+          <span class="resontes-icon"><svg class="resonate-icon" viewBox="0 0 512 512" aria-hidden="true" focusable="false"><use href="/icons/sprite.svg?v=2#resonate-icon"></use></svg></span>
           <span class="resontes-label">Resonates</span>
           <span class="resontes-count" id="resontes-count">0</span>
         </button>
-        <span id="current-track-share" class="theme-selector" role="button" tabindex="0" aria-label="Share current track" title="Share this track">🔗</span>
+        <span id="current-track-share" class="theme-selector" role="button" tabindex="0" aria-label="Share current track" title="Share this track">
+          <span class="header-icon" aria-hidden="true">
+            <svg class="header-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 3v10" />
+              <path d="M8 7l4-4 4 4" />
+              <path d="M5 11v7a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3v-7" />
+            </svg>
+          </span>
+        </span>
       </div>
     </header>
     <div class="content-layout" id="content-layout">
