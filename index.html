@@ -47,7 +47,18 @@
           <span class="resontes-label">Resonates</span>
           <span class="resontes-count" id="resontes-count">0</span>
         </button>
-        <span id="current-track-share" class="theme-selector" role="button" tabindex="0" aria-label="Share current track" title="Share this track">
+        <button id="current-track-cast" class="theme-selector" type="button" aria-label="Cast current track" title="Cast" data-tooltip="Cast">
+          <span class="header-icon" aria-hidden="true">
+            <svg class="header-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="13" y="4" width="8" height="6" rx="1" />
+              <path d="M2 18a4 4 0 0 1 4 4" />
+              <path d="M2 14a8 8 0 0 1 8 8" />
+              <path d="M2 10a12 12 0 0 1 12 12" />
+            </svg>
+          </span>
+          <span class="cast-badge" aria-hidden="true">!</span>
+        </button>
+        <span id="current-track-share" class="theme-selector" role="button" tabindex="0" aria-label="Share current track" title="Share this track" data-tooltip="Share">
           <span class="header-icon" aria-hidden="true">
             <svg class="header-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12 3v10" />

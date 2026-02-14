@@ -1095,6 +1095,80 @@ async function initializeApp() {
     });
   }
 
+  if (elements.currentTrackCast) {
+    const handleCast = async () => {
+      const audioEl = (elements && elements.audio) ? elements.audio : document.getElementById('audio');
+      const track = (state && state.currentTrack) ? state.currentTrack : null;
+
+      if (!track || !audioEl || !audioEl.src) {
+        try { showStatus('Play a track to cast', 'info', 2500); } catch {}
+        return;
+      }
+
+      const caps = (typeof window.getCastCapabilities === 'function')
+        ? window.getCastCapabilities(audioEl)
+        : { canRemotePlayback: false, canAirPlay: false };
+
+      if (caps.canRemotePlayback) {
+        try {
+          await audioEl.remote.prompt();
+          showStatus('Choose a device to cast', 'info', 4000);
+          return;
+        } catch (err) {
+          if (err && err.name === 'AbortError') return;
+          window.logger?.warn({ message: 'Cast prompt failed', error: err }, 'UI');
+        }
+      }
+
+      if (caps.canAirPlay) {
+        try {
+          audioEl.webkitShowPlaybackTargetPicker();
+          showStatus('Choose an AirPlay device', 'info', 4000);
+          return;
+        } catch (err) {
+          window.logger?.warn({ message: 'AirPlay picker failed', error: err }, 'UI');
+        }
+      }
+
+      const isPwa = (typeof isRunningAsPWA === 'function') ? isRunningAsPWA() : false;
+      try {
+        const hintKey = 'resonate_cast_hint_shown';
+        if (sessionStorage.getItem(hintKey) !== 'true') {
+          showStatus(
+            isPwa
+              ? 'Casting needs the browser menu. Opening a browser tab.'
+              : 'Use your browser menu to cast this track',
+            'info',
+            6000
+          );
+          sessionStorage.setItem(hintKey, 'true');
+        }
+      } catch {}
+      if (isPwa) {
+        let openUrl = window.location.href;
+        try {
+          const trackIndex = (typeof track.trackIndex === 'number' && isFinite(track.trackIndex)) ? track.trackIndex : null;
+          if (track.id && typeof window.buildShareUrl === 'function') {
+            openUrl = window.buildShareUrl(track.id, trackIndex);
+          }
+        } catch {}
+        try { window.open(openUrl, '_blank', 'noopener'); } catch {}
+        showStatus('Opened browser so you can use Cast from the menu', 'info', 6000);
+        return;
+      }
+
+      showStatus('Use your browser menu to cast this track', 'info', 6000);
+    };
+
+    elements.currentTrackCast.addEventListener('click', handleCast);
+    elements.currentTrackCast.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter' || ev.key === ' ') {
+        ev.preventDefault();
+        handleCast();
+      }
+    });
+  }
+
   if (elements.currentTrackShare) {
     const handleShare = async () => {
       if (state.currentTrack && state.currentTrack.id) {

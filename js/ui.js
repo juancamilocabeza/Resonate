@@ -148,6 +148,7 @@ const elements = {
 
   // Header / global controls
   themeToggle: document.getElementById('theme-toggle'),
+  currentTrackCast: document.getElementById('current-track-cast'),
   currentTrackShare: document.getElementById('current-track-share'),
 
   // Search
@@ -207,6 +208,12 @@ window.elements = elements;
 try {
   if (elements.currentTrackShare) {
     applyShareButtonState(elements.currentTrackShare);
+  }
+} catch {}
+
+try {
+  if (elements.currentTrackCast) {
+    applyCastButtonState(elements.currentTrackCast);
   }
 } catch {}
 
@@ -4026,6 +4033,34 @@ function getShareCapabilities() {
     }
   })();
   return { canShare, canCopy };
+}
+
+function getCastCapabilities(audioEl) {
+  const el = audioEl || (elements && elements.audio) || document.getElementById('audio');
+  const remote = el && el.remote ? el.remote : null;
+  const canRemotePlayback = !!(remote && typeof remote.prompt === 'function');
+  const canAirPlay = !!(el && typeof el.webkitShowPlaybackTargetPicker === 'function');
+  return { canRemotePlayback, canAirPlay };
+}
+
+function applyCastButtonState(el) {
+  if (!el) return;
+  const audioEl = (elements && elements.audio) ? elements.audio : document.getElementById('audio');
+  const { canRemotePlayback, canAirPlay } = getCastCapabilities(audioEl);
+  const available = canRemotePlayback || canAirPlay;
+  const fallbackTitle = isRunningAsPWA() ? 'Open in browser to cast' : 'Use browser menu to cast';
+  const title = available ? 'Cast' : fallbackTitle;
+
+  try { el.title = title; } catch {}
+  try { el.setAttribute('aria-label', title); } catch {}
+  try { el.dataset.castMode = available ? 'native' : 'browser'; } catch {}
+  try { el.dataset.tooltip = title; } catch {}
+  try { el.classList.toggle('cast-available', available); } catch {}
+  try { el.classList.toggle('cast-fallback', !available); } catch {}
+  try {
+    const badge = el.querySelector('.cast-badge');
+    if (badge) badge.hidden = available;
+  } catch {}
 }
 
 function getShareIconMarkup(mode) {
@@ -8026,6 +8061,8 @@ window.hideStartFavoritesCTA = hideStartFavoritesCTA;
 window.registerServiceWorker = registerServiceWorker;
 window.updateServiceWorker = updateServiceWorker;
 window.setupPWAInstall = setupPWAInstall;
+window.getCastCapabilities = getCastCapabilities;
+window.applyCastButtonState = applyCastButtonState;
 window.displaySearchResults = displaySearchResults;
 window.hideSearchResults = hideSearchResults;
 window.hideResontesList = hideResontesList;

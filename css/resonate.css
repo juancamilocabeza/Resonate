@@ -1081,6 +1081,37 @@ header {
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.18), 0 10px 20px rgba(0, 0, 0, 0.28);
 }
 
+.header-controls .theme-selector.cast-fallback {
+  border-style: dashed;
+  opacity: 0.82;
+}
+
+.header-controls .theme-selector.cast-fallback .header-icon {
+  color: var(--muted);
+}
+
+.header-controls .cast-badge {
+  position: absolute;
+  top: -4px;
+  right: -2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--accent-alt);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.header-controls .theme-selector.cast-available .cast-badge {
+  display: none;
+}
+
 @media (max-width: 480px) {
   .header-controls {
     gap: 10px;
