@@ -3868,3 +3868,6 @@ async function playTrack(trackId) {
     }
   }
 }
+
+// Expose for UI hints when status messages are disabled.
+window.showAutoplayCta = showAutoplayCta;
