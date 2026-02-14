@@ -1099,9 +1099,20 @@ async function initializeApp() {
     const handleCast = async () => {
       const audioEl = (elements && elements.audio) ? elements.audio : document.getElementById('audio');
       const track = (state && state.currentTrack) ? state.currentTrack : null;
+      const audioSrc = audioEl ? (audioEl.currentSrc || audioEl.src || '') : '';
 
-      if (!track || !audioEl || !audioEl.src) {
-        try { showStatus('Play a track to cast', 'info', 2500); } catch {}
+      const showCastHint = (message) => {
+        try {
+          if (typeof showAutoplayCta === 'function') {
+            showAutoplayCta(message);
+            return;
+          }
+        } catch {}
+        try { showStatus(message, 'info', 6000); } catch {}
+      };
+
+      if (!audioEl) {
+        showCastHint('Cast is not available on this device');
         return;
       }
 
@@ -1115,7 +1126,7 @@ async function initializeApp() {
           showStatus('Choose a device to cast', 'info', 4000);
           return;
         } catch (err) {
-          if (err && err.name === 'AbortError') return;
+          if (err && (err.name === 'AbortError' || err.name === 'NotAllowedError')) return;
           window.logger?.warn({ message: 'Cast prompt failed', error: err }, 'UI');
         }
       }
@@ -1134,12 +1145,10 @@ async function initializeApp() {
       try {
         const hintKey = 'resonate_cast_hint_shown';
         if (sessionStorage.getItem(hintKey) !== 'true') {
-          showStatus(
+          showCastHint(
             isPwa
               ? 'Casting needs the browser menu. Opening a browser tab.'
-              : 'Use your browser menu to cast this track',
-            'info',
-            6000
+              : 'Use your browser menu to cast this track'
           );
           sessionStorage.setItem(hintKey, 'true');
         }
@@ -1147,17 +1156,22 @@ async function initializeApp() {
       if (isPwa) {
         let openUrl = window.location.href;
         try {
-          const trackIndex = (typeof track.trackIndex === 'number' && isFinite(track.trackIndex)) ? track.trackIndex : null;
-          if (track.id && typeof window.buildShareUrl === 'function') {
+          const trackIndex = (track && typeof track.trackIndex === 'number' && isFinite(track.trackIndex)) ? track.trackIndex : null;
+          if (track && track.id && typeof window.buildShareUrl === 'function') {
             openUrl = window.buildShareUrl(track.id, trackIndex);
           }
         } catch {}
         try { window.open(openUrl, '_blank', 'noopener'); } catch {}
-        showStatus('Opened browser so you can use Cast from the menu', 'info', 6000);
+        showCastHint('Opened browser so you can use Cast from the menu');
         return;
       }
 
-      showStatus('Use your browser menu to cast this track', 'info', 6000);
+      if (!audioSrc) {
+        showCastHint('Play a track first to cast');
+        return;
+      }
+
+      showCastHint('Use your browser menu to cast this track');
     };
 
     elements.currentTrackCast.addEventListener('click', handleCast);
