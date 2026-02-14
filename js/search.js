@@ -471,7 +471,10 @@ function shouldPreferArchiveProxy() {
     } catch {}
 
     const host = String((window.location && window.location.hostname) ? window.location.hostname : '');
-    return host === 'localhost' || host === '127.0.0.1';
+    if (host === 'localhost' || host === '127.0.0.1') {
+      return qs.get('proxy') === '1';
+    }
+    return true;
   } catch {
     return false;
   }
@@ -1931,14 +1934,33 @@ async function fetchOptimizedPlayableFiles(identifier, options = {}) {
     const downlink = connection && typeof connection.downlink === 'number' ? connection.downlink : 0;
     const slowNetwork = effectiveType === '2g' || effectiveType === 'slow-2g' || downlink < 1;
     const midNetwork = effectiveType === '3g' || downlink < 5;
+    const qualityTier = getNetworkQualityTierForAudio();
+    const allowFlac = isWifiEthernetConnection();
+    if (!allowFlac) {
+      audioFiles = audioFiles.filter(file => !String(file.name || '').toLowerCase().endsWith('.flac'));
+    }
+    const preferMp3 = qualityTier === 'eco';
+    const preferFlac = allowFlac && qualityTier === 'ultra-hd';
 
     audioFiles.sort((a, b) => {
+      const aIsFlac = a.name.toLowerCase().endsWith('.flac');
+      const bIsFlac = b.name.toLowerCase().endsWith('.flac');
       const aIsOgg = a.name.toLowerCase().endsWith('.ogg');
       const bIsOgg = b.name.toLowerCase().endsWith('.ogg');
       const aIsMp3 = a.name.toLowerCase().endsWith('.mp3');
       const bIsMp3 = b.name.toLowerCase().endsWith('.mp3');
       const aSize = a.size || 0;
       const bSize = b.size || 0;
+
+      if (preferFlac) {
+        if (aIsFlac && !bIsFlac) return -1;
+        if (!aIsFlac && bIsFlac) return 1;
+      }
+
+      if (preferMp3) {
+        if (aIsMp3 && !bIsMp3) return -1;
+        if (!aIsMp3 && bIsMp3) return 1;
+      }
 
       // On slow networks prefer the smallest payload first
       if (slowNetwork) {
@@ -1951,8 +1973,10 @@ async function fetchOptimizedPlayableFiles(identifier, options = {}) {
       }
 
       // Prioritize .ogg over .mp3 for quality when network is good enough
-      if (aIsOgg && !bIsOgg) return -1;
-      if (!aIsOgg && bIsOgg) return 1;
+      if (!preferMp3 && !preferFlac) {
+        if (aIsOgg && !bIsOgg) return -1;
+        if (!aIsOgg && bIsOgg) return 1;
+      }
       // Then prioritize .mp3 over other formats
       if (aIsMp3 && !bIsMp3 && !bIsOgg) return -1;
       if (!aIsMp3 && bIsMp3 && !aIsOgg) return 1;
@@ -1962,7 +1986,7 @@ async function fetchOptimizedPlayableFiles(identifier, options = {}) {
       if (audioFiles.length === 0) {
         return [];
       }
-      const playableFiles = createPlayableFiles(audioFiles, identifier, metadata);
+      const playableFiles = createPlayableFiles(audioFiles, identifier, metadata, { qualityTier, allowFlac });
       if (window.enhancedCache) window.enhancedCache.set('metadata', identifier, playableFiles);
       try {
         debugSearch('metadata_response', { identifier, usedProxy: Boolean(usedProxy), files: Array.isArray(metadata.files) ? metadata.files.length : null });
@@ -1992,6 +2016,7 @@ async function fetchOptimizedPlayableFiles(identifier, options = {}) {
 // Check if file is playable audio (filter out metadata, images, archives)
 function isPlayableAudioFile(file) {
   if (!file.name) return false;
+  const FLAC_MAX_BYTES = 200 * 1024 * 1024;
   const excludePatterns = [
     /_files\.xml$/i,
     /_meta\.xml$/i,
@@ -2017,20 +2042,131 @@ function isPlayableAudioFile(file) {
     pattern.test(file.name)
   );
   if (hasExcludedPattern) return false;
-  // Only accept .ogg and .mp3 formats (priority: .ogg first, then .mp3)
-  const audioFormats = ['.ogg', '.mp3'];
+  // Only accept .flac, .ogg and .mp3 formats (priority handled elsewhere)
+  const audioFormats = ['.flac', '.ogg', '.mp3'];
   const isAudioFile = audioFormats.some(format =>
     file.name.toLowerCase().endsWith(format)
   );
   if (!isAudioFile) return false;
   const fileSize = file.size || 0;
+  const isFlac = file.name.toLowerCase().endsWith('.flac');
+  if (isFlac && fileSize > FLAC_MAX_BYTES) return false;
   if (fileSize < 50000) return false;
   if (fileSize > 500000000) return false;
   return true;
 }
 
-function createPlayableFiles(audioFiles, identifier, metadata) {
+function shouldLogAudioFormatDebug() {
+  try {
+    const params = new URLSearchParams(window.location.search || '');
+    const debugParam = String(params.get('debug') || '').toLowerCase();
+    const storedDebug = String(localStorage.getItem('resonate_debug') || '').toLowerCase();
+    const storedLevel = String(localStorage.getItem('resonate_log_level') || '').toLowerCase();
+    return debugParam === '1' || debugParam === 'true' || storedDebug === 'true' || storedLevel === 'debug';
+  } catch {
+    return false;
+  }
+}
+
+function logAudioFormatSelection(tracks, { identifier, qualityTier, allowFlac } = {}) {
+  if (!shouldLogAudioFormatDebug()) return;
+  try {
+    const counts = {};
+    for (const track of tracks || []) {
+      const fmt = String(track && (track.format || '')).toUpperCase() || 'UNKNOWN';
+      counts[fmt] = (counts[fmt] || 0) + 1;
+    }
+    logSearch({
+      message: 'Audio format selection',
+      identifier,
+      qualityTier,
+      allowFlac,
+      formats: counts
+    }, 'debug', 'SEARCH');
+  } catch {
+    // best-effort
+  }
+}
+
+function getNetworkQualityTierForAudio() {
+  try {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return 'disconnected';
+  } catch {}
+
+  const connection = (typeof navigator !== 'undefined')
+    ? (navigator.connection || navigator.mozConnection || navigator.webkitConnection)
+    : null;
+
+  let tier = 'standard';
+  if (connection) {
+    const { effectiveType, downlink, type } = connection;
+    const linkType = String(type || '').toLowerCase();
+    const isWifi = linkType === 'wifi' || linkType === 'ethernet';
+
+    if (isWifi) {
+      tier = 'ultra-hd';
+    } else if (effectiveType === '5g' || downlink >= 20) {
+      tier = 'ultra-hd';
+    } else if (effectiveType === '4g' || downlink >= 5) {
+      tier = 'high-quality';
+    } else if (effectiveType === '3g' || downlink >= 1.5) {
+      tier = 'eco';
+    } else if (effectiveType === '2g' || effectiveType === 'slow-2g' || downlink > 0) {
+      tier = 'eco';
+    }
+  }
+
+  return tier;
+}
+
+function isWifiEthernetConnection() {
+  try {
+    const connection = (typeof navigator !== 'undefined')
+      ? (navigator.connection || navigator.mozConnection || navigator.webkitConnection)
+      : null;
+    if (!connection) return false;
+    const linkType = String(connection.type || '').toLowerCase();
+    return linkType === 'wifi' || linkType === 'ethernet';
+  } catch {
+    return false;
+  }
+}
+
+function createPlayableFiles(audioFiles, identifier, metadata, { qualityTier, allowFlac = true } = {}) {
   let playableFiles;
+  const tier = (qualityTier === 'disconnected') ? 'eco' : (qualityTier || 'standard');
+  const preferMp3 = tier === 'eco';
+  const preferFlac = allowFlac && tier === 'ultra-hd';
+  const preferOgg = !preferMp3 && !preferFlac;
+
+  const pickPreferred = (existing, candidate) => {
+    if (!existing) return candidate;
+    const existingIsFlac = existing.fileName.toLowerCase().endsWith('.flac');
+    const candidateIsFlac = candidate.fileName.toLowerCase().endsWith('.flac');
+    const existingIsOgg = existing.fileName.toLowerCase().endsWith('.ogg');
+    const candidateIsOgg = candidate.fileName.toLowerCase().endsWith('.ogg');
+    const existingIsMp3 = existing.fileName.toLowerCase().endsWith('.mp3');
+    const candidateIsMp3 = candidate.fileName.toLowerCase().endsWith('.mp3');
+    const existingSize = Number.isFinite(existing.fileSize) ? existing.fileSize : 0;
+    const candidateSize = Number.isFinite(candidate.fileSize) ? candidate.fileSize : 0;
+
+    if (preferFlac) {
+      if (candidateIsFlac && !existingIsFlac) return candidate;
+      if (existingIsFlac && !candidateIsFlac) return existing;
+    } else if (preferMp3) {
+      if (candidateIsMp3 && !existingIsMp3) return candidate;
+      if (existingIsMp3 && !candidateIsMp3) return existing;
+    } else if (preferOgg) {
+      if (candidateIsOgg && !existingIsOgg) return candidate;
+      if (existingIsOgg && !candidateIsOgg) return existing;
+    }
+
+    if (candidateSize && existingSize) {
+      return candidateSize < existingSize ? candidate : existing;
+    }
+
+    return existing;
+  };
   if (audioFiles.length > 1) {
     // First create all playable files
     let allFiles = audioFiles.map((file, index) => {
@@ -2064,7 +2200,8 @@ function createPlayableFiles(audioFiles, identifier, metadata) {
         albumId: identifier,
         trackIndex: index,
         totalTracks: audioFiles.length,
-        fileName: file.name
+        fileName: file.name,
+        fileSize: file.size || 0
       };
     });
     // Deduplication: prefer .ogg over .mp3 for the same track based on title and artist
@@ -2093,15 +2230,9 @@ function createPlayableFiles(audioFiles, identifier, metadata) {
         // First time seeing this track
         seenTracks.set(trackKey, file);
       } else {
-        // Check if current file is .ogg and existing is not
-        const currentIsOgg = file.fileName.toLowerCase().endsWith('.ogg');
-        const existingIsOgg = existing.fileName.toLowerCase().endsWith('.ogg');
-        if (currentIsOgg && !existingIsOgg) {
-          // Replace with .ogg version
-          seenTracks.set(trackKey, file);
-        }
-        // If existing is already .ogg, keep it
-        // If both are .mp3 or both are .ogg, keep the first one
+        // Choose best format/size for current quality tier
+        const preferred = pickPreferred(existing, file);
+        seenTracks.set(trackKey, preferred);
       }
     }
     playableFiles = Array.from(seenTracks.values());
@@ -2146,7 +2277,8 @@ function createPlayableFiles(audioFiles, identifier, metadata) {
       isAlbumTrack: false,
       trackIndex: 0,
       totalTracks: 1,
-      fileName: audioFile.name
+      fileName: audioFile.name,
+      fileSize: audioFile.size || 0
     }];
   }
   try {

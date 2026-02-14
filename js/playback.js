@@ -1630,18 +1630,18 @@ async function loadAudioWithCache(track) {
     throw new Error('Audio URL not available');
   }
 
-  // Only allow .ogg and .mp3 files.
+  // Only allow .flac, .ogg and .mp3 files.
   // NOTE: allow query strings/fragments (e.g. .mp3?download=1)
   try {
     const u = new URL(String(track.url), window.location.href);
     const p = (u.pathname || '').toLowerCase();
-    if (!p.endsWith('.ogg') && !p.endsWith('.mp3')) {
-      throw new Error('Only .ogg and .mp3 files are allowed');
+    if (!p.endsWith('.flac') && !p.endsWith('.ogg') && !p.endsWith('.mp3')) {
+      throw new Error('Only .flac, .ogg and .mp3 files are allowed');
     }
   } catch {
     const raw = String(track.url || '').trim();
-    if (!/\.(ogg|mp3)(\?|#|$)/i.test(raw)) {
-      throw new Error('Only .ogg and .mp3 files are allowed');
+    if (!/\.(flac|ogg|mp3)(\?|#|$)/i.test(raw)) {
+      throw new Error('Only .flac, .ogg and .mp3 files are allowed');
     }
   }
 

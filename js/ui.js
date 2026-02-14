@@ -2331,9 +2331,9 @@ function isSupportedAudioUrl(url) {
   try {
     const u = new URL(trimmed, window.location.href);
     const p = (u.pathname || '').toLowerCase();
-    return p.endsWith('.ogg') || p.endsWith('.mp3');
+    return p.endsWith('.flac') || p.endsWith('.ogg') || p.endsWith('.mp3');
   } catch {
-    return /\.(ogg|mp3)(\?|#|$)/i.test(trimmed);
+    return /\.(flac|ogg|mp3)(\?|#|$)/i.test(trimmed);
   }
 }
 
@@ -2366,7 +2366,7 @@ function loadFavorites() {
     if (favorites) {
       parsedFavorites = JSON.parse(favorites);
       window.logger.debug(`Parsed ${parsedFavorites.length} favorites`, 'UI');
-      // Filter out unsupported format favorites (keep .ogg and .mp3)
+      // Filter out unsupported format favorites (keep .flac, .ogg and .mp3)
       const originalCount = parsedFavorites.length;
       parsedFavorites = parsedFavorites.filter(fav => {
         if (!fav.url) return false;
@@ -5033,28 +5033,32 @@ function getNavigatorConnection() {
 function deriveNetworkLabel() {
   // Treat undefined as online; only explicit false means offline.
   if (state.networkOnline === false) {
-    state.networkType = 'offline';
-    return 'Offline';
+    state.networkType = 'disconnected';
+    return 'Disconnected';
   }
 
   const connection = getNavigatorConnection();
-  let tier = 'online';
+  let tier = 'Standard';
 
   if (connection) {
-    const { effectiveType, downlink } = connection;
+    const { effectiveType, downlink, type } = connection;
+    const linkType = String(type || '').toLowerCase();
+    const isWifi = linkType === 'wifi' || linkType === 'ethernet';
 
-    if (effectiveType === '5g' || downlink >= 20) {
-      tier = '5G';
+    if (isWifi) {
+      tier = 'Ultra HD (WiFi only)';
+    } else if (effectiveType === '5g' || downlink >= 20) {
+      tier = 'High Quality';
     } else if (effectiveType === '4g' || downlink >= 5) {
-      tier = '4G';
+      tier = 'High Quality';
     } else if (effectiveType === '3g' || downlink >= 1.5) {
-      tier = '3G';
+      tier = 'Low';
     } else if (effectiveType === '2g' || effectiveType === 'slow-2g' || downlink > 0) {
-      tier = '2G';
+      tier = 'Low';
     }
   }
 
-  state.networkType = tier.toLowerCase();
+  state.networkType = tier.toLowerCase().replace(/\s+/g, '-');
   return tier;
 }
 
@@ -5289,7 +5293,7 @@ function createOfflineIndicator() {
   indicator.setAttribute('aria-live', 'polite');
   indicator.innerHTML = `
     <div class="offline-icon"></div>
-    <div class="offline-text">No connection</div>
+    <div class="offline-text">Disconnected</div>
   `;
 
   const header = document.querySelector('header');
@@ -5308,7 +5312,7 @@ function updateOfflineIndicator() {
   if (!state.networkOnline) {
     indicator.classList.remove('hidden');
     indicator.classList.add('active');
-    indicator.querySelector('.offline-text').textContent = 'Offline';
+    indicator.querySelector('.offline-text').textContent = 'Disconnected';
 
     // Add offline class to body for styling
     document.body.classList.add('offline-mode');
