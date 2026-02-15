@@ -5840,7 +5840,7 @@ const SW_UPDATE_PLAYBACK_QUERY_TIMEOUT_MS = 700;
 
 // Force autoupdate: apply updates automatically when ready.
 // Safety: if playback is active, activation/reload is deferred until idle.
-const SW_FORCE_AUTOUPDATE = true;
+const SW_FORCE_AUTOUPDATE = false;
 
 function isPlaybackActiveInThisWindow() {
   try {
@@ -7014,10 +7014,8 @@ async function registerServiceWorker() {
       const host = String((loc && loc.hostname) ? loc.hostname : '').toLowerCase();
       const proto = String((loc && loc.protocol) ? loc.protocol : '').toLowerCase();
 
-      // In local/dev environments we prefer to avoid SW caching issues
-      // (stale JS/CSS can make it look like changes “don’t work”).
+      // Disable SW only for file:// to avoid caching surprises with local files.
       if (proto === 'file:') return true;
-      if (host === 'localhost' || host === '127.0.0.1') return true;
     } catch {
       // ignore
     }

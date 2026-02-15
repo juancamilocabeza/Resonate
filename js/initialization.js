@@ -890,6 +890,7 @@ async function initializeApp() {
     const isUpdateReload = sessionStorage.getItem('resonate_update_reload') === '1';
     if (isUpdateReload) {
       sessionStorage.removeItem('resonate_update_reload');
+      safeShowStatus('Updated to the latest version', 'info', 2500);
       const shouldAutoResume = !!(window.state && window.state.savedPlaybackState && window.state.savedPlaybackState.wasPlaying);
       if (shouldAutoResume) {
         setTimeout(() => {
