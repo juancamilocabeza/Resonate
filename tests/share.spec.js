@@ -315,3 +315,34 @@ test.describe('Share Module - Error Handling', () => {
     expect(result.success).toBe(true);
   });
 });
+
+test.describe('Share Module - Cover Image Inclusion', () => {
+  test('attempts to fetch cover image when sharing', async ({ page }) => {
+    await page.goto('/');
+    
+    let coverFetched = false;
+    
+    // Intercept network requests to check if cover is fetched
+    await page.route('**/archive.org/services/img/**', route => {
+      coverFetched = true;
+      route.fulfill({
+        status: 200,
+        contentType: 'image/jpeg',
+        body: Buffer.from([0xFF, 0xD8, 0xFF, 0xE0]) // Minimal JPEG header
+      });
+    });
+    
+    // Mock navigator.share
+    await page.evaluate(() => {
+      navigator.share = async () => Promise.resolve();
+    });
+    
+    // Call shareTrack and wait for it to complete
+    await page.evaluate(async () => {
+      await window.shareTrack('test-identifier', 'Test Track', 'Test Artist', null, 'track', null);
+    });
+    
+    // Verify that cover was fetched
+    expect(coverFetched).toBe(true);
+  });
+});
