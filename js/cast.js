@@ -13,6 +13,7 @@
   var lastRemoteAdvanceAt = 0;
   var lastRemoteContentId = '';
   var lastMediaSessionId = '';
+  var castPlaybackMonitorId = null;
 
   function getCastAppId() {
     try {
@@ -67,6 +68,9 @@
             var session = context ? context.getCurrentSession() : null;
             var sessionId = session && session.getSessionId ? String(session.getSessionId()) : '';
             maybeShowCastingHint(sessionId);
+            startCastPlaybackMonitor();
+          } else {
+            stopCastPlaybackMonitor();
           }
           updateLocalTransportState();
         } catch (e) {}
@@ -79,6 +83,7 @@
           }
           updateLocalTransportState();
           maybeAdvanceOnRemoteEnd();
+          maybeAdvanceNearRemoteEnd();
         } catch (e) {}
       });
 
@@ -185,46 +190,11 @@
         title: title,
         creator: creator,
         albumTitle: albumTitle,
-      var castPlaybackMonitorId = null;
         trackIndex: trackNumber ? Math.max(0, trackNumber - 1) : 0,
         totalTracks: totalTracks || 1,
         duration: duration || undefined,
         isAlbumTrack: (totalTracks || 1) > 1
-      function maybeAdvanceNearRemoteEnd() {
-        try {
-          if (!remotePlayer || !remotePlayer.isConnected) return;
-          var duration = Number(remotePlayer.duration || 0);
-          var position = Number(remotePlayer.currentTime || 0);
-          if (!isFinite(duration) || duration <= 0) return;
-          if (!isFinite(position) || position < 0) position = 0;
-
-          var remaining = duration - position;
-          if (remaining > 1.25) return;
-          var now = Date.now();
-          if (now - lastRemoteAdvanceAt < 1200) return;
-          lastRemoteAdvanceAt = now;
-          if (typeof window.playNext === 'function') {
-            window.playNext();
-          }
-        } catch (e) {}
-      }
       };
-      function startCastPlaybackMonitor() {
-        if (castPlaybackMonitorId) return;
-        castPlaybackMonitorId = window.setInterval(function () {
-          try {
-            if (!remotePlayer || !remotePlayer.isConnected) return;
-            maybeAdvanceOnRemoteEnd();
-            maybeAdvanceNearRemoteEnd();
-          } catch (e) {}
-        }, 1200);
-      }
-
-      function stopCastPlaybackMonitor() {
-        if (!castPlaybackMonitorId) return;
-        try { window.clearInterval(castPlaybackMonitorId); } catch (e) {}
-        castPlaybackMonitorId = null;
-      }
 
       var identifier = (fallbackTrack && (fallbackTrack.albumId || fallbackTrack.id)) ? (fallbackTrack.albumId || fallbackTrack.id) : '';
       return { track: track, identifier: identifier };
@@ -235,9 +205,7 @@
 
   function updateLocalNowPlaying(track, identifier) {
     try {
-                startCastPlaybackMonitor();
       if (!track) return false;
-                stopCastPlaybackMonitor();
       var elements = window.elements || {};
       var trackTitle = track.title || 'Untitled';
       var isAlbumTrack = (track.totalTracks || 1) > 1;
@@ -250,7 +218,6 @@
       } else if (elements.title) {
         elements.title.textContent = displayTitle;
       }
-              maybeAdvanceNearRemoteEnd();
       if (elements.creator) {
         elements.creator.textContent = isAlbumTrack
           ? (track.creator || 'Unknown') + ' (' + (Number(track.trackIndex || 0) + 1) + '/' + (track.totalTracks || 1) + ')'
@@ -260,12 +227,6 @@
         window.updateDescriptionUI(track);
       }
       if (typeof setArtwork === 'function') {
-                if (state === String(window.cast.framework.SessionState.SESSION_STARTED)
-                  || state === String(window.cast.framework.SessionState.SESSION_RESUMED)) {
-                  startCastPlaybackMonitor();
-                } else if (state === String(window.cast.framework.SessionState.SESSION_ENDED)) {
-                  stopCastPlaybackMonitor();
-                }
         setArtwork(track, identifier).catch(function () {});
       }
       if (typeof updateFavoriteButton === 'function') {
@@ -331,6 +292,42 @@
         window.playNext();
       }
     } catch (e) {}
+  }
+
+  function maybeAdvanceNearRemoteEnd() {
+    try {
+      if (!remotePlayer || !remotePlayer.isConnected) return;
+      var duration = Number(remotePlayer.duration || 0);
+      var position = Number(remotePlayer.currentTime || 0);
+      if (!isFinite(duration) || duration <= 0) return;
+      if (!isFinite(position) || position < 0) position = 0;
+
+      var remaining = duration - position;
+      if (remaining > 1.25) return;
+      var now = Date.now();
+      if (now - lastRemoteAdvanceAt < 1200) return;
+      lastRemoteAdvanceAt = now;
+      if (typeof window.playNext === 'function') {
+        window.playNext();
+      }
+    } catch (e) {}
+  }
+
+  function startCastPlaybackMonitor() {
+    if (castPlaybackMonitorId) return;
+    castPlaybackMonitorId = window.setInterval(function () {
+      try {
+        if (!remotePlayer || !remotePlayer.isConnected) return;
+        maybeAdvanceOnRemoteEnd();
+        maybeAdvanceNearRemoteEnd();
+      } catch (e) {}
+    }, 1200);
+  }
+
+  function stopCastPlaybackMonitor() {
+    if (!castPlaybackMonitorId) return;
+    try { window.clearInterval(castPlaybackMonitorId); } catch (e) {}
+    castPlaybackMonitorId = null;
   }
 
   function maybeAdvanceOnMediaSession(mediaSession) {
@@ -421,6 +418,12 @@
               maybeShowCastingHint(sessionId);
             }
             attachMediaSessionListeners(session);
+            if (state === String(window.cast.framework.SessionState.SESSION_STARTED)
+              || state === String(window.cast.framework.SessionState.SESSION_RESUMED)) {
+              startCastPlaybackMonitor();
+            } else if (state === String(window.cast.framework.SessionState.SESSION_ENDED)) {
+              stopCastPlaybackMonitor();
+            }
             try {
               if (remotePlayer && remotePlayer.mediaInfo) {
                 syncLocalTrackFromRemoteMedia(remotePlayer.mediaInfo, true);

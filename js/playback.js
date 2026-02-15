@@ -1624,6 +1624,17 @@ function resetLoaderProgress() {
   activeLoaderProgress = 0;
 }
 
+function isAllowedAudioUrl(url) {
+  if (!url) return false;
+  try {
+    const u = new URL(String(url), window.location.href);
+    const p = (u.pathname || '').toLowerCase();
+    return p.endsWith('.flac') || p.endsWith('.ogg') || p.endsWith('.mp3');
+  } catch {
+    return /\.(flac|ogg|mp3)(\?|#|$)/i.test(String(url || '').trim());
+  }
+}
+
 // Load audio from cache or network
 async function loadAudioWithCache(track) {
   if (!track || !track.url) {
@@ -1632,17 +1643,8 @@ async function loadAudioWithCache(track) {
 
   // Only allow .flac, .ogg and .mp3 files.
   // NOTE: allow query strings/fragments (e.g. .mp3?download=1)
-  try {
-    const u = new URL(String(track.url), window.location.href);
-    const p = (u.pathname || '').toLowerCase();
-    if (!p.endsWith('.flac') && !p.endsWith('.ogg') && !p.endsWith('.mp3')) {
-      throw new Error('Only .flac, .ogg and .mp3 files are allowed');
-    }
-  } catch {
-    const raw = String(track.url || '').trim();
-    if (!/\.(flac|ogg|mp3)(\?|#|$)/i.test(raw)) {
-      throw new Error('Only .flac, .ogg and .mp3 files are allowed');
-    }
+  if (!isAllowedAudioUrl(track.url)) {
+    throw new Error('Only .flac, .ogg and .mp3 files are allowed');
   }
 
   try {
@@ -2358,6 +2360,70 @@ async function resumeSavedPlayback() {
     }
 
     // Play the track
+    if (!isAllowedAudioUrl(trackForResume && trackForResume.url)) {
+      try {
+        const tryRecoverUrlFromList = (items) => {
+          if (!Array.isArray(items) || !items.length) return '';
+          const trackId = trackForResume && (trackForResume.id || trackForResume.trackId || trackForResume.albumId) ? String(trackForResume.id || trackForResume.trackId || trackForResume.albumId) : '';
+          const trackIndex = (trackForResume && Number.isFinite(trackForResume.trackIndex)) ? Number(trackForResume.trackIndex) : -1;
+          const trackTitle = trackForResume && trackForResume.title ? String(trackForResume.title) : '';
+          const trackCreator = trackForResume && trackForResume.creator ? String(trackForResume.creator) : '';
+
+          let match = null;
+          if (trackId) {
+            match = items.find(it => it && (String(it.id || it.trackId || '') === trackId));
+          }
+          if (!match && trackIndex >= 0) {
+            match = items.find(it => it && Number(it.trackIndex) === trackIndex);
+          }
+          if (!match && trackIndex >= 0 && trackIndex < items.length) {
+            match = items[trackIndex];
+          }
+          if (!match && trackTitle) {
+            match = items.find(it => it && it.title && String(it.title) === trackTitle && (!trackCreator || String(it.creator || '') === trackCreator));
+          }
+
+          const candidateUrl = match && match.url ? String(match.url) : '';
+          return isAllowedAudioUrl(candidateUrl) ? candidateUrl : '';
+        };
+
+        const savedItems = state && state.savedPlaybackTracklist && Array.isArray(state.savedPlaybackTracklist.items)
+          ? state.savedPlaybackTracklist.items
+          : [];
+        const currentItems = state && Array.isArray(state.currentTracklist) ? state.currentTracklist : [];
+
+        let recoveredUrl = tryRecoverUrlFromList(savedItems) || tryRecoverUrlFromList(currentItems);
+
+        if (!recoveredUrl) {
+          const albumId = trackForResume && (trackForResume.albumId || trackForResume.id) ? String(trackForResume.albumId || trackForResume.id) : '';
+          if (albumId && typeof fetchOptimizedPlayableFiles === 'function') {
+            const files = await fetchOptimizedPlayableFiles(albumId);
+            if (Array.isArray(files) && files.length > 0) {
+              const idx = (trackForResume && Number.isFinite(trackForResume.trackIndex))
+                ? Math.min(Math.max(Number(trackForResume.trackIndex), 0), files.length - 1)
+                : 0;
+              const candidate = files[idx] || files[0];
+              if (candidate && candidate.url && isAllowedAudioUrl(candidate.url)) {
+                recoveredUrl = String(candidate.url);
+                trackForResume.trackIndex = Number.isFinite(trackForResume.trackIndex) ? trackForResume.trackIndex : idx;
+                trackForResume.totalTracks = Number.isFinite(trackForResume.totalTracks) ? trackForResume.totalTracks : files.length;
+              }
+            }
+          }
+        }
+
+        if (recoveredUrl) {
+          trackForResume.url = recoveredUrl;
+        }
+      } catch {}
+    }
+
+    if (!isAllowedAudioUrl(trackForResume && trackForResume.url)) {
+      state.savedPlaybackState = null;
+      try { localStorage.removeItem('resonate_playback_state'); } catch {}
+      showStatus("Couldn't resume last track (unsupported file)", 'info', 3500);
+      return;
+    }
     await playAudioTrackOptimized(
       trackForResume,
       (trackForResume && trackForResume.id) ? trackForResume.id : (savedState.track && savedState.track.id),

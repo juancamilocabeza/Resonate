@@ -1109,6 +1109,24 @@ async function initializeApp() {
       const track = (state && state.currentTrack) ? state.currentTrack : null;
       const audioSrc = audioEl ? (audioEl.currentSrc || audioEl.src || '') : '';
 
+      const isAllowedCastUrl = (url) => {
+        if (!url) return false;
+        try {
+          const u = new URL(String(url), window.location.href);
+          const p = (u.pathname || '').toLowerCase();
+          return p.endsWith('.flac') || p.endsWith('.ogg') || p.endsWith('.mp3');
+        } catch {
+          return /\.(flac|ogg|mp3)(\?|#|$)/i.test(String(url || '').trim());
+        }
+      };
+
+      const pickCastUrl = () => {
+        const trackUrl = track && track.url ? String(track.url) : '';
+        if (trackUrl && isAllowedCastUrl(trackUrl)) return trackUrl;
+        if (audioSrc && !String(audioSrc).startsWith('blob:') && isAllowedCastUrl(audioSrc)) return audioSrc;
+        return trackUrl || audioSrc || '';
+      };
+
       const syncCastPlaybackContext = () => {
         try {
           if (!window.playbackManager || typeof window.playbackManager.getCurrentContext !== 'function') return;
@@ -1292,7 +1310,7 @@ async function initializeApp() {
           await window.CastManager.requestSession();
 
           var castTime = audioEl ? audioEl.currentTime : 0;
-          var castUrl = audioSrc || (track && track.url) || '';
+          var castUrl = pickCastUrl();
           if (!castUrl) {
             showCastHint('Connected to Cast. Select a track to play.');
             return;
