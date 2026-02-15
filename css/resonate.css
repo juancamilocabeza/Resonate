@@ -1123,10 +1123,6 @@ header {
   100% { transform: scale(1); }
 }
 
-body.casting-active .controls button:not(#favorite-btn) {
-  pointer-events: none;
-  opacity: 0.5;
-}
 
 @media (max-width: 480px) {
   .header-controls {

@@ -1043,6 +1043,12 @@ async function initializeApp() {
   if (elements.playBtn) {
     elements.playBtn.addEventListener('click', () => {
       window.logger.info('Play/pause button clicked', 'UI');
+      if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
+        if (typeof window.CastManager.togglePlayback === 'function') {
+          window.CastManager.togglePlayback();
+          return;
+        }
+      }
       togglePlay();
     });
     // Ocultar CTA si el usuario hace clic en el botón de reproducir

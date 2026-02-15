@@ -10,6 +10,7 @@
   var castHintSessionId = '';
   var remotePlayer = null;
   var remoteController = null;
+  var lastRemoteAdvanceAt = 0;
 
   function getCastAppId() {
     try {
@@ -76,6 +77,8 @@
           if (remotePlayer && !remotePlayer.isPaused) {
             enforceLocalPause();
           }
+          updateLocalTransportState();
+          maybeAdvanceOnRemoteEnd();
         } catch (e) {}
       });
 
@@ -84,8 +87,40 @@
           if (remotePlayer && remotePlayer.mediaInfo) {
             enforceLocalPause();
           }
+          updateLocalTransportState();
         } catch (e) {}
       });
+    } catch (e) {}
+  }
+
+  function maybeAdvanceOnRemoteEnd() {
+    try {
+      if (!remotePlayer || !remotePlayer.isConnected) return;
+      var playerState = remotePlayer.playerState || '';
+      var idleReason = remotePlayer.idleReason || '';
+      var RemotePlayerState = window.cast && window.cast.framework ? window.cast.framework.RemotePlayerState : null;
+      var IdleReason = window.chrome && window.chrome.cast ? window.chrome.cast.media.IdleReason : null;
+      var isIdle = RemotePlayerState ? playerState === RemotePlayerState.IDLE : String(playerState) === 'IDLE';
+      var isFinished = IdleReason ? idleReason === IdleReason.FINISHED : String(idleReason) === 'FINISHED';
+
+      if (!isIdle || !isFinished) return;
+      var now = Date.now();
+      if (now - lastRemoteAdvanceAt < 1200) return;
+      lastRemoteAdvanceAt = now;
+      if (typeof window.playNext === 'function') {
+        window.playNext();
+      }
+    } catch (e) {}
+  }
+
+  function updateLocalTransportState() {
+    try {
+      if (!remotePlayer) return;
+      var playBtn = (window.elements && window.elements.playBtn) ? window.elements.playBtn : document.getElementById('play-btn');
+      if (!playBtn) return;
+      var isPlaying = !remotePlayer.isPaused;
+      playBtn.textContent = isPlaying ? '⏸' : '▶';
+      playBtn.setAttribute('aria-label', isPlaying ? 'Pause' : 'Play');
     } catch (e) {}
   }
 
@@ -199,6 +234,16 @@
     }
   }
 
+  function togglePlayback() {
+    if (!remoteController) return false;
+    try {
+      remoteController.playOrPause();
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   function getCoverUrl(track) {
     if (!track) return '';
     var id = track.id || track.identifier || track.albumId || '';
@@ -292,6 +337,7 @@
       var st = ctx ? ctx.getSessionState() : null;
       updateCastUi(st, ctx ? ctx.getCurrentSession() : null);
       ensureRemotePlayer();
+      updateLocalTransportState();
     } catch (e) {}
   }
 
@@ -303,6 +349,7 @@
     requestSession: requestSession,
     isSessionActive: isSessionActive,
     disconnect: disconnect,
+    togglePlayback: togglePlayback,
     loadMediaFromTrack: loadMediaFromTrack
   };
 })();
