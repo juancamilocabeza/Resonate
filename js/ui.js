@@ -5774,6 +5774,7 @@ function loadSavedPlaybackState() {
 // --- Service Worker Auto-Update (Mode B: prompt) ---
 const SW_UPDATE_CHANNEL_NAME = 'resonate_sw_update_v1';
 const SW_UPDATE_SESSION_DISMISS_KEY = 'resonate_sw_update_banner_dismissed';
+const SW_UPDATE_SESSION_DISMISS_VERSION_KEY = 'resonate_sw_update_banner_dismissed_version';
 const SW_UPDATE_LEADER_KEY = 'resonate_sw_update_leader_v1';
 const SW_UPDATE_LEADER_TTL_MS = 12000;
 const SW_UPDATE_PENDING_RELOAD_KEY = 'resonate_sw_update_pending_reload';
@@ -5943,12 +5944,33 @@ function onBroadcastUpdateMessage(handler) {
   }
 }
 
-function isUpdateBannerDismissedForSession() {
-  try { return sessionStorage.getItem(SW_UPDATE_SESSION_DISMISS_KEY) === 'true'; } catch { return false; }
+function getDismissedUpdateVersion() {
+  try {
+    const raw = sessionStorage.getItem(SW_UPDATE_SESSION_DISMISS_VERSION_KEY);
+    const s = (raw != null ? String(raw) : '').trim();
+    return s || null;
+  } catch {
+    return null;
+  }
 }
 
-function dismissUpdateBannerForSession() {
+function isUpdateBannerDismissedForSession(newVersion = null) {
+  try {
+    if (sessionStorage.getItem(SW_UPDATE_SESSION_DISMISS_KEY) !== 'true') return false;
+    const dismissedVersion = getDismissedUpdateVersion();
+    if (!newVersion) return false;
+    if (!dismissedVersion) return false;
+    return String(newVersion) === String(dismissedVersion);
+  } catch {
+    return false;
+  }
+}
+
+function dismissUpdateBannerForSession(newVersion = null) {
   try { sessionStorage.setItem(SW_UPDATE_SESSION_DISMISS_KEY, 'true'); } catch {}
+  try {
+    if (newVersion) sessionStorage.setItem(SW_UPDATE_SESSION_DISMISS_VERSION_KEY, String(newVersion));
+  } catch {}
 }
 
 function tryBecomeUpdateLeader() {
@@ -5981,7 +6003,7 @@ function renewUpdateLeaderLease() {
 }
 
 function showServiceWorkerUpdateBanner({ currentVersion = null, newVersion = null } = {}) {
-  if (isUpdateBannerDismissedForSession()) return;
+  if (isUpdateBannerDismissedForSession(newVersion)) return;
   if (document.getElementById('sw-update-banner')) return;
 
   const banner = document.createElement('div');
@@ -6011,7 +6033,7 @@ function showServiceWorkerUpdateBanner({ currentVersion = null, newVersion = nul
 
   const hide = (dismiss = false) => {
     try {
-      if (dismiss) dismissUpdateBannerForSession();
+      if (dismiss) dismissUpdateBannerForSession(newVersion);
       banner.classList.remove('active');
       setTimeout(() => {
         try { banner.remove(); } catch {}
@@ -6033,7 +6055,7 @@ function showServiceWorkerUpdateBanner({ currentVersion = null, newVersion = nul
 
   const later = () => {
     hide(true);
-    broadcastUpdateMessage({ type: 'UPDATE_BANNER_DISMISSED' });
+    broadcastUpdateMessage({ type: 'UPDATE_BANNER_DISMISSED', newVersion: newVersion || null });
   };
 
   laterBtn?.addEventListener('click', later);
@@ -6082,6 +6104,32 @@ async function computeCurrentAndWaitingVersions(registration) {
   } catch {
     return { currentVersion: getResonateVersionFromMeta(), newVersion: null };
   }
+}
+
+function waitForWaitingWorker(registration, timeoutMs = 4000) {
+  return new Promise((resolve) => {
+    if (!registration) return resolve(false);
+    if (registration.waiting) return resolve(true);
+
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      resolve(!!value);
+    };
+
+    const installing = registration.installing;
+    if (installing && typeof installing.addEventListener === 'function') {
+      installing.addEventListener('statechange', () => {
+        if (installing.state === 'installed') {
+          // Allow the registration to update its waiting reference.
+          setTimeout(() => finish(registration.waiting), 50);
+        }
+      });
+    }
+
+    setTimeout(() => finish(registration.waiting), Math.max(200, Number(timeoutMs) || 0));
+  });
 }
 
 async function maybeAnnounceUpdateReady(registration) {
@@ -6234,6 +6282,12 @@ async function applyServiceWorkerUpdateAcrossTabs({ expectedNewVersion = null } 
     // If it is now waiting, try to activate it.
     if (await tryActivateWaitingWorker()) return;
 
+    // Give the browser a moment to move installing -> waiting, then retry.
+    try {
+      await waitForWaitingWorker(reg, 4500);
+    } catch {}
+    if (await tryActivateWaitingWorker()) return;
+
     showStatus('Update is not ready yet', 'info', 2500);
   } finally {
     try { window.__resonateSwApplyInProgress = false; } catch {}
@@ -6306,7 +6360,7 @@ function ensureServiceWorkerUpdateCoordinationHandlers() {
         return;
       }
 
-      if (isUpdateBannerDismissedForSession()) return;
+      if (isUpdateBannerDismissedForSession(msg.newVersion || null)) return;
       showServiceWorkerUpdateBanner({ currentVersion: msg.currentVersion || null, newVersion: msg.newVersion || null });
       return;
     }
@@ -6347,7 +6401,7 @@ function ensureServiceWorkerUpdateCoordinationHandlers() {
         try { banner.classList.remove('active'); } catch {}
         try { banner.remove(); } catch {}
       }
-      dismissUpdateBannerForSession();
+      dismissUpdateBannerForSession(msg.newVersion || null);
       return;
     }
 
@@ -6406,6 +6460,7 @@ async function checkForServiceWorkerUpdates(reason = '') {
       const reg = await navigator.serviceWorker.getRegistration('/');
       if (!reg) return;
       await reg.update();
+      try { await waitForWaitingWorker(reg, 4500); } catch {}
       await maybeAnnounceUpdateReady(reg);
     } catch (e) {
       // ignore
