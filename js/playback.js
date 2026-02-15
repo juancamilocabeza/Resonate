@@ -1644,16 +1644,30 @@ function isAllowedAudioUrl(url) {
   }
 }
 
+function isAllowedVideoUrl(url) {
+  if (!url) return false;
+  try {
+    const u = new URL(String(url), window.location.href);
+    const p = (u.pathname || '').toLowerCase();
+    return p.endsWith('.mp4') || p.endsWith('.webm') || p.endsWith('.ogv');
+  } catch {
+    return /\.(mp4|webm|ogv)(\?|#|$)/i.test(String(url || '').trim());
+  }
+}
+
+function isAllowedMediaUrl(url) {
+  return isAllowedAudioUrl(url) || isAllowedVideoUrl(url);
+}
+
 // Load audio from cache or network
 async function loadAudioWithCache(track) {
   if (!track || !track.url) {
     throw new Error('Audio URL not available');
   }
 
-  // Only allow .flac, .ogg and .mp3 files.
-  // NOTE: allow query strings/fragments (e.g. .mp3?download=1)
-  if (!isAllowedAudioUrl(track.url)) {
-    throw new Error('Only .flac, .ogg and .mp3 files are allowed');
+  // Allow audio and video files
+  if (!isAllowedMediaUrl(track.url)) {
+    throw new Error('Only audio (.flac, .ogg, .mp3) and video (.mp4, .webm, .ogv) files are allowed');
   }
 
   try {
