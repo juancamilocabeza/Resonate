@@ -337,13 +337,10 @@ test.describe('Share Module - Cover Image Inclusion', () => {
       navigator.share = async () => Promise.resolve();
     });
     
-    // Wait for network idle before calling shareTrack
-    const sharePromise = page.evaluate(async () => {
+    // Call shareTrack and wait for it to complete
+    await page.evaluate(async () => {
       await window.shareTrack('test-identifier', 'Test Track', 'Test Artist', null, 'track', null);
     });
-    
-    // Wait for the share operation to complete
-    await sharePromise;
     
     // Verify that cover was fetched
     expect(coverFetched).toBe(true);
