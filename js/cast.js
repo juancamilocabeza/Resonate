@@ -12,6 +12,7 @@
   var remoteController = null;
   var lastRemoteAdvanceAt = 0;
   var lastRemoteContentId = '';
+  var lastMediaSessionId = '';
 
   function getCastAppId() {
     try {
@@ -90,6 +91,11 @@
           if (remotePlayer && remotePlayer.mediaInfo) {
             syncLocalTrackFromRemoteMedia(remotePlayer.mediaInfo, false);
           }
+          try {
+            var context = getCastContext();
+            var session = context ? context.getCurrentSession() : null;
+            attachMediaSessionListeners(session);
+          } catch (e) {}
         } catch (e) {}
       });
 
@@ -283,6 +289,47 @@
     } catch (e) {}
   }
 
+  function maybeAdvanceOnMediaSession(mediaSession) {
+    try {
+      if (!mediaSession) return;
+      var playerState = mediaSession.playerState || '';
+      var idleReason = mediaSession.idleReason || '';
+      var PlayerState = window.chrome && window.chrome.cast ? window.chrome.cast.media.PlayerState : null;
+      var IdleReason = window.chrome && window.chrome.cast ? window.chrome.cast.media.IdleReason : null;
+      var isIdle = PlayerState ? playerState === PlayerState.IDLE : String(playerState) === 'IDLE';
+      var isFinished = IdleReason ? idleReason === IdleReason.FINISHED : String(idleReason) === 'FINISHED';
+
+      if (!isIdle || !isFinished) return;
+      var now = Date.now();
+      if (now - lastRemoteAdvanceAt < 1200) return;
+      lastRemoteAdvanceAt = now;
+      if (typeof window.playNext === 'function') {
+        window.playNext();
+      }
+    } catch (e) {}
+  }
+
+  function attachMediaSessionListeners(session) {
+    try {
+      if (!session || typeof session.getMediaSession !== 'function') return;
+      var mediaSession = session.getMediaSession();
+      if (!mediaSession) return;
+      var mediaSessionId = mediaSession.mediaSessionId ? String(mediaSession.mediaSessionId) : '';
+      if (mediaSessionId && mediaSessionId === lastMediaSessionId) return;
+      if (mediaSessionId) lastMediaSessionId = mediaSessionId;
+
+      mediaSession.addUpdateListener(function (isAlive) {
+        try {
+          if (!isAlive) return;
+          if (mediaSession.media) {
+            syncLocalTrackFromRemoteMedia(mediaSession.media, false);
+          }
+          maybeAdvanceOnMediaSession(mediaSession);
+        } catch (e) {}
+      });
+    } catch (e) {}
+  }
+
   function updateLocalTransportState() {
     try {
       if (!remotePlayer) return;
@@ -329,6 +376,7 @@
             if (sessionId) {
               maybeShowCastingHint(sessionId);
             }
+            attachMediaSessionListeners(session);
             try {
               if (remotePlayer && remotePlayer.mediaInfo) {
                 syncLocalTrackFromRemoteMedia(remotePlayer.mediaInfo, true);
@@ -500,7 +548,12 @@
     var session = context.getCurrentSession();
     if (!session) return Promise.reject(new Error('Cast session not available'));
 
-    return session.loadMedia(request);
+    return session.loadMedia(request).then(function (result) {
+      try {
+        attachMediaSessionListeners(session);
+      } catch (e) {}
+      return result;
+    });
   }
 
   function onGCastApiAvailable(isAvailable) {
