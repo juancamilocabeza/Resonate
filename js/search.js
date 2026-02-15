@@ -23,7 +23,7 @@ const SEARCH_CACHE_SCHEMA = 'intent-pop-v2';
 // Curated filter options for Archive.org searches.
 // Note: Archive advancedsearch doesn't expose robust faceting; keep this list intentionally small.
 window.SEARCH_FILTERS_CONFIG = window.SEARCH_FILTERS_CONFIG || {
-  mediatypeDefault: 'audio'
+  mediatypeDefault: 'all'
 };
 
 // AbortController state for cancellable operations
@@ -92,7 +92,7 @@ function getSearchFilterState() {
   const ui = st && st.searchUi ? st.searchUi : {};
   const cfg = window.SEARCH_FILTERS_CONFIG || {};
 
-  const mediatype = (ui.mediatype || cfg.mediatypeDefault || 'audio').trim() || 'audio';
+  const mediatype = (ui.mediatype || cfg.mediatypeDefault || 'all').trim() || 'all';
 
   return { mediatype };
 }
@@ -104,10 +104,10 @@ function getSearchNetworkFilterState() {
     const st = getSearchStateRef();
     const ui = st && st.searchUi ? st.searchUi : {};
     const cfg = window.SEARCH_FILTERS_CONFIG || {};
-    const mediatype = (ui.mediatype || cfg.mediatypeDefault || 'audio').trim() || 'audio';
+    const mediatype = (ui.mediatype || cfg.mediatypeDefault || 'all').trim() || 'all';
     return { mediatype };
   } catch {
-    return { mediatype: 'audio' };
+    return { mediatype: 'all' };
   }
 }
 
@@ -124,9 +124,17 @@ function getSearchFilterClauseParts(filters) {
   const f = filters || getSearchNetworkFilterState();
 
   const parts = [];
-  // Always include both audio and movies (videos) in search results.
-  // This intentionally overrides the mediatype filter to show all playable content.
-  parts.push(`(mediatype:audio OR mediatype:movies)`);
+  // Include audio and/or movies (videos) based on the mediatype filter
+  const mediatype = (f.mediatype || 'all').trim().toLowerCase();
+  
+  if (mediatype === 'audio') {
+    parts.push('mediatype:audio');
+  } else if (mediatype === 'movies' || mediatype === 'video') {
+    parts.push('mediatype:movies');
+  } else {
+    // 'all' or any other value: include both audio and movies
+    parts.push(`(mediatype:audio OR mediatype:movies)`);
+  }
 
   return parts;
 }

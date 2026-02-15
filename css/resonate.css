@@ -2899,7 +2899,7 @@ select:focus {
 .search-filter-summary {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 12px;
   flex-wrap: nowrap;
   min-width: 0;
   overflow-x: auto;
@@ -2909,6 +2909,13 @@ select:focus {
 
 .search-filter-summary::-webkit-scrollbar {
   display: none;
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 .search-option-btn {
