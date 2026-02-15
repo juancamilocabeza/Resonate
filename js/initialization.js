@@ -1109,6 +1109,121 @@ async function initializeApp() {
       const track = (state && state.currentTrack) ? state.currentTrack : null;
       const audioSrc = audioEl ? (audioEl.currentSrc || audioEl.src || '') : '';
 
+      const syncCastPlaybackContext = () => {
+        try {
+          if (!window.playbackManager || typeof window.playbackManager.getCurrentContext !== 'function') return;
+
+          const currentContext = window.playbackManager.getCurrentContext();
+          const currentCtxData = currentContext && window.playbackManager.contextData
+            ? window.playbackManager.contextData[currentContext]
+            : null;
+          if (currentContext && currentCtxData && Array.isArray(currentCtxData.items) && currentCtxData.items.length > 0) {
+            let startIndex = -1;
+            if (track && typeof track.trackIndex === 'number' && track.trackIndex >= 0) {
+              startIndex = track.trackIndex;
+            }
+
+            if (startIndex < 0 && track) {
+              if (currentContext === 'search') {
+                startIndex = currentCtxData.items.findIndex(it => it && (it.identifier || it.id) === (track.albumId || track.id));
+              } else if (track.url) {
+                startIndex = currentCtxData.items.findIndex(it => it && it.url === track.url);
+              }
+            }
+
+            if (startIndex < 0) startIndex = 0;
+            currentCtxData.currentIndex = startIndex;
+
+            if (currentContext === 'album' && !currentCtxData.currentAlbumId) {
+              currentCtxData.currentAlbumId = (track && (track.albumId || track.album || track.id)) || currentCtxData.currentAlbumId || null;
+            }
+
+            if (typeof window.loadPlaybackQueue === 'function' && (currentContext === 'album' || currentContext === 'favorites' || currentContext === 'searchPlaylist')) {
+              const nextIndex = Math.min(Math.max(startIndex + 1, 0), currentCtxData.items.length);
+              window.loadPlaybackQueue(currentContext, currentCtxData.items, nextIndex);
+            }
+            return;
+          }
+
+          const searchPlaylist = (state && Array.isArray(state.searchPlaylist)) ? state.searchPlaylist : [];
+          const preferSearchPlaylist = !!(state && state.autoPlaySearchResults);
+          if (preferSearchPlaylist && searchPlaylist.length > 0) {
+            let startIndex = -1;
+            if (track && track.url) {
+              startIndex = searchPlaylist.findIndex(it => it && it.url === track.url);
+            }
+            if (startIndex < 0) startIndex = 0;
+            if (typeof window.playbackManager.setSearchPlaylist === 'function') {
+              window.playbackManager.setSearchPlaylist(searchPlaylist, startIndex);
+            } else if (typeof window.playbackManager.setContext === 'function') {
+              window.playbackManager.setContext('searchPlaylist', searchPlaylist, startIndex);
+            }
+            if (typeof window.loadPlaybackQueue === 'function') {
+              const nextIndex = Math.min(Math.max(startIndex + 1, 0), searchPlaylist.length);
+              window.loadPlaybackQueue('searchPlaylist', searchPlaylist, nextIndex);
+            }
+            return;
+          }
+
+          const currentTracklist = (state && Array.isArray(state.currentTracklist)) ? state.currentTracklist : [];
+          const savedTracklist = (state && state.savedPlaybackTracklist && Array.isArray(state.savedPlaybackTracklist.items))
+            ? state.savedPlaybackTracklist.items
+            : [];
+          const fallbackList = currentTracklist.length ? currentTracklist : savedTracklist;
+
+          if (fallbackList.length > 1) {
+            const albumId = (track && (track.albumId || track.album || track.id))
+              || (state && state.savedPlaybackTracklist && state.savedPlaybackTracklist.albumId)
+              || (fallbackList[0] && (fallbackList[0].albumId || fallbackList[0].album || fallbackList[0].id))
+              || null;
+            let startIndex = (track && typeof track.trackIndex === 'number') ? track.trackIndex : -1;
+            if (startIndex < 0 && track && track.url) {
+              startIndex = fallbackList.findIndex(it => it && it.url === track.url);
+            }
+            if (startIndex < 0) startIndex = 0;
+            if (typeof window.playbackManager.setAlbumPlaylist === 'function') {
+              window.playbackManager.setAlbumPlaylist(albumId, fallbackList, startIndex);
+              if (typeof window.loadPlaybackQueue === 'function') {
+                const nextIndex = Math.min(Math.max(startIndex + 1, 0), fallbackList.length);
+                window.loadPlaybackQueue('album', fallbackList, nextIndex);
+              }
+              return;
+            }
+          }
+
+          if (state && state.isPlayingFavorites && Array.isArray(state.favorites) && state.favorites.length > 0) {
+            let startIndex = -1;
+            if (track && track.url) {
+              startIndex = state.favorites.findIndex(it => it && it.url === track.url);
+            }
+            if (startIndex < 0) startIndex = 0;
+            if (typeof window.playbackManager.setContext === 'function') {
+              window.playbackManager.setContext('favorites', state.favorites, startIndex);
+              if (typeof window.loadPlaybackQueue === 'function') {
+                const nextIndex = Math.min(Math.max(startIndex + 1, 0), state.favorites.length);
+                window.loadPlaybackQueue('favorites', state.favorites, nextIndex);
+              }
+              return;
+            }
+          }
+
+          if (state && Array.isArray(state.searchResults) && state.searchResults.length > 0) {
+            let startIndex = -1;
+            if (track && track.id) {
+              startIndex = state.searchResults.findIndex(it => it && (it.identifier || it.id) === track.id);
+            }
+            if (startIndex < 0) startIndex = 0;
+            if (typeof window.playbackManager.setContext === 'function') {
+              window.playbackManager.setContext('search', state.searchResults, startIndex);
+              if (typeof window.loadPlaybackQueue === 'function') {
+                const nextIndex = Math.min(Math.max(startIndex + 1, 0), state.searchResults.length);
+                window.loadPlaybackQueue('search', state.searchResults, nextIndex);
+              }
+            }
+          }
+        } catch {}
+      };
+
       const showCastHint = (message) => {
         try {
           if (window && typeof window.showAutoplayCta === 'function') {
@@ -1173,6 +1288,7 @@ async function initializeApp() {
 
       if (window.CastManager && typeof window.CastManager.isReady === 'function' && window.CastManager.isReady()) {
         try {
+          syncCastPlaybackContext();
           await window.CastManager.requestSession();
 
           var castTime = audioEl ? audioEl.currentTime : 0;
