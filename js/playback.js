@@ -1988,8 +1988,6 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
   const elements = getElementsSafe();
   const isVideo = track.isVideo === true;
   const mediaEl = isVideo ? elements.video : elements.audio;
-  const audioEl = elements.audio;
-  const videoEl = elements.video;
   
   if (!mediaEl) {
     if (window.Loaders && typeof window.Loaders.hideLoader === 'function') window.Loaders.hideLoader();
@@ -2003,20 +2001,19 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
   } catch {}
 
   // Pause and reset both elements, show/hide appropriately
-  if (audioEl) {
-    audioEl.pause();
-    audioEl.currentTime = 0;
+  if (elements.audio) {
+    elements.audio.pause();
+    elements.audio.currentTime = 0;
   }
-  if (videoEl) {
-    videoEl.pause();
-    videoEl.currentTime = 0;
-    videoEl.hidden = !isVideo;
+  if (elements.video) {
+    elements.video.pause();
+    elements.video.currentTime = 0;
+    elements.video.hidden = !isVideo;
   }
   
   // Hide/show artwork based on media type
-  const artElement = elements.art;
-  if (artElement) {
-    const artImg = artElement.querySelector('img');
+  if (elements.art) {
+    const artImg = elements.art.querySelector('img');
     if (isVideo) {
       if (artImg) artImg.style.display = 'none';
     } else {
@@ -2089,8 +2086,8 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
         var castDuration = null;
         if (track && typeof track.duration === 'number' && isFinite(track.duration) && track.duration > 0) {
           castDuration = track.duration;
-        } else if (audioEl && typeof audioEl.duration === 'number' && isFinite(audioEl.duration) && audioEl.duration > 0) {
-          castDuration = audioEl.duration;
+        } else if (mediaEl && typeof mediaEl.duration === 'number' && isFinite(mediaEl.duration) && mediaEl.duration > 0) {
+          castDuration = mediaEl.duration;
         }
         var castUrl = track.url || '';
         window.CastManager.loadMediaFromTrack(track, castUrl, 0, castDuration);
@@ -2229,7 +2226,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
       stopInitialRamp();
     };
 
-    // Cargar media con caché
+    // Load media with cache
     loadAudioWithCache(track)
       .then(mediaUrl => {
         // Progress already advanced in loadAudioWithCache (20→85%)

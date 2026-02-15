@@ -2072,15 +2072,16 @@ function isPlayableVideoFile(file) {
     pattern.test(file.name)
   );
   if (hasExcludedPattern) return false;
-  // Accept common video formats
-  const videoFormats = ['.mp4', '.webm', '.ogv', '.ogg'];
+  // Accept common video formats (.ogv for Ogg Video, not .ogg which is typically audio)
+  const videoFormats = ['.mp4', '.webm', '.ogv'];
   const isVideoFile = videoFormats.some(format =>
     file.name.toLowerCase().endsWith(format)
   );
   if (!isVideoFile) return false;
   const fileSize = file.size || 0;
   if (fileSize < 50000) return false;
-  if (fileSize > 2000000000) return false; // 2GB max for videos
+  const MAX_VIDEO_FILE_SIZE = 2000000000; // 2GB max for videos
+  if (fileSize > MAX_VIDEO_FILE_SIZE) return false;
   return true;
 }
 
