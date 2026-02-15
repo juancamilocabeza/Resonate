@@ -14,6 +14,7 @@
   var lastRemoteContentId = '';
   var lastMediaSessionId = '';
   var castPlaybackMonitorId = null;
+  var lastQueuedTrackUrls = [];
 
   function getCastAppId() {
     try {
@@ -363,14 +364,29 @@
 
       // If only 1 or fewer items remain after current, add more
       if (remainingItems <= 1) {
+        // Get URLs of already queued tracks to avoid duplicates
+        var queuedUrls = {};
+        for (var i = 0; i < items.length; i++) {
+          if (items[i] && items[i].media && items[i].media.contentId) {
+            queuedUrls[normalizeContentId(items[i].media.contentId)] = true;
+          }
+        }
+
         var upcomingTracks = getUpcomingTracks(3);
         if (upcomingTracks.length === 0) return;
 
         var queueItems = [];
         for (var i = 0; i < upcomingTracks.length; i++) {
-          var queueItem = buildQueueItem(upcomingTracks[i], null);
+          var track = upcomingTracks[i];
+          var trackUrl = track && track.url ? normalizeContentId(track.url) : '';
+          
+          // Skip if already in queue
+          if (trackUrl && queuedUrls[trackUrl]) continue;
+          
+          var queueItem = buildQueueItem(track, null);
           if (queueItem) {
             queueItems.push(queueItem);
+            if (trackUrl) queuedUrls[trackUrl] = true;
           }
         }
 
