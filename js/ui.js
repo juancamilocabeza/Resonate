@@ -4531,6 +4531,17 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
   chipType.textContent = isAlbum ? 'Album' : (isPendingMeta ? '…' : 'Single');
   chips.appendChild(chipType);
 
+  // Video chip (when mediatype is movies)
+  try {
+    const isVideo = item && (item.mediatype === 'movies' || item.mediatype === 'video');
+    if (isVideo) {
+      const chipVideo = document.createElement('span');
+      chipVideo.className = 'chip chip-video';
+      chipVideo.textContent = '🎬 Video';
+      chips.appendChild(chipVideo);
+    }
+  } catch (e) {}
+
   // Offline chip (when we can determine it cheaply)
 
   try {
