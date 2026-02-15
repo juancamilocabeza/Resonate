@@ -3205,14 +3205,26 @@ function hideSearchResults() {
 function updateMediaPositionState() {
   if (!('mediaSession' in navigator) || !navigator.mediaSession) return;
   if (typeof navigator.mediaSession.setPositionState !== 'function') return;
-  if (!elements.audio.duration) return;
+  const castState = (window.CastManager && typeof window.CastManager.getRemotePositionState === 'function')
+    ? window.CastManager.getRemotePositionState()
+    : null;
+  const useCast = !!(castState && typeof castState.duration === 'number');
+  if (!useCast && !elements.audio.duration) return;
 
   try {
-    navigator.mediaSession.setPositionState({
-      duration: elements.audio.duration,
-      playbackRate: elements.audio.playbackRate,
-      position: elements.audio.currentTime
-    });
+    if (useCast) {
+      navigator.mediaSession.setPositionState({
+        duration: castState.duration,
+        playbackRate: castState.playbackRate || 1,
+        position: castState.position || 0
+      });
+    } else {
+      navigator.mediaSession.setPositionState({
+        duration: elements.audio.duration,
+        playbackRate: elements.audio.playbackRate,
+        position: elements.audio.currentTime
+      });
+    }
   } catch (error) {
     window.logger?.warn({ message: 'Error updating Media Session position', error }, 'PLAYBACK');
   }
@@ -3229,11 +3241,33 @@ function updateMediaSessionMetadata(track, identifier) {
     const displayTitle = (isAlbumTrack && albumTitle && albumTitle.toLowerCase() !== trackTitle.toLowerCase())
       ? `${albumTitle} — ${trackTitle}`
       : trackTitle;
+    let coverUrl = '';
+    try {
+      if (window.CoverManager && typeof window.CoverManager.getCoverUrl === 'function') {
+        coverUrl = window.CoverManager.getCoverUrl(identifier);
+      } else if (identifier) {
+        coverUrl = `https://archive.org/services/img/${encodeURIComponent(identifier)}`;
+      }
+    } catch {}
+    let imageType = '';
+    try {
+      const lower = String(coverUrl || '').toLowerCase();
+      if (lower.endsWith('.png')) imageType = 'image/png';
+      if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) imageType = 'image/jpeg';
+    } catch {}
+    const artwork = coverUrl
+      ? [64, 96, 128, 192, 256, 384, 512, 1024].map(size => {
+          const entry = { src: coverUrl, sizes: `${size}x${size}` };
+          if (imageType) entry.type = imageType;
+          return entry;
+        })
+      : undefined;
 
     navigator.mediaSession.metadata = new MediaMetadata({
       title: displayTitle,
       artist: track.creator || 'Unknown',
-      album: albumTitle
+      album: albumTitle,
+      artwork
     });
 
     updateMediaPositionState();

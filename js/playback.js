@@ -3833,32 +3833,70 @@ function setupMediaSession() {
 
   try {
     navigator.mediaSession.setActionHandler('play', () => {
+      if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
+        if (typeof window.CastManager.togglePlayback === 'function') {
+          window.CastManager.togglePlayback();
+          return;
+        }
+      }
       togglePlay();
     });
 
     navigator.mediaSession.setActionHandler('pause', () => {
+      if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
+        if (typeof window.CastManager.togglePlayback === 'function') {
+          window.CastManager.togglePlayback();
+          return;
+        }
+      }
       togglePlay();
     });
 
     navigator.mediaSession.setActionHandler('previoustrack', () => {
+      if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
+        playPrevious();
+        return;
+      }
       playPrevious();
     });
 
     navigator.mediaSession.setActionHandler('nexttrack', () => {
+      if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
+        playNext();
+        return;
+      }
       playNext();
     });
 
     navigator.mediaSession.setActionHandler('seekbackward', (details) => {
       const skipTime = details.seekOffset || 10;
+      if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
+        if (typeof window.CastManager.skipBy === 'function') {
+          window.CastManager.skipBy(-skipTime);
+          return;
+        }
+      }
       window.elements.audio.currentTime = Math.max(0, window.elements.audio.currentTime - skipTime);
     });
 
     navigator.mediaSession.setActionHandler('seekforward', (details) => {
       const skipTime = details.seekOffset || 10;
+      if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
+        if (typeof window.CastManager.skipBy === 'function') {
+          window.CastManager.skipBy(skipTime);
+          return;
+        }
+      }
       window.elements.audio.currentTime = Math.min(window.elements.audio.duration, window.elements.audio.currentTime + skipTime);
     });
 
     navigator.mediaSession.setActionHandler('seekto', (details) => {
+      if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
+        if (typeof window.CastManager.seekTo === 'function') {
+          window.CastManager.seekTo(details.seekTime);
+          return;
+        }
+      }
       if (details.fastSeek && 'fastSeek' in window.elements.audio) {
         window.elements.audio.fastSeek(details.seekTime);
       } else {

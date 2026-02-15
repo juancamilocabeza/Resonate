@@ -11,6 +11,7 @@
   var remotePlayer = null;
   var remoteController = null;
   var lastRemoteAdvanceAt = 0;
+  var lastRemoteContentId = '';
 
   function getCastAppId() {
     try {
@@ -69,6 +70,7 @@
             var sessionId = session && session.getSessionId ? String(session.getSessionId()) : '';
             maybeShowCastingHint(sessionId);
           }
+          updateLocalTransportState();
         } catch (e) {}
       });
 
@@ -88,9 +90,180 @@
             enforceLocalPause();
           }
           updateLocalTransportState();
+          if (remotePlayer && remotePlayer.mediaInfo) {
+            syncLocalTrackFromRemoteMedia(remotePlayer.mediaInfo, false);
+          }
+        } catch (e) {}
+      });
+
+      remoteController.addEventListener(window.cast.framework.RemotePlayerEventType.CURRENT_TIME_CHANGED, function () {
+        try {
+          if (typeof window.updateMediaPositionState === 'function') {
+            window.updateMediaPositionState();
+          }
         } catch (e) {}
       });
     } catch (e) {}
+  }
+
+  function getRemotePositionState() {
+    try {
+      if (!remotePlayer || !remotePlayer.isConnected) return null;
+      var duration = Number(remotePlayer.duration);
+      var position = Number(remotePlayer.currentTime);
+      var playbackRate = Number(remotePlayer.playbackRate || 1);
+      if (!isFinite(duration) || duration <= 0) return null;
+      if (!isFinite(position) || position < 0) position = 0;
+      if (!isFinite(playbackRate) || playbackRate <= 0) playbackRate = 1;
+      return { duration: duration, position: position, playbackRate: playbackRate };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function normalizeContentId(contentId) {
+    if (!contentId) return '';
+    try {
+      if (typeof canonicalizeUrl === 'function') {
+        return canonicalizeUrl(String(contentId));
+      }
+      return new URL(String(contentId), window.location.href).href;
+    } catch (e) {
+      return String(contentId || '');
+    }
+  }
+
+  function findTrackInCurrentContextByUrl(contentId) {
+    try {
+      var manager = window.playbackManager;
+      if (!manager || typeof manager.getCurrentContext !== 'function') return null;
+      var context = manager.getCurrentContext();
+      if (!context || !manager.contextData || !manager.contextData[context]) return null;
+      var ctx = manager.contextData[context];
+      var items = Array.isArray(ctx.items) ? ctx.items : [];
+      if (!items.length) return null;
+      var target = normalizeContentId(contentId);
+      if (!target) return null;
+
+      var idx = -1;
+      for (var i = 0; i < items.length; i++) {
+        var item = items[i];
+        var itemUrl = item && item.url ? normalizeContentId(item.url) : '';
+        if (itemUrl && itemUrl === target) {
+          idx = i;
+          break;
+        }
+      }
+      if (idx < 0) return null;
+      ctx.currentIndex = idx;
+
+      var identifier = '';
+      if (context === 'album' && typeof manager.getCurrentAlbumId === 'function') {
+        identifier = manager.getCurrentAlbumId();
+      }
+      return { track: items[idx], identifier: identifier || (items[idx] && (items[idx].albumId || items[idx].id)) || '' };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function buildFallbackTrackFromMediaInfo(mediaInfo, fallbackTrack) {
+    try {
+      var meta = mediaInfo && mediaInfo.metadata ? mediaInfo.metadata : null;
+      var title = meta && meta.title ? String(meta.title) : (fallbackTrack && fallbackTrack.title) ? String(fallbackTrack.title) : 'Track';
+      var creator = meta && meta.artist ? String(meta.artist) : (fallbackTrack && fallbackTrack.creator) ? String(fallbackTrack.creator) : 'Unknown';
+      var albumTitle = meta && meta.albumName ? String(meta.albumName) : (fallbackTrack && (fallbackTrack.albumTitle || fallbackTrack.album)) ? String(fallbackTrack.albumTitle || fallbackTrack.album) : '';
+      var trackNumber = meta && Number.isFinite(meta.trackNumber) ? Number(meta.trackNumber) : (fallbackTrack && Number.isFinite(fallbackTrack.trackIndex) ? fallbackTrack.trackIndex + 1 : null);
+      var totalTracks = meta && Number.isFinite(meta.totalTrackCount) ? Number(meta.totalTrackCount) : (fallbackTrack && Number.isFinite(fallbackTrack.totalTracks) ? fallbackTrack.totalTracks : 1);
+      var duration = mediaInfo && Number.isFinite(mediaInfo.duration) ? Number(mediaInfo.duration) : (fallbackTrack && Number.isFinite(fallbackTrack.duration) ? fallbackTrack.duration : null);
+
+      var track = {
+        url: mediaInfo && mediaInfo.contentId ? String(mediaInfo.contentId) : '',
+        title: title,
+        creator: creator,
+        albumTitle: albumTitle,
+        trackIndex: trackNumber ? Math.max(0, trackNumber - 1) : 0,
+        totalTracks: totalTracks || 1,
+        duration: duration || undefined,
+        isAlbumTrack: (totalTracks || 1) > 1
+      };
+
+      var identifier = (fallbackTrack && (fallbackTrack.albumId || fallbackTrack.id)) ? (fallbackTrack.albumId || fallbackTrack.id) : '';
+      return { track: track, identifier: identifier };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function updateLocalNowPlaying(track, identifier) {
+    try {
+      if (!track) return false;
+      var elements = window.elements || {};
+      var trackTitle = track.title || 'Untitled';
+      var isAlbumTrack = (track.totalTracks || 1) > 1;
+      var albumTitle = (track.albumTitle || track.album || '').toString().trim();
+      var displayTitle = (isAlbumTrack && albumTitle && albumTitle.toLowerCase() !== trackTitle.toLowerCase())
+        ? albumTitle + ' - ' + trackTitle
+        : trackTitle;
+      if (typeof window.updateTitleTicker === 'function') {
+        window.updateTitleTicker(displayTitle);
+      } else if (elements.title) {
+        elements.title.textContent = displayTitle;
+      }
+      if (elements.creator) {
+        elements.creator.textContent = isAlbumTrack
+          ? (track.creator || 'Unknown') + ' (' + (Number(track.trackIndex || 0) + 1) + '/' + (track.totalTracks || 1) + ')'
+          : (track.creator || 'Unknown');
+      }
+      if (typeof window.updateDescriptionUI === 'function') {
+        window.updateDescriptionUI(track);
+      }
+      if (typeof setArtwork === 'function') {
+        setArtwork(track, identifier).catch(function () {});
+      }
+      if (typeof updateFavoriteButton === 'function') {
+        updateFavoriteButton();
+      }
+      if (typeof updateMediaSessionMetadata === 'function') {
+        updateMediaSessionMetadata(track, identifier);
+      }
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function syncLocalTrackFromRemoteMedia(mediaInfo, force) {
+    try {
+      if (!mediaInfo) return false;
+      var contentId = mediaInfo.contentId ? String(mediaInfo.contentId) : '';
+      if (!contentId) return false;
+      var normalized = normalizeContentId(contentId);
+      if (!normalized) return false;
+      if (!force && lastRemoteContentId && lastRemoteContentId === normalized) return false;
+      lastRemoteContentId = normalized;
+
+      var match = findTrackInCurrentContextByUrl(contentId);
+      var fallbackTrack = (window.state && window.state.currentTrack) ? window.state.currentTrack : null;
+      var payload = match ? match : buildFallbackTrackFromMediaInfo(mediaInfo, fallbackTrack);
+      if (!payload || !payload.track) return false;
+
+      var identifier = payload.identifier || (payload.track.albumId || payload.track.id) || (fallbackTrack && (fallbackTrack.albumId || fallbackTrack.id)) || '';
+      var merged = Object.assign({}, payload.track);
+      merged.url = merged.url || contentId;
+      merged.id = merged.id || identifier || merged.url;
+      if (!Number.isFinite(merged.trackIndex)) merged.trackIndex = 0;
+      if (!Number.isFinite(merged.totalTracks)) merged.totalTracks = 1;
+      merged.isAlbumTrack = (merged.totalTracks || 1) > 1;
+      merged.albumId = merged.albumId || identifier || merged.id;
+
+      if (!window.state) window.state = {};
+      window.state.currentTrack = Object.assign({}, window.state.currentTrack || {}, merged);
+
+      return updateLocalNowPlaying(window.state.currentTrack, identifier);
+    } catch (e) {
+      return false;
+    }
   }
 
   function maybeAdvanceOnRemoteEnd() {
@@ -121,6 +294,9 @@
       var isPlaying = !remotePlayer.isPaused;
       playBtn.textContent = isPlaying ? '⏸' : '▶';
       playBtn.setAttribute('aria-label', isPlaying ? 'Pause' : 'Play');
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+      }
     } catch (e) {}
   }
 
@@ -156,6 +332,11 @@
             if (sessionId) {
               maybeShowCastingHint(sessionId);
             }
+            try {
+              if (remotePlayer && remotePlayer.mediaInfo) {
+                syncLocalTrackFromRemoteMedia(remotePlayer.mediaInfo, true);
+              }
+            } catch (e) {}
           } catch (e) {}
         });
       } catch (e) {}
@@ -229,6 +410,33 @@
     try {
       context.endCurrentSession(true);
       return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function seekTo(seconds) {
+    var context = getCastContext();
+    if (!context) return false;
+    var session = context.getCurrentSession();
+    if (!session || typeof session.getMediaSession !== 'function') return false;
+    try {
+      var mediaSession = session.getMediaSession();
+      if (!mediaSession) return false;
+      var req = new window.chrome.cast.media.SeekRequest();
+      req.currentTime = Math.max(0, Number(seconds) || 0);
+      mediaSession.seek(req);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function skipBy(deltaSeconds) {
+    try {
+      var state = getRemotePositionState();
+      if (!state) return false;
+      return seekTo(state.position + Number(deltaSeconds || 0));
     } catch (e) {
       return false;
     }
@@ -345,11 +553,14 @@
     isReady: function () { return castReady; },
     getInitError: function () { return castInitError; },
     getCastState: getCastState,
+    getRemotePositionState: getRemotePositionState,
     init: initCastFramework,
     requestSession: requestSession,
     isSessionActive: isSessionActive,
     disconnect: disconnect,
     togglePlayback: togglePlayback,
+    seekTo: seekTo,
+    skipBy: skipBy,
     loadMediaFromTrack: loadMediaFromTrack
   };
 })();
