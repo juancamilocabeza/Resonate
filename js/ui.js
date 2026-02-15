@@ -4094,10 +4094,10 @@ function applyCastButtonState(el) {
   const fallbackTitle = isRunningAsPWA() ? 'Open in browser to cast' : 'Use browser menu to cast';
   const title = available ? 'Cast' : fallbackTitle;
 
-  try { el.title = title; } catch {}
+  try { el.title = ''; } catch {}
+  try { el.removeAttribute('data-tooltip'); } catch {}
   try { el.setAttribute('aria-label', title); } catch {}
   try { el.dataset.castMode = available ? 'native' : 'browser'; } catch {}
-  try { el.dataset.tooltip = title; } catch {}
   try { el.classList.toggle('cast-available', available); } catch {}
   try { el.classList.toggle('cast-fallback', !available); } catch {}
   try { el.hidden = !shouldShow; } catch {}
@@ -4138,10 +4138,13 @@ function applyShareButtonState(el) {
   if (!el) return;
 
   const { canShare, canCopy } = getShareCapabilities();
+  const allowTitle = !(el.classList && el.classList.contains('theme-selector'));
 
   if (canShare) {
     try { el.dataset.shareMode = 'share'; } catch {}
-    try { el.title = 'Share'; } catch {}
+    if (allowTitle) {
+      try { el.title = 'Share'; } catch {}
+    }
     try { el.setAttribute('aria-label', 'Share'); } catch {}
     setShareButtonIcon(el, 'share');
     try { el.classList.remove('disabled'); } catch {}
@@ -4153,7 +4156,9 @@ function applyShareButtonState(el) {
 
   if (canCopy) {
     try { el.dataset.shareMode = 'copy'; } catch {}
-    try { el.title = 'Copy link'; } catch {}
+    if (allowTitle) {
+      try { el.title = 'Copy link'; } catch {}
+    }
     try { el.setAttribute('aria-label', 'Copy link'); } catch {}
     setShareButtonIcon(el, 'copy');
     try { el.classList.remove('disabled'); } catch {}
@@ -4164,7 +4169,9 @@ function applyShareButtonState(el) {
   }
 
   try { el.dataset.shareMode = 'disabled'; } catch {}
-  try { el.title = 'Sharing not available'; } catch {}
+  if (allowTitle) {
+    try { el.title = 'Sharing not available'; } catch {}
+  }
   try { el.setAttribute('aria-label', 'Sharing not available'); } catch {}
   setShareButtonIcon(el, 'share');
   try { el.classList.add('disabled'); } catch {}

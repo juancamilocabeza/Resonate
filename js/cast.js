@@ -46,9 +46,6 @@
     try {
       if (!sessionId || castHintSessionId === sessionId) return;
       castHintSessionId = sessionId;
-      if (typeof window.showAutoplayCta === 'function') {
-        window.showAutoplayCta('Playing on Cast device');
-      }
     } catch (e) {}
   }
 

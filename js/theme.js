@@ -135,8 +135,6 @@
     }
     labelEl.textContent = label;
     themeToggleEl.setAttribute('aria-label', `Theme: ${label}. Press to cycle through themes.`);
-    themeToggleEl.setAttribute('title', `Switch theme (current: ${label})`);
-    themeToggleEl.setAttribute('data-tooltip', label);
     // Mantener aria-current sincronizado para indicar tema activo
     themeToggleEl.setAttribute('aria-current', 'page');
   }

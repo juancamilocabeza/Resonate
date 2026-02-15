@@ -22,6 +22,16 @@
     <path d="M5 21c9-1 14-7 14-16-6 1-11 4-14 9-1 2-1 4 0 7Z" />
     <path d="M5 21c3-3 7-6 12-8" />
   </symbol>
+  <symbol id="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 10.5v5" />
+    <circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none" />
+  </symbol>
+  <symbol id="tracks-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6 7h12" />
+    <path d="M6 12h12" />
+    <path d="M6 17h12" />
+  </symbol>
   <symbol id="share-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
     <path d="M12 3v10" />
     <path d="M8 7l4-4 4 4" />
