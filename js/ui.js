@@ -2170,7 +2170,6 @@ const state = {
   expandedAlbums: new Set(),
   shuffleFavorites: false,
   networkOnline: true,
-  networkType: 'online',
   // URL currently assigned to the <audio> element (may be a normal URL or a blob: URL)
   currentAudioUrl: null,
   currentBlobUrl: null,
@@ -5112,62 +5111,6 @@ function enableControlsForSearchResults() {
   }
 }
 
-// Network information helpers
-function getNavigatorConnection() {
-  return navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-}
-
-function deriveNetworkLabel() {
-  // Treat undefined as online; only explicit false means offline.
-  if (state.networkOnline === false) {
-    state.networkType = 'disconnected';
-    return 'Disconnected';
-  }
-
-  const connection = getNavigatorConnection();
-  let tier = 'Standard';
-
-  if (connection) {
-    const { effectiveType, downlink, type } = connection;
-    const linkType = String(type || '').toLowerCase();
-    const isWifi = linkType === 'wifi' || linkType === 'ethernet';
-
-    if (isWifi) {
-      tier = 'Ultra HD (WiFi only)';
-    } else if (effectiveType === '5g' || downlink >= 20) {
-      tier = 'High Quality';
-    } else if (effectiveType === '4g' || downlink >= 5) {
-      tier = 'High Quality';
-    } else if (effectiveType === '3g' || downlink >= 1.5) {
-      tier = 'Low';
-    } else if (effectiveType === '2g' || effectiveType === 'slow-2g' || downlink > 0) {
-      tier = 'Low';
-    }
-  }
-
-  state.networkType = tier.toLowerCase().replace(/\s+/g, '-');
-  return tier;
-}
-
-let __resonateNetworkListenerAttached = false;
-
-function updateNetworkIndicator() {
-  const indicator = document.getElementById('network-indicator');
-  if (!indicator) return;
-
-  indicator.textContent = deriveNetworkLabel();
-}
-
-function attachNetworkInformationListener() {
-  const connection = getNavigatorConnection();
-  if (!connection || __resonateNetworkListenerAttached || typeof connection.addEventListener !== 'function') return;
-
-  __resonateNetworkListenerAttached = true;
-  connection.addEventListener('change', () => {
-    updateNetworkIndicator();
-  });
-}
-
 // Connectivity monitoring
 let __resonateConnectivityHandlersAttached = false;
 let __resonateOfflineHintsShown = false;
@@ -5196,7 +5139,6 @@ function __resonateAttachConnectivityHandlersOnce() {
 
     __resonateSetSearchOnlineState(true);
     updateOfflineIndicator();
-    updateNetworkIndicator();
     // Try to sync cached data when back online
     syncOfflineData();
   });
@@ -5207,7 +5149,6 @@ function __resonateAttachConnectivityHandlersOnce() {
 
     __resonateSetSearchOnlineState(false);
     updateOfflineIndicator();
-    updateNetworkIndicator();
 
     // Notificar si solo hay pistas offline disponibles
     if (typeof window.audioCache === 'object' && window.audioCache) {
@@ -5339,36 +5280,11 @@ function setupOfflineFunctionality() {
     createOfflineIndicator();
   }
 
-  // Create network indicator element
-  if (!document.getElementById('network-indicator')) {
-    createNetworkIndicator();
-  }
-
   // Initial check
   state.networkOnline = navigator.onLine;
-  updateNetworkIndicator();
   updateOfflineIndicator();
 
   __resonateAttachConnectivityHandlersOnce();
-  attachNetworkInformationListener();
-}
-
-// Create network indicator in the header
-function createNetworkIndicator() {
-  if (document.getElementById('network-indicator')) return;
-
-  const indicator = document.createElement('div');
-  indicator.id = 'network-indicator';
-  indicator.className = 'network-indicator';
-  indicator.setAttribute('aria-live', 'polite');
-  indicator.textContent = deriveNetworkLabel();
-
-  const header = document.querySelector('header');
-  if (header) {
-    header.appendChild(indicator);
-  } else {
-    document.body.insertBefore(indicator, document.body.firstChild);
-  }
 }
 
 // Create offline indicator in the UI
