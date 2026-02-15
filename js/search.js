@@ -124,8 +124,8 @@ function getSearchFilterClauseParts(filters) {
   const f = filters || getSearchNetworkFilterState();
 
   const parts = [];
-  // Always include mediatype (keeps results playable/consistent).
-  // Include both audio and movies (videos) in search results
+  // Always include both audio and movies (videos) in search results.
+  // This intentionally overrides the mediatype filter to show all playable content.
   parts.push(`(mediatype:audio OR mediatype:movies)`);
 
   return parts;
