@@ -447,7 +447,7 @@ function ensureSearchFilterDefaults() {
   try {
     state.searchUi = state.searchUi || {};
     const cfg = window.SEARCH_FILTERS_CONFIG || {};
-    if (!state.searchUi.mediatype) state.searchUi.mediatype = cfg.mediatypeDefault || 'audio';
+    if (!state.searchUi.mediatype) state.searchUi.mediatype = cfg.mediatypeDefault || 'all';
     if (typeof state.searchUi.isSearching !== 'boolean') state.searchUi.isSearching = false;
     if (typeof state.searchUi.offlineOnly !== 'boolean') state.searchUi.offlineOnly = false;
     if (typeof state.searchUi.typeFilter !== 'string') state.searchUi.typeFilter = '';
@@ -648,6 +648,15 @@ function ensureSearchFiltersHeader() {
           summary.appendChild(host);
         }
 
+        // Media type filter (audio/video)
+        const activeMedia = (state.searchUi && typeof state.searchUi.mediatype === 'string') ? state.searchUi.mediatype : 'all';
+        const mediaDefs = [
+          { id: 'all', label: 'All' },
+          { id: 'audio', label: 'Audio' },
+          { id: 'movies', label: 'Video' }
+        ];
+
+        // Content type filter (single/album)
         const active = (state.searchUi && typeof state.searchUi.typeFilter === 'string') ? state.searchUi.typeFilter : '';
         const defs = [
           { id: '', label: 'All' },
@@ -655,24 +664,43 @@ function ensureSearchFiltersHeader() {
           { id: 'album', label: 'Album' }
         ];
 
-        host.innerHTML = defs.map(d => {
+        const mediaFilterHTML = mediaDefs.map(d => {
+          const isActive = d.id === activeMedia || (!d.id && !activeMedia);
+          const pressed = isActive ? 'true' : 'false';
+          const cls = `search-option-btn${isActive ? ' active' : ''}`;
+          return `<button type="button" class="${cls}" data-media-filter="${escapeHtml(d.id)}" aria-pressed="${pressed}">${escapeHtml(d.label)}</button>`;
+        }).join('');
+
+        const typeFilterHTML = defs.map(d => {
           const isActive = d.id === active || (!d.id && !active);
           const pressed = isActive ? 'true' : 'false';
           const cls = `search-option-btn${isActive ? ' active' : ''}`;
           return `<button type="button" class="${cls}" data-type-filter="${escapeHtml(d.id)}" aria-pressed="${pressed}">${escapeHtml(d.label)}</button>`;
         }).join('');
 
+        host.innerHTML = `<div class="filter-group">${mediaFilterHTML}</div><div class="filter-group">${typeFilterHTML}</div>`;
+
         if (!host.dataset.bound) {
           host.dataset.bound = 'true';
           host.addEventListener('click', (e) => {
-            const btn = e && e.target ? e.target.closest('button[data-type-filter]') : null;
-            if (!btn) return;
-            try { e.preventDefault(); e.stopPropagation(); } catch {}
-            const next = String(btn.getAttribute('data-type-filter') || '').trim();
-            ensureSearchFilterDefaults();
-            state.searchUi.typeFilter = next;
-            try { ensureSearchFiltersHeader(); } catch {}
-            rerenderSearchResultsFromState(true);
+            const mediaBtn = e && e.target ? e.target.closest('button[data-media-filter]') : null;
+            const typeBtn = e && e.target ? e.target.closest('button[data-type-filter]') : null;
+            
+            if (mediaBtn) {
+              try { e.preventDefault(); e.stopPropagation(); } catch {}
+              const next = String(mediaBtn.getAttribute('data-media-filter') || '').trim();
+              ensureSearchFilterDefaults();
+              state.searchUi.mediatype = next;
+              try { ensureSearchFiltersHeader(); } catch {}
+              runSearchWithCurrentFilters({ keepKeyboard: true });
+            } else if (typeBtn) {
+              try { e.preventDefault(); e.stopPropagation(); } catch {}
+              const next = String(typeBtn.getAttribute('data-type-filter') || '').trim();
+              ensureSearchFilterDefaults();
+              state.searchUi.typeFilter = next;
+              try { ensureSearchFiltersHeader(); } catch {}
+              rerenderSearchResultsFromState(true);
+            }
           });
         }
       }
