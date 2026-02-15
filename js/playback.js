@@ -46,6 +46,15 @@ function getAudioEl() {
   return elements.audio || null;
 }
 
+function getVideoEl() {
+  const elements = getElementsSafe();
+  return elements.video || null;
+}
+
+function getMediaEl(isVideo) {
+  return isVideo ? getVideoEl() : getAudioEl();
+}
+
 function safeShowStatus(message, type, duration, variant, showLoader) {
   if (typeof showStatus === 'function') {
     showStatus(message, type, duration, variant, showLoader);
@@ -1977,11 +1986,13 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
   }
 
   const elements = getElementsSafe();
-  const audioEl = elements.audio;
-  if (!audioEl) {
+  const isVideo = track.isVideo === true;
+  const mediaEl = isVideo ? elements.video : elements.audio;
+  
+  if (!mediaEl) {
     if (window.Loaders && typeof window.Loaders.hideLoader === 'function') window.Loaders.hideLoader();
     state.isLoading = false;
-    throw new Error('Audio element not available');
+    throw new Error('Media element not available');
   }
 
   // If we have a track ready (even if autoplay might be blocked), allow the user to press Play.
@@ -1989,8 +2000,26 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
     if (elements.playBtn) elements.playBtn.disabled = false;
   } catch {}
 
-  audioEl.pause();
-  audioEl.currentTime = 0;
+  // Pause and reset both elements, show/hide appropriately
+  if (elements.audio) {
+    elements.audio.pause();
+    elements.audio.currentTime = 0;
+  }
+  if (elements.video) {
+    elements.video.pause();
+    elements.video.currentTime = 0;
+    elements.video.hidden = !isVideo;
+  }
+  
+  // Hide/show artwork based on media type
+  if (elements.art) {
+    const artImg = elements.art.querySelector('img');
+    if (isVideo) {
+      if (artImg) artImg.style.display = 'none';
+    } else {
+      if (artImg) artImg.style.display = '';
+    }
+  }
 
   {
     const trackTitle = track.title || 'Untitled';
@@ -2057,8 +2086,8 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
         var castDuration = null;
         if (track && typeof track.duration === 'number' && isFinite(track.duration) && track.duration > 0) {
           castDuration = track.duration;
-        } else if (audioEl && typeof audioEl.duration === 'number' && isFinite(audioEl.duration) && audioEl.duration > 0) {
-          castDuration = audioEl.duration;
+        } else if (mediaEl && typeof mediaEl.duration === 'number' && isFinite(mediaEl.duration) && mediaEl.duration > 0) {
+          castDuration = mediaEl.duration;
         }
         var castUrl = track.url || '';
         window.CastManager.loadMediaFromTrack(track, castUrl, 0, castDuration);
@@ -2085,7 +2114,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
   safeShowStatus('Getting your track ready to play', 'info');
 
   return new Promise((resolve, reject) => {
-    const audio = audioEl;
+    const media = mediaEl;
     let timeoutId;
 
     const onCanPlay = () => {
@@ -2097,12 +2126,12 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
         ? window.CastManager.isSessionActive()
         : false;
       if (castActive) {
-        try { audio.pause(); } catch {}
+        try { media.pause(); } catch {}
         resolve(true);
         return;
       }
 
-      audio.play().then(async () => {
+      media.play().then(async () => {
         // Mark this track as consumed in the persistent shuffle deck (only once playback actually starts).
         try {
           if (state && state.shuffleFavorites) {
@@ -2147,8 +2176,8 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
             state.onPlayCallback({
               title: track.title,
               creator: track.creator,
-              duration: audio.duration,
-              currentTime: audio.currentTime,
+              duration: media.duration,
+              currentTime: media.currentTime,
               id: state.currentTrack.id
             });
           } catch (error) {
@@ -2187,19 +2216,19 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
       if (window.Loaders && typeof window.Loaders.hideLoader === 'function') window.Loaders.hideLoader();
       const errMsg = (e && e.target && e.target.error && e.target.error.message) ? e.target.error.message : 'Source not supported';
       state.isLoading = false;
-      reject(new Error(`Audio error: ${errMsg}`));
+      reject(new Error(`Media error: ${errMsg}`));
     };
 
     const cleanup = () => {
-      audio.removeEventListener('canplay', onCanPlay);
-      audio.removeEventListener('error', onError);
+      media.removeEventListener('canplay', onCanPlay);
+      media.removeEventListener('error', onError);
       clearTimeout(timeoutId);
       stopInitialRamp();
     };
 
-    // Cargar audio con caché
+    // Load media with cache
     loadAudioWithCache(track)
-      .then(audioUrl => {
+      .then(mediaUrl => {
         // Progress already advanced in loadAudioWithCache (20→85%)
         // Skip updating here to preserve cache progress
         updateLoaderProgress(85);
@@ -2212,23 +2241,23 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
           }
         }
 
-        state.currentAudioUrl = audioUrl;
-        state.currentBlobUrl = (typeof audioUrl === 'string' && audioUrl.startsWith('blob:')) ? audioUrl : null;
-        audio.src = audioUrl;
-        audio.preload = 'auto';
-        audio.load();
+        state.currentAudioUrl = mediaUrl;
+        state.currentBlobUrl = (typeof mediaUrl === 'string' && mediaUrl.startsWith('blob:')) ? mediaUrl : null;
+        media.src = mediaUrl;
+        media.preload = 'auto';
+        media.load();
         updateLoaderProgress(88);
 
         timeoutId = setTimeout(() => {
-          if (audio.readyState < 1) {
+          if (media.readyState < 1) {
             cleanup();
-            reject(new Error('Timeout while loading audio'));
+            reject(new Error('Timeout while loading media'));
           }
         }, PLAYBACK_CONSTANTS.AUDIO_LOAD_TIMEOUT_MS);
 
-        audio.addEventListener('loadeddata', () => updateLoaderProgress(92), { once: true });
-        audio.addEventListener('canplay', onCanPlay, { once: true });
-        audio.addEventListener('error', onError, { once: true });
+        media.addEventListener('loadeddata', () => updateLoaderProgress(92), { once: true });
+        media.addEventListener('canplay', onCanPlay, { once: true });
+        media.addEventListener('error', onError, { once: true });
       })
       .catch(error => {
         if (window.Loaders && typeof window.Loaders.hideLoader === 'function') window.Loaders.hideLoader();

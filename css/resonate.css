@@ -1375,6 +1375,18 @@ h3 {
   object-fit: cover;
 }
 
+/* Video player styling */
+.video-player {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
+.video-player[hidden] {
+  display: none;
+}
+
 /* Skeleton placeholder - ONLY show when container is empty */
 .result-cover:empty,
 .card-media:empty,
