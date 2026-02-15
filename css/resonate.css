@@ -950,13 +950,13 @@ header {
 .header-controls {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 14px;
+  flex-wrap: wrap;
   flex-shrink: 0;
-  max-width: none;
-  margin-left: auto;
-  justify-content: flex-end;
-  grid-column: 2;
-  grid-row: 1;
+  width: 100%;
+  max-width: 520px;
+  margin: 10px auto 0;
 }
 
 /* Header-only button polish */
@@ -967,14 +967,14 @@ header {
   border-radius: 999px;
   padding: 0;
   gap: 0;
-  height: 44px;
-  min-height: 44px;
-  width: 44px;
-  min-width: 44px;
-  font-size: 12px;
+  height: var(--btn-size-mobile);
+  min-height: var(--btn-size-mobile);
+  width: var(--btn-size-mobile);
+  min-width: var(--btn-size-mobile);
+  font-size: 16px;
   font-weight: 600;
   letter-spacing: 0.02em;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
   position: relative;
 }
 
@@ -982,8 +982,8 @@ header {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 26px;
+  height: 26px;
   border-radius: 0;
   border: none;
   background: transparent;
@@ -991,8 +991,8 @@ header {
 }
 
 .header-controls .theme-svg {
-  width: 16px;
-  height: 16px;
+  width: 22px;
+  height: 22px;
   display: block;
 }
 
@@ -1000,8 +1000,8 @@ header {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 26px;
+  height: 26px;
   border-radius: 0;
   border: none;
   background: transparent;
@@ -1009,8 +1009,8 @@ header {
 }
 
 .header-controls .header-svg {
-  width: 16px;
-  height: 16px;
+  width: 22px;
+  height: 22px;
   display: block;
 }
 
