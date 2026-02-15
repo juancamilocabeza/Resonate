@@ -14,7 +14,6 @@
   var lastRemoteContentId = '';
   var lastMediaSessionId = '';
   var castPlaybackMonitorId = null;
-  var lastQueuedTrackUrls = [];
 
   function getCastAppId() {
     try {
@@ -616,7 +615,9 @@
       var upcomingTracks = [];
       
       // Get the next N tracks (wrapping around for continuous playback)
-      for (var i = 1; i <= maxTracks && i < items.length; i++) {
+      // Limit to items.length to avoid duplicates when wrapping
+      var limit = Math.min(maxTracks, items.length - 1);
+      for (var i = 1; i <= limit; i++) {
         var nextIndex = (currentIndex + i) % items.length;
         if (items[nextIndex]) {
           upcomingTracks.push(items[nextIndex]);
