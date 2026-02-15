@@ -53,8 +53,71 @@
   align-items: center;
   margin-bottom: 0.5em;
 }
-#description-container .btn-secondary {
+#description-container .btn-secondary,
+#description-container .icon-control {
   margin: 0;
+}
+
+.icon-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--muted);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.icon-control .btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-control .btn-svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+  stroke: currentColor;
+  fill: none;
+}
+
+.icon-control:hover {
+  background: rgba(var(--primary-rgb), 0.12);
+  border-color: rgba(var(--primary-rgb), 0.24);
+  color: var(--fg);
+}
+
+.icon-control:active {
+  background: rgba(var(--primary-rgb), 0.18);
+}
+
+.icon-control:focus {
+  outline: none;
+}
+
+.icon-control:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring-shadow);
+}
+
+.icon-control.active {
+  background: rgba(var(--primary-rgb), 0.22);
+  border-color: rgba(var(--primary-rgb), 0.45);
+  color: var(--fg);
+}
+
+.icon-control.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 /* Shared overlay shell for panels (search/results/tracks) */

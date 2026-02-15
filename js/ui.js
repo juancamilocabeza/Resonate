@@ -1589,11 +1589,32 @@ function bindDescriptionModalShell() {
   }
 }
 
+function bindIconControlActivation(element) {
+  if (!element || element._resonateKeyHandlerSet) return;
+  element._resonateKeyHandlerSet = true;
+  element.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      element.click();
+    }
+  });
+}
+
+function setIconControlDisabled(element, isDisabled) {
+  if (!element) return;
+  element.setAttribute('aria-disabled', isDisabled ? 'true' : 'false');
+  element.classList.toggle('is-disabled', isDisabled);
+  element.tabIndex = isDisabled ? -1 : 0;
+}
+
 // Control de descripción de pista
 function updateDescriptionUI(track) {
   if (!elements.descriptionContainer || !elements.toggleDescriptionBtn) return;
   const activeTrack = track || (window.state && window.state.currentTrack) || null;
   // ...existing code...
+
+  bindIconControlActivation(elements.toggleDescriptionBtn);
+  bindIconControlActivation(elements.toggleTracksBtn);
 
   // --- TRACKS BUTTON LOGIC ---
   if (elements.toggleTracksBtn && elements.tracksListContainer) {
@@ -1627,11 +1648,12 @@ function updateDescriptionUI(track) {
 
     const shouldShowTracks = !!albumId && (fallbackTracklist.length > 1 || (activeTrack && ((activeTrack.totalTracks && activeTrack.totalTracks > 1) || activeTrack.isAlbumTrack)) || !fallbackTracklist.length);
     elements.toggleTracksBtn.style.display = shouldShowTracks ? 'inline-flex' : 'none';
-    elements.toggleTracksBtn.disabled = !albumId;
+    setIconControlDisabled(elements.toggleTracksBtn, !albumId || !shouldShowTracks);
     // Solo asignar el handler una vez
     if (!elements.toggleTracksBtn._resonateHandlerSet) {
       elements.toggleTracksBtn._resonateHandlerSet = true;
       elements.toggleTracksBtn.addEventListener('click', function() {
+        if (elements.toggleTracksBtn.getAttribute('aria-disabled') === 'true') return;
         if (!window.state || !window.state.currentTrack) return;
         const currentTrack = window.state.currentTrack;
         const savedAlbumId = window.state.savedPlaybackTracklist && window.state.savedPlaybackTracklist.albumId
@@ -1731,10 +1753,10 @@ function updateDescriptionUI(track) {
 
   if (bestDescription && bestDescription.trim() !== '') {
     elements.toggleDescriptionBtn.style.display = 'inline-flex';
-    elements.toggleDescriptionBtn.textContent = 'Info';
-    elements.toggleDescriptionBtn.disabled = false;
+    setIconControlDisabled(elements.toggleDescriptionBtn, false);
     window.logger?.debug('[updateDescriptionUI] Showing description button', 'UI');
     elements.toggleDescriptionBtn.onclick = function() {
+      if (elements.toggleDescriptionBtn.getAttribute('aria-disabled') === 'true') return;
       window.logger?.debug('[updateDescriptionUI] Description button clicked; opening modal', 'UI');
       if (modal && modalDesc) {
         const sanitizedHtml = sanitizeHTML(bestDescription);
@@ -1760,7 +1782,10 @@ function updateDescriptionUI(track) {
     }
   } else {
     window.logger?.debug('[updateDescriptionUI] Hiding description button; no description available', 'UI');
-    if (elements.toggleDescriptionBtn) elements.toggleDescriptionBtn.style.display = 'none';
+    if (elements.toggleDescriptionBtn) {
+      elements.toggleDescriptionBtn.style.display = 'none';
+      setIconControlDisabled(elements.toggleDescriptionBtn, true);
+    }
     if (modal) modal.style.display = 'none';
     if (modalDesc) modalDesc.innerHTML = '';
   }
