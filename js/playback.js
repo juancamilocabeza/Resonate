@@ -2049,14 +2049,20 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
 
   try {
     if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
-      var castDuration = null;
-      if (track && typeof track.duration === 'number' && isFinite(track.duration) && track.duration > 0) {
-        castDuration = track.duration;
-      } else if (audioEl && typeof audioEl.duration === 'number' && isFinite(audioEl.duration) && audioEl.duration > 0) {
-        castDuration = audioEl.duration;
+      // Use queue loading for continuous playback instead of single track loading
+      if (typeof window.CastManager.loadQueueToRemote === 'function') {
+        window.CastManager.loadQueueToRemote(track, identifier, { currentTime: 0 });
+      } else {
+        // Fallback to single track loading if queue not available
+        var castDuration = null;
+        if (track && typeof track.duration === 'number' && isFinite(track.duration) && track.duration > 0) {
+          castDuration = track.duration;
+        } else if (audioEl && typeof audioEl.duration === 'number' && isFinite(audioEl.duration) && audioEl.duration > 0) {
+          castDuration = audioEl.duration;
+        }
+        var castUrl = track.url || '';
+        window.CastManager.loadMediaFromTrack(track, castUrl, 0, castDuration);
       }
-      var castUrl = track.url || '';
-      window.CastManager.loadMediaFromTrack(track, castUrl, 0, castDuration);
     }
   } catch {}
 
