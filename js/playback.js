@@ -2045,6 +2045,19 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
   updateFavoriteButton();
   updateMediaSessionMetadata(track, identifier);
 
+  try {
+    if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
+      var castDuration = null;
+      if (track && typeof track.duration === 'number' && isFinite(track.duration) && track.duration > 0) {
+        castDuration = track.duration;
+      } else if (audioEl && typeof audioEl.duration === 'number' && isFinite(audioEl.duration) && audioEl.duration > 0) {
+        castDuration = audioEl.duration;
+      }
+      var castUrl = track.url || '';
+      window.CastManager.loadMediaFromTrack(track, castUrl, 0, castDuration);
+    }
+  } catch {}
+
   // Update meta tags for rich previews
   if (typeof updateMetaTags === 'function') {
     updateMetaTags(track, identifier);
@@ -2072,7 +2085,15 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
       // Hide loader when track is ready to play
       updateLoaderProgress(100);
       if (window.Loaders && typeof window.Loaders.hideLoader === 'function') window.Loaders.hideLoader();
-      
+      const castActive = (window.CastManager && typeof window.CastManager.isSessionActive === 'function')
+        ? window.CastManager.isSessionActive()
+        : false;
+      if (castActive) {
+        try { audio.pause(); } catch {}
+        resolve(true);
+        return;
+      }
+
       audio.play().then(async () => {
         // Mark this track as consumed in the persistent shuffle deck (only once playback actually starts).
         try {

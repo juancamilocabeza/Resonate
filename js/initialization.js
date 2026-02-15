@@ -1098,27 +1098,106 @@ async function initializeApp() {
   if (elements.currentTrackCast) {
     const handleCast = async () => {
       const audioEl = (elements && elements.audio) ? elements.audio : document.getElementById('audio');
+      const castBtn = (elements && elements.currentTrackCast) ? elements.currentTrackCast : document.getElementById('current-track-cast');
       const track = (state && state.currentTrack) ? state.currentTrack : null;
       const audioSrc = audioEl ? (audioEl.currentSrc || audioEl.src || '') : '';
 
       const showCastHint = (message) => {
         try {
-          if (typeof showAutoplayCta === 'function') {
-            showAutoplayCta(message);
+          if (window && typeof window.showAutoplayCta === 'function') {
+            window.showAutoplayCta(message);
             return;
           }
         } catch {}
         try { showStatus(message, 'info', 6000); } catch {}
       };
 
-      if (!audioEl) {
-        showCastHint('Cast is not available on this device');
-        return;
+      if (castBtn) {
+        try {
+          castBtn.classList.remove('cast-pulse');
+          void castBtn.offsetWidth;
+          castBtn.classList.add('cast-pulse');
+        } catch {}
       }
+
+      if (!audioEl) {
+        showCastHint('Cast is available, pick a device to connect');
+      }
+
+      const ensureRemotePlaybackAvailability = async (el) => {
+        if (!el || !el.remote || typeof el.remote.watchAvailability !== 'function') return null;
+        try {
+          if (typeof window.__resonateRemotePlaybackAvailable === 'boolean') {
+            return window.__resonateRemotePlaybackAvailable;
+          }
+        } catch {}
+
+        return new Promise((resolve) => {
+          let settled = false;
+          const finish = (value) => {
+            if (settled) return;
+            settled = true;
+            try { window.__resonateRemotePlaybackAvailable = !!value; } catch {}
+            resolve(!!value);
+          };
+
+          try {
+            const maybePromise = el.remote.watchAvailability((available) => {
+              finish(available);
+            });
+            if (maybePromise && typeof maybePromise.catch === 'function') {
+              maybePromise.catch(() => finish(false));
+            }
+          } catch {
+            finish(false);
+          }
+
+          setTimeout(() => finish(false), 1200);
+        });
+      };
 
       const caps = (typeof window.getCastCapabilities === 'function')
         ? window.getCastCapabilities(audioEl)
         : { canRemotePlayback: false, canAirPlay: false };
+
+      if (window.CastManager && typeof window.CastManager.init === 'function') {
+        try { window.CastManager.init(); } catch {}
+      }
+
+      if (window.CastManager && typeof window.CastManager.isReady === 'function' && window.CastManager.isReady()) {
+        try {
+          await window.CastManager.requestSession();
+
+          var castTime = audioEl ? audioEl.currentTime : 0;
+          var castUrl = audioSrc || (track && track.url) || '';
+          if (!castUrl) {
+            showCastHint('Connected to Cast. Select a track to play.');
+            return;
+          }
+          var castDuration = null;
+          if (track && typeof track.duration === 'number' && isFinite(track.duration) && track.duration > 0) {
+            castDuration = track.duration;
+          } else if (audioEl && typeof audioEl.duration === 'number' && isFinite(audioEl.duration) && audioEl.duration > 0) {
+            castDuration = audioEl.duration;
+          }
+          await window.CastManager.loadMediaFromTrack(track, castUrl, castTime, castDuration, { force: true });
+          showCastHint('Casting to device');
+          return;
+        } catch (err) {
+          showCastHint('Cast session failed. Check sender domain and devices.');
+        }
+      }
+
+      if (caps.canRemotePlayback) {
+        const availability = await ensureRemotePlaybackAvailability(audioEl);
+        if (availability === false) {
+          const isPwa = (typeof isRunningAsPWA === 'function') ? isRunningAsPWA() : false;
+          showCastHint(isPwa
+            ? 'Open in browser and use the Cast menu'
+            : 'Use your browser menu to cast this track');
+          return;
+        }
+      }
 
       if (caps.canRemotePlayback) {
         try {
@@ -1126,7 +1205,10 @@ async function initializeApp() {
           showStatus('Choose a device to cast', 'info', 4000);
           return;
         } catch (err) {
-          if (err && (err.name === 'AbortError' || err.name === 'NotAllowedError')) return;
+          if (err && (err.name === 'AbortError' || err.name === 'NotAllowedError')) {
+            showCastHint('Cast prompt dismissed');
+            return;
+          }
           window.logger?.warn({ message: 'Cast prompt failed', error: err }, 'UI');
         }
       }
@@ -1137,6 +1219,10 @@ async function initializeApp() {
           showStatus('Choose an AirPlay device', 'info', 4000);
           return;
         } catch (err) {
+          if (err && (err.name === 'AbortError' || err.name === 'NotAllowedError')) {
+            showCastHint('AirPlay picker dismissed');
+            return;
+          }
           window.logger?.warn({ message: 'AirPlay picker failed', error: err }, 'UI');
         }
       }
@@ -1154,15 +1240,7 @@ async function initializeApp() {
         }
       } catch {}
       if (isPwa) {
-        let openUrl = window.location.href;
-        try {
-          const trackIndex = (track && typeof track.trackIndex === 'number' && isFinite(track.trackIndex)) ? track.trackIndex : null;
-          if (track && track.id && typeof window.buildShareUrl === 'function') {
-            openUrl = window.buildShareUrl(track.id, trackIndex);
-          }
-        } catch {}
-        try { window.open(openUrl, '_blank', 'noopener'); } catch {}
-        showCastHint('Opened browser so you can use Cast from the menu');
+        showCastHint('Use your browser menu to cast this track');
         return;
       }
 
@@ -1182,6 +1260,7 @@ async function initializeApp() {
       }
     });
   }
+
 
   if (elements.currentTrackShare) {
     const handleShare = async () => {

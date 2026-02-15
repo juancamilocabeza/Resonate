@@ -4048,6 +4048,15 @@ function applyCastButtonState(el) {
   const audioEl = (elements && elements.audio) ? elements.audio : document.getElementById('audio');
   const { canRemotePlayback, canAirPlay } = getCastCapabilities(audioEl);
   const available = canRemotePlayback || canAirPlay;
+  const castState = (window.CastManager && typeof window.CastManager.getCastState === 'function')
+    ? window.CastManager.getCastState()
+    : null;
+  const CastState = (window.cast && window.cast.framework) ? window.cast.framework.CastState : null;
+  const castDevicesAvailable = CastState ? castState !== CastState.NO_DEVICES_AVAILABLE : null;
+  const castSessionActive = (window.CastManager && typeof window.CastManager.isSessionActive === 'function')
+    ? window.CastManager.isSessionActive()
+    : false;
+  const shouldShow = castSessionActive || castDevicesAvailable !== false || available;
   const fallbackTitle = isRunningAsPWA() ? 'Open in browser to cast' : 'Use browser menu to cast';
   const title = available ? 'Cast' : fallbackTitle;
 
@@ -4057,6 +4066,8 @@ function applyCastButtonState(el) {
   try { el.dataset.tooltip = title; } catch {}
   try { el.classList.toggle('cast-available', available); } catch {}
   try { el.classList.toggle('cast-fallback', !available); } catch {}
+  try { el.hidden = !shouldShow; } catch {}
+  try { el.setAttribute('aria-hidden', shouldShow ? 'false' : 'true'); } catch {}
   try {
     const badge = el.querySelector('.cast-badge');
     if (badge) badge.hidden = available;

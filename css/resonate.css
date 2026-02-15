@@ -1112,6 +1112,22 @@ header {
   display: none;
 }
 
+
+.header-controls .theme-selector.cast-pulse {
+  animation: castPulse 0.32s ease-out;
+}
+
+@keyframes castPulse {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.06); }
+  100% { transform: scale(1); }
+}
+
+body.casting-active .controls button:not(#favorite-btn) {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
 @media (max-width: 480px) {
   .header-controls {
     gap: 10px;
