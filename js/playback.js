@@ -1659,10 +1659,10 @@ function isAllowedMediaUrl(url) {
   return isAllowedAudioUrl(url) || isAllowedVideoUrl(url);
 }
 
-// Load audio from cache or network
+// Load media (audio or video) from cache or network
 async function loadAudioWithCache(track) {
   if (!track || !track.url) {
-    throw new Error('Audio URL not available');
+    throw new Error('Media URL not available');
   }
 
   // Allow audio and video files
