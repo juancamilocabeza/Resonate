@@ -145,6 +145,8 @@ const elements = {
   // Core
   app: document.getElementById('app'),
   audio: document.getElementById('audio'),
+  video: document.getElementById('video'),
+  art: document.getElementById('art'),
 
   // Header / global controls
   themeToggle: document.getElementById('theme-toggle'),

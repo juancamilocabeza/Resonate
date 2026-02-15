@@ -1925,9 +1925,11 @@ async function fetchOptimizedPlayableFiles(identifier, options = {}) {
       if (!(metadata && metadata.files)) {
         throw new Error('Invalid metadata');
       }
-      let audioFiles = metadata.files.filter(file =>
-        isPlayableAudioFile(file)
+      let mediaFiles = metadata.files.filter(file =>
+        isPlayableMediaFile(file)
       );
+      let audioFiles = mediaFiles.filter(file => isPlayableAudioFile(file));
+      let videoFiles = mediaFiles.filter(file => isPlayableVideoFile(file));
     // Sort remaining files by format priority with network-aware sizing
     const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
     const effectiveType = connection && connection.effectiveType ? connection.effectiveType : '';
@@ -1941,6 +1943,30 @@ async function fetchOptimizedPlayableFiles(identifier, options = {}) {
     }
     const preferMp3 = qualityTier === 'eco';
     const preferFlac = allowFlac && qualityTier === 'ultra-hd';
+
+    // Sort video files by format priority (prefer mp4 for better compatibility)
+    videoFiles.sort((a, b) => {
+      const aIsMp4 = a.name.toLowerCase().endsWith('.mp4');
+      const bIsMp4 = b.name.toLowerCase().endsWith('.mp4');
+      const aIsWebm = a.name.toLowerCase().endsWith('.webm');
+      const bIsWebm = b.name.toLowerCase().endsWith('.webm');
+      const aSize = a.size || 0;
+      const bSize = b.size || 0;
+
+      // Prefer mp4 for compatibility
+      if (aIsMp4 && !bIsMp4) return -1;
+      if (!aIsMp4 && bIsMp4) return 1;
+      
+      // Then webm for quality
+      if (aIsWebm && !bIsWebm) return -1;
+      if (!aIsWebm && bIsWebm) return 1;
+      
+      // On slow networks prefer smaller files
+      if (slowNetwork && aSize !== bSize) return aSize - bSize;
+      
+      // Finally sort by size
+      return aSize - bSize;
+    });
 
     audioFiles.sort((a, b) => {
       const aIsFlac = a.name.toLowerCase().endsWith('.flac');
@@ -1983,13 +2009,18 @@ async function fetchOptimizedPlayableFiles(identifier, options = {}) {
       // Finally sort by size
       return aSize - bSize;
     });
-      if (audioFiles.length === 0) {
+      
+      // Prefer video files if available, otherwise use audio files
+      const filesToProcess = videoFiles.length > 0 ? videoFiles : audioFiles;
+      const isVideo = videoFiles.length > 0;
+      
+      if (filesToProcess.length === 0) {
         return [];
       }
-      const playableFiles = createPlayableFiles(audioFiles, identifier, metadata, { qualityTier, allowFlac });
+      const playableFiles = createPlayableFiles(filesToProcess, identifier, metadata, { qualityTier, allowFlac, isVideo });
       if (window.enhancedCache) window.enhancedCache.set('metadata', identifier, playableFiles);
       try {
-        debugSearch('metadata_response', { identifier, usedProxy: Boolean(usedProxy), files: Array.isArray(metadata.files) ? metadata.files.length : null });
+        debugSearch('metadata_response', { identifier, usedProxy: Boolean(usedProxy), files: Array.isArray(metadata.files) ? metadata.files.length : null, isVideo });
       } catch {}
       return playableFiles;
     } catch (error) {
@@ -2014,6 +2045,45 @@ async function fetchOptimizedPlayableFiles(identifier, options = {}) {
 }
 
 // Check if file is playable audio (filter out metadata, images, archives)
+function isPlayableVideoFile(file) {
+  if (!file.name) return false;
+  const excludePatterns = [
+    /_files\.xml$/i,
+    /_meta\.xml$/i,
+    /_reviews\.xml$/i,
+    /_archive\.torrent$/i,
+    /_meta\.sqlite$/i,
+    /\.png$/i,
+    /\.jpg$/i,
+    /\.jpeg$/i,
+    /\.gif$/i,
+    /_thumb\./i,
+    /spectrogram/i,
+    /preview/i,
+    /sample/i,
+    /demo/i,
+    /\.rar$/i,
+    /\.zip$/i,
+    /\.7z$/i,
+    /\.tar$/i,
+    /\.gz$/i
+  ];
+  const hasExcludedPattern = excludePatterns.some(pattern =>
+    pattern.test(file.name)
+  );
+  if (hasExcludedPattern) return false;
+  // Accept common video formats
+  const videoFormats = ['.mp4', '.webm', '.ogv', '.ogg'];
+  const isVideoFile = videoFormats.some(format =>
+    file.name.toLowerCase().endsWith(format)
+  );
+  if (!isVideoFile) return false;
+  const fileSize = file.size || 0;
+  if (fileSize < 50000) return false;
+  if (fileSize > 2000000000) return false; // 2GB max for videos
+  return true;
+}
+
 function isPlayableAudioFile(file) {
   if (!file.name) return false;
   const FLAC_MAX_BYTES = 200 * 1024 * 1024;
@@ -2054,6 +2124,10 @@ function isPlayableAudioFile(file) {
   if (fileSize < 50000) return false;
   if (fileSize > 500000000) return false;
   return true;
+}
+
+function isPlayableMediaFile(file) {
+  return isPlayableAudioFile(file) || isPlayableVideoFile(file);
 }
 
 function shouldLogAudioFormatDebug() {
@@ -2132,7 +2206,7 @@ function isWifiEthernetConnection() {
   }
 }
 
-function createPlayableFiles(audioFiles, identifier, metadata, { qualityTier, allowFlac = true } = {}) {
+function createPlayableFiles(audioFiles, identifier, metadata, { qualityTier, allowFlac = true, isVideo = false } = {}) {
   let playableFiles;
   const tier = (qualityTier === 'disconnected') ? 'eco' : (qualityTier || 'standard');
   const preferMp3 = tier === 'eco';
@@ -2141,25 +2215,36 @@ function createPlayableFiles(audioFiles, identifier, metadata, { qualityTier, al
 
   const pickPreferred = (existing, candidate) => {
     if (!existing) return candidate;
-    const existingIsFlac = existing.fileName.toLowerCase().endsWith('.flac');
-    const candidateIsFlac = candidate.fileName.toLowerCase().endsWith('.flac');
-    const existingIsOgg = existing.fileName.toLowerCase().endsWith('.ogg');
-    const candidateIsOgg = candidate.fileName.toLowerCase().endsWith('.ogg');
-    const existingIsMp3 = existing.fileName.toLowerCase().endsWith('.mp3');
-    const candidateIsMp3 = candidate.fileName.toLowerCase().endsWith('.mp3');
+    
+    if (isVideo) {
+      // For video files, prefer mp4 for compatibility
+      const existingIsMp4 = existing.fileName.toLowerCase().endsWith('.mp4');
+      const candidateIsMp4 = candidate.fileName.toLowerCase().endsWith('.mp4');
+      if (candidateIsMp4 && !existingIsMp4) return candidate;
+      if (existingIsMp4 && !candidateIsMp4) return existing;
+    } else {
+      // For audio files, use existing logic
+      const existingIsFlac = existing.fileName.toLowerCase().endsWith('.flac');
+      const candidateIsFlac = candidate.fileName.toLowerCase().endsWith('.flac');
+      const existingIsOgg = existing.fileName.toLowerCase().endsWith('.ogg');
+      const candidateIsOgg = candidate.fileName.toLowerCase().endsWith('.ogg');
+      const existingIsMp3 = existing.fileName.toLowerCase().endsWith('.mp3');
+      const candidateIsMp3 = candidate.fileName.toLowerCase().endsWith('.mp3');
+
+      if (preferFlac) {
+        if (candidateIsFlac && !existingIsFlac) return candidate;
+        if (existingIsFlac && !candidateIsFlac) return existing;
+      } else if (preferMp3) {
+        if (candidateIsMp3 && !existingIsMp3) return candidate;
+        if (existingIsMp3 && !candidateIsMp3) return existing;
+      } else if (preferOgg) {
+        if (candidateIsOgg && !existingIsOgg) return candidate;
+        if (existingIsOgg && !candidateIsOgg) return existing;
+      }
+    }
+    
     const existingSize = Number.isFinite(existing.fileSize) ? existing.fileSize : 0;
     const candidateSize = Number.isFinite(candidate.fileSize) ? candidate.fileSize : 0;
-
-    if (preferFlac) {
-      if (candidateIsFlac && !existingIsFlac) return candidate;
-      if (existingIsFlac && !candidateIsFlac) return existing;
-    } else if (preferMp3) {
-      if (candidateIsMp3 && !existingIsMp3) return candidate;
-      if (existingIsMp3 && !candidateIsMp3) return existing;
-    } else if (preferOgg) {
-      if (candidateIsOgg && !existingIsOgg) return candidate;
-      if (existingIsOgg && !candidateIsOgg) return existing;
-    }
 
     if (candidateSize && existingSize) {
       return candidateSize < existingSize ? candidate : existing;
@@ -2197,6 +2282,7 @@ function createPlayableFiles(audioFiles, identifier, metadata, { qualityTier, al
         duration: file.length || 0,
         album: metaRoot.title || identifier,
         isAlbumTrack: true,
+        isVideo: isVideo,
         albumId: identifier,
         trackIndex: index,
         totalTracks: audioFiles.length,
@@ -2275,6 +2361,7 @@ function createPlayableFiles(audioFiles, identifier, metadata, { qualityTier, al
       format: (audioFile.name.split('.').pop() || 'mp3').toUpperCase(),
       album: metaRoot.title || identifier,
       isAlbumTrack: false,
+      isVideo: isVideo,
       trackIndex: 0,
       totalTracks: 1,
       fileName: audioFile.name,
