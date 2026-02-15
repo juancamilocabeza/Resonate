@@ -125,7 +125,8 @@ function getSearchFilterClauseParts(filters) {
 
   const parts = [];
   // Always include mediatype (keeps results playable/consistent).
-  parts.push(`mediatype:${f.mediatype || 'audio'}`);
+  // Include both audio and movies (videos) in search results
+  parts.push(`(mediatype:audio OR mediatype:movies)`);
 
   return parts;
 }

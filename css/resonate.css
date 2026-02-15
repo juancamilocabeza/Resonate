@@ -3683,6 +3683,17 @@ body.offline-mode .share-track-button {
   border-color: rgba(var(--primary-rgb), 0.30);
 }
 
+/* Video chip for identifying video content */
+.chip-video {
+  background: linear-gradient(
+    to bottom,
+    rgba(220, 38, 38, 0.44),
+    rgba(220, 38, 38, 0.28)
+  );
+  color: #fff;
+  border-color: rgba(220, 38, 38, 0.40);
+}
+
 /* Offline chip visibility is controlled by the Offline checkbox */
 .chip-offline { display: none; }
 /* .chip-offline is no longer shown in search results */
