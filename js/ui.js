@@ -7903,8 +7903,18 @@ async function shareTrack(identifier, title = 'Track', creator = null, albumTitl
   // Try to get cover image for sharing
   let coverFile = null;
   try {
-    coverFile = await getCoverImageForSharing(identifier);
-    window.logger?.debug('Cover image obtained for sharing', 'NETWORK');
+    // Use CoverManager if available, otherwise fallback to local implementation
+    if (window.CoverManager && typeof window.CoverManager.getCoverImageForSharing === 'function') {
+      coverFile = await window.CoverManager.getCoverImageForSharing(identifier);
+    } else {
+      coverFile = await getCoverImageForSharing(identifier);
+    }
+    
+    if (coverFile) {
+      window.logger?.debug('Cover image obtained for sharing', 'NETWORK');
+    } else {
+      window.logger?.warn({ message: 'Cover image not available for sharing', identifier }, 'NETWORK');
+    }
   } catch (error) {
     window.logger?.warn({ message: 'Could not get cover image', error }, 'NETWORK');
   }
@@ -7996,6 +8006,7 @@ async function getCoverImageForSharing(identifier) {
     const blob = await response.blob();
 
     if (!blob || !blob.size) {
+      window.logger?.warn({ message: 'Empty or invalid cover image blob', identifier }, 'NETWORK');
       return null;
     }
 
