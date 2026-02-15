@@ -350,6 +350,53 @@
     } catch (e) {}
   }
 
+  function maybeAppendToQueue(session) {
+    try {
+      if (!session || typeof session.getMediaSession !== 'function') return;
+      var mediaSession = session.getMediaSession();
+      if (!mediaSession) return;
+
+      // Check if we need to add more items to the queue
+      var currentItemIndex = mediaSession.currentItemIndex || 0;
+      var items = mediaSession.items || [];
+      var remainingItems = items.length - currentItemIndex - 1;
+
+      // If only 1 or fewer items remain after current, add more
+      if (remainingItems <= 1) {
+        // Get URLs of already queued tracks to avoid duplicates
+        var queuedUrls = {};
+        for (var i = 0; i < items.length; i++) {
+          if (items[i] && items[i].media && items[i].media.contentId) {
+            queuedUrls[normalizeContentId(items[i].media.contentId)] = true;
+          }
+        }
+
+        var upcomingTracks = getUpcomingTracks(3);
+        if (upcomingTracks.length === 0) return;
+
+        var queueItems = [];
+        for (var i = 0; i < upcomingTracks.length; i++) {
+          var track = upcomingTracks[i];
+          var trackUrl = track && track.url ? normalizeContentId(track.url) : '';
+          
+          // Skip if already in queue
+          if (trackUrl && queuedUrls[trackUrl]) continue;
+          
+          var queueItem = buildQueueItem(track, null);
+          if (queueItem) {
+            queueItems.push(queueItem);
+            if (trackUrl) queuedUrls[trackUrl] = true;
+          }
+        }
+
+        if (queueItems.length > 0) {
+          var insertRequest = new window.chrome.cast.media.QueueInsertItemsRequest(queueItems);
+          mediaSession.queueInsertItems(insertRequest);
+        }
+      }
+    } catch (e) {}
+  }
+
   function attachMediaSessionListeners(session) {
     try {
       if (!session || typeof session.getMediaSession !== 'function') return;
@@ -366,6 +413,7 @@
             syncLocalTrackFromRemoteMedia(mediaSession.media, false);
           }
           maybeAdvanceOnMediaSession(mediaSession);
+          maybeAppendToQueue(session);
         } catch (e) {}
       });
     } catch (e) {}
@@ -551,6 +599,122 @@
     return 'https://archive.org/services/img/' + encodeURIComponent(id);
   }
 
+  function getUpcomingTracks(maxTracks) {
+    try {
+      var manager = window.playbackManager;
+      if (!manager || typeof manager.getCurrentContext !== 'function') return [];
+      
+      var context = manager.getCurrentContext();
+      if (!context || !manager.contextData || !manager.contextData[context]) return [];
+      
+      var ctx = manager.contextData[context];
+      var items = Array.isArray(ctx.items) ? ctx.items : [];
+      if (!items.length) return [];
+      
+      var currentIndex = typeof ctx.currentIndex === 'number' ? ctx.currentIndex : 0;
+      var upcomingTracks = [];
+      
+      // Get the next N tracks (wrapping around for continuous playback)
+      // Limit to items.length to avoid duplicates when wrapping
+      var limit = Math.min(maxTracks, items.length - 1);
+      for (var i = 1; i <= limit; i++) {
+        var nextIndex = (currentIndex + i) % items.length;
+        if (items[nextIndex]) {
+          upcomingTracks.push(items[nextIndex]);
+        }
+      }
+      
+      return upcomingTracks;
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function buildQueueItem(track, identifier) {
+    try {
+      var url = track && track.url ? String(track.url) : '';
+      if (!url) return null;
+
+      var title = (track && track.title) ? String(track.title) : 'Track';
+      var artist = (track && track.creator) ? String(track.creator) : '';
+      var album = (track && (track.albumTitle || track.album)) ? String(track.albumTitle || track.album) : '';
+      var trackNumber = (track && typeof track.trackIndex === 'number' && isFinite(track.trackIndex)) ? (track.trackIndex + 1) : null;
+      var totalTracks = (track && typeof track.totalTracks === 'number' && isFinite(track.totalTracks)) ? track.totalTracks : null;
+      var artUrl = getCoverUrl(track);
+      var duration = (track && typeof track.duration === 'number' && isFinite(track.duration) && track.duration > 0) ? track.duration : null;
+
+      var mediaInfo = new window.chrome.cast.media.MediaInfo(url, 'audio/mpeg');
+      mediaInfo.streamType = window.chrome.cast.media.StreamType.BUFFERED;
+      if (duration) {
+        mediaInfo.duration = duration;
+      }
+      
+      var metadata = new window.chrome.cast.media.MusicTrackMediaMetadata();
+      metadata.title = title;
+      if (artist) metadata.artist = artist;
+      if (album) metadata.albumName = album;
+      if (trackNumber) metadata.trackNumber = trackNumber;
+      if (totalTracks) metadata.totalTrackCount = totalTracks;
+      if (artUrl) metadata.images = [new window.chrome.cast.Image(artUrl)];
+      mediaInfo.metadata = metadata;
+
+      var queueItem = new window.chrome.cast.media.QueueItem(mediaInfo);
+      queueItem.autoplay = true;
+      queueItem.preloadTime = 5; // Preload 5 seconds before track ends
+      
+      return queueItem;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function loadQueueToRemote(currentTrack, currentIdentifier, options) {
+    if (!isCastFrameworkReady()) return Promise.reject(new Error('Cast framework not available'));
+    
+    try {
+      // Build queue starting with current track
+      var queueItems = [];
+      var currentQueueItem = buildQueueItem(currentTrack, currentIdentifier);
+      if (!currentQueueItem) {
+        return Promise.reject(new Error('Failed to build current track queue item'));
+      }
+      queueItems.push(currentQueueItem);
+
+      // Add upcoming tracks to queue (get next 3-5 tracks for lookahead)
+      var upcomingTracks = getUpcomingTracks(4);
+      for (var i = 0; i < upcomingTracks.length; i++) {
+        var queueItem = buildQueueItem(upcomingTracks[i], currentIdentifier);
+        if (queueItem) {
+          queueItems.push(queueItem);
+        }
+      }
+
+      var context = getCastContext();
+      if (!context) return Promise.reject(new Error('Cast context not available'));
+      var session = context.getCurrentSession();
+      if (!session) return Promise.reject(new Error('Cast session not available'));
+
+      // Create queue load request
+      var queueLoadRequest = new window.chrome.cast.media.QueueLoadRequest(queueItems);
+      queueLoadRequest.startIndex = 0;
+      queueLoadRequest.repeatMode = window.chrome.cast.media.RepeatMode.ALL_OFF;
+      
+      var currentTime = options && typeof options.currentTime === 'number' ? options.currentTime : 0;
+      if (currentTime > 0) {
+        queueLoadRequest.currentTime = currentTime;
+      }
+
+      return session.loadMedia(queueLoadRequest).then(function (result) {
+        try {
+          attachMediaSessionListeners(session);
+        } catch (e) {}
+        return result;
+      });
+    } catch (e) {
+      return Promise.reject(e);
+    }
+  }
+
   function loadMediaFromTrack(track, audioUrl, currentTime, duration, options) {
     if (!isCastFrameworkReady()) return Promise.reject(new Error('Cast framework not available'));
 
@@ -658,6 +822,7 @@
     togglePlayback: togglePlayback,
     seekTo: seekTo,
     skipBy: skipBy,
-    loadMediaFromTrack: loadMediaFromTrack
+    loadMediaFromTrack: loadMediaFromTrack,
+    loadQueueToRemote: loadQueueToRemote
   };
 })();
