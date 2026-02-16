@@ -1,3 +1,20 @@
+// Helper to force Service Worker update and reload
+window.forceResonateSwUpdate = async function() {
+  if ('serviceWorker' in navigator) {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    for (const reg of regs) {
+      try {
+        await reg.update();
+        if (reg.waiting) {
+          await reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        }
+      } catch {}
+    }
+    setTimeout(() => { window.location.reload(); }, 1200);
+  } else {
+    window.location.reload();
+  }
+};
 // Enhanced Playback Management System
 
 // Note: elements object is defined in ui.js
@@ -28,6 +45,7 @@ const PLAYBACK_CONSTANTS = {
   DEFAULT_QUEUE_SIZE: 6,
   PREFETCH_TIMEOUT_MS: 45000,
   AUDIO_LOAD_TIMEOUT_MS: 45000,
+  VIDEO_LOAD_TIMEOUT_MS: 120000, // 2 minutos para videos grandes
   LOCAL_DEFAULT_FETCH_TIMEOUT_MS: 30000,
   PROD_DEFAULT_FETCH_TIMEOUT_MS: 8000,
   MAX_BLOB_SIZE_MB: 50 // Use direct streaming for files larger than this
@@ -1762,9 +1780,31 @@ function isAllowedVideoUrl(url) {
   try {
     const u = new URL(String(url), window.location.href);
     const p = (u.pathname || '').toLowerCase();
-    return p.endsWith('.mp4') || p.endsWith('.webm') || p.endsWith('.ogv');
+    return (
+      p.endsWith('.mp4') ||
+      p.endsWith('.webm') ||
+      p.endsWith('.ogv') ||
+      p.endsWith('.mkv') ||
+      p.endsWith('.avi') ||
+      p.endsWith('.mov') ||
+      p.endsWith('.m4v') ||
+      p.endsWith('.flv') ||
+      p.endsWith('.wmv') ||
+      p.endsWith('.mpeg') ||
+      p.endsWith('.mpg') ||
+      p.endsWith('.3gp') ||
+      p.endsWith('.3g2') ||
+      p.endsWith('.ts') ||
+      p.endsWith('.m2ts') ||
+      p.endsWith('.vob') ||
+      p.endsWith('.asf') ||
+      p.endsWith('.rm') ||
+      p.endsWith('.rmvb') ||
+      p.endsWith('.divx') ||
+      p.endsWith('.xvid')
+    );
   } catch {
-    return /\.(mp4|webm|ogv)(\?|#|$)/i.test(String(url || '').trim());
+    return /\.(mp4|webm|ogv|mkv|avi|mov|m4v|flv|wmv|mpeg|mpg|3gp|3g2|ts|m2ts|vob|asf|rm|rmvb|divx|xvid)(\?|#|$)/i.test(String(url || '').trim());
   }
 }
 
@@ -1803,6 +1843,21 @@ function getVideoMimeForUrl(url) {
   if (path.endsWith('.mp4')) return 'video/mp4';
   if (path.endsWith('.webm')) return 'video/webm';
   if (path.endsWith('.ogv')) return 'video/ogg';
+  if (path.endsWith('.mkv')) return 'video/x-matroska';
+  if (path.endsWith('.avi')) return 'video/x-msvideo';
+  if (path.endsWith('.mov')) return 'video/quicktime';
+  if (path.endsWith('.m4v')) return 'video/x-m4v';
+  if (path.endsWith('.flv')) return 'video/x-flv';
+  if (path.endsWith('.wmv')) return 'video/x-ms-wmv';
+  if (path.endsWith('.mpeg') || path.endsWith('.mpg')) return 'video/mpeg';
+  if (path.endsWith('.3gp')) return 'video/3gpp';
+  if (path.endsWith('.3g2')) return 'video/3gpp2';
+  if (path.endsWith('.ts') || path.endsWith('.m2ts')) return 'video/mp2t';
+  if (path.endsWith('.vob')) return 'video/dvd';
+  if (path.endsWith('.asf')) return 'video/x-ms-asf';
+  if (path.endsWith('.rm') || path.endsWith('.rmvb')) return 'application/vnd.rn-realmedia';
+  if (path.endsWith('.divx')) return 'video/divx';
+  if (path.endsWith('.xvid')) return 'video/x-xvid';
   return '';
 }
 
@@ -2255,21 +2310,18 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
   // Global loading lock: used by togglePlay/Next/Prev to avoid races.
   state.isLoading = true;
 
-  // Show loader based on context - ONLY playback shows progress
-  if (window.Loaders && typeof window.Loaders.showLoader === 'function') {
-    window.Loaders.showLoader({ type: 'spinner', showProgress: showProgress, context: 'playback' });
-    resetLoaderProgress();
-    updateLoaderProgress(10);
-  }
+  const elements = getElementsSafe();
+  const mediaChoice = selectMediaElementForTrack(track, elements);
+  const isVideo = mediaChoice.isVideo;
+  const mediaEl = mediaChoice.mediaEl;
 
-  // Kick off a short ramp so the UI doesn't sit at 10%
+  // Show loader and progress only if not video
   let rampTimer = null;
   const startInitialRamp = () => {
+    if (isVideo) return;
     let rampValue = 10;
     rampTimer = setInterval(() => {
-      // push up to 55% quickly to avoid visible freeze at 30%
       rampValue = Math.min(55, rampValue + 6);
-      // stop ramping if actual progress already ahead
       if (activeLoaderProgress >= rampValue) {
         stopInitialRamp();
         return;
@@ -2284,7 +2336,12 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
       rampTimer = null;
     }
   };
-  if (showProgress) startInitialRamp();
+  if (!isVideo && window.Loaders && typeof window.Loaders.showLoader === 'function') {
+    window.Loaders.showLoader({ type: 'spinner', showProgress: showProgress, context: 'playback' });
+    resetLoaderProgress();
+    updateLoaderProgress(10);
+    if (showProgress) startInitialRamp();
+  }
 
   if (!track || !track.url) {
     if (window.Loaders && typeof window.Loaders.hideLoader === 'function') window.Loaders.hideLoader();
@@ -2292,10 +2349,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
     throw new Error('Track not available');
   }
 
-  const elements = getElementsSafe();
-  const mediaChoice = selectMediaElementForTrack(track, elements);
-  const isVideo = mediaChoice.isVideo;
-  const mediaEl = mediaChoice.mediaEl;
+  // ...existing code...
   
   if (!mediaEl) {
     if (window.Loaders && typeof window.Loaders.hideLoader === 'function') window.Loaders.hideLoader();
@@ -2438,9 +2492,11 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
 
     const onCanPlay = () => {
       cleanup();
-      // Hide loader when track is ready to play
-      updateLoaderProgress(100);
-      if (window.Loaders && typeof window.Loaders.hideLoader === 'function') window.Loaders.hideLoader();
+      // Hide loader when track is ready to play SOLO si no es video
+      if (!isVideo) {
+        updateLoaderProgress(100);
+        if (window.Loaders && typeof window.Loaders.hideLoader === 'function') window.Loaders.hideLoader();
+      }
       const castActive = (window.CastManager && typeof window.CastManager.isSessionActive === 'function')
         ? window.CastManager.isSessionActive()
         : false;
@@ -2539,12 +2595,35 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
         : '';
       const isFormatError = /format/i.test(rawMessage);
 
+
       if (isFormatError && track && track.url) {
         recordMediaFormatFailure(track.url);
+        // Show user-friendly message
+        if (window.Loaders && typeof window.Loaders.showLoader === 'function') {
+          window.Loaders.showLoader({
+            type: 'error',
+            message: 'Este formato de audio o video no es compatible con tu navegador.',
+            context: 'playback',
+            autoHide: true,
+            duration: 4000
+          });
+        } else {
+          alert('Este formato de audio o video no es compatible con tu navegador.');
+        }
       }
 
       if (isFormatError && track && track.url && isMediaFormatFailureSuppressed(track.url)) {
         state.isLoading = false;
+        // Auto-skip to next track after a short delay
+        if (typeof playNextInContext === 'function') {
+          setTimeout(() => {
+            try {
+              playNextInContext();
+            } catch (e) {
+              logPlayback('warn', 'Auto-skip after format error failed', e);
+            }
+          }, 1200);
+        }
         reject(new Error('Media error: format not supported'));
         return;
       }
@@ -2593,9 +2672,37 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
 
         state.currentAudioUrl = mediaUrl;
         state.currentBlobUrl = (typeof mediaUrl === 'string' && mediaUrl.startsWith('blob:')) ? mediaUrl : null;
-        media.src = mediaUrl;
+        // Log the URL being set for debugging
+        logPlayback('debug', `[PLAYBACK] Setting media.src`, { url: mediaUrl, isArchive: isArchiveOrgUrl(mediaUrl) });
+        // For video, set <source> with correct type to help browser
+        if (media.tagName === 'VIDEO') {
+          // Remove all existing sources
+          while (media.firstChild) media.removeChild(media.firstChild);
+          const source = document.createElement('source');
+          source.src = mediaUrl;
+          source.type = getVideoMimeForUrl(mediaUrl) || 'video/mp4';
+          media.appendChild(source);
+          // Force crossorigin attribute
+          media.setAttribute('crossorigin', 'anonymous');
+          // Log video and source attributes for debugging
+          logPlayback('debug', '[VIDEO ATTRS]', {
+            video: {
+              src: media.src,
+              crossorigin: media.getAttribute('crossorigin'),
+              readyState: media.readyState,
+              networkState: media.networkState
+            },
+            source: {
+              src: source.src,
+              type: source.type
+            }
+          });
+          media.load();
+        } else {
+          media.src = mediaUrl;
+          media.load();
+        }
         media.preload = 'auto';
-        media.load();
         updateLoaderProgress(88);
 
         timeoutId = setTimeout(() => {
@@ -2603,7 +2710,9 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
             cleanup();
             reject(new Error('Timeout while loading media'));
           }
-        }, PLAYBACK_CONSTANTS.AUDIO_LOAD_TIMEOUT_MS);
+        },
+          isVideo ? PLAYBACK_CONSTANTS.VIDEO_LOAD_TIMEOUT_MS : PLAYBACK_CONSTANTS.AUDIO_LOAD_TIMEOUT_MS
+        );
 
         media.addEventListener('loadeddata', () => updateLoaderProgress(92), { once: true });
         media.addEventListener('canplay', onCanPlay, { once: true });

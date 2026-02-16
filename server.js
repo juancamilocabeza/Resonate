@@ -1,8 +1,21 @@
+
 import http from 'node:http';
 import https from 'node:https';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+let useHttps = false;
+let sslOptions = undefined;
+try {
+  sslOptions = {
+    key: await fs.readFile(path.join(path.dirname(fileURLToPath(import.meta.url)), 'localhost-key.pem')),
+    cert: await fs.readFile(path.join(path.dirname(fileURLToPath(import.meta.url)), 'localhost-cert.pem'))
+  };
+  useHttps = true;
+} catch (e) {
+  console.warn('No se encontraron certificados SSL válidos. El servidor se iniciará en HTTP.');
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -203,7 +216,7 @@ function proxyArchiveMetadata(req, res) {
   }
 }
 
-const server = http.createServer(async (req, res) => {
+const requestHandler = async (req, res) => {
   try {
     const method = req.method || 'GET';
     if (method !== 'GET' && method !== 'HEAD') {
@@ -273,9 +286,19 @@ const server = http.createServer(async (req, res) => {
   } catch (err) {
     res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end('Internal Server Error');
-  }
-});
 
-server.listen(PORT, () => {
-  console.log(`Resonate dev server: http://localhost:${PORT}`);
-});
+    }
+};
+
+let server;
+if (useHttps) {
+  server = https.createServer(sslOptions, requestHandler);
+  server.listen(PORT, () => {
+    console.log(`Resonate dev server (HTTPS): https://localhost:${PORT}`);
+  });
+} else {
+  server = http.createServer(requestHandler);
+  server.listen(PORT, () => {
+    console.log(`Resonate dev server (HTTP): http://localhost:${PORT}`);
+  });
+}

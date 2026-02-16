@@ -66,6 +66,10 @@ class ResonateHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", content_type)
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Cache-Control", "no-cache" if _should_no_cache(url_path) else "no-cache")
+        self.send_header(
+            "Content-Security-Policy",
+            "default-src 'self'; connect-src 'self' https://archive.org https://*.archive.org http://archive.org http://*.archive.org; img-src 'self' data: https://archive.org https://*.archive.org http://archive.org http://*.archive.org; media-src 'self' https://archive.org https://*.archive.org http://archive.org http://*.archive.org; script-src 'self' https://www.gstatic.com http://www.gstatic.com https://www.googletagmanager.com https://www.gstatic.com/* http://www.gstatic.com/* https://www.gstatic.com/eureka/* http://www.gstatic.com/eureka/* 'sha256-EFBqO59HVRvqU1F+qQLZEAaxBWq7OXp3xPW1L8AdgEw=' 'sha256-Fa/tzRij1qW6WeSQmh4dekC31DsCL7WAzB27l1TUtoI=';"
+        )
 
     def do_HEAD(self):
         try:
@@ -337,7 +341,17 @@ class ResonateHandler(BaseHTTPRequestHandler):
 def main() -> int:
     # Bind only to loopback to avoid firewall prompts/issues.
     httpd = ThreadingHTTPServer(("127.0.0.1", PORT), ResonateHandler)
-    print(f"Resonate python server: http://localhost:{PORT}")
+    cert_file = ROOT / "localhost.crt"
+    key_file = ROOT / "localhost.key"
+    use_ssl = cert_file.exists() and key_file.exists()
+    if use_ssl:
+        import ssl
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(certfile=str(cert_file), keyfile=str(key_file))
+        httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
+        print(f"Resonate python server (HTTPS): https://localhost:{PORT}")
+    else:
+        print(f"Resonate python server (HTTP): http://localhost:{PORT}")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

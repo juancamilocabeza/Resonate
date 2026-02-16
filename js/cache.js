@@ -714,6 +714,10 @@ class AudioCache {
       logCache('warn', 'Skipping prefetch: invalid or undefined url');
       return;
     }
+    if (isArchiveOrgUrl(url)) {
+      logCache('info', `Skipping prefetch for archive.org media: ${url}`);
+      return;
+    }
     if (!this.isInitialized) await this.init();
 
     const opts = (options && typeof options === 'object') ? options : { priority: !!options };
@@ -811,6 +815,10 @@ class AudioCache {
       req.onsuccess = async () => {
         const items = req.result || [];
         for (const item of items) {
+          if (isArchiveOrgUrl(item.url)) {
+            store.delete(item.url);
+            continue;
+          }
           try {
             const response = await fetch(item.url);
             if (!response || !response.ok) throw new Error(`Retry failed: ${response && response.status}`);

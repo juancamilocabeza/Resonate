@@ -26,6 +26,15 @@ function tryLoadResontesWithRetry() {
   }, INIT_TIMING.LOAD_FAVORITES_RETRY_DELAY_MS);
 }
 // Application initialization
+// Dummy fallback for updateProgressBar if not defined elsewhere
+if (typeof window.updateProgressBar !== 'function') {
+  window.updateProgressBar = function updateProgressBar() {};
+}
+
+// Dummy fallback for updateBufferedProgress if not defined elsewhere
+if (typeof window.updateBufferedProgress !== 'function') {
+  window.updateBufferedProgress = function updateBufferedProgress() {};
+}
 
 const INIT_TIMING = {
   SHARED_LINK_PLAY_DELAY_MS: 1000,

@@ -1,3 +1,69 @@
+// Global video player utility to ensure correct <source> usage and MIME type
+window.playVideo = function playVideo(url, item, fileObj) {
+  try {
+    const video = (window.elements && window.elements.video) ? window.elements.video : document.getElementById('video');
+    if (!video) return;
+    // Remove all existing <source> children
+    while (video.firstChild) video.removeChild(video.firstChild);
+    // Determine MIME type
+    let mime = '';
+    if (window.getVideoMimeForUrl) {
+      mime = window.getVideoMimeForUrl(url);
+    } else {
+      const ext = url.split('.').pop().toLowerCase();
+      if (ext === 'mp4') mime = 'video/mp4';
+      else if (ext === 'webm') mime = 'video/webm';
+      else if (ext === 'ogv') mime = 'video/ogg';
+    }
+    // Create and append <source>
+    const source = document.createElement('source');
+    source.src = url;
+    if (mime) source.type = mime;
+    video.appendChild(source);
+    video.removeAttribute('hidden');
+    video.style.display = '';
+    video.load();
+    video.play().catch(() => {});
+  } catch (e) {}
+};
+// Play video directly from search result (for video mediatype)
+window.playVideoFromSearchResult = async function playVideoFromSearchResult(item, globalIndex, allResults) {
+  try {
+    if (!item || !item.identifier) {
+      window.showStatus?.('No video found for this result.', 'warning', 2500);
+      return;
+    }
+    // Fetch playable files (should prioritize video files)
+    const files = (window.AlbumTracks && typeof window.AlbumTracks.getTracks === 'function')
+      ? await window.AlbumTracks.getTracks(item.identifier, { preferCache: true, allowFetch: true })
+      : await (window.fetchOptimizedPlayableFiles ? window.fetchOptimizedPlayableFiles(item.identifier) : []);
+    if (!files || !files.length) {
+      window.showStatus?.('No video files found for this result.', 'warning', 2500);
+      return;
+    }
+    // Find the first video file
+    const videoFile = files.find(f => f.isVideo || (f.url && /\.(mp4|webm|ogv)$/i.test(f.url)));
+    if (!videoFile || !videoFile.url) {
+      window.showStatus?.('No playable video file found.', 'warning', 2500);
+      return;
+    }
+    // Hide loader if present
+    if (window.Loaders && typeof window.Loaders.hideLoader === 'function') {
+      window.Loaders.hideLoader();
+    }
+    // Play the video (assume window.playVideo is available, otherwise set video src)
+    if (window.playVideo && typeof window.playVideo === 'function') {
+      window.playVideo(videoFile.url, item, videoFile);
+    } else if (window.elements && window.elements.video) {
+      window.elements.video.src = videoFile.url;
+      window.elements.video.load();
+      window.elements.video.play();
+    }
+    window.showStatus?.('Playing video…', 'info', 1500);
+  } catch (err) {
+    window.showStatus?.('Error playing video', 'error', 2500);
+  }
+};
 // Hook global refresh after any album resonte change
 try {
   if (typeof window.toggleAlbumResonte === 'function') {
@@ -4563,13 +4629,13 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
   const chipType = document.createElement('span');
   chipType.className = 'chip chip-type';
   const isAlbum = ( !!item.isAlbum || (typeof item.trackCount === 'number' && item.trackCount > 1) || !!item.isAlbumTrack );
+  const isVideo = item && (item.mediatype === 'movies' || item.mediatype === 'video');
   const isPendingMeta = (context === 'search' && item && item.__metaPending === true);
   chipType.textContent = isAlbum ? 'Album' : (isPendingMeta ? '…' : 'Single');
   chips.appendChild(chipType);
 
   // Video chip (when mediatype is movies)
   try {
-    const isVideo = item && (item.mediatype === 'movies' || item.mediatype === 'video');
     if (isVideo) {
       const chipVideo = document.createElement('span');
       chipVideo.className = 'chip chip-video';
@@ -4662,8 +4728,13 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
     // Play UX: click cover or title
     const playFromCard = async (e) => {
       e.stopPropagation();
-      showStatus('Loading your track', 'info');
-      await window.playOptimizedSearchResult?.(item, globalIndex, state.searchResults);
+      if (isVideo && window.playVideoFromSearchResult) {
+        showStatus('Loading your video', 'info');
+        await window.playVideoFromSearchResult(item, globalIndex, state.searchResults);
+      } else {
+        showStatus('Loading your track', 'info');
+        await window.playOptimizedSearchResult?.(item, globalIndex, state.searchResults);
+      }
     };
 
     media.style.cursor = 'pointer';
@@ -7074,7 +7145,9 @@ async function registerServiceWorker() {
     return false;
   })();
 
-  if (shouldDisableSw) {
+  // Solo registrar el Service Worker si estamos en HTTPS
+  const isHttps = window.location.protocol === 'https:';
+  if (shouldDisableSw || !isHttps) {
     try {
       if ('serviceWorker' in navigator) {
         const regs = await navigator.serviceWorker.getRegistrations();
@@ -7091,7 +7164,7 @@ async function registerServiceWorker() {
         }
       }
     } catch {}
-    try { window.logger?.info('Service Worker disabled (dev/nosw)', 'SYSTEM'); } catch {}
+    try { window.logger?.info('Service Worker disabled (dev/nosw or non-https)', 'SYSTEM'); } catch {}
     return;
   }
 
