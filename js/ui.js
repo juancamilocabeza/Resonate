@@ -3186,11 +3186,15 @@ function showStatus(message, type = 'info', duration = null, priority = 'normal'
 async function setArtwork(track, identifier) {
   if (!track || !elements.art) return;
 
-  // Clear existing artwork (but preserve video element if it exists)
-  const videoEl = elements.art.querySelector('video');
+  // Clear existing artwork but preserve video element
+  const existingVideo = elements.art.querySelector('video');
+  const preserveVideo = existingVideo !== null;
+  
   elements.art.innerHTML = '';
-  if (videoEl) {
-    elements.art.appendChild(videoEl);
+  
+  // Re-add video element if it existed
+  if (preserveVideo && elements.video) {
+    elements.art.appendChild(elements.video);
   }
 
   // Get safe identifier
