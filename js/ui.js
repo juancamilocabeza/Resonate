@@ -3188,12 +3188,11 @@ async function setArtwork(track, identifier) {
 
   // Clear existing artwork but preserve video element
   const existingVideo = elements.art.querySelector('video');
-  const preserveVideo = existingVideo !== null;
   
   elements.art.innerHTML = '';
   
-  // Re-add video element if it existed
-  if (preserveVideo && elements.video) {
+  // Re-add video element if it existed (using the global reference to ensure consistency)
+  if (existingVideo && elements.video) {
     elements.art.appendChild(elements.video);
   }
 
