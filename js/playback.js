@@ -3481,123 +3481,158 @@ function setupListenTracking() {
     }, 8000);
   };
 
-  window.elements.audio.addEventListener('play', () => {
-    endedHandlerExecuted = false;
-    errorHandlerExecuted = false;
-    isTransitioning = false;
-    if (transitionUnlockId) {
-      clearTimeout(transitionUnlockId);
-      transitionUnlockId = null;
-    }
-    if (state.currentTrack) {
-      state.currentTrackListenStart = Date.now();
-    }
+  // Helper to determine the currently active media element
+  const getActiveMediaElement = () => {
+    const isVideo = state.currentTrack?.isVideo === true;
+    return isVideo ? window.elements.video : window.elements.audio;
+  };
 
-    // New user/system playback started; restore auto-skip budget for this context.
-    try { resetAutoSkipBudgetForCurrentContext(); } catch {}
-  });
-
-  window.elements.audio.addEventListener('ended', async () => {
-    // PREVENIR EJECUCIÓN MÚLTIPLE
-    if (endedHandlerExecuted || isTransitioning) {
+  // Helper to attach event listeners to a media element
+  const attachMediaListeners = (mediaElement, mediaType) => {
+    if (!mediaElement) {
+      logPlayback('warn', `Cannot attach listeners to ${mediaType} element: element is null`);
       return;
     }
-    endedHandlerExecuted = true;
-    isTransitioning = true;
 
-    // Track listening statistics (must never block auto-advance)
-    if (state.currentTrack) {
-      try {
-        const listenDuration = Date.now() - state.currentTrackListenStart;
-        const trackDuration = window.elements.audio.duration * 1000; // Convertir a ms
+    mediaElement.addEventListener('play', () => {
+      // Only handle if this is the active media element
+      if (getActiveMediaElement() !== mediaElement) return;
 
-        // Si se escuchó al menos el 90% de la pista, marcarla como escuchada completamente
-        if (isFinite(trackDuration) && trackDuration > 0 && listenDuration >= trackDuration * 0.9) {
-          if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.markAsFullyListened === 'function') {
-            await audioCache.markAsFullyListened(state.currentTrack.url);
-          }
-          if (isTrackResonteSafe(state.currentTrack) && typeof audioCache !== 'undefined' && audioCache && typeof audioCache.replaceFavoritesQueueItem === 'function') {
-            await audioCache.replaceFavoritesQueueItem(state.currentTrack.url, null, getResontesList());
-          }
-          if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.getUsageStats === 'function') {
-            const stats = await audioCache.getUsageStats();
-            if (stats && stats.usagePercentage > 90) {
-              showStatus(`Cache storage almost full`, 'info', 3000);
-            }
-          }
-        } else {
-          if (state.tracksSkippedEarly && state.currentTrack.url) {
-            const skipCount = state.tracksSkippedEarly.get(state.currentTrack.url) || 0;
-            state.tracksSkippedEarly.set(state.currentTrack.url, skipCount + 1);
-          }
-        }
-      } catch (err) {
-        logPlayback('debug', 'Listen tracking failed', err);
-      } finally {
-        state.currentTrackListenStart = 0;
+      endedHandlerExecuted = false;
+      errorHandlerExecuted = false;
+      isTransitioning = false;
+      if (transitionUnlockId) {
+        clearTimeout(transitionUnlockId);
+        transitionUnlockId = null;
       }
-    }
-
-    // Use enhanced playback controller for track end handling
-    const currentContext = playbackManager.getCurrentContext();
-    if (currentContext) {
-      try {
-        const contextId = currentContext === 'album' ? playbackManager.getCurrentAlbumId() : null;
-        enhancedPlaybackController.setContext(currentContext, contextId);
-        await enhancedPlaybackController.handleTrackEnd();
-      } catch (err) {
-        logPlayback('warn', 'Enhanced track end handling failed', err);
-        scheduleAutoAdvance('enhanced-ended-fallback', 500, () => {
-          playNextInContext().catch((e) => logPlayback('warn', 'Fallback playNextInContext failed', e));
-        });
+      if (state.currentTrack) {
+        state.currentTrackListenStart = Date.now();
       }
-    } else {
-      // Resonate UX: never stop when context is missing.
-      playNextInContext().catch((e) => logPlayback('warn', 'No-context playNextInContext failed', e));
-    }
 
-    signalServiceWorkerSafeActivation();
-    scheduleTransitionUnlock();
-  });
-
-  // If a track errors and never reaches 'ended', skip forward to keep continuous playback.
-  window.elements.audio.addEventListener('error', () => {
-    if (errorHandlerExecuted || isTransitioning) return;
-    errorHandlerExecuted = true;
-    isTransitioning = true;
-
-    try {
-      showStatus('Track error. Skipping...', 'error', 2000);
-    } catch {}
-
-    scheduleAutoAdvance('audio-error', 800, () => {
-      const currentContext = playbackManager.getCurrentContext();
-      if (currentContext) {
-        const contextId = currentContext === 'album' ? playbackManager.getCurrentAlbumId() : null;
-        enhancedPlaybackController.setContext(currentContext, contextId);
-        enhancedPlaybackController.handleTrackEnd().catch((err) => {
-          logPlayback('warn', 'Error-skip handler failed', err);
-          playNextInContext().catch((e) => logPlayback('warn', 'Fallback skip failed', e));
-        });
-      } else {
-        playNextInContext().catch((e) => logPlayback('warn', 'Skip failed', e));
-      }
+      // New user/system playback started; restore auto-skip budget for this context.
+      try { resetAutoSkipBudgetForCurrentContext(); } catch {}
     });
 
-    scheduleTransitionUnlock();
-  });
+    mediaElement.addEventListener('ended', async () => {
+      // Only handle if this is the active media element
+      if (getActiveMediaElement() !== mediaElement) return;
 
-  window.elements.audio.addEventListener('pause', () => {
-    // When playback is idle, allow waiting SW to activate safely
-    signalServiceWorkerSafeActivation();
-  });
+      // PREVENIR EJECUCIÓN MÚLTIPLE
+      if (endedHandlerExecuted || isTransitioning) {
+        return;
+      }
+      endedHandlerExecuted = true;
+      isTransitioning = true;
 
-  window.elements.audio.addEventListener('seeked', () => {
-    // Si el usuario busca hacia atrás, reiniciar el contador de escucha
-    if (state.currentTrackListenStart > 0) {
-      state.currentTrackListenStart = Date.now();
-    }
-  });
+      // Track listening statistics (must never block auto-advance)
+      if (state.currentTrack) {
+        try {
+          const listenDuration = Date.now() - state.currentTrackListenStart;
+          const trackDuration = mediaElement.duration * 1000; // Convertir a ms
+
+          // Si se escuchó al menos el 90% de la pista, marcarla como escuchada completamente
+          if (isFinite(trackDuration) && trackDuration > 0 && listenDuration >= trackDuration * 0.9) {
+            if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.markAsFullyListened === 'function') {
+              await audioCache.markAsFullyListened(state.currentTrack.url);
+            }
+            if (isTrackResonteSafe(state.currentTrack) && typeof audioCache !== 'undefined' && audioCache && typeof audioCache.replaceFavoritesQueueItem === 'function') {
+              await audioCache.replaceFavoritesQueueItem(state.currentTrack.url, null, getResontesList());
+            }
+            if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.getUsageStats === 'function') {
+              const stats = await audioCache.getUsageStats();
+              if (stats && stats.usagePercentage > 90) {
+                showStatus(`Cache storage almost full`, 'info', 3000);
+              }
+            }
+          } else {
+            if (state.tracksSkippedEarly && state.currentTrack.url) {
+              const skipCount = state.tracksSkippedEarly.get(state.currentTrack.url) || 0;
+              state.tracksSkippedEarly.set(state.currentTrack.url, skipCount + 1);
+            }
+          }
+        } catch (err) {
+          logPlayback('debug', 'Listen tracking failed', err);
+        } finally {
+          state.currentTrackListenStart = 0;
+        }
+      }
+
+      // Use enhanced playback controller for track end handling
+      const currentContext = playbackManager.getCurrentContext();
+      if (currentContext) {
+        try {
+          const contextId = currentContext === 'album' ? playbackManager.getCurrentAlbumId() : null;
+          enhancedPlaybackController.setContext(currentContext, contextId);
+          await enhancedPlaybackController.handleTrackEnd();
+        } catch (err) {
+          logPlayback('warn', 'Enhanced track end handling failed', err);
+          scheduleAutoAdvance('enhanced-ended-fallback', 500, () => {
+            playNextInContext().catch((e) => logPlayback('warn', 'Fallback playNextInContext failed', e));
+          });
+        }
+      } else {
+        // Resonate UX: never stop when context is missing.
+        playNextInContext().catch((e) => logPlayback('warn', 'No-context playNextInContext failed', e));
+      }
+
+      signalServiceWorkerSafeActivation();
+      scheduleTransitionUnlock();
+    });
+
+    // If a track errors and never reaches 'ended', skip forward to keep continuous playback.
+    mediaElement.addEventListener('error', () => {
+      // Only handle if this is the active media element
+      if (getActiveMediaElement() !== mediaElement) return;
+
+      if (errorHandlerExecuted || isTransitioning) return;
+      errorHandlerExecuted = true;
+      isTransitioning = true;
+
+      try {
+        showStatus('Track error. Skipping...', 'error', 2000);
+      } catch {}
+
+      scheduleAutoAdvance(`${mediaType}-error`, 800, () => {
+        const currentContext = playbackManager.getCurrentContext();
+        if (currentContext) {
+          const contextId = currentContext === 'album' ? playbackManager.getCurrentAlbumId() : null;
+          enhancedPlaybackController.setContext(currentContext, contextId);
+          enhancedPlaybackController.handleTrackEnd().catch((err) => {
+            logPlayback('warn', 'Error-skip handler failed', err);
+            playNextInContext().catch((e) => logPlayback('warn', 'Fallback skip failed', e));
+          });
+        } else {
+          playNextInContext().catch((e) => logPlayback('warn', 'Skip failed', e));
+        }
+      });
+
+      scheduleTransitionUnlock();
+    });
+
+    mediaElement.addEventListener('pause', () => {
+      // Only handle if this is the active media element
+      if (getActiveMediaElement() !== mediaElement) return;
+
+      // When playback is idle, allow waiting SW to activate safely
+      signalServiceWorkerSafeActivation();
+    });
+
+    mediaElement.addEventListener('seeked', () => {
+      // Only handle if this is the active media element
+      if (getActiveMediaElement() !== mediaElement) return;
+
+      // Si el usuario busca hacia atrás, reiniciar el contador de escucha
+      if (state.currentTrackListenStart > 0) {
+        state.currentTrackListenStart = Date.now();
+      }
+    });
+  };
+
+  // Attach listeners to both audio and video elements
+  attachMediaListeners(window.elements.audio, 'audio');
+  if (window.elements.video) {
+    attachMediaListeners(window.elements.video, 'video');
+  }
 }
 
 // Enhanced progress bar interaction
