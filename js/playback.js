@@ -3483,7 +3483,7 @@ function setupListenTracking() {
 
   // Helper to determine the currently active media element
   const getActiveMediaElement = () => {
-    const isVideo = state.currentTrack && state.currentTrack.isVideo === true;
+    const isVideo = state.currentTrack?.isVideo === true;
     return isVideo ? window.elements.video : window.elements.audio;
   };
 
