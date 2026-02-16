@@ -115,6 +115,13 @@ function isArchiveOrg(url) {
   return url && url.hostname === 'archive.org';
 }
 
+function isArchiveMediaRequest(request, url) {
+  if (!isArchiveOrg(url)) return false;
+  if (request && (request.destination === 'video' || request.destination === 'audio')) return true;
+  const path = (url && url.pathname ? url.pathname : '').toLowerCase();
+  return path.endsWith('.mp4') || path.endsWith('.webm') || path.endsWith('.ogv') || path.endsWith('.mp3') || path.endsWith('.ogg') || path.endsWith('.flac');
+}
+
 function isArchiveImageRequest(url) {
   return isArchiveOrg(url) && url.pathname.includes('/services/img/');
 }
@@ -483,6 +490,11 @@ self.addEventListener('fetch', (event) => {
   // Only handle our own assets and archive.org. Avoid intercepting third-party
   // scripts (e.g. analytics) which can otherwise show confusing 503 errors.
   if (!isSameOrigin(url) && !isArchiveOrg(url)) {
+    return;
+  }
+
+  // Let the browser handle archive.org media streaming directly.
+  if (isArchiveMediaRequest(event.request, url)) {
     return;
   }
 

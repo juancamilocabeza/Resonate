@@ -60,6 +60,71 @@ function logCache(level, message) {
   }
 }
 
+var HOST_OUTAGE_COOLDOWN_MS = 60 * 1000;
+try {
+  if (typeof window !== 'undefined') {
+    if (typeof window.__resonateHostOutageCooldownMs !== 'number') {
+      window.__resonateHostOutageCooldownMs = HOST_OUTAGE_COOLDOWN_MS;
+    }
+    HOST_OUTAGE_COOLDOWN_MS = window.__resonateHostOutageCooldownMs;
+  }
+} catch {}
+
+function getHostOutageStore() {
+  try {
+    if (typeof window === 'undefined') return null;
+    if (!window.__resonateHostOutage) window.__resonateHostOutage = new Map();
+    return window.__resonateHostOutage;
+  } catch {
+    return null;
+  }
+}
+
+function getHostFromUrl(url) {
+  if (!url) return '';
+  try {
+    return new URL(String(url), window.location.href).host || '';
+  } catch {
+    return '';
+  }
+}
+
+function isArchiveOrgUrl(url) {
+  const host = getHostFromUrl(url).toLowerCase();
+  return host === 'archive.org' || host.endsWith('.archive.org');
+}
+
+function getHostOutage(url) {
+  const store = getHostOutageStore();
+  if (!store) return null;
+  const host = getHostFromUrl(url);
+  if (!host) return null;
+  const entry = store.get(host);
+  if (!entry) return null;
+  if (entry.until && entry.until > Date.now()) return entry;
+  store.delete(host);
+  return null;
+}
+
+function markHostOutage(url, status) {
+  if (!isRetryableFetchStatus(status)) return;
+  const store = getHostOutageStore();
+  if (!store) return;
+  const host = getHostFromUrl(url);
+  if (!host) return;
+  const until = Date.now() + HOST_OUTAGE_COOLDOWN_MS;
+  store.set(host, { until, status });
+}
+
+function isRetryableFetchStatus(status) {
+  return status === 408 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+}
+
+function computeRetryDelayMs(attempt, baseDelay = 600) {
+  const jitter = Math.floor(Math.random() * 250);
+  return baseDelay * Math.pow(2, Math.max(0, attempt - 1)) + jitter;
+}
+
 class EnhancedCache {
   constructor() {
     this.cache = new Map();
@@ -464,6 +529,11 @@ class AudioCache {
     if (!this.isInitialized) await this.init();
 
     try {
+      const outage = getHostOutage(url);
+      if (outage) {
+        logCache('warn', `Host in outage cooldown, skipping fetch: ${url}`);
+        return null;
+      }
       // Try Cache API first (fastest path)
       const cachedResponse = await this.cache.match(url);
       if (cachedResponse) {
@@ -503,7 +573,45 @@ class AudioCache {
 
       // Fallback to fetch: playback gets priority, prefetch waits
       const queueFn = isPlayback ? 'enqueuePlayback' : 'enqueuePrefetch';
-      const response = await audioFetchQueue[queueFn](() => fetch(url));
+      const maxAttempts = isPlayback ? 3 : 2;
+
+      if (isPlayback && isArchiveOrgUrl(url)) {
+        logCache('info', `Skipping cache fetch for archive.org playback: ${url}`);
+        return null;
+      }
+
+      const response = await audioFetchQueue[queueFn](async () => {
+        let attempt = 0;
+        while (true) {
+          try {
+            const fetchResponse = await fetch(url);
+            if (fetchResponse && fetchResponse.ok) return fetchResponse;
+
+            const status = fetchResponse ? fetchResponse.status : 0;
+            if (isRetryableFetchStatus(status) && attempt >= maxAttempts - 1) {
+              markHostOutage(url, status);
+            }
+            if (!isRetryableFetchStatus(status) || attempt >= maxAttempts - 1) {
+              return fetchResponse;
+            }
+
+            attempt += 1;
+            const delayMs = computeRetryDelayMs(attempt);
+            logCache('warn', `Retrying fetch for ${url} (attempt ${attempt + 1}/${maxAttempts}) after ${delayMs}ms`);
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+          } catch (fetchError) {
+            if (attempt >= maxAttempts - 1) {
+              markHostOutage(url, 503);
+            }
+            if (attempt >= maxAttempts - 1) throw fetchError;
+            attempt += 1;
+            const delayMs = computeRetryDelayMs(attempt);
+            logCache('warn', `Retrying fetch after error for ${url} (attempt ${attempt + 1}/${maxAttempts}) after ${delayMs}ms`);
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+          }
+        }
+      });
+
       if (response && response.ok) {
         // Cache in background for future use
         this.put(url, response.clone());
