@@ -273,6 +273,8 @@ const requestHandler = async (req, res) => {
     res.setHeader('Content-Type', contentType);
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Cache-Control', shouldNoCache(urlPath) ? 'no-cache' : 'no-cache');
+    // CORS header for all static files
+    res.setHeader('Access-Control-Allow-Origin', '*');
 
     if (method === 'HEAD') {
       res.writeHead(200);
