@@ -714,37 +714,23 @@ function ensureSearchFiltersHeader() {
           summary.appendChild(host);
         }
 
-        // Media type filter (audio/video)
+
+        // Only render one group for mediaDefs (All, Album, Audio, Single, Video)
         const activeMedia = (state.searchUi && typeof state.searchUi.mediatype === 'string') ? state.searchUi.mediatype : 'all';
         const mediaDefs = [
           { id: 'all', label: 'All' },
+          { id: 'album', label: 'Album' },
           { id: 'audio', label: 'Audio' },
+          { id: 'single', label: 'Single' },
           { id: 'movies', label: 'Video' }
         ];
-
-        // Content type filter (single/album)
-        const active = (state.searchUi && typeof state.searchUi.typeFilter === 'string') ? state.searchUi.typeFilter : '';
-        const defs = [
-          { id: '', label: 'All' },
-          { id: 'single', label: 'Single' },
-          { id: 'album', label: 'Album' }
-        ];
-
         const mediaFilterHTML = mediaDefs.map(d => {
           const isActive = d.id === activeMedia || (!d.id && !activeMedia);
           const pressed = isActive ? 'true' : 'false';
           const cls = `search-option-btn${isActive ? ' active' : ''}`;
           return `<button type="button" class="${cls}" data-media-filter="${escapeHtml(d.id)}" aria-pressed="${pressed}">${escapeHtml(d.label)}</button>`;
         }).join('');
-
-        const typeFilterHTML = defs.map(d => {
-          const isActive = d.id === active || (!d.id && !active);
-          const pressed = isActive ? 'true' : 'false';
-          const cls = `search-option-btn${isActive ? ' active' : ''}`;
-          return `<button type="button" class="${cls}" data-type-filter="${escapeHtml(d.id)}" aria-pressed="${pressed}">${escapeHtml(d.label)}</button>`;
-        }).join('');
-
-        host.innerHTML = `<div class="filter-group">${mediaFilterHTML}</div><div class="filter-group">${typeFilterHTML}</div>`;
+        host.innerHTML = `<div class="filter-group">${mediaFilterHTML}</div>`;
 
         if (!host.dataset.bound) {
           host.dataset.bound = 'true';
