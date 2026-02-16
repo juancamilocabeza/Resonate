@@ -2834,7 +2834,8 @@ function toggleFavorite(track) {
       totalTracks: track.totalTracks || 1,
       albumTitle: track.album || '',
       downloadOffline: !!track.downloadOffline,
-      fileName: track.fileName || track.filename || ''
+      fileName: track.fileName || track.filename || '',
+      isVideo: track.isVideo || false
     };
     state.favorites.push(favoriteTrack);
 
@@ -3185,8 +3186,12 @@ function showStatus(message, type = 'info', duration = null, priority = 'normal'
 async function setArtwork(track, identifier) {
   if (!track || !elements.art) return;
 
-  // Clear existing artwork
+  // Clear existing artwork (but preserve video element if it exists)
+  const videoEl = elements.art.querySelector('video');
   elements.art.innerHTML = '';
+  if (videoEl) {
+    elements.art.appendChild(videoEl);
+  }
 
   // Get safe identifier
   const safeIdentifier = identifier || (track && track.id) || (track && track.identifier) || 'default';
