@@ -2018,11 +2018,21 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
   if (elements.audio) {
     elements.audio.pause();
     elements.audio.currentTime = 0;
+    // Clear audio src when switching to video
+    if (isVideo && elements.audio.src) {
+      elements.audio.removeAttribute('src');
+      elements.audio.load();
+    }
   }
   if (elements.video) {
     elements.video.pause();
     elements.video.currentTime = 0;
     elements.video.hidden = !isVideo;
+    // Clear video src when switching to audio
+    if (!isVideo && elements.video.src) {
+      elements.video.removeAttribute('src');
+      elements.video.load();
+    }
   }
   
   // Hide/show artwork based on media type
