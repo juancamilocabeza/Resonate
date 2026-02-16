@@ -3489,7 +3489,10 @@ function setupListenTracking() {
 
   // Helper to attach event listeners to a media element
   const attachMediaListeners = (mediaElement, mediaType) => {
-    if (!mediaElement) return;
+    if (!mediaElement) {
+      logPlayback('warn', `Cannot attach listeners to ${mediaType} element: element is null`);
+      return;
+    }
 
     mediaElement.addEventListener('play', () => {
       // Only handle if this is the active media element
