@@ -55,6 +55,13 @@
 }
 #description-container .btn-secondary,
 #description-container .icon-control {
+    .app {
+      position: static !important;
+      overflow-x: visible !important;
+      min-width: 0 !important;
+      width: 100vw !important;
+      max-width: 100vw !important;
+    }
   margin: 0;
 }
 
@@ -255,6 +262,21 @@ body.tracks-open #tracks-list-container .track-row-title,
   white-space: nowrap;
   text-overflow: clip;
   overflow: hidden;
+    .title-share-container {
+      display: block;
+      width: 100vw;
+      max-width: 100vw;
+      overflow: visible;
+      padding: 0;
+      margin: 0 auto;
+    }
+    .current-track-info {
+      width: 100vw;
+      max-width: 100vw;
+      overflow-x: visible;
+      padding: 0;
+      margin: 0 auto;
+    }
   min-width: 0;
 }
 
@@ -1184,6 +1206,19 @@ header {
   }
   h1 {
     font-size: 19px;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+  }
+  .title {
+    font-size: 18px;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    display: block;
+    word-break: break-word;
+    line-height: 1.2;
+    padding: 0 4px;
   }
   .footer {
     text-align: center !important;
@@ -4380,7 +4415,6 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
   
   h1 {
     font-size: 18px;
-    max-width: 100px;
   }
   
   header {
