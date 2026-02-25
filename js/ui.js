@@ -522,6 +522,9 @@ function dispatchSearchWithFastPath(queryAtDispatch, { keepKeyboard = true, addT
     setSearchOpenState(true);
     scheduleSearchInsetsBurst();
 
+    // Show skeleton loaders immediately for better UX
+    showSearchSkeletons(8);
+
     if (!keepKeyboard) {
       try { elements.searchInput?.blur?.(); } catch {}
     }
@@ -3378,6 +3381,39 @@ function navigateSearchResults(direction) {
   } catch {
     // ignore
   }
+}
+
+// Show skeleton loaders while search is in progress
+function showSearchSkeletons(count = 8) {
+  if (!elements.searchResultsList) return;
+  
+  // Show search results panel if not already visible
+  if (elements.searchResults && !elements.searchResults.classList.contains('active')) {
+    elements.searchResults.classList.add('active');
+    try {
+      initializePanelToolbarsOnce();
+      if (elements.searchResultsHeader) elements.searchResultsHeader.hidden = false;
+      if (elements.searchResultsCount) {
+        elements.searchResultsCount.innerHTML = '<div class="search-status-message"><div class="search-status-spinner"></div><span>Searching...</span></div>';
+      }
+    } catch {}
+    state.searchActive = true;
+    setSearchOpenState(true);
+    scheduleSearchInsetsBurst();
+  }
+  
+  // Create skeleton cards
+  const skeletonHTML = Array.from({ length: count }, () => `
+    <div class="search-skeleton-card">
+      <div class="search-skeleton-cover"></div>
+      <div class="search-skeleton-content">
+        <div class="search-skeleton-title"></div>
+        <div class="search-skeleton-subtitle"></div>
+      </div>
+    </div>
+  `).join('');
+  
+  elements.searchResultsList.innerHTML = `<div class="search-skeleton-container">${skeletonHTML}</div>`;
 }
 
 function displaySearchResults(searchData, clearExisting = true) {
