@@ -5272,6 +5272,28 @@ function setupPageVisibilityHandling() {
     // ignore
   }
 
+  // Page Lifecycle API: restore MediaSession when page is resumed from frozen state
+  try {
+    document.addEventListener('resume', () => {
+      // Re-initialize MediaSession if needed
+      if (window.mediaSessionManager && window.mediaSessionManager.isCleanedUp) {
+        window.mediaSessionManager.reset();
+        // Re-setup handlers
+        if (typeof setupMediaSession === 'function') {
+          setupMediaSession();
+        }
+        // Re-update metadata if we have a current track
+        if (window.state && window.state.currentTrack && window.state.currentIdentifier) {
+          if (typeof updateMediaSessionMetadata === 'function') {
+            updateMediaSessionMetadata(window.state.currentTrack, window.state.currentIdentifier);
+          }
+        }
+      }
+    });
+  } catch {
+    // ignore
+  }
+
   // Also save state when page unloads
   window.addEventListener('beforeunload', () => {
     savePlaybackState();
