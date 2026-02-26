@@ -1580,7 +1580,9 @@ function consumePreloadedBlobUrl(url) {
   const blobUrl = preloadedBlobUrlMap.get(url);
   preloadedBlobUrlMap.delete(url);
   try {
-    if (preloadAudioElement && preloadAudioElement.src === blobUrl) {
+    // Only clear the preload element if it's actually using the consumed URL
+    // Check both exact match and prevent clearing if element is loading/buffering
+    if (preloadAudioElement && preloadAudioElement.src === blobUrl && preloadAudioElement.readyState < 2) {
       preloadAudioElement.removeAttribute('src');
       preloadAudioElement.load();
     }
@@ -1602,8 +1604,12 @@ async function prewarmAudioFromCache(url) {
 
     const preloader = ensurePreloadAudioElement();
     if (preloader) {
-      preloader.src = blobUrl;
-      preloader.load();
+      // Only update preload element if it's not currently preloading something else
+      // This prevents interrupting an in-progress preload operation
+      if (!preloader.src || preloader.readyState >= 2) {
+        preloader.src = blobUrl;
+        preloader.load();
+      }
     }
   } catch (err) {
     logPlayback('debug', 'Prewarm cache failed', err);
@@ -3494,8 +3500,12 @@ function setupListenTracking() {
         const contextId = currentContext === 'album' ? playbackManager.getCurrentAlbumId() : null;
         enhancedPlaybackController.setContext(currentContext, contextId);
         await enhancedPlaybackController.handleTrackEnd();
+        // Only schedule unlock after successful handling
+        scheduleTransitionUnlock();
       } catch (err) {
         logPlayback('warn', 'Enhanced track end handling failed', err);
+        // Schedule unlock before fallback to prevent lock starvation
+        scheduleTransitionUnlock();
         scheduleAutoAdvance('enhanced-ended-fallback', 500, () => {
           playNextInContext().catch((e) => logPlayback('warn', 'Fallback playNextInContext failed', e));
         });
@@ -3503,10 +3513,11 @@ function setupListenTracking() {
     } else {
       // Resonate UX: never stop when context is missing.
       playNextInContext().catch((e) => logPlayback('warn', 'No-context playNextInContext failed', e));
+      // Schedule unlock for no-context case
+      scheduleTransitionUnlock();
     }
 
     signalServiceWorkerSafeActivation();
-    scheduleTransitionUnlock();
   });
 
   // If a track errors and never reaches 'ended', skip forward to keep continuous playback.
