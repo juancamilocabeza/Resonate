@@ -7957,7 +7957,12 @@ async function shareTrack(identifier, title = 'Track', creator = null, albumTitl
   // Try to get cover image for sharing
   let coverFile = null;
   try {
-    coverFile = await getCoverImageForSharing(identifier);
+    // Use CoverManager if available, otherwise fallback to local implementation
+    if (window.CoverManager && typeof window.CoverManager.getCoverImageForSharing === 'function') {
+      coverFile = await window.CoverManager.getCoverImageForSharing(identifier);
+    } else {
+      coverFile = await getCoverImageForSharing(identifier);
+    }
     window.logger?.debug('Cover image obtained for sharing', 'NETWORK');
   } catch (error) {
     window.logger?.warn({ message: 'Could not get cover image', error }, 'NETWORK');

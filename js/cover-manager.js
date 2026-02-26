@@ -317,6 +317,11 @@
       return null;
     }
     
+    if (typeof File === 'undefined') {
+      logWarn('File API not available for sharing');
+      return null;
+    }
+    
     try {
       const response = await fetch(coverUrl);
       if (!response.ok) {
@@ -331,7 +336,8 @@
       }
       
       const filename = `cover-${identifier}.jpg`;
-      const fileType = blob.type.startsWith('image/') ? blob.type : 'image/jpeg';
+      const blobType = blob && typeof blob.type === 'string' ? blob.type : '';
+      const fileType = blobType && blobType.startsWith('image/') ? blobType : 'image/jpeg';
       
       return new File([blob], filename, { type: fileType });
     } catch (error) {
