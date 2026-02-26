@@ -1530,7 +1530,7 @@ function formatTime(seconds) {
 let activeLoaderProgress = 0;
 
 // In-memory preloaded blob URLs for near-instant next-track playback
-const PRELOADED_BLOB_URL_LIMIT = 2;
+const PRELOADED_BLOB_URL_LIMIT = 3;
 const preloadedBlobUrlMap = new Map();
 let preloadAudioElement = null;
 
@@ -1580,6 +1580,8 @@ function consumePreloadedBlobUrl(url) {
   const blobUrl = preloadedBlobUrlMap.get(url);
   preloadedBlobUrlMap.delete(url);
   try {
+    // Clear the preload element if it's using the consumed URL
+    // We always clear to avoid keeping stale references
     if (preloadAudioElement && preloadAudioElement.src === blobUrl) {
       preloadAudioElement.removeAttribute('src');
       preloadAudioElement.load();
@@ -1602,8 +1604,15 @@ async function prewarmAudioFromCache(url) {
 
     const preloader = ensurePreloadAudioElement();
     if (preloader) {
-      preloader.src = blobUrl;
-      preloader.load();
+      // Only update preload element if it's truly idle or empty
+      // readyState 0 = HAVE_NOTHING (idle, safe to update)
+      // readyState 1+ = has started loading (avoid interrupting)
+      // Also update if src is empty/unset
+      const isIdle = !preloader.src || preloader.src === '' || preloader.readyState === 0;
+      if (isIdle) {
+        preloader.src = blobUrl;
+        preloader.load();
+      }
     }
   } catch (err) {
     logPlayback('debug', 'Prewarm cache failed', err);
@@ -3494,8 +3503,12 @@ function setupListenTracking() {
         const contextId = currentContext === 'album' ? playbackManager.getCurrentAlbumId() : null;
         enhancedPlaybackController.setContext(currentContext, contextId);
         await enhancedPlaybackController.handleTrackEnd();
+        // Only schedule unlock after successful handling
+        scheduleTransitionUnlock();
       } catch (err) {
         logPlayback('warn', 'Enhanced track end handling failed', err);
+        // Schedule unlock before fallback to prevent lock starvation
+        scheduleTransitionUnlock();
         scheduleAutoAdvance('enhanced-ended-fallback', 500, () => {
           playNextInContext().catch((e) => logPlayback('warn', 'Fallback playNextInContext failed', e));
         });
@@ -3503,10 +3516,11 @@ function setupListenTracking() {
     } else {
       // Resonate UX: never stop when context is missing.
       playNextInContext().catch((e) => logPlayback('warn', 'No-context playNextInContext failed', e));
+      // Schedule unlock for no-context case
+      scheduleTransitionUnlock();
     }
 
     signalServiceWorkerSafeActivation();
-    scheduleTransitionUnlock();
   });
 
   // If a track errors and never reaches 'ended', skip forward to keep continuous playback.
@@ -3524,16 +3538,21 @@ function setupListenTracking() {
       if (currentContext) {
         const contextId = currentContext === 'album' ? playbackManager.getCurrentAlbumId() : null;
         enhancedPlaybackController.setContext(currentContext, contextId);
-        enhancedPlaybackController.handleTrackEnd().catch((err) => {
+        enhancedPlaybackController.handleTrackEnd().then(() => {
+          // Schedule unlock after successful handling
+          scheduleTransitionUnlock();
+        }).catch((err) => {
           logPlayback('warn', 'Error-skip handler failed', err);
+          // Schedule unlock before fallback
+          scheduleTransitionUnlock();
           playNextInContext().catch((e) => logPlayback('warn', 'Fallback skip failed', e));
         });
       } else {
         playNextInContext().catch((e) => logPlayback('warn', 'Skip failed', e));
+        // Schedule unlock for no-context case
+        scheduleTransitionUnlock();
       }
     });
-
-    scheduleTransitionUnlock();
   });
 
   window.elements.audio.addEventListener('pause', () => {
