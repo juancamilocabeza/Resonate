@@ -52,6 +52,30 @@ function safeShowStatus(message, type, duration, variant, showLoader) {
   }
 }
 
+/**
+ * Helper function to acquire wake lock if supported
+ * Prevents screen from turning off during playback
+ */
+function acquireWakeLockIfSupported() {
+  if (window.wakeLockManager && window.wakeLockManager.isSupported) {
+    window.wakeLockManager.acquire().catch(error => {
+      logPlayback('debug', 'Failed to acquire wake lock', error);
+    });
+  }
+}
+
+/**
+ * Helper function to release wake lock if supported
+ * Allows screen to turn off normally when not playing
+ */
+function releaseWakeLockIfSupported() {
+  if (window.wakeLockManager && window.wakeLockManager.isSupported) {
+    window.wakeLockManager.release().catch(error => {
+      logPlayback('debug', 'Failed to release wake lock', error);
+    });
+  }
+}
+
 function isAutoplayBlockedError(error) {
   try {
     const name = (error && error.name) ? String(error.name) : '';
@@ -2138,6 +2162,9 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
         // Successful playback start: reset auto-skip budget for this context.
         try { resetAutoSkipBudgetForCurrentContext(); } catch {}
 
+        // Acquire wake lock to prevent screen from turning off during playback
+        acquireWakeLockIfSupported();
+
         if (totalTracks > 1) {
           safeShowStatus('Now playing album track with numbers', 'info');
         } else {
@@ -2515,6 +2542,9 @@ function togglePlay() {
           updateMediaPositionState();
         }
       }
+
+      // Acquire wake lock to prevent screen from turning off during playback
+      acquireWakeLockIfSupported();
     }).catch(error => {
       if (isAutoplayBlockedError(error)) {
         showAutoplayCta('Tap Play to start');
@@ -2536,6 +2566,9 @@ function togglePlay() {
         updateMediaPositionState();
       }
     }
+
+    // Release wake lock when paused
+    releaseWakeLockIfSupported();
   }
 }
 
@@ -3558,6 +3591,9 @@ function setupListenTracking() {
   window.elements.audio.addEventListener('pause', () => {
     // When playback is idle, allow waiting SW to activate safely
     signalServiceWorkerSafeActivation();
+
+    // Release wake lock when paused
+    releaseWakeLockIfSupported();
   });
 
   window.elements.audio.addEventListener('seeked', () => {
