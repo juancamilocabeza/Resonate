@@ -35,9 +35,9 @@ The cover art sharing feature requires:
 
 ### Supported Browsers
 
-- Chrome/Edge 89+ (Android, Windows 11)
-- Safari 15+ (iOS/iPadOS, macOS)
-- Firefox (limited support, depends on platform)
+- Chrome/Edge 89+ (Android, Windows 11) - Full support
+- Safari 15+ (iOS/iPadOS, macOS) - Full support
+- Firefox 101+ - Limited support (Android only as of Firefox 101+, desktop versions may require enabling flags)
 
 ### Fallback Behavior
 

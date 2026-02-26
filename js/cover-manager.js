@@ -336,8 +336,12 @@
       }
       
       const filename = `cover-${identifier}.jpg`;
-      const blobType = blob && typeof blob.type === 'string' ? blob.type : '';
-      const fileType = blobType && blobType.startsWith('image/') ? blobType : 'image/jpeg';
+      
+      // Determine file type from blob, defaulting to JPEG if not an image type
+      let fileType = 'image/jpeg';
+      if (blob && typeof blob.type === 'string' && blob.type.startsWith('image/')) {
+        fileType = blob.type;
+      }
       
       return new File([blob], filename, { type: fileType });
     } catch (error) {
