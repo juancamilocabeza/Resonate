@@ -379,8 +379,8 @@
       var isPlaying = !remotePlayer.isPaused;
       playBtn.textContent = isPlaying ? '⏸' : '▶';
       playBtn.setAttribute('aria-label', isPlaying ? 'Pause' : 'Play');
-      if ('mediaSession' in navigator) {
-        navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+      if (window.mediaSessionManager && window.mediaSessionManager.isSupported) {
+        window.mediaSessionManager.updatePlaybackState(isPlaying ? 'playing' : 'paused');
       }
     } catch (e) {}
   }

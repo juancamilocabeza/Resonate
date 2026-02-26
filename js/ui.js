@@ -3230,23 +3230,30 @@ function hideSearchResults() {
 }
 
 function updateMediaPositionState() {
-  if (!('mediaSession' in navigator) || !navigator.mediaSession) return;
-  if (typeof navigator.mediaSession.setPositionState !== 'function') return;
+  // Use the new MediaSessionManager - this should only be called on state changes
+  // (play, pause, seek) to optimize battery usage
+  if (!window.mediaSessionManager || !window.mediaSessionManager.isSupported) {
+    return;
+  }
+
   const castState = (window.CastManager && typeof window.CastManager.getRemotePositionState === 'function')
     ? window.CastManager.getRemotePositionState()
     : null;
   const useCast = !!(castState && typeof castState.duration === 'number');
-  if (!useCast && !elements.audio.duration) return;
+  
+  if (!useCast && !elements.audio.duration) {
+    return;
+  }
 
   try {
     if (useCast) {
-      navigator.mediaSession.setPositionState({
+      window.mediaSessionManager.updatePositionState({
         duration: castState.duration,
         playbackRate: castState.playbackRate || 1,
         position: castState.position || 0
       });
     } else {
-      navigator.mediaSession.setPositionState({
+      window.mediaSessionManager.updatePositionState({
         duration: elements.audio.duration,
         playbackRate: elements.audio.playbackRate,
         position: elements.audio.currentTime
@@ -3258,48 +3265,15 @@ function updateMediaPositionState() {
 }
 
 function updateMediaSessionMetadata(track, identifier) {
-  if (!('mediaSession' in navigator)) return;
-  if (typeof MediaMetadata !== 'function') return;
+  // Use the new MediaSessionManager
+  if (!window.mediaSessionManager || !window.mediaSessionManager.isSupported) {
+    return;
+  }
 
   try {
-    const trackTitle = track.title || 'Untitled';
-    const albumTitle = (track.albumTitle || track.album || identifier || '').toString().trim();
-    const isAlbumTrack = ((track.totalTracks || 1) > 1) || !!track.isAlbumTrack;
-    const displayTitle = (isAlbumTrack && albumTitle && albumTitle.toLowerCase() !== trackTitle.toLowerCase())
-      ? `${albumTitle} — ${trackTitle}`
-      : trackTitle;
-    let coverUrl = '';
-    try {
-      if (window.CoverManager && typeof window.CoverManager.getCoverUrl === 'function') {
-        coverUrl = window.CoverManager.getCoverUrl(identifier);
-      } else if (identifier) {
-        coverUrl = `https://archive.org/services/img/${encodeURIComponent(identifier)}`;
-      }
-    } catch {}
-    let imageType = '';
-    try {
-      const lower = String(coverUrl || '').toLowerCase();
-      if (lower.endsWith('.png')) imageType = 'image/png';
-      if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) imageType = 'image/jpeg';
-    } catch {}
-    const artwork = coverUrl
-      ? [64, 96, 128, 192, 256, 384, 512, 1024].map(size => {
-          const entry = { src: coverUrl, sizes: `${size}x${size}` };
-          if (imageType) entry.type = imageType;
-          return entry;
-        })
-      : undefined;
-
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: displayTitle,
-      artist: track.creator || 'Unknown',
-      album: albumTitle,
-      artwork
-    });
-
-    updateMediaPositionState();
+    window.mediaSessionManager.updateMetadata(track, identifier);
   } catch (error) {
-    window.logger?.warn({ message: 'Error updating Media Session', error }, 'PLAYBACK');
+    window.logger?.warn({ message: 'Error updating Media Session metadata', error }, 'PLAYBACK');
   }
 }
 
@@ -5244,6 +5218,9 @@ function setupConnectivityMonitoring() {
   __resonateAttachConnectivityHandlersOnce();
 }
 
+// Configuration constants for page lifecycle
+const MEDIA_SESSION_CLEANUP_DELAY_MS = 5000; // Delay before cleaning up MediaSession when page is hidden
+
 // Page visibility and playback resume management
 function setupPageVisibilityHandling() {
   if (window._resonatePageVisibilityInit) return;
@@ -5253,6 +5230,31 @@ function setupPageVisibilityHandling() {
     if (document.hidden) {
       // App is hidden - save state
       savePlaybackState();
+      
+      // Battery optimization: cleanup MediaSession if no audio is playing
+      if (window.mediaSessionManager && elements.audio && elements.audio.paused) {
+        // Defer cleanup slightly to avoid issues with quick tab switches
+        setTimeout(() => {
+          if (document.hidden && elements.audio.paused) {
+            window.mediaSessionManager.cleanup();
+          }
+        }, MEDIA_SESSION_CLEANUP_DELAY_MS);
+      }
+    } else {
+      // App is visible again - re-initialize MediaSession if needed
+      if (window.mediaSessionManager && window.mediaSessionManager.isCleanedUp) {
+        window.mediaSessionManager.reset();
+        // Re-setup handlers
+        if (typeof setupMediaSession === 'function') {
+          setupMediaSession();
+        }
+        // Re-update metadata if we have a current track
+        if (window.state && window.state.currentTrack && window.state.currentIdentifier) {
+          if (typeof updateMediaSessionMetadata === 'function') {
+            updateMediaSessionMetadata(window.state.currentTrack, window.state.currentIdentifier);
+          }
+        }
+      }
     }
   });
 
@@ -5261,16 +5263,32 @@ function setupPageVisibilityHandling() {
   try {
     document.addEventListener('freeze', () => {
       savePlaybackState();
+      // Cleanup MediaSession on freeze to save battery
+      if (window.mediaSessionManager) {
+        window.mediaSessionManager.cleanup();
+      }
     });
   } catch {
     // ignore
   }
 
   // Also save state when page unloads
-  window.addEventListener('beforeunload', savePlaybackState);
+  window.addEventListener('beforeunload', () => {
+    savePlaybackState();
+    // Cleanup MediaSession on unload
+    if (window.mediaSessionManager) {
+      window.mediaSessionManager.cleanup();
+    }
+  });
 
   // Also save state when PWA might be closed (pagehide is better for mobile)
-  window.addEventListener('pagehide', savePlaybackState);
+  window.addEventListener('pagehide', () => {
+    savePlaybackState();
+    // Cleanup MediaSession on pagehide
+    if (window.mediaSessionManager) {
+      window.mediaSessionManager.cleanup();
+    }
+  });
 }
 
 // Periodic autosave while playing (covers abrupt closes where lifecycle events might not fire)

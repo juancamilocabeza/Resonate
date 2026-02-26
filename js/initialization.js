@@ -998,20 +998,36 @@ async function initializeApp() {
     elements.audio.addEventListener('play', () => {
       // Keep icon consistent with playback.js
       elements.playBtn.textContent = '⏸';
-      // Actualizar Media Session
-      if ('mediaSession' in navigator) {
-        navigator.mediaSession.playbackState = 'playing';
+      // Update MediaSession playback state
+      if (window.mediaSessionManager && window.mediaSessionManager.isSupported) {
+        window.mediaSessionManager.updatePlaybackState('playing');
+        // Battery-efficient: update position state only on state change
+        if (typeof updateMediaPositionState === 'function') {
+          updateMediaPositionState();
+        }
       }
     });
 
     elements.audio.addEventListener('pause', () => {
       elements.playBtn.textContent = '▶';
-      // Actualizar Media Session
-      if ('mediaSession' in navigator) {
-        navigator.mediaSession.playbackState = 'paused';
+      // Update MediaSession playback state
+      if (window.mediaSessionManager && window.mediaSessionManager.isSupported) {
+        window.mediaSessionManager.updatePlaybackState('paused');
+        // Battery-efficient: update position state only on state change
+        if (typeof updateMediaPositionState === 'function') {
+          updateMediaPositionState();
+        }
       }
     });
 
+    // Battery-efficient: update position state only on seek
+    elements.audio.addEventListener('seeked', () => {
+      if (window.mediaSessionManager && window.mediaSessionManager.isSupported) {
+        if (typeof updateMediaPositionState === 'function') {
+          updateMediaPositionState();
+        }
+      }
+    });
 
     elements.audio.addEventListener('error', (e) => {
       window.logger.error(`Audio error: ${e.target.error?.code} - ${e.target.error?.message}`, 'PLAYBACK');
