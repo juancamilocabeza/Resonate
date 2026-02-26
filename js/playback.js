@@ -52,6 +52,30 @@ function safeShowStatus(message, type, duration, variant, showLoader) {
   }
 }
 
+/**
+ * Helper function to acquire wake lock if supported
+ * Prevents screen from turning off during playback
+ */
+function acquireWakeLockIfSupported() {
+  if (window.wakeLockManager && window.wakeLockManager.isSupported) {
+    window.wakeLockManager.acquire().catch(error => {
+      logPlayback('debug', 'Failed to acquire wake lock', error);
+    });
+  }
+}
+
+/**
+ * Helper function to release wake lock if supported
+ * Allows screen to turn off normally when not playing
+ */
+function releaseWakeLockIfSupported() {
+  if (window.wakeLockManager && window.wakeLockManager.isSupported) {
+    window.wakeLockManager.release().catch(error => {
+      logPlayback('debug', 'Failed to release wake lock', error);
+    });
+  }
+}
+
 function isAutoplayBlockedError(error) {
   try {
     const name = (error && error.name) ? String(error.name) : '';
@@ -2139,11 +2163,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
         try { resetAutoSkipBudgetForCurrentContext(); } catch {}
 
         // Acquire wake lock to prevent screen from turning off during playback
-        if (window.wakeLockManager && window.wakeLockManager.isSupported) {
-          window.wakeLockManager.acquire().catch(error => {
-            logPlayback('debug', 'Failed to acquire wake lock', error);
-          });
-        }
+        acquireWakeLockIfSupported();
 
         if (totalTracks > 1) {
           safeShowStatus('Now playing album track with numbers', 'info');
@@ -2524,11 +2544,7 @@ function togglePlay() {
       }
 
       // Acquire wake lock to prevent screen from turning off during playback
-      if (window.wakeLockManager && window.wakeLockManager.isSupported) {
-        window.wakeLockManager.acquire().catch(error => {
-          logPlayback('debug', 'Failed to acquire wake lock', error);
-        });
-      }
+      acquireWakeLockIfSupported();
     }).catch(error => {
       if (isAutoplayBlockedError(error)) {
         showAutoplayCta('Tap Play to start');
@@ -2552,11 +2568,7 @@ function togglePlay() {
     }
 
     // Release wake lock when paused
-    if (window.wakeLockManager && window.wakeLockManager.isSupported) {
-      window.wakeLockManager.release().catch(error => {
-        logPlayback('debug', 'Failed to release wake lock', error);
-      });
-    }
+    releaseWakeLockIfSupported();
   }
 }
 
@@ -3581,11 +3593,7 @@ function setupListenTracking() {
     signalServiceWorkerSafeActivation();
 
     // Release wake lock when paused
-    if (window.wakeLockManager && window.wakeLockManager.isSupported) {
-      window.wakeLockManager.release().catch(error => {
-        logPlayback('debug', 'Failed to release wake lock on pause', error);
-      });
-    }
+    releaseWakeLockIfSupported();
   });
 
   window.elements.audio.addEventListener('seeked', () => {
