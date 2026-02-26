@@ -1604,11 +1604,12 @@ async function prewarmAudioFromCache(url) {
 
     const preloader = ensurePreloadAudioElement();
     if (preloader) {
-      // Only update preload element if it's idle (not loading or already loaded)
-      // readyState 0 = HAVE_NOTHING (idle), 1 = HAVE_METADATA (starting)
-      // readyState 2+ = HAVE_CURRENT_DATA or more (actively loading/loaded)
-      // We avoid interrupting active loads by only setting when idle
-      if (!preloader.src || preloader.readyState < 2) {
+      // Only update preload element if it's truly idle or empty
+      // readyState 0 = HAVE_NOTHING (idle, safe to update)
+      // readyState 1+ = has started loading (avoid interrupting)
+      // Also update if src is empty/unset
+      const isIdle = !preloader.src || preloader.src === '' || preloader.readyState === 0;
+      if (isIdle) {
         preloader.src = blobUrl;
         preloader.load();
       }
