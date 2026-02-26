@@ -1530,7 +1530,7 @@ function formatTime(seconds) {
 let activeLoaderProgress = 0;
 
 // In-memory preloaded blob URLs for near-instant next-track playback
-const PRELOADED_BLOB_URL_LIMIT = 2;
+const PRELOADED_BLOB_URL_LIMIT = 3;
 const preloadedBlobUrlMap = new Map();
 let preloadAudioElement = null;
 
@@ -3535,16 +3535,21 @@ function setupListenTracking() {
       if (currentContext) {
         const contextId = currentContext === 'album' ? playbackManager.getCurrentAlbumId() : null;
         enhancedPlaybackController.setContext(currentContext, contextId);
-        enhancedPlaybackController.handleTrackEnd().catch((err) => {
+        enhancedPlaybackController.handleTrackEnd().then(() => {
+          // Schedule unlock after successful handling
+          scheduleTransitionUnlock();
+        }).catch((err) => {
           logPlayback('warn', 'Error-skip handler failed', err);
+          // Schedule unlock before fallback
+          scheduleTransitionUnlock();
           playNextInContext().catch((e) => logPlayback('warn', 'Fallback skip failed', e));
         });
       } else {
         playNextInContext().catch((e) => logPlayback('warn', 'Skip failed', e));
+        // Schedule unlock for no-context case
+        scheduleTransitionUnlock();
       }
     });
-
-    scheduleTransitionUnlock();
   });
 
   window.elements.audio.addEventListener('pause', () => {
