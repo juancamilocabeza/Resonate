@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: '.',
-  testMatch: ['e2e.spec.js'],
+  testMatch: ['e2e.spec.js', 'e2e-media-session.spec.js'],
   timeout: 60000,
   expect: { timeout: 10000 },
   retries: process.env.CI ? 2 : 0,
@@ -19,7 +19,7 @@ export default defineConfig({
   webServer: {
     command: 'npm run dev',
     url: 'http://localhost:3000',
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: true,
     timeout: 120000
   }
 });
