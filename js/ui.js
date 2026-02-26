@@ -5221,6 +5221,30 @@ function setupConnectivityMonitoring() {
 // Configuration constants for page lifecycle
 const MEDIA_SESSION_CLEANUP_DELAY_MS = 5000; // Delay before cleaning up MediaSession when page is hidden
 
+/**
+ * Helper function to restore MediaSession state
+ * @private
+ */
+function restoreMediaSessionState() {
+  if (!window.mediaSessionManager || !window.mediaSessionManager.isCleanedUp) {
+    return;
+  }
+  
+  window.mediaSessionManager.reset();
+  
+  // Re-setup handlers
+  if (typeof setupMediaSession === 'function') {
+    setupMediaSession();
+  }
+  
+  // Re-update metadata if we have a current track
+  if (window.state && window.state.currentTrack && window.state.currentIdentifier) {
+    if (typeof updateMediaSessionMetadata === 'function') {
+      updateMediaSessionMetadata(window.state.currentTrack, window.state.currentIdentifier);
+    }
+  }
+}
+
 // Page visibility and playback resume management
 function setupPageVisibilityHandling() {
   if (window._resonatePageVisibilityInit) return;
@@ -5242,19 +5266,7 @@ function setupPageVisibilityHandling() {
       }
     } else {
       // App is visible again - re-initialize MediaSession if needed
-      if (window.mediaSessionManager && window.mediaSessionManager.isCleanedUp) {
-        window.mediaSessionManager.reset();
-        // Re-setup handlers
-        if (typeof setupMediaSession === 'function') {
-          setupMediaSession();
-        }
-        // Re-update metadata if we have a current track
-        if (window.state && window.state.currentTrack && window.state.currentIdentifier) {
-          if (typeof updateMediaSessionMetadata === 'function') {
-            updateMediaSessionMetadata(window.state.currentTrack, window.state.currentIdentifier);
-          }
-        }
-      }
+      restoreMediaSessionState();
     }
   });
 
@@ -5276,19 +5288,7 @@ function setupPageVisibilityHandling() {
   try {
     document.addEventListener('resume', () => {
       // Re-initialize MediaSession if needed
-      if (window.mediaSessionManager && window.mediaSessionManager.isCleanedUp) {
-        window.mediaSessionManager.reset();
-        // Re-setup handlers
-        if (typeof setupMediaSession === 'function') {
-          setupMediaSession();
-        }
-        // Re-update metadata if we have a current track
-        if (window.state && window.state.currentTrack && window.state.currentIdentifier) {
-          if (typeof updateMediaSessionMetadata === 'function') {
-            updateMediaSessionMetadata(window.state.currentTrack, window.state.currentIdentifier);
-          }
-        }
-      }
+      restoreMediaSessionState();
     });
   } catch {
     // ignore
