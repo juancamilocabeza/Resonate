@@ -5218,6 +5218,9 @@ function setupConnectivityMonitoring() {
   __resonateAttachConnectivityHandlersOnce();
 }
 
+// Configuration constants for page lifecycle
+const MEDIA_SESSION_CLEANUP_DELAY_MS = 5000; // Delay before cleaning up MediaSession when page is hidden
+
 // Page visibility and playback resume management
 function setupPageVisibilityHandling() {
   if (window._resonatePageVisibilityInit) return;
@@ -5235,7 +5238,7 @@ function setupPageVisibilityHandling() {
           if (document.hidden && elements.audio.paused) {
             window.mediaSessionManager.cleanup();
           }
-        }, 5000); // 5 seconds idle before cleanup
+        }, MEDIA_SESSION_CLEANUP_DELAY_MS);
       }
     } else {
       // App is visible again - re-initialize MediaSession if needed

@@ -15,6 +15,9 @@
 (function(window) {
   'use strict';
 
+  // Configuration constants
+  const POSITION_TOLERANCE_SECONDS = 1.0; // Tolerance for position comparison to avoid redundant updates
+
   /**
    * MediaSession Manager Class
    * Encapsulates all MediaSession API logic with battery efficiency and cross-platform support
@@ -240,7 +243,7 @@
     _isSamePositionState(duration, position, playbackRate) {
       const last = this.lastPositionUpdate;
       return last.duration === duration &&
-             Math.abs(last.position - position) < 1.0 && // Within 1 second
+             Math.abs(last.position - position) < POSITION_TOLERANCE_SECONDS &&
              last.playbackRate === playbackRate;
     }
 
