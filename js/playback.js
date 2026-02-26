@@ -1580,9 +1580,9 @@ function consumePreloadedBlobUrl(url) {
   const blobUrl = preloadedBlobUrlMap.get(url);
   preloadedBlobUrlMap.delete(url);
   try {
-    // Only clear the preload element if it's actually using the consumed URL
-    // Check both exact match and prevent clearing if element is loading/buffering
-    if (preloadAudioElement && preloadAudioElement.src === blobUrl && preloadAudioElement.readyState < 2) {
+    // Clear the preload element if it's using the consumed URL
+    // We always clear to avoid keeping stale references
+    if (preloadAudioElement && preloadAudioElement.src === blobUrl) {
       preloadAudioElement.removeAttribute('src');
       preloadAudioElement.load();
     }
@@ -1604,9 +1604,11 @@ async function prewarmAudioFromCache(url) {
 
     const preloader = ensurePreloadAudioElement();
     if (preloader) {
-      // Only update preload element if it's not currently preloading something else
-      // This prevents interrupting an in-progress preload operation
-      if (!preloader.src || preloader.readyState >= 2) {
+      // Only update preload element if it's idle (not loading or already loaded)
+      // readyState 0 = HAVE_NOTHING (idle), 1 = HAVE_METADATA (starting)
+      // readyState 2+ = HAVE_CURRENT_DATA or more (actively loading/loaded)
+      // We avoid interrupting active loads by only setting when idle
+      if (!preloader.src || preloader.readyState < 2) {
         preloader.src = blobUrl;
         preloader.load();
       }
