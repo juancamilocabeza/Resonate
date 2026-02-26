@@ -2498,9 +2498,13 @@ function togglePlay() {
       if (elements.playBtn) elements.playBtn.textContent = '⏸';
       safeShowStatus('Music is playing now', 'info');
 
-      // Actualizar Media Session
-      if ('mediaSession' in navigator) {
-        navigator.mediaSession.playbackState = 'playing';
+      // Update MediaSession playback state and position
+      if (window.mediaSessionManager && window.mediaSessionManager.isSupported) {
+        window.mediaSessionManager.updatePlaybackState('playing');
+        // Battery-efficient: update position state only on state change
+        if (typeof updateMediaPositionState === 'function') {
+          updateMediaPositionState();
+        }
       }
     }).catch(error => {
       if (isAutoplayBlockedError(error)) {
@@ -2515,9 +2519,13 @@ function togglePlay() {
     if (elements.playBtn) elements.playBtn.textContent = '▶';
     safeShowStatus('Music is now paused', 'info');
 
-    // Actualizar Media Session
-    if ('mediaSession' in navigator) {
-      navigator.mediaSession.playbackState = 'paused';
+    // Update MediaSession playback state and position
+    if (window.mediaSessionManager && window.mediaSessionManager.isSupported) {
+      window.mediaSessionManager.updatePlaybackState('paused');
+      // Battery-efficient: update position state only on state change
+      if (typeof updateMediaPositionState === 'function') {
+        updateMediaPositionState();
+      }
     }
   }
 }
@@ -3892,85 +3900,98 @@ function toggleShuffleFavorites() {
 }
 
 function setupMediaSession() {
-  if (!('mediaSession' in navigator)) {
-    // Media Session API not available in this environment
+  // Use the new MediaSessionManager
+  if (!window.mediaSessionManager || !window.mediaSessionManager.isSupported) {
+    logPlayback('info', 'MediaSession API not available in this environment');
     return;
   }
 
   try {
-    navigator.mediaSession.setActionHandler('play', () => {
-      if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
-        if (typeof window.CastManager.togglePlayback === 'function') {
-          window.CastManager.togglePlayback();
+    // Setup action handlers using the new manager
+    window.mediaSessionManager.setupActionHandlers({
+      onPlay: () => {
+        if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
+          if (typeof window.CastManager.togglePlayback === 'function') {
+            window.CastManager.togglePlayback();
+            return;
+          }
+        }
+        togglePlay();
+      },
+      onPause: () => {
+        if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
+          if (typeof window.CastManager.togglePlayback === 'function') {
+            window.CastManager.togglePlayback();
+            return;
+          }
+        }
+        togglePlay();
+      },
+      onPreviousTrack: () => {
+        if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
+          playPrevious();
           return;
         }
-      }
-      togglePlay();
-    });
-
-    navigator.mediaSession.setActionHandler('pause', () => {
-      if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
-        if (typeof window.CastManager.togglePlayback === 'function') {
-          window.CastManager.togglePlayback();
-          return;
-        }
-      }
-      togglePlay();
-    });
-
-    navigator.mediaSession.setActionHandler('previoustrack', () => {
-      if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
         playPrevious();
-        return;
-      }
-      playPrevious();
-    });
-
-    navigator.mediaSession.setActionHandler('nexttrack', () => {
-      if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
+      },
+      onNextTrack: () => {
+        if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
+          playNext();
+          return;
+        }
         playNext();
-        return;
-      }
-      playNext();
-    });
-
-    navigator.mediaSession.setActionHandler('seekbackward', (details) => {
-      const skipTime = details.seekOffset || 10;
-      if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
-        if (typeof window.CastManager.skipBy === 'function') {
-          window.CastManager.skipBy(-skipTime);
-          return;
+      },
+      onSeekBackward: (details) => {
+        const skipTime = details.seekOffset || 10;
+        if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
+          if (typeof window.CastManager.skipBy === 'function') {
+            window.CastManager.skipBy(-skipTime);
+            return;
+          }
+        }
+        window.elements.audio.currentTime = Math.max(0, window.elements.audio.currentTime - skipTime);
+      },
+      onSeekForward: (details) => {
+        const skipTime = details.seekOffset || 10;
+        if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
+          if (typeof window.CastManager.skipBy === 'function') {
+            window.CastManager.skipBy(skipTime);
+            return;
+          }
+        }
+        window.elements.audio.currentTime = Math.min(window.elements.audio.duration, window.elements.audio.currentTime + skipTime);
+      },
+      onSeekTo: (details) => {
+        if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
+          if (typeof window.CastManager.seekTo === 'function') {
+            window.CastManager.seekTo(details.seekTime);
+            return;
+          }
+        }
+        if (details.fastSeek && 'fastSeek' in window.elements.audio) {
+          window.elements.audio.fastSeek(details.seekTime);
+        } else {
+          window.elements.audio.currentTime = details.seekTime;
+        }
+      },
+      onStop: () => {
+        // Stop handler - pause and reset position
+        if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
+          if (typeof window.CastManager.togglePlayback === 'function') {
+            window.CastManager.togglePlayback();
+          }
+        } else {
+          const audio = getAudioEl();
+          if (audio && !audio.paused) {
+            audio.pause();
+          }
         }
       }
-      window.elements.audio.currentTime = Math.max(0, window.elements.audio.currentTime - skipTime);
     });
 
-    navigator.mediaSession.setActionHandler('seekforward', (details) => {
-      const skipTime = details.seekOffset || 10;
-      if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
-        if (typeof window.CastManager.skipBy === 'function') {
-          window.CastManager.skipBy(skipTime);
-          return;
-        }
-      }
-      window.elements.audio.currentTime = Math.min(window.elements.audio.duration, window.elements.audio.currentTime + skipTime);
-    });
-
-    navigator.mediaSession.setActionHandler('seekto', (details) => {
-      if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
-        if (typeof window.CastManager.seekTo === 'function') {
-          window.CastManager.seekTo(details.seekTime);
-          return;
-        }
-      }
-      if (details.fastSeek && 'fastSeek' in window.elements.audio) {
-        window.elements.audio.fastSeek(details.seekTime);
-      } else {
-        window.elements.audio.currentTime = details.seekTime;
-      }
-    });
+    logPlayback('info', 'MediaSession handlers setup successfully');
   } catch (error) {
-    logPlayback('warn', 'Some Media Session actions unavailable', error);
+    logPlayback('warn', 'Error setting up MediaSession handlers', error);
   }
 }
 
