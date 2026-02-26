@@ -170,7 +170,7 @@
     getStatus() {
       return {
         isSupported: this.isSupported,
-        isActive: this.wakeLock && !this.wakeLock.released,
+        isActive: !!(this.wakeLock && !this.wakeLock.released),
         shouldBeActive: this.shouldBeActive,
         isAcquiring: this.isAcquiring
       };
