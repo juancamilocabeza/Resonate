@@ -2138,6 +2138,13 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
         // Successful playback start: reset auto-skip budget for this context.
         try { resetAutoSkipBudgetForCurrentContext(); } catch {}
 
+        // Acquire wake lock to prevent screen from turning off during playback
+        if (window.wakeLockManager && window.wakeLockManager.isSupported) {
+          window.wakeLockManager.acquire().catch(error => {
+            logPlayback('debug', 'Failed to acquire wake lock', error);
+          });
+        }
+
         if (totalTracks > 1) {
           safeShowStatus('Now playing album track with numbers', 'info');
         } else {
@@ -2515,6 +2522,13 @@ function togglePlay() {
           updateMediaPositionState();
         }
       }
+
+      // Acquire wake lock to prevent screen from turning off during playback
+      if (window.wakeLockManager && window.wakeLockManager.isSupported) {
+        window.wakeLockManager.acquire().catch(error => {
+          logPlayback('debug', 'Failed to acquire wake lock', error);
+        });
+      }
     }).catch(error => {
       if (isAutoplayBlockedError(error)) {
         showAutoplayCta('Tap Play to start');
@@ -2535,6 +2549,13 @@ function togglePlay() {
       if (typeof updateMediaPositionState === 'function') {
         updateMediaPositionState();
       }
+    }
+
+    // Release wake lock when paused
+    if (window.wakeLockManager && window.wakeLockManager.isSupported) {
+      window.wakeLockManager.release().catch(error => {
+        logPlayback('debug', 'Failed to release wake lock', error);
+      });
     }
   }
 }
@@ -3558,6 +3579,13 @@ function setupListenTracking() {
   window.elements.audio.addEventListener('pause', () => {
     // When playback is idle, allow waiting SW to activate safely
     signalServiceWorkerSafeActivation();
+
+    // Release wake lock when paused
+    if (window.wakeLockManager && window.wakeLockManager.isSupported) {
+      window.wakeLockManager.release().catch(error => {
+        logPlayback('debug', 'Failed to release wake lock on pause', error);
+      });
+    }
   });
 
   window.elements.audio.addEventListener('seeked', () => {
