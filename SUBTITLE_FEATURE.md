@@ -57,7 +57,7 @@ This feature implements real-time audio transcription using the Web Speech API, 
 
 ### Usage
 
-1. Subtitles are **automatically enabled** when you start playing audio
+1. Subtitles are **automatically enabled by default** when the page loads
 2. Allow microphone access when prompted (first time only)
 3. Subtitles will appear at the bottom of the player when audio is playing
 4. No manual toggle needed - instant subtitling works seamlessly

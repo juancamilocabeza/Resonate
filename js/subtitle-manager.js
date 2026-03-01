@@ -287,12 +287,6 @@
     // Auto-enable subtitles by default for instant subtitling
     subtitleEnabled = true;
     localStorage.setItem(SUBTITLE_CONFIG.STORAGE_KEY, 'true');
-
-    // Hide toggle button since subtitles are always enabled
-    const toggleBtn = document.getElementById('subtitle-toggle-btn');
-    if (toggleBtn) {
-      toggleBtn.style.display = 'none';
-    }
   }
 
   // Setup audio event listeners
@@ -329,11 +323,6 @@
   function init() {
     if (!checkSpeechRecognitionSupport()) {
       console.warn('Subtitle manager: Speech recognition not supported');
-      // Hide subtitle controls if not supported
-      const toggleBtn = document.getElementById('subtitle-toggle-btn');
-      if (toggleBtn) {
-        toggleBtn.style.display = 'none';
-      }
       return;
     }
 
