@@ -3018,7 +3018,7 @@ async function playFromFavoritesQueue(specificTrack = null) {
       safeShowStatus("This track isn't cached offline. Try reconnecting or add more resonates.", 'error', 3000);
       // Try next track in queue if available
       if (state.playbackQueue.length > 0) {
-        scheduleAutoAdvance('favoritesqueue-offline-uncached', 2000, () => {
+        scheduleAutoAdvance('favoritesqueue-offline-uncached', 0, () => {
           playFromFavoritesQueue().catch((err) => logPlayback('warn', 'Retry playFromFavoritesQueue failed', err));
         });
         return;
@@ -3098,7 +3098,7 @@ async function playNextInContext(maxRetries = 3) {
             return playNextInContext(maxRetries - 1);
           }
           // Never stop; try again from next.
-          scheduleAutoAdvance('album-track-error', 1000, () => {
+          scheduleAutoAdvance('album-track-error', 0, () => {
             playNextInContext(3).catch((e) => logPlayback('warn', 'Auto-advance retry failed', e));
           });
           return;
@@ -3232,7 +3232,7 @@ async function playNextInContext(maxRetries = 3) {
         // Use cache for favorites
         if (!nextItem.url) {
           logPlayback('error', 'Favorite without valid URL', nextItem);
-          scheduleAutoAdvance('favorite-missing-url', 1000, () => {
+          scheduleAutoAdvance('favorite-missing-url', 0, () => {
             playNextInContext().catch((e) => logPlayback('warn', 'Retry after missing URL failed', e));
           });
           return;
@@ -3252,7 +3252,7 @@ async function playNextInContext(maxRetries = 3) {
         if (!track.url || track.url === '') {
           logPlayback('error', 'Empty audio URL in resonte', track);
           showStatus('Audio link isn\'t available', 'error', 2000);
-          scheduleAutoAdvance('favorite-empty-url', 1000, () => {
+          scheduleAutoAdvance('favorite-empty-url', 0, () => {
             playNextInContext().catch((e) => logPlayback('warn', 'Retry after empty URL failed', e));
           });
           return;
@@ -3262,7 +3262,7 @@ async function playNextInContext(maxRetries = 3) {
         const cached = typeof audioCache !== 'undefined' && audioCache && typeof audioCache.get === 'function' ? await audioCache.get(track.url, true) : null;
         if (!cached && !state.networkOnline) {
           // Transparente: saltar sin mostrar error
-          scheduleAutoAdvance('offline-uncached-favorite', 100, () => {
+          scheduleAutoAdvance('offline-uncached-favorite', 0, () => {
             playNextInContext().catch((e) => logPlayback('warn', 'Offline skip failed', e));
           });
           return;
@@ -3278,7 +3278,7 @@ async function playNextInContext(maxRetries = 3) {
       logPlayback('error', 'Error playing next track', error);
 
       // Transparente: siempre intentar la siguiente pista sin mostrar error
-      scheduleAutoAdvance('play-next-error', 100, () => {
+      scheduleAutoAdvance('play-next-error', 0, () => {
         playNextInContext().catch((e) => logPlayback('warn', 'Retry playNextInContext failed', e));
       });
     }
@@ -3672,7 +3672,7 @@ function setupListenTracking() {
         logPlayback('warn', 'Enhanced track end handling failed', err);
         // Schedule unlock before fallback to prevent lock starvation
         scheduleTransitionUnlock();
-        scheduleAutoAdvance('enhanced-ended-fallback', 500, () => {
+        scheduleAutoAdvance('enhanced-ended-fallback', 0, () => {
           playNextInContext().catch((e) => logPlayback('warn', 'Fallback playNextInContext failed', e));
         });
       }
@@ -3696,7 +3696,7 @@ function setupListenTracking() {
       showStatus('Track error. Skipping...', 'error', 2000);
     } catch {}
 
-    scheduleAutoAdvance('audio-error', 800, () => {
+    scheduleAutoAdvance('audio-error', 0, () => {
       const currentContext = playbackManager.getCurrentContext();
       if (currentContext) {
         const contextId = currentContext === 'album' ? playbackManager.getCurrentAlbumId() : null;
