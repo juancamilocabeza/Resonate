@@ -321,16 +321,9 @@
 
   // Initialize subtitle manager
   function init() {
-    if (!checkSpeechRecognitionSupport()) {
-      console.warn('Subtitle manager: Speech recognition not supported');
-      return;
-    }
-
-    initSpeechRecognition();
-    initSubtitleUI();
-    setupAudioListeners();
-
-    console.log('Subtitle manager initialized successfully');
+    // Subtitle feature disabled - should not access microphone
+    console.log('Subtitle manager: Feature disabled (microphone access not appropriate for audio playback subtitles)');
+    return;
   }
 
   // Public API

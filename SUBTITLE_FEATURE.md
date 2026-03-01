@@ -1,7 +1,11 @@
-# Instant Subtitle Feature
+# Subtitle Feature
 
-## Overview
-This feature implements real-time audio transcription using the Web Speech API, providing instant subtitles for audio playback on both web browsers and mobile devices.
+## Status: DISABLED
+
+This feature has been disabled because it was incorrectly using microphone access via the Web Speech API to transcribe ambient audio, rather than providing proper subtitles for the audio content being played.
+
+## Previous Implementation (Removed)
+The previous implementation attempted real-time audio transcription using the Web Speech API, but this approach had a fundamental flaw: it accessed the user's microphone to transcribe ambient sound instead of providing actual subtitles for the audio content.
 
 ## Implementation Details
 
@@ -55,50 +59,21 @@ This feature implements real-time audio transcription using the Web Speech API, 
 | Safari Mobile | ✅ Full | iOS 14.5+ |
 | Firefox | ⚠️ Limited | Experimental support |
 
-### Usage
+### Why This Was Disabled
 
-1. Subtitles are **automatically enabled by default** when the page loads
-2. Allow microphone access when prompted (first time only)
-3. Subtitles will appear at the bottom of the player when audio is playing
-4. No manual toggle needed - instant subtitling works seamlessly
+The previous implementation had the following issues:
+1. **Incorrect approach**: Used microphone to listen to ambient audio instead of transcribing the actual audio being played
+2. **Privacy concern**: Requested microphone access when it should not have been necessary
+3. **Not actual subtitles**: Was transcribing environmental sounds, not the audio content itself
 
-### Technical Details
+### Future Implementation Considerations
 
-**Web Speech API Configuration**:
-- `continuous: true` - Keeps recognition active
-- `interimResults: true` - Shows results as speech is recognized
-- `maxAlternatives: 1` - Uses most confident result
-- Auto-restart on network/abort errors
+For proper subtitle support, consider:
+- Using actual subtitle files (WebVTT, SRT) from content providers
+- Implementing HTML5 `<track>` element for subtitle display
+- No microphone access should be required for displaying subtitles
+- Subtitles should be synchronized with the audio/video content metadata
 
-**User Experience**:
-- Subtitles auto-hide after 5 seconds of inactivity (when audio stops)
-- Backdrop blur effect for better readability
-- High contrast mode support for accessibility
-- Reduced motion support for users with motion sensitivity
+## Previous Technical Details (Removed Implementation)
 
-**Storage**:
-- `resonate_subtitle_enabled`: Boolean preference
-- `resonate_subtitle_language`: Language code (e.g., 'en-US', 'es-ES')
-
-### Privacy & Security
-
-- ✅ No security vulnerabilities detected (CodeQL verified)
-- ✅ Microphone access only when subtitles are enabled
-- ✅ No data sent to external servers
-- ✅ All processing happens locally in the browser
-- ✅ User controls can revoke microphone access anytime
-
-### Performance
-
-- Minimal CPU overhead (native browser API)
-- No network requests for transcription
-- Efficient DOM updates using visibility classes
-- No impact on audio playback performance
-
-## Future Enhancements (Optional)
-
-- Language selection UI
-- Subtitle history/transcript view
-- Export transcript feature
-- Custom styling options
-- Subtitle position customization
+The previous implementation used the Web Speech API for speech recognition, which required microphone access. This has been removed.
