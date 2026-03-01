@@ -83,9 +83,11 @@
           }
         }
         
-        // Show error in subtitle area
+        // Show error in subtitle area with helpful guidance
         if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-          updateSubtitleDisplay('Microphone access denied. Please enable permissions.');
+          updateSubtitleDisplay('Microphone access required. Please allow microphone permissions in your browser settings.');
+        } else if (event.error === 'no-speech') {
+          // Silent error - no need to show to user
         }
       };
 
@@ -167,8 +169,8 @@
       clearTimeout(autoHideTimer);
     }
 
-    // Auto-hide after delay if recognition is not active
-    if (!isRecognitionActive) {
+    // Auto-hide after delay if recognition is not active and audio is not playing
+    if (!isRecognitionActive && !isAudioPlaying()) {
       autoHideTimer = setTimeout(() => {
         subtitleContainer.classList.remove('visible');
       }, SUBTITLE_CONFIG.AUTO_HIDE_DELAY);
@@ -192,7 +194,8 @@
   // Enable subtitles
   function enableSubtitles() {
     if (!recognitionSupported) {
-      alert('Speech recognition is not supported in your browser. Please use Chrome, Edge, or Safari.');
+      updateSubtitleDisplay('Speech recognition is not supported in your browser. Please use Chrome, Edge, or Safari.');
+      setTimeout(() => clearSubtitleDisplay(), 5000);
       return false;
     }
 

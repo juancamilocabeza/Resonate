@@ -5133,8 +5133,8 @@ function updatePlayButtonState() {
     if (buttons) {
       buttons.forEach(button => {
         if (!button) return;
-        // Don't disable subtitle toggle - it should always be available
-        if (button.id === 'subtitle-toggle-btn') return;
+        // Don't disable buttons marked as always-enabled (e.g., subtitle toggle)
+        if (button.hasAttribute('data-always-enabled')) return;
         button.disabled = shouldLockPlayer;
       });
     }
@@ -5157,9 +5157,11 @@ function updatePlayButtonState() {
     if (elements.favoritesToggle) elements.favoritesToggle.classList.remove('disabled');
     if (elements.playAllFavoritesBtn) elements.playAllFavoritesBtn.classList.add('disabled');
     
-    // Keep subtitle toggle enabled - user preference should be accessible anytime
-    const subtitleToggle = document.getElementById('subtitle-toggle-btn');
-    if (subtitleToggle) subtitleToggle.disabled = false;
+    // Keep buttons with data-always-enabled attribute enabled
+    const alwaysEnabledButtons = playerContent ? playerContent.querySelectorAll('[data-always-enabled]') : [];
+    alwaysEnabledButtons.forEach(btn => {
+      if (btn) btn.disabled = false;
+    });
   } else if (hasFavorites) {
     // Habilitar los controles relevantes cuando haya favoritos
     if (elements.prevBtn) elements.prevBtn.disabled = false;
