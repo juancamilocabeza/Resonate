@@ -5133,7 +5133,7 @@ function updatePlayButtonState() {
     if (buttons) {
       buttons.forEach(button => {
         if (!button) return;
-        // Don't disable buttons marked as always-enabled (e.g., subtitle toggle)
+        // Don't disable buttons marked as always-enabled
         if (button.hasAttribute('data-always-enabled')) return;
         button.disabled = shouldLockPlayer;
       });
