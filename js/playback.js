@@ -52,6 +52,30 @@ function safeShowStatus(message, type, duration, variant, showLoader) {
   }
 }
 
+/**
+ * Helper function to acquire wake lock if supported
+ * Prevents screen from turning off during playback
+ */
+function acquireWakeLockIfSupported() {
+  if (window.wakeLockManager && window.wakeLockManager.isSupported) {
+    window.wakeLockManager.acquire().catch(error => {
+      logPlayback('debug', 'Failed to acquire wake lock', error);
+    });
+  }
+}
+
+/**
+ * Helper function to release wake lock if supported
+ * Allows screen to turn off normally when not playing
+ */
+function releaseWakeLockIfSupported() {
+  if (window.wakeLockManager && window.wakeLockManager.isSupported) {
+    window.wakeLockManager.release().catch(error => {
+      logPlayback('debug', 'Failed to release wake lock', error);
+    });
+  }
+}
+
 function isAutoplayBlockedError(error) {
   try {
     const name = (error && error.name) ? String(error.name) : '';
@@ -1530,7 +1554,7 @@ function formatTime(seconds) {
 let activeLoaderProgress = 0;
 
 // In-memory preloaded blob URLs for near-instant next-track playback
-const PRELOADED_BLOB_URL_LIMIT = 2;
+const PRELOADED_BLOB_URL_LIMIT = 3;
 const preloadedBlobUrlMap = new Map();
 let preloadAudioElement = null;
 
@@ -1580,6 +1604,8 @@ function consumePreloadedBlobUrl(url) {
   const blobUrl = preloadedBlobUrlMap.get(url);
   preloadedBlobUrlMap.delete(url);
   try {
+    // Clear the preload element if it's using the consumed URL
+    // We always clear to avoid keeping stale references
     if (preloadAudioElement && preloadAudioElement.src === blobUrl) {
       preloadAudioElement.removeAttribute('src');
       preloadAudioElement.load();
@@ -1602,8 +1628,15 @@ async function prewarmAudioFromCache(url) {
 
     const preloader = ensurePreloadAudioElement();
     if (preloader) {
-      preloader.src = blobUrl;
-      preloader.load();
+      // Only update preload element if it's truly idle or empty
+      // readyState 0 = HAVE_NOTHING (idle, safe to update)
+      // readyState 1+ = has started loading (avoid interrupting)
+      // Also update if src is empty/unset
+      const isIdle = !preloader.src || preloader.src === '' || preloader.readyState === 0;
+      if (isIdle) {
+        preloader.src = blobUrl;
+        preloader.load();
+      }
     }
   } catch (err) {
     logPlayback('debug', 'Prewarm cache failed', err);
@@ -2129,6 +2162,9 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
         // Successful playback start: reset auto-skip budget for this context.
         try { resetAutoSkipBudgetForCurrentContext(); } catch {}
 
+        // Acquire wake lock to prevent screen from turning off during playback
+        acquireWakeLockIfSupported();
+
         if (totalTracks > 1) {
           safeShowStatus('Now playing album track with numbers', 'info');
         } else {
@@ -2498,10 +2534,17 @@ function togglePlay() {
       if (elements.playBtn) elements.playBtn.textContent = '⏸';
       safeShowStatus('Music is playing now', 'info');
 
-      // Actualizar Media Session
-      if ('mediaSession' in navigator) {
-        navigator.mediaSession.playbackState = 'playing';
+      // Update MediaSession playback state and position
+      if (window.mediaSessionManager && window.mediaSessionManager.isSupported) {
+        window.mediaSessionManager.updatePlaybackState('playing');
+        // Battery-efficient: update position state only on state change
+        if (typeof updateMediaPositionState === 'function') {
+          updateMediaPositionState();
+        }
       }
+
+      // Acquire wake lock to prevent screen from turning off during playback
+      acquireWakeLockIfSupported();
     }).catch(error => {
       if (isAutoplayBlockedError(error)) {
         showAutoplayCta('Tap Play to start');
@@ -2515,10 +2558,17 @@ function togglePlay() {
     if (elements.playBtn) elements.playBtn.textContent = '▶';
     safeShowStatus('Music is now paused', 'info');
 
-    // Actualizar Media Session
-    if ('mediaSession' in navigator) {
-      navigator.mediaSession.playbackState = 'paused';
+    // Update MediaSession playback state and position
+    if (window.mediaSessionManager && window.mediaSessionManager.isSupported) {
+      window.mediaSessionManager.updatePlaybackState('paused');
+      // Battery-efficient: update position state only on state change
+      if (typeof updateMediaPositionState === 'function') {
+        updateMediaPositionState();
+      }
     }
+
+    // Release wake lock when paused
+    releaseWakeLockIfSupported();
   }
 }
 
@@ -3486,8 +3536,12 @@ function setupListenTracking() {
         const contextId = currentContext === 'album' ? playbackManager.getCurrentAlbumId() : null;
         enhancedPlaybackController.setContext(currentContext, contextId);
         await enhancedPlaybackController.handleTrackEnd();
+        // Only schedule unlock after successful handling
+        scheduleTransitionUnlock();
       } catch (err) {
         logPlayback('warn', 'Enhanced track end handling failed', err);
+        // Schedule unlock before fallback to prevent lock starvation
+        scheduleTransitionUnlock();
         scheduleAutoAdvance('enhanced-ended-fallback', 500, () => {
           playNextInContext().catch((e) => logPlayback('warn', 'Fallback playNextInContext failed', e));
         });
@@ -3495,10 +3549,11 @@ function setupListenTracking() {
     } else {
       // Resonate UX: never stop when context is missing.
       playNextInContext().catch((e) => logPlayback('warn', 'No-context playNextInContext failed', e));
+      // Schedule unlock for no-context case
+      scheduleTransitionUnlock();
     }
 
     signalServiceWorkerSafeActivation();
-    scheduleTransitionUnlock();
   });
 
   // If a track errors and never reaches 'ended', skip forward to keep continuous playback.
@@ -3516,21 +3571,29 @@ function setupListenTracking() {
       if (currentContext) {
         const contextId = currentContext === 'album' ? playbackManager.getCurrentAlbumId() : null;
         enhancedPlaybackController.setContext(currentContext, contextId);
-        enhancedPlaybackController.handleTrackEnd().catch((err) => {
+        enhancedPlaybackController.handleTrackEnd().then(() => {
+          // Schedule unlock after successful handling
+          scheduleTransitionUnlock();
+        }).catch((err) => {
           logPlayback('warn', 'Error-skip handler failed', err);
+          // Schedule unlock before fallback
+          scheduleTransitionUnlock();
           playNextInContext().catch((e) => logPlayback('warn', 'Fallback skip failed', e));
         });
       } else {
         playNextInContext().catch((e) => logPlayback('warn', 'Skip failed', e));
+        // Schedule unlock for no-context case
+        scheduleTransitionUnlock();
       }
     });
-
-    scheduleTransitionUnlock();
   });
 
   window.elements.audio.addEventListener('pause', () => {
     // When playback is idle, allow waiting SW to activate safely
     signalServiceWorkerSafeActivation();
+
+    // Release wake lock when paused
+    releaseWakeLockIfSupported();
   });
 
   window.elements.audio.addEventListener('seeked', () => {
@@ -3892,85 +3955,98 @@ function toggleShuffleFavorites() {
 }
 
 function setupMediaSession() {
-  if (!('mediaSession' in navigator)) {
-    // Media Session API not available in this environment
+  // Use the new MediaSessionManager
+  if (!window.mediaSessionManager || !window.mediaSessionManager.isSupported) {
+    logPlayback('info', 'MediaSession API not available in this environment');
     return;
   }
 
   try {
-    navigator.mediaSession.setActionHandler('play', () => {
-      if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
-        if (typeof window.CastManager.togglePlayback === 'function') {
-          window.CastManager.togglePlayback();
+    // Setup action handlers using the new manager
+    window.mediaSessionManager.setupActionHandlers({
+      onPlay: () => {
+        if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
+          if (typeof window.CastManager.togglePlayback === 'function') {
+            window.CastManager.togglePlayback();
+            return;
+          }
+        }
+        togglePlay();
+      },
+      onPause: () => {
+        if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
+          if (typeof window.CastManager.togglePlayback === 'function') {
+            window.CastManager.togglePlayback();
+            return;
+          }
+        }
+        togglePlay();
+      },
+      onPreviousTrack: () => {
+        if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
+          playPrevious();
           return;
         }
-      }
-      togglePlay();
-    });
-
-    navigator.mediaSession.setActionHandler('pause', () => {
-      if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
-        if (typeof window.CastManager.togglePlayback === 'function') {
-          window.CastManager.togglePlayback();
-          return;
-        }
-      }
-      togglePlay();
-    });
-
-    navigator.mediaSession.setActionHandler('previoustrack', () => {
-      if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
         playPrevious();
-        return;
-      }
-      playPrevious();
-    });
-
-    navigator.mediaSession.setActionHandler('nexttrack', () => {
-      if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
+      },
+      onNextTrack: () => {
+        if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
+          playNext();
+          return;
+        }
         playNext();
-        return;
-      }
-      playNext();
-    });
-
-    navigator.mediaSession.setActionHandler('seekbackward', (details) => {
-      const skipTime = details.seekOffset || 10;
-      if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
-        if (typeof window.CastManager.skipBy === 'function') {
-          window.CastManager.skipBy(-skipTime);
-          return;
+      },
+      onSeekBackward: (details) => {
+        const skipTime = details.seekOffset || 10;
+        if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
+          if (typeof window.CastManager.skipBy === 'function') {
+            window.CastManager.skipBy(-skipTime);
+            return;
+          }
+        }
+        window.elements.audio.currentTime = Math.max(0, window.elements.audio.currentTime - skipTime);
+      },
+      onSeekForward: (details) => {
+        const skipTime = details.seekOffset || 10;
+        if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
+          if (typeof window.CastManager.skipBy === 'function') {
+            window.CastManager.skipBy(skipTime);
+            return;
+          }
+        }
+        window.elements.audio.currentTime = Math.min(window.elements.audio.duration, window.elements.audio.currentTime + skipTime);
+      },
+      onSeekTo: (details) => {
+        if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
+          if (typeof window.CastManager.seekTo === 'function') {
+            window.CastManager.seekTo(details.seekTime);
+            return;
+          }
+        }
+        if (details.fastSeek && 'fastSeek' in window.elements.audio) {
+          window.elements.audio.fastSeek(details.seekTime);
+        } else {
+          window.elements.audio.currentTime = details.seekTime;
+        }
+      },
+      onStop: () => {
+        // Stop handler - pause and reset position
+        if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
+          if (typeof window.CastManager.togglePlayback === 'function') {
+            window.CastManager.togglePlayback();
+          }
+        } else {
+          const audio = getAudioEl();
+          if (audio && !audio.paused) {
+            audio.pause();
+          }
         }
       }
-      window.elements.audio.currentTime = Math.max(0, window.elements.audio.currentTime - skipTime);
     });
 
-    navigator.mediaSession.setActionHandler('seekforward', (details) => {
-      const skipTime = details.seekOffset || 10;
-      if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
-        if (typeof window.CastManager.skipBy === 'function') {
-          window.CastManager.skipBy(skipTime);
-          return;
-        }
-      }
-      window.elements.audio.currentTime = Math.min(window.elements.audio.duration, window.elements.audio.currentTime + skipTime);
-    });
-
-    navigator.mediaSession.setActionHandler('seekto', (details) => {
-      if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
-        if (typeof window.CastManager.seekTo === 'function') {
-          window.CastManager.seekTo(details.seekTime);
-          return;
-        }
-      }
-      if (details.fastSeek && 'fastSeek' in window.elements.audio) {
-        window.elements.audio.fastSeek(details.seekTime);
-      } else {
-        window.elements.audio.currentTime = details.seekTime;
-      }
-    });
+    logPlayback('info', 'MediaSession handlers setup successfully');
   } catch (error) {
-    logPlayback('warn', 'Some Media Session actions unavailable', error);
+    logPlayback('warn', 'Error setting up MediaSession handlers', error);
   }
 }
 

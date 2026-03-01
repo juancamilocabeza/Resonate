@@ -599,6 +599,9 @@ function dispatchSearchWithFastPath(queryAtDispatch, { keepKeyboard = true, addT
     setSearchOpenState(true);
     scheduleSearchInsetsBurst();
 
+    // Show skeleton loaders immediately for better UX
+    showSearchSkeletons(8);
+
     if (!keepKeyboard) {
       try { elements.searchInput?.blur?.(); } catch {}
     }
@@ -3304,23 +3307,30 @@ function hideSearchResults() {
 }
 
 function updateMediaPositionState() {
-  if (!('mediaSession' in navigator) || !navigator.mediaSession) return;
-  if (typeof navigator.mediaSession.setPositionState !== 'function') return;
+  // Use the new MediaSessionManager - this should only be called on state changes
+  // (play, pause, seek) to optimize battery usage
+  if (!window.mediaSessionManager || !window.mediaSessionManager.isSupported) {
+    return;
+  }
+
   const castState = (window.CastManager && typeof window.CastManager.getRemotePositionState === 'function')
     ? window.CastManager.getRemotePositionState()
     : null;
   const useCast = !!(castState && typeof castState.duration === 'number');
-  if (!useCast && !elements.audio.duration) return;
+  
+  if (!useCast && !elements.audio.duration) {
+    return;
+  }
 
   try {
     if (useCast) {
-      navigator.mediaSession.setPositionState({
+      window.mediaSessionManager.updatePositionState({
         duration: castState.duration,
         playbackRate: castState.playbackRate || 1,
         position: castState.position || 0
       });
     } else {
-      navigator.mediaSession.setPositionState({
+      window.mediaSessionManager.updatePositionState({
         duration: elements.audio.duration,
         playbackRate: elements.audio.playbackRate,
         position: elements.audio.currentTime
@@ -3332,48 +3342,15 @@ function updateMediaPositionState() {
 }
 
 function updateMediaSessionMetadata(track, identifier) {
-  if (!('mediaSession' in navigator)) return;
-  if (typeof MediaMetadata !== 'function') return;
+  // Use the new MediaSessionManager
+  if (!window.mediaSessionManager || !window.mediaSessionManager.isSupported) {
+    return;
+  }
 
   try {
-    const trackTitle = track.title || 'Untitled';
-    const albumTitle = (track.albumTitle || track.album || identifier || '').toString().trim();
-    const isAlbumTrack = ((track.totalTracks || 1) > 1) || !!track.isAlbumTrack;
-    const displayTitle = (isAlbumTrack && albumTitle && albumTitle.toLowerCase() !== trackTitle.toLowerCase())
-      ? `${albumTitle} — ${trackTitle}`
-      : trackTitle;
-    let coverUrl = '';
-    try {
-      if (window.CoverManager && typeof window.CoverManager.getCoverUrl === 'function') {
-        coverUrl = window.CoverManager.getCoverUrl(identifier);
-      } else if (identifier) {
-        coverUrl = `https://archive.org/services/img/${encodeURIComponent(identifier)}`;
-      }
-    } catch {}
-    let imageType = '';
-    try {
-      const lower = String(coverUrl || '').toLowerCase();
-      if (lower.endsWith('.png')) imageType = 'image/png';
-      if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) imageType = 'image/jpeg';
-    } catch {}
-    const artwork = coverUrl
-      ? [64, 96, 128, 192, 256, 384, 512, 1024].map(size => {
-          const entry = { src: coverUrl, sizes: `${size}x${size}` };
-          if (imageType) entry.type = imageType;
-          return entry;
-        })
-      : undefined;
-
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: displayTitle,
-      artist: track.creator || 'Unknown',
-      album: albumTitle,
-      artwork
-    });
-
-    updateMediaPositionState();
+    window.mediaSessionManager.updateMetadata(track, identifier);
   } catch (error) {
-    window.logger?.warn({ message: 'Error updating Media Session', error }, 'PLAYBACK');
+    window.logger?.warn({ message: 'Error updating Media Session metadata', error }, 'PLAYBACK');
   }
 }
 
@@ -3455,6 +3432,39 @@ function navigateSearchResults(direction) {
   } catch {
     // ignore
   }
+}
+
+// Show skeleton loaders while search is in progress
+function showSearchSkeletons(count = 8) {
+  if (!elements.searchResultsList) return;
+  
+  // Show search results panel if not already visible
+  if (elements.searchResults && !elements.searchResults.classList.contains('active')) {
+    elements.searchResults.classList.add('active');
+    try {
+      initializePanelToolbarsOnce();
+      if (elements.searchResultsHeader) elements.searchResultsHeader.hidden = false;
+      if (elements.searchResultsCount) {
+        elements.searchResultsCount.innerHTML = '<div class="search-status-message"><div class="search-status-spinner"></div><span>Searching...</span></div>';
+      }
+    } catch {}
+    state.searchActive = true;
+    setSearchOpenState(true);
+    scheduleSearchInsetsBurst();
+  }
+  
+  // Create skeleton cards
+  const skeletonHTML = Array.from({ length: count }, () => `
+    <div class="search-skeleton-card">
+      <div class="search-skeleton-cover"></div>
+      <div class="search-skeleton-content">
+        <div class="search-skeleton-title"></div>
+        <div class="search-skeleton-subtitle"></div>
+      </div>
+    </div>
+  `).join('');
+  
+  elements.searchResultsList.innerHTML = `<div class="search-skeleton-container">${skeletonHTML}</div>`;
 }
 
 function displaySearchResults(searchData, clearExisting = true) {
@@ -5285,6 +5295,33 @@ function setupConnectivityMonitoring() {
   __resonateAttachConnectivityHandlersOnce();
 }
 
+// Configuration constants for page lifecycle
+const MEDIA_SESSION_CLEANUP_DELAY_MS = 5000; // Delay before cleaning up MediaSession when page is hidden
+
+/**
+ * Helper function to restore MediaSession state
+ * @private
+ */
+function restoreMediaSessionState() {
+  if (!window.mediaSessionManager || !window.mediaSessionManager.isCleanedUp) {
+    return;
+  }
+  
+  window.mediaSessionManager.reset();
+  
+  // Re-setup handlers
+  if (typeof setupMediaSession === 'function') {
+    setupMediaSession();
+  }
+  
+  // Re-update metadata if we have a current track
+  if (window.state && window.state.currentTrack && window.state.currentIdentifier) {
+    if (typeof updateMediaSessionMetadata === 'function') {
+      updateMediaSessionMetadata(window.state.currentTrack, window.state.currentIdentifier);
+    }
+  }
+}
+
 // Page visibility and playback resume management
 function setupPageVisibilityHandling() {
   if (window._resonatePageVisibilityInit) return;
@@ -5294,6 +5331,19 @@ function setupPageVisibilityHandling() {
     if (document.hidden) {
       // App is hidden - save state
       savePlaybackState();
+      
+      // Battery optimization: cleanup MediaSession if no audio is playing
+      if (window.mediaSessionManager && elements.audio && elements.audio.paused) {
+        // Defer cleanup slightly to avoid issues with quick tab switches
+        setTimeout(() => {
+          if (document.hidden && elements.audio.paused) {
+            window.mediaSessionManager.cleanup();
+          }
+        }, MEDIA_SESSION_CLEANUP_DELAY_MS);
+      }
+    } else {
+      // App is visible again - re-initialize MediaSession if needed
+      restoreMediaSessionState();
     }
   });
 
@@ -5302,16 +5352,42 @@ function setupPageVisibilityHandling() {
   try {
     document.addEventListener('freeze', () => {
       savePlaybackState();
+      // Cleanup MediaSession on freeze to save battery
+      if (window.mediaSessionManager) {
+        window.mediaSessionManager.cleanup();
+      }
+    });
+  } catch {
+    // ignore
+  }
+
+  // Page Lifecycle API: restore MediaSession when page is resumed from frozen state
+  try {
+    document.addEventListener('resume', () => {
+      // Re-initialize MediaSession if needed
+      restoreMediaSessionState();
     });
   } catch {
     // ignore
   }
 
   // Also save state when page unloads
-  window.addEventListener('beforeunload', savePlaybackState);
+  window.addEventListener('beforeunload', () => {
+    savePlaybackState();
+    // Cleanup MediaSession on unload
+    if (window.mediaSessionManager) {
+      window.mediaSessionManager.cleanup();
+    }
+  });
 
   // Also save state when PWA might be closed (pagehide is better for mobile)
-  window.addEventListener('pagehide', savePlaybackState);
+  window.addEventListener('pagehide', () => {
+    savePlaybackState();
+    // Cleanup MediaSession on pagehide
+    if (window.mediaSessionManager) {
+      window.mediaSessionManager.cleanup();
+    }
+  });
 }
 
 // Periodic autosave while playing (covers abrupt closes where lifecycle events might not fire)
@@ -7980,7 +8056,12 @@ async function shareTrack(identifier, title = 'Track', creator = null, albumTitl
   // Try to get cover image for sharing
   let coverFile = null;
   try {
-    coverFile = await getCoverImageForSharing(identifier);
+    // Use CoverManager if available, otherwise fallback to local implementation
+    if (window.CoverManager && typeof window.CoverManager.getCoverImageForSharing === 'function') {
+      coverFile = await window.CoverManager.getCoverImageForSharing(identifier);
+    } else {
+      coverFile = await getCoverImageForSharing(identifier);
+    }
     window.logger?.debug('Cover image obtained for sharing', 'NETWORK');
   } catch (error) {
     window.logger?.warn({ message: 'Could not get cover image', error }, 'NETWORK');
