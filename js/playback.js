@@ -3247,7 +3247,7 @@ async function playNextInContext(maxRetries = 3) {
       } else if (context === 'favorites' || context === 'resontes') {
         // Use cache for favorites and resontes
         if (!nextItem.url) {
-          logPlayback('error', 'Favorite without valid URL', nextItem);
+          logPlayback('error', 'Favorite/resontes item without valid URL', nextItem);
           scheduleAutoAdvance('favorite-missing-url', 0, () => {
             playNextInContext().catch((e) => logPlayback('warn', 'Retry after missing URL failed', e));
           });
