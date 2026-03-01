@@ -74,6 +74,7 @@ const STATIC_FILES = [
   '/js/initialization.js',
   '/js/cover-manager.js',
   '/js/wake-lock-manager.js',
+  '/js/subtitle-manager.js',
   '/icons/favicon.svg',
   '/icons/sprite.svg',
   '/icons/maskable_icon_x192.png',
