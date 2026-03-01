@@ -14,7 +14,84 @@ try {
   }
 } catch {}
 
+
 window.RES_SPRITE_URL = window.RES_SPRITE_URL || '/icons/sprite.svg?v=2';
+
+// --- Wake Lock y visibilidad para playback ---
+let __resonateWakeLock = null;
+
+async function requestWakeLock() {
+  try {
+    if ('wakeLock' in navigator) {
+      __resonateWakeLock = await navigator.wakeLock.request('screen');
+      __resonateWakeLock.addEventListener('release', () => {
+        __resonateWakeLock = null;
+      });
+    }
+  } catch {}
+}
+
+function releaseWakeLock() {
+  try {
+    if (__resonateWakeLock) {
+      __resonateWakeLock.release();
+      __resonateWakeLock = null;
+    }
+  } catch {}
+}
+
+function handleVisibilityChange() {
+  if (document.visibilityState === 'visible') {
+    // Si el audio está pausado pero no por el usuario, y no ha terminado de cargar, reintentar carga
+    try {
+      const audio = window.elements && window.elements.audio;
+      if (audio && audio.readyState < 3 && audio.src && !audio.ended && !audio.paused) {
+        // Forzar recarga de la pista
+        const src = audio.src;
+        audio.load();
+        audio.src = src;
+        audio.play().catch(() => {});
+      }
+    } catch {}
+  }
+}
+
+document.addEventListener('visibilitychange', handleVisibilityChange, false);
+
+// Wake Lock: solicitar al iniciar playback, liberar al pausar
+
+function setupWakeLockAndLoaderHandlers() {
+  const audio = window.elements && window.elements.audio;
+  if (!audio) return;
+  audio.addEventListener('play', requestWakeLock);
+  audio.addEventListener('pause', releaseWakeLock);
+  audio.addEventListener('ended', releaseWakeLock);
+
+  // --- Loader UX for playback ---
+  // Show loader on loadstart/waiting, hide on canplay/playing/error/ended
+  const showLoader = () => {
+    if (window.Loaders && typeof window.Loaders.showLoader === 'function') {
+      window.Loaders.showLoader({ type: 'spinner', showProgress: true, context: 'playback' });
+    }
+  };
+  const hideLoader = () => {
+    if (window.Loaders && typeof window.Loaders.hideLoader === 'function') {
+      window.Loaders.hideLoader();
+    }
+  };
+  audio.addEventListener('loadstart', showLoader);
+  audio.addEventListener('waiting', showLoader);
+  audio.addEventListener('canplay', hideLoader);
+  audio.addEventListener('playing', hideLoader);
+  audio.addEventListener('error', hideLoader);
+  audio.addEventListener('ended', hideLoader);
+}
+
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+  setupWakeLockAndLoaderHandlers();
+} else {
+  window.addEventListener('DOMContentLoaded', setupWakeLockAndLoaderHandlers);
+}
 
 // Refresca todos los iconos de resonte en todos los listados
 window.resonateLogoSVG = `<svg class="resonate-icon" width="24" height="24" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false"><circle cx="256" cy="256" r="200" stroke="currentColor" stroke-width="32" fill="none"></circle><path d="M96 256 C140 256, 180 180, 220 180 C260 180, 300 332, 340 332 C380 332, 416 256, 416 256" stroke="currentColor" stroke-width="32" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>`;
