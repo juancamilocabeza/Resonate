@@ -5133,6 +5133,8 @@ function updatePlayButtonState() {
     if (buttons) {
       buttons.forEach(button => {
         if (!button) return;
+        // Don't disable subtitle toggle - it should always be available
+        if (button.id === 'subtitle-toggle-btn') return;
         button.disabled = shouldLockPlayer;
       });
     }
@@ -5154,6 +5156,10 @@ function updatePlayButtonState() {
     // Keep favorites toggle usable so users can open the panel and see the empty-state message.
     if (elements.favoritesToggle) elements.favoritesToggle.classList.remove('disabled');
     if (elements.playAllFavoritesBtn) elements.playAllFavoritesBtn.classList.add('disabled');
+    
+    // Keep subtitle toggle enabled - user preference should be accessible anytime
+    const subtitleToggle = document.getElementById('subtitle-toggle-btn');
+    if (subtitleToggle) subtitleToggle.disabled = false;
   } else if (hasFavorites) {
     // Habilitar los controles relevantes cuando haya favoritos
     if (elements.prevBtn) elements.prevBtn.disabled = false;
