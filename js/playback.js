@@ -2722,7 +2722,17 @@ function loadPlaybackQueue(context, items, startIndex = 0) {
   // Filter out items with invalid or undefined URLs.
   // NOTE: Do not require specific extensions here; archive.org URLs can include query strings
   // (e.g. .mp3?download=1) which would incorrectly fail an endsWith('.mp3') check.
-  const validItems = normalizedItems.filter(item => item && item.url && typeof item.url === 'string' && !item.url.includes('/undefined') && item.url.trim() !== '');
+  // Special case: 'search' and 'resontes' contexts may have items with 'identifier' instead of 'url'.
+  const validItems = normalizedItems.filter(item => {
+    if (!item) return false;
+    // For search contexts, check for identifier
+    if (context === 'search' || context === 'resontes') {
+      return (item.url && typeof item.url === 'string' && !item.url.includes('/undefined') && item.url.trim() !== '') ||
+             (item.identifier && typeof item.identifier === 'string' && item.identifier.trim() !== '');
+    }
+    // For other contexts, check for url
+    return item.url && typeof item.url === 'string' && !item.url.includes('/undefined') && item.url.trim() !== '';
+  });
 
   if (validItems.length === 0) {
     // No valid items to load into FIFO
@@ -2730,7 +2740,7 @@ function loadPlaybackQueue(context, items, startIndex = 0) {
   }
 
   // Unificar: para álbumes, favoritos, playlist y búsqueda, cargar toda la lista para reproducción continua
-  const useFullList = context === 'favorites' || context === 'search' || context === 'album' || context === 'searchPlaylist';
+  const useFullList = context === 'favorites' || context === 'resontes' || context === 'search' || context === 'album' || context === 'searchPlaylist';
 
   if (useFullList) {
     if (state.shuffleFavorites) {
@@ -2803,8 +2813,14 @@ function regenerateQueueFromCurrentContext(currentTrackUrl) {
   } else if (context === 'searchPlaylist') {
     const playlistCtx = playbackManager.contextData.searchPlaylist;
     items = playlistCtx && Array.isArray(playlistCtx.items) ? playlistCtx.items : [];
+  } else if (context === 'search') {
+    const searchCtx = playbackManager.contextData.search;
+    items = searchCtx && Array.isArray(searchCtx.items) ? searchCtx.items : [];
+  } else if (context === 'resontes') {
+    const resontesCtx = playbackManager.contextData.resontes;
+    items = resontesCtx && Array.isArray(resontesCtx.items) ? resontesCtx.items : [];
   } else {
-    // Search contexts don't have direct audio URLs for FIFO.
+    // Unknown context - cannot regenerate queue
     return;
   }
 
@@ -3228,8 +3244,8 @@ async function playNextInContext(maxRetries = 3) {
         } else {
           await playNextInContext();
         }
-      } else if (context === 'favorites') {
-        // Use cache for favorites
+      } else if (context === 'favorites' || context === 'resontes') {
+        // Use cache for favorites and resontes
         if (!nextItem.url) {
           logPlayback('error', 'Favorite without valid URL', nextItem);
           scheduleAutoAdvance('favorite-missing-url', 0, () => {
