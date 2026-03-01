@@ -16,8 +16,8 @@ This feature implements real-time audio transcription using the Web Speech API, 
    - Language support
 
 2. **HTML Changes** (index.html):
-   - Added CC toggle button with `data-always-enabled` attribute
    - Subtitle display container (dynamically created)
+   - CC toggle button removed (subtitles are now auto-enabled)
 
 3. **CSS Styles** (resonate.css):
    - Subtitle display styling with backdrop blur
@@ -27,8 +27,8 @@ This feature implements real-time audio transcription using the Web Speech API, 
    - Reduced motion support
 
 4. **UI Integration** (ui.js):
-   - Keep subtitle toggle enabled at all times
-   - Data attribute pattern for always-enabled buttons
+   - No longer needs special handling for subtitle toggle
+   - Subtitles are auto-enabled when supported
 
 5. **Service Worker** (sw.js):
    - Cache subtitle-manager.js for offline availability
@@ -36,8 +36,8 @@ This feature implements real-time audio transcription using the Web Speech API, 
 ### Features
 
 ✅ **Real-time Transcription**: Uses browser's native speech recognition API  
-✅ **Toggle Control**: Easy-to-use CC button to enable/disable subtitles  
-✅ **Persistent Preferences**: Saves user's subtitle preference in localStorage  
+✅ **Auto-enabled**: Subtitles are automatically enabled when supported
+✅ **Persistent Preferences**: Saves subtitle state in localStorage  
 ✅ **Multi-language Support**: Automatically uses browser language or custom setting  
 ✅ **Auto-restart**: Automatically recovers from network errors  
 ✅ **Accessibility**: Full ARIA support for screen readers  
@@ -57,10 +57,10 @@ This feature implements real-time audio transcription using the Web Speech API, 
 
 ### Usage
 
-1. Click the **CC** button in the player controls
+1. Subtitles are **automatically enabled by default** when the page loads
 2. Allow microphone access when prompted (first time only)
 3. Subtitles will appear at the bottom of the player when audio is playing
-4. Click CC again to disable subtitles
+4. No manual toggle needed - instant subtitling works seamlessly
 
 ### Technical Details
 
