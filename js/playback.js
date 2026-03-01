@@ -63,6 +63,13 @@
     setTimeout(periodicCheck, CHECK_INTERVAL);
   }
 
+  // Mejora: reintentar precarga al recuperar visibilidad
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      preloadNextTrack(true);
+    }
+  });
+
   if (document.readyState === 'complete' || document.readyState === 'interactive') {
     setupManualPauseTracking();
     setTimeout(periodicCheck, CHECK_INTERVAL);
@@ -100,8 +107,8 @@ function normalizeRepeatMode(mode) {
 
 const PLAYBACK_CONSTANTS = {
   DEFAULT_QUEUE_SIZE: 6,
-  PREFETCH_TIMEOUT_MS: 45000,
-  AUDIO_LOAD_TIMEOUT_MS: 45000,
+  PREFETCH_TIMEOUT_MS: (typeof navigator !== 'undefined' && navigator.userAgent && /Android|iPhone|iPad|iPod|Mobile|PWA/i.test(navigator.userAgent)) ? 90000 : 45000,
+  AUDIO_LOAD_TIMEOUT_MS: (typeof navigator !== 'undefined' && navigator.userAgent && /Android|iPhone|iPad|iPod|Mobile|PWA/i.test(navigator.userAgent)) ? 90000 : 45000,
   LOCAL_DEFAULT_FETCH_TIMEOUT_MS: 30000,
   PROD_DEFAULT_FETCH_TIMEOUT_MS: 8000,
   MAX_BLOB_SIZE_MB: 50 // Use direct streaming for files larger than this
@@ -1643,7 +1650,8 @@ function formatTime(seconds) {
 let activeLoaderProgress = 0;
 
 // In-memory preloaded blob URLs for near-instant next-track playback
-const PRELOADED_BLOB_URL_LIMIT = 3;
+// Mejora: precargar más pistas para continuidad en móviles/PWA
+const PRELOADED_BLOB_URL_LIMIT = 6;
 const preloadedBlobUrlMap = new Map();
 let preloadAudioElement = null;
 
@@ -1994,30 +2002,29 @@ async function loadAudioWithCache(track) {
   }
 }
 
-function preloadNextTrack() {
+function preloadNextTrack(forceFull = false) {
   try {
     if (!state) return;
     if (typeof audioCache === 'undefined' || !audioCache || typeof audioCache.prefetchAudio !== 'function') return;
 
     // Ensure queue exists; when it's low/empty try to regenerate from the current context.
     try {
-      if ((!state.playbackQueue || state.playbackQueue.length < 2) && state.currentTrack && state.currentTrack.url) {
+      if ((!state.playbackQueue || state.playbackQueue.length < 4) && state.currentTrack && state.currentTrack.url) {
         regenerateQueueFromCurrentContext(state.currentTrack.url);
       }
-    } catch {
-      // ignore
-    }
+    } catch {}
 
-    // Preload the next 2 tracks from the FIFO queue (works for shuffle too, because the FIFO is already shuffled).
+    // Mejora: precargar las próximas 4 pistas (o más si forceFull)
     const queue = Array.isArray(state.playbackQueue) ? state.playbackQueue : [];
-    const upcoming = queue.slice(0, 2).filter(t => t && t.url);
+    const preloadCount = forceFull ? 6 : 4;
+    const upcoming = queue.slice(0, preloadCount).filter(t => t && t.url);
     for (const track of upcoming) {
       audioCache.prefetchAudio(track.url, false)
         .then(() => prewarmAudioFromCache(track.url))
         .catch((err) => logPlayback('debug', 'Failed to prefetch upcoming track', err));
     }
 
-    // Also prefetch the immediate previous candidate (top of history) to make Prev feel instant.
+    // También prefetch del anterior inmediato
     try {
       const history = Array.isArray(state.playbackHistory) ? state.playbackHistory : [];
       const prevCandidate = history.length > 0 ? history[history.length - 1] : null;
@@ -2026,9 +2033,7 @@ function preloadNextTrack() {
           .then(() => prewarmAudioFromCache(prevCandidate.url))
           .catch((err) => logPlayback('debug', 'Failed to prefetch previous candidate', err));
       }
-    } catch {
-      // ignore
-    }
+    } catch {}
   } catch (e) {
     // Never let prefetch break playback
   }
@@ -2197,6 +2202,8 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
   } catch (error) {
     logPlayback('warn', 'Failed to preload upcoming covers', error);
   }
+  // Mejora: forzar precarga de próximas pistas al iniciar playback
+  setTimeout(() => preloadNextTrack(), 100);
 
   safeShowStatus('Getting your track ready to play', 'info');
 
@@ -2275,8 +2282,8 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
           }
         }
 
-        // Preload next 2 tracks (FIFO) + previous candidate (history)
-        preloadNextTrack();
+        // Mejora: forzar precarga extendida de próximas pistas al terminar la actual
+        preloadNextTrack(true);
 
         state.isLoading = false;
 
@@ -2297,7 +2304,24 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
         // Handle playback error
         cleanup();
         state.isLoading = false;
-        reject(error);
+        // Mejora: si la siguiente pista no está lista, intentar loop suave de la actual mientras se precarga
+        if (audioEl && audioEl.readyState > 0 && !audioEl.ended) {
+          let retryCount = 0;
+          const maxRetries = 8;
+          const retryLoop = () => {
+            if (retryCount++ >= maxRetries) {
+              reject(error);
+              return;
+            }
+            preloadNextTrack(true);
+            setTimeout(() => {
+              audioEl.play().then(() => resolve(true)).catch(() => retryLoop());
+            }, 1200);
+          };
+          retryLoop();
+        } else {
+          reject(error);
+        }
       });
     };
 
@@ -2306,7 +2330,24 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
       if (window.Loaders && typeof window.Loaders.hideLoader === 'function') window.Loaders.hideLoader();
       const errMsg = (e && e.target && e.target.error && e.target.error.message) ? e.target.error.message : 'Source not supported';
       state.isLoading = false;
-      reject(new Error(`Audio error: ${errMsg}`));
+      // Mejora: si la siguiente pista no está lista, intentar loop suave de la actual mientras se precarga
+      if (audio && audio.readyState > 0 && !audio.ended) {
+        let retryCount = 0;
+        const maxRetries = 8;
+        const retryLoop = () => {
+          if (retryCount++ >= maxRetries) {
+            reject(new Error(`Audio error: ${errMsg}`));
+            return;
+          }
+          preloadNextTrack(true);
+          setTimeout(() => {
+            audio.play().then(() => resolve(true)).catch(() => retryLoop());
+          }, 1200);
+        };
+        retryLoop();
+      } else {
+        reject(new Error(`Audio error: ${errMsg}`));
+      }
     };
 
     const cleanup = () => {
