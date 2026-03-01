@@ -284,20 +284,14 @@
       }
     }
 
-    // Setup toggle button
+    // Auto-enable subtitles by default for instant subtitling
+    subtitleEnabled = true;
+    localStorage.setItem(SUBTITLE_CONFIG.STORAGE_KEY, 'true');
+
+    // Hide toggle button since subtitles are always enabled
     const toggleBtn = document.getElementById('subtitle-toggle-btn');
     if (toggleBtn) {
-      toggleBtn.addEventListener('click', toggleSubtitles);
-    }
-
-    // Load saved preference
-    const savedEnabled = localStorage.getItem(SUBTITLE_CONFIG.STORAGE_KEY);
-    if (savedEnabled === 'true') {
-      subtitleEnabled = true;
-      if (toggleBtn) {
-        toggleBtn.classList.add('active');
-        toggleBtn.setAttribute('aria-pressed', 'true');
-      }
+      toggleBtn.style.display = 'none';
     }
   }
 
