@@ -106,6 +106,7 @@ const Loaders = (() => {
     overlay._messageEl = messageEl;
     overlay._showProgress = showProgress;
     overlay._context = context;
+    overlay._displayedProgress = 0;
 
     // Hide progress if showProgress is false
     if (!showProgress && progressEl) {
@@ -182,6 +183,9 @@ const Loaders = (() => {
     if (!activeLoader._showProgress) return; // Don't update if progress display is disabled
     const numeric = Number.isFinite(Number(value)) ? Number(value) : 0;
     const clamped = Math.max(0, Math.min(100, Math.round(numeric)));
+    // Monotonic: never regress progress within a single loading cycle
+    if (typeof activeLoader._displayedProgress === 'number' && clamped < activeLoader._displayedProgress) return;
+    activeLoader._displayedProgress = clamped;
     activeLoader._progressEl.textContent = `${clamped}%`;
   }
 

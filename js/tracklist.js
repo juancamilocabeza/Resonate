@@ -182,6 +182,18 @@
         row.appendChild(duration);
         // Eliminado: left, info, right (layout simplificado)
 
+        // Async: mark cached rows so users know which tracks are preloaded/available offline
+        if (track.url && window.audioCache && typeof window.audioCache.isCached === 'function') {
+          window.audioCache.isCached(track.url).then(cached => {
+            if (cached) {
+              row.classList.add('tlv2-row--cached');
+              // Best-effort DOM attribute updates; failure doesn't affect playback
+              duration.title = 'Available offline';
+              duration.setAttribute('aria-label', `${formatTime(track.duration)}, available offline`);
+            }
+          }).catch(() => {});
+        }
+
         const playFromRow = () => {
           try {
             if (resonteContext) {

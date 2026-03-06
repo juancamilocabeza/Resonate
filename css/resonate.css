@@ -5415,6 +5415,15 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
   font-size: 12px;
   color: var(--muted);
 }
+/* Cached/preloaded track indicator: show a subtle dot after the duration */
+.tracklist .tlv2-row.tlv2-row--cached .tlv2-duration::after {
+  content: '●';
+  font-size: 7px;
+  color: var(--primary);
+  margin-left: 5px;
+  vertical-align: middle;
+  opacity: 0.75;
+}
 .tracklist .tlv2-action {
   background: transparent;
   border: none;

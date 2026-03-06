@@ -1784,7 +1784,8 @@ async function loadAudioWithCache(track) {
     const preloadedBlobUrl = consumePreloadedBlobUrl(track.url);
     if (preloadedBlobUrl) {
       logPlayback('info', `Playing from prewarmed cache: ${track.title || track.url}`);
-      updateLoaderProgress(85);
+      updateLoaderProgress(95);
+      safeShowStatus('Playing from offline cache', 'info');
       return preloadedBlobUrl;
     }
 

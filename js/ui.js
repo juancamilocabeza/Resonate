@@ -69,9 +69,14 @@ function setupWakeLockAndLoaderHandlers() {
 
   // --- Loader UX for playback ---
   // Show loader on loadstart/waiting, hide on canplay/playing/error/ended
-  const showLoader = () => {
+  const showPlaybackLoader = () => {
     if (window.Loaders && typeof window.Loaders.showLoader === 'function') {
       window.Loaders.showLoader({ type: 'spinner', showProgress: true, context: 'playback' });
+    }
+  };
+  const showBufferingLoader = () => {
+    if (window.Loaders && typeof window.Loaders.showLoader === 'function') {
+      window.Loaders.showLoader({ type: 'spinner', showProgress: true, context: 'buffering' });
     }
   };
   const hideLoader = () => {
@@ -79,8 +84,8 @@ function setupWakeLockAndLoaderHandlers() {
       window.Loaders.hideLoader();
     }
   };
-  audio.addEventListener('loadstart', showLoader);
-  audio.addEventListener('waiting', showLoader);
+  audio.addEventListener('loadstart', showPlaybackLoader);
+  audio.addEventListener('waiting', showBufferingLoader);
   audio.addEventListener('canplay', hideLoader);
   audio.addEventListener('playing', hideLoader);
   audio.addEventListener('error', hideLoader);
