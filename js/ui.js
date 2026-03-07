@@ -4305,7 +4305,13 @@ function getShareIconMarkup(mode) {
 function setShareButtonIcon(el, mode) {
   if (!el) return;
   try {
+    // Preserve sheet-item-label if present (used in bottom sheet context).
+    // Clone the node *before* innerHTML replacement to avoid a detached-node
+    // reference after the parent's children are destroyed by the assignment.
+    const labelEl = el.querySelector('.sheet-item-label');
+    const labelClone = labelEl ? labelEl.cloneNode(true) : null;
     el.innerHTML = getShareIconMarkup(mode);
+    if (labelClone) el.appendChild(labelClone);
   } catch {}
 }
 

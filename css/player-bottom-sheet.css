@@ -1,0 +1,372 @@
+/**
+ * player-bottom-sheet.css — Progressive Disclosure: More Options
+ *
+ * Replaces the secondary icon row (.header-controls) with a single
+ * "More Options" button (⋯) that opens a bottom sheet menu.
+ *
+ * Follows mobile music player conventions (Spotify, Apple Music):
+ *   - Slide-up bottom sheet with rounded top corners
+ *   - Touch-friendly tap targets (min 44px)
+ *   - Dismissible by tapping the overlay or swiping down
+ */
+
+/* =====================================================================
+   MORE OPTIONS BUTTON — Single button replacing the secondary icon row
+   ===================================================================== */
+
+.more-options-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  min-height: 44px;
+  width: 44px;
+  min-width: 44px;
+  padding: 0;
+  background: var(--header-btn-bg, rgba(255, 255, 255, 0.12));
+  border: 1px solid var(--header-btn-border, rgba(255, 255, 255, 0.12));
+  border-radius: 999px;
+  color: var(--primary);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 150ms ease, transform 100ms ease;
+}
+
+.more-options-btn:hover {
+  background: rgba(var(--primary-rgb), 0.18);
+  border-color: rgba(var(--primary-rgb), 0.3);
+}
+
+.more-options-btn:active {
+  transform: scale(0.94);
+}
+
+.more-options-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* =====================================================================
+   BOTTOM SHEET OVERLAY — Semi-transparent backdrop
+   ===================================================================== */
+
+.bottom-sheet-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 800;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 250ms ease;
+}
+
+.bottom-sheet-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* =====================================================================
+   BOTTOM SHEET — Slide-up panel from the bottom
+   ===================================================================== */
+
+.bottom-sheet {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 900;
+  background: var(--bg, #1a1a2e);
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -4px 32px rgba(0, 0, 0, 0.45);
+  max-height: 70vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  transform: translateY(100%);
+  transition: transform 250ms cubic-bezier(0.32, 0.72, 0, 1);
+  will-change: transform;
+  /* Safe area padding for iOS home bar */
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.bottom-sheet.open {
+  transform: translateY(0);
+}
+
+/* =====================================================================
+   SHEET DRAG HANDLE — Visual affordance for swipe-to-dismiss
+   ===================================================================== */
+
+.sheet-drag-handle {
+  width: 40px;
+  height: 4px;
+  background: var(--muted, rgba(255, 255, 255, 0.25));
+  border-radius: 2px;
+  margin: 12px auto 0;
+  flex-shrink: 0;
+}
+
+/* =====================================================================
+   SHEET HEADER
+   ===================================================================== */
+
+.sheet-header {
+  padding: 16px 20px 8px;
+  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  flex-shrink: 0;
+}
+
+.sheet-title {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted, rgba(255, 255, 255, 0.5));
+}
+
+/* =====================================================================
+   SHEET CONTENT — List of action items
+   ===================================================================== */
+
+.sheet-content {
+  padding: 8px 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* =====================================================================
+   SHEET ACTION ITEM — Each row in the bottom sheet
+   ===================================================================== */
+
+.sheet-action-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  min-height: 56px;
+  padding: 0 20px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  color: var(--fg, #e8eaf6);
+  font-size: 16px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 120ms ease;
+  /* Reset theme-selector styles that bleed through */
+  height: auto;
+  max-height: none;
+  box-shadow: none;
+  letter-spacing: normal;
+}
+
+.sheet-action-item:hover {
+  background: rgba(var(--primary-rgb), 0.10);
+}
+
+.sheet-action-item:active {
+  background: rgba(var(--primary-rgb), 0.18);
+}
+
+.sheet-action-item:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+  background: rgba(var(--primary-rgb), 0.10);
+}
+
+/* Icon wrapper inside each sheet action item */
+.sheet-item-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(var(--primary-rgb), 0.12);
+  color: var(--primary);
+  flex-shrink: 0;
+  /* Override header-icon defaults */
+  border: none;
+}
+
+.sheet-item-svg {
+  width: 20px;
+  height: 20px;
+  display: block;
+  /* Allow SVGs with stroke to render correctly */
+  stroke: currentColor;
+  fill: none;
+}
+
+/* For SVGs that use <use> and fill (like resonate-icon / info-icon) */
+.sheet-item-svg.resonate-icon,
+.sheet-item-svg use {
+  stroke: none;
+  fill: currentColor;
+}
+
+.sheet-item-label {
+  flex: 1;
+  /* Override theme-label's visually-hidden styles */
+  position: static;
+  width: auto;
+  height: auto;
+  padding: 0;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+  border: 0;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--fg, #e8eaf6);
+}
+
+/* Resonates count badge in sheet */
+.sheet-action-item .resontes-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--bg, #1a1a2e);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.sheet-action-item .resontes-label {
+  /* Override the display:none set by .header-controls #resontes-toggle .resontes-label */
+  display: block !important;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--fg, #e8eaf6);
+}
+
+/* Theme label in sheet */
+.sheet-action-item .theme-label {
+  /* Override the visually-hidden .theme-label */
+  position: static;
+  width: auto;
+  height: auto;
+  padding: 0;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+  border: 0;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted, rgba(255, 255, 255, 0.5));
+  flex-shrink: 0;
+}
+
+/* Cast badge in sheet (show when cast available) */
+.sheet-action-item .cast-badge {
+  display: none;
+}
+
+.sheet-action-item.cast-available .cast-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--bg, #1a1a2e);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* Disabled/unavailable items in the sheet */
+.sheet-action-item.sheet-new-item {
+  opacity: 0.72;
+}
+
+/* =====================================================================
+   SHEET FOOTER — Cancel button
+   ===================================================================== */
+
+.sheet-footer {
+  padding: 8px 20px 16px;
+  border-top: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+}
+
+.sheet-cancel-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 50px;
+  padding: 0 20px;
+  background: rgba(var(--primary-rgb), 0.10);
+  border: 1px solid rgba(var(--primary-rgb), 0.20);
+  border-radius: 12px;
+  color: var(--primary);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 120ms ease;
+}
+
+.sheet-cancel-btn:hover {
+  background: rgba(var(--primary-rgb), 0.18);
+}
+
+.sheet-cancel-btn:active {
+  background: rgba(var(--primary-rgb), 0.25);
+}
+
+.sheet-cancel-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* =====================================================================
+   BODY SCROLL LOCK — Prevent background scroll while sheet is open
+   ===================================================================== */
+
+body.sheet-open {
+  overflow: hidden;
+}
+
+/* =====================================================================
+   DYNAMICALLY-GENERATED ICON MARKUP inside sheet action items
+   (e.g. the share button's icon is replaced by setShareButtonIcon in ui.js
+   which outputs class="header-icon" instead of class="sheet-item-icon")
+   ===================================================================== */
+
+.sheet-action-item .header-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(var(--primary-rgb), 0.12);
+  color: var(--primary);
+  flex-shrink: 0;
+  border: none;
+}
+
+.sheet-action-item .header-svg {
+  width: 20px;
+  height: 20px;
+  display: block;
+  stroke: currentColor;
+  fill: none;
+}
