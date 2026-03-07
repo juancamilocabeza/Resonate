@@ -29,6 +29,60 @@
     0 2px 6px rgba(var(--primary-rgb), 0.3) !important;
 }
 
+.play-btn {
+  letter-spacing: 0;
+  line-height: 1;
+  text-shadow: none;
+}
+
+.play-btn .transport-icon {
+  position: relative;
+  display: block;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  pointer-events: none;
+}
+
+.play-btn .transport-icon::before,
+.play-btn .transport-icon::after {
+  content: '';
+  position: absolute;
+  display: block;
+  box-sizing: border-box;
+}
+
+.play-btn[data-state="play"] .transport-icon::before {
+  top: 4px;
+  left: 9px;
+  width: 0;
+  height: 0;
+  border-top: 10px solid transparent;
+  border-bottom: 10px solid transparent;
+  border-left: 15px solid currentColor;
+}
+
+.play-btn[data-state="play"] .transport-icon::after {
+  display: none;
+}
+
+.play-btn[data-state="pause"] .transport-icon::before,
+.play-btn[data-state="pause"] .transport-icon::after {
+  top: 4px;
+  width: 6px;
+  height: 20px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.play-btn[data-state="pause"] .transport-icon::before {
+  left: 7px;
+}
+
+.play-btn[data-state="pause"] .transport-icon::after {
+  right: 7px;
+}
+
 .play-btn:hover:not(:disabled),
 .play-btn-favorite:hover:not(:disabled) {
   background: var(--primary) !important;

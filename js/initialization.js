@@ -997,7 +997,7 @@ async function initializeApp() {
     elements.audio.addEventListener('progress', updateBufferedProgress);
     elements.audio.addEventListener('play', () => {
       // Keep icon consistent with playback.js
-      elements.playBtn.textContent = '⏸';
+      window.setMainPlayButtonState?.(true);
       // Update MediaSession playback state
       if (window.mediaSessionManager && window.mediaSessionManager.isSupported) {
         window.mediaSessionManager.updatePlaybackState('playing');
@@ -1009,7 +1009,7 @@ async function initializeApp() {
     });
 
     elements.audio.addEventListener('pause', () => {
-      elements.playBtn.textContent = '▶';
+      window.setMainPlayButtonState?.(false);
       // Update MediaSession playback state
       if (window.mediaSessionManager && window.mediaSessionManager.isSupported) {
         window.mediaSessionManager.updatePlaybackState('paused');
@@ -1038,7 +1038,7 @@ async function initializeApp() {
         // Restore state on error (legacy fallback)
         if (window.state) window.state.isLoading = false;
         elements.playBtn.disabled = false;
-        elements.playBtn.textContent = '▶';
+        window.setMainPlayButtonState?.(false);
       }
     });
   }

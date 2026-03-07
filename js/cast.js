@@ -505,8 +505,9 @@
       var playBtn = (window.elements && window.elements.playBtn) ? window.elements.playBtn : document.getElementById('play-btn');
       if (!playBtn) return;
       var isPlaying = !remotePlayer.isPaused;
-      playBtn.textContent = isPlaying ? '⏸' : '▶';
-      playBtn.setAttribute('aria-label', isPlaying ? 'Pause' : 'Play');
+      if (window.setMainPlayButtonState) {
+        window.setMainPlayButtonState(isPlaying);
+      }
       if (window.mediaSessionManager && window.mediaSessionManager.isSupported) {
         window.mediaSessionManager.updatePlaybackState(isPlaying ? 'playing' : 'paused');
       }

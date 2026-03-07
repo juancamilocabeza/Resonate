@@ -88,6 +88,40 @@
 })();
 
 // Note: elements object is defined in ui.js
+
+function ensureMainPlayButtonIcon(button) {
+  if (!button) return null;
+
+  let icon = button.querySelector('.transport-icon');
+  if (!icon) {
+    button.textContent = '';
+    icon = document.createElement('span');
+    icon.className = 'transport-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    button.appendChild(icon);
+  }
+
+  return icon;
+}
+
+function setMainPlayButtonState(isPlaying) {
+  const playButton = (window.elements && window.elements.playBtn) || document.getElementById('play-btn');
+  if (!playButton) return;
+
+  ensureMainPlayButtonIcon(playButton);
+  playButton.dataset.state = isPlaying ? 'pause' : 'play';
+  playButton.setAttribute('aria-label', isPlaying ? 'Pause' : 'Play');
+}
+
+window.setMainPlayButtonState = setMainPlayButtonState;
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => {
+    setMainPlayButtonState(false);
+  }, { once: true });
+} else {
+  setMainPlayButtonState(false);
+}
 // We access it via window.elements to avoid scope conflicts
 // This file will use window.elements which gets populated when ui.js loads
 
@@ -374,7 +408,7 @@ function handleAutoSkipBudgetExhausted(contextKey) {
     const elements = getElementsSafe();
     const audio = elements.audio;
     if (audio) audio.pause();
-    if (elements.playBtn) elements.playBtn.textContent = '▶';
+    setMainPlayButtonState(false);
   } catch {}
 
   safeShowStatus('Paused: too many skipped tracks in this context', 'error', 4500);
@@ -2304,7 +2338,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
         // Shared links: if autoplay is blocked, keep the track ready and show a CTA.
         if (isSharedLinkAutoplayAttempt() && isAutoplayBlockedError(error)) {
           try {
-            if (elements.playBtn) elements.playBtn.textContent = '▶';
+            setMainPlayButtonState(false);
             if (elements.playBtn) elements.playBtn.disabled = false;
           } catch {}
           showAutoplayCta('Tap Play to start');
@@ -2677,7 +2711,7 @@ function togglePlay() {
     }
 
     audio.play().then(() => {
-      if (elements.playBtn) elements.playBtn.textContent = '⏸';
+      setMainPlayButtonState(true);
       safeShowStatus('Music is playing now', 'info');
 
       // Update MediaSession playback state and position
@@ -2701,7 +2735,7 @@ function togglePlay() {
     });
   } else {
     audio.pause();
-    if (elements.playBtn) elements.playBtn.textContent = '▶';
+    setMainPlayButtonState(false);
     safeShowStatus('Music is now paused', 'info');
 
     // Update MediaSession playback state and position
