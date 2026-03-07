@@ -1060,7 +1060,7 @@ header {
   top: 0;
   background: var(--bg);
   z-index: 100;
-  padding: 8px var(--spacing-md);
+  padding: 6px var(--spacing-md);
   border-bottom: 1px solid rgba(var(--primary-rgb), 0.1);
   backdrop-filter: blur(8px);
   transition: var(--transition-all-slow);
@@ -1073,7 +1073,6 @@ header {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  min-width: 0;
   flex: 1 1 auto;
   overflow: hidden;
 }
