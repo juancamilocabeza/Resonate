@@ -17,10 +17,10 @@
 }
 /* Card visual para cada álbum de favoritos */
 .favorites-album-card {
-  background: var(--surface-2, #fff);
+  background: var(--collection-card-bg, var(--surface-2, #fff));
   border-radius: 14px;
-  border: 1px solid var(--border, #e0e0e0);
-  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+  border: 1px solid var(--surface-border, #e0e0e0);
+  box-shadow: var(--collection-shadow, 0 2px 12px rgba(0,0,0,0.08));
   margin-bottom: 24px;
   padding: 0 0 8px 0;
   transition: box-shadow 0.2s;
@@ -129,7 +129,7 @@
 
 /* Shared overlay shell for panels (search/results/tracks) */
 .panel-overlay {
-  background: var(--card);
+  background: var(--collection-panel-bg, var(--card));
   border: var(--panel-border, 2px solid rgba(128, 128, 128, 0.3));
   box-shadow: var(--panel-shadow, 0 8px 28px rgba(0,0,0,0.45), 0 0 0 3px rgba(var(--primary-rgb), 0.18));
   border-radius: var(--panel-radius, 16px);
@@ -147,7 +147,7 @@
 .tracklist {
   border: none;
   border-radius: 8px;
-  background: var(--surface-subtle, rgba(255,255,255,0.02));
+  background: var(--collection-subpanel-bg, var(--surface-subtle, rgba(255,255,255,0.02)));
   box-shadow: none;
   box-sizing: border-box;
 }
@@ -196,21 +196,21 @@
 
 /* Unified track row styling across contexts */
 .track-row {
-  background: transparent;
-  border: 1px solid rgba(255,255,255,0.08);
+  background: var(--collection-row-bg, transparent);
+  border: 1px solid var(--surface-border-subtle, rgba(255,255,255,0.08));
   box-shadow: inset 0 0 0 1px rgba(var(--primary-rgb), 0.08);
   border-radius: 10px;
 }
 
 .track-row:hover {
-  background: var(--surface-hover, rgba(var(--primary-rgb), 0.12));
+  background: var(--collection-row-hover-bg, var(--surface-hover, rgba(var(--primary-rgb), 0.12)));
 }
 
 /* In-player Tracks overlay: match track cards styling */
 #tracks-list-container .tlv2-row,
 #tracks-list-container .track-row {
-  background: var(--surface-2, rgba(255,255,255,0.04));
-  border: 1px solid var(--surface-border-subtle, rgba(255,255,255,0.12));
+  background: var(--collection-row-bg, var(--surface-2, rgba(255,255,255,0.04)));
+  border: 1px solid var(--surface-border, rgba(255,255,255,0.12));
   box-shadow: inset 0 0 0 1px rgba(var(--primary-rgb), 0.08);
   border-radius: 10px;
   padding: 10px 8px;
@@ -220,7 +220,7 @@
 #tracks-list-container .tlv2-row:focus-visible,
 #tracks-list-container .track-row:hover,
 #tracks-list-container .track-row:focus-visible {
-  background: var(--surface-hover, rgba(var(--primary-rgb), 0.12));
+  background: var(--collection-row-hover-bg, var(--surface-hover, rgba(var(--primary-rgb), 0.12)));
 }
 
 .track-row-title {
@@ -345,8 +345,9 @@ body.tracks-open #tracks-list-container .tlv2-list {
   max-width: 500px;
   margin-left: auto;
   margin-right: auto;
-  background: #f9f9f9;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.10);
+  background: var(--collection-panel-bg, #f9f9f9);
+  border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.08));
+  box-shadow: var(--collection-shadow, 0 2px 12px rgba(0,0,0,0.10));
   border-radius: 14px;
   padding: 0.5em 0.2em 1em 0.2em;
 }
@@ -358,20 +359,21 @@ body.tracks-open #tracks-list-container .tlv2-list {
   margin-bottom: 1em;
   border-radius: 10px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-  background: #fff;
+  background: var(--collection-subpanel-bg, #fff);
+  border: 1px solid var(--surface-border-subtle, rgba(0, 0, 0, 0.08));
   scrollbar-width: thin;
-  scrollbar-color: #b3b3b3 #f0f0f0;
+  scrollbar-color: var(--muted) var(--collection-subpanel-bg, #f0f0f0);
 }
 
 #album-tracklist::-webkit-scrollbar {
   width: 8px;
 }
 #album-tracklist::-webkit-scrollbar-thumb {
-  background: #b3b3b3;
+  background: var(--muted);
   border-radius: 4px;
 }
 #album-tracklist::-webkit-scrollbar-track {
-  background: #f0f0f0;
+  background: var(--collection-subpanel-bg, #f0f0f0);
   border-radius: 4px;
 }
 
@@ -379,13 +381,13 @@ body.tracks-open #tracks-list-container .tlv2-list {
 .album-tracklist-container .tracks-list {
   max-height: none;
   padding: 0.5em 0.2em;
-  background: #fff;
+  background: var(--collection-subpanel-bg, #fff);
   border-radius: 10px;
   box-shadow: 0 1px 8px rgba(0,0,0,0.06);
 }
 .album-tracklist-empty {
   padding: 0.8em;
-  color: #888;
+  color: var(--muted);
   font-style: italic;
 }
 /* Modal de descripción */
@@ -608,6 +610,14 @@ body.tracks-open #tracks-list-container .tlv2-list {
   --sheet-item-hover-bg: rgba(var(--primary-rgb), 0.12);
   --sheet-item-active-bg: rgba(var(--primary-rgb), 0.18);
   --sheet-icon-bg: rgba(var(--primary-rgb), 0.14);
+  --collection-panel-bg: #3a4655;
+  --collection-panel-header-bg: #323d4a;
+  --collection-card-bg: #36414f;
+  --collection-card-hover-bg: #3f4d5c;
+  --collection-subpanel-bg: #2d3743;
+  --collection-row-bg: #313c48;
+  --collection-row-hover-bg: rgba(var(--primary-rgb), 0.14);
+  --collection-shadow: 0 12px 30px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(var(--primary-rgb), 0.05);
   --btn: #3d464f;
   --btn-hover: rgba(var(--primary-rgb), 0.12);
   --btn-active: #1a1a1a;
@@ -696,6 +706,14 @@ body.tracks-open #tracks-list-container .tlv2-list {
   --sheet-item-hover-bg: rgba(var(--primary-rgb), 0.14);
   --sheet-item-active-bg: rgba(var(--primary-rgb), 0.2);
   --sheet-icon-bg: rgba(var(--primary-rgb), 0.16);
+  --collection-panel-bg: #2b3541;
+  --collection-panel-header-bg: #242d38;
+  --collection-card-bg: #2f3945;
+  --collection-card-hover-bg: #384451;
+  --collection-subpanel-bg: #212a34;
+  --collection-row-bg: #28323d;
+  --collection-row-hover-bg: rgba(var(--primary-rgb), 0.16);
+  --collection-shadow: 0 12px 30px rgba(0, 0, 0, 0.42), 0 0 0 1px rgba(var(--primary-rgb), 0.08);
   --btn: #1f1f1f;
   --btn-hover: rgba(var(--primary-rgb), 0.12);
   --btn-active: #0a0a0a;
@@ -751,6 +769,14 @@ body.tracks-open #tracks-list-container .tlv2-list {
   --sheet-item-hover-bg: rgba(var(--primary-rgb), 0.1);
   --sheet-item-active-bg: rgba(var(--primary-rgb), 0.16);
   --sheet-icon-bg: rgba(var(--primary-rgb), 0.12);
+  --collection-panel-bg: #ffffff;
+  --collection-panel-header-bg: #f5f8f7;
+  --collection-card-bg: #ffffff;
+  --collection-card-hover-bg: #f3f8f6;
+  --collection-subpanel-bg: #f6faf8;
+  --collection-row-bg: #f8fbfa;
+  --collection-row-hover-bg: rgba(var(--primary-rgb), 0.12);
+  --collection-shadow: 0 10px 24px rgba(15, 23, 42, 0.1), 0 0 0 1px rgba(var(--primary-rgb), 0.04);
   --btn: #e5e5e5;
   --btn-hover: rgba(var(--primary-rgb), 0.12);
   --btn-active: #d0d0d0;
@@ -883,6 +909,14 @@ body.tracks-open #tracks-list-container .tlv2-list {
   --sheet-item-hover-bg: rgba(var(--primary-rgb), 0.12);
   --sheet-item-active-bg: rgba(var(--primary-rgb), 0.18);
   --sheet-icon-bg: rgba(var(--primary-rgb), 0.14);
+  --collection-panel-bg: #1d282d;
+  --collection-panel-header-bg: #162126;
+  --collection-card-bg: #223035;
+  --collection-card-hover-bg: #2a393f;
+  --collection-subpanel-bg: #131b1f;
+  --collection-row-bg: #1b262b;
+  --collection-row-hover-bg: rgba(var(--primary-rgb), 0.14);
+  --collection-shadow: 0 12px 30px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(var(--primary-rgb), 0.08);
   --btn: #181818;
   --btn-hover: rgba(var(--primary-rgb), 0.08);
   --btn-active: #050505;
@@ -2407,7 +2441,7 @@ select:focus {
   border-radius: 8px;
   margin-top: 6px;
   display: none;
-  background: var(--card);
+  background: var(--collection-panel-bg, var(--card));
   overflow-x: hidden;
   overflow-y: auto;
   width: 100%;
@@ -2431,7 +2465,8 @@ select:focus {
   max-height: min(45vh, 520px);
   min-height: 160px;
   opacity: 1;
-  background: var(--card);
+  background: var(--collection-panel-bg, var(--card));
+  box-shadow: var(--collection-shadow, var(--shadow-subtle));
   z-index: 120;
 }
 
@@ -2443,7 +2478,7 @@ select:focus {
     height: 100%;
     min-height: 0;
     border-radius: 12px;
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22);
+    box-shadow: var(--collection-shadow, 0 12px 30px rgba(0, 0, 0, 0.22));
   }
 }
 
@@ -2463,7 +2498,7 @@ select:focus {
   gap: 8px;
   padding: 8px 10px;
   /* Opaque header so scrolling chips/content never show through */
-  background: var(--bg);
+  background: var(--collection-panel-header-bg, var(--bg));
   border-bottom: 1px solid var(--surface-border);
   backdrop-filter: blur(10px);
 }
@@ -2783,7 +2818,7 @@ select:focus {
   max-height: none;
   min-height: 160px;
   opacity: 1;
-  background: var(--card);
+  background: var(--collection-panel-bg, var(--card));
   border: var(--panel-border);
   border-radius: var(--panel-radius);
   box-shadow: var(--panel-shadow);
@@ -2831,7 +2866,7 @@ select:focus {
   padding: 8px 10px;
   border-bottom: 1px solid var(--surface-border);
   /* Opaque header so scrolling chips/content never show through */
-  background: var(--bg);
+  background: var(--collection-panel-header-bg, var(--bg));
   backdrop-filter: blur(10px);
 }
 
@@ -3302,7 +3337,8 @@ body.offline-mode .share-track-button {
 .resontes-list-content .tracks-container,
 .search-results-list .tracks-container,
 .content-card .tracks-container {
-  background: var(--surface-subtle, rgba(255,255,255,0.02));
+  background: var(--collection-subpanel-bg, var(--surface-subtle, rgba(255,255,255,0.02)));
+  border: 1px solid var(--surface-border-subtle, rgba(255,255,255,0.08));
   border-radius: 8px;
   margin: 8px 0;
   padding: 0;
@@ -3678,11 +3714,11 @@ body.offline-mode .share-track-button {
 .content-card {
   display: grid;
   grid-template-rows: auto 1fr auto;
-  background: var(--card);
-  border: 1px solid var(--surface-border-subtle);
+  background: var(--collection-card-bg, var(--card));
+  border: 1px solid var(--surface-border);
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: var(--shadow-subtle);
+  box-shadow: var(--collection-shadow, var(--shadow-subtle));
   transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease;
   height: 100%;
 }
@@ -3695,7 +3731,7 @@ body.offline-mode .share-track-button {
 .content-card:hover {
   transform: translateY(-2px);
   box-shadow: var(--shadow-card-hover);
-  background: var(--surface-hover);
+  background: var(--collection-card-hover-bg, var(--surface-hover));
 }
 
 .content-card:focus-visible {
@@ -5243,13 +5279,14 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
   gap: 8px;
   padding: 8px 6px;
   border-radius: 8px;
-  background: transparent;
+  background: var(--collection-row-bg, transparent);
   transition: background 0.15s;
   min-height: 44px;
   cursor: pointer;
   user-select: none;
   /* Garantizar que sea clickeable incluso dentro de overflow */
   touch-action: manipulation;
+  box-shadow: inset 0 0 0 1px var(--surface-border-subtle);
 }
 
 @media (max-width: 480px) {
@@ -5261,7 +5298,7 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
 }
 .tracklist .tlv2-row:hover,
 .tracklist .tlv2-row:focus-visible {
-  background: var(--surface-hover);
+  background: var(--collection-row-hover-bg, var(--surface-hover));
 }
 .tracklist .tlv2-row:focus-visible {
   outline: 2px solid var(--primary);
