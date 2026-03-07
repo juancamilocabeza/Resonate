@@ -994,8 +994,8 @@ body {
   padding-top: var(--spacing-lg);
   padding-left: 0;
   padding-right: 0;
-  /* Reserve space for sticky/fixed footer + safe-area so controls stay reachable */
-  padding-bottom: calc(var(--spacing-md) + env(safe-area-inset-bottom, 0) + var(--vv-bottom-inset, 0px) + var(--footer-height, 44px));
+  /* Keep controls clear of the mobile browser inset without duplicating sticky footer space. */
+  padding-bottom: calc(var(--spacing-md) + env(safe-area-inset-bottom, 0) + var(--vv-bottom-inset, 0px));
   box-sizing: border-box;
   position: relative;
   z-index: 50;
