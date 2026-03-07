@@ -41,6 +41,13 @@
       <h1 id="app-title">
         Resonate player
       </h1>
+      <!-- Secondary controls moved into the bottom sheet — see #player-options-sheet below -->
+      <div class="header-controls">
+        <span class="more-options-btn" id="more-options-btn"
+                aria-label="More player options" aria-expanded="false"
+                aria-controls="player-options-sheet"
+                data-always-enabled>⋯</span>
+      </div>
     </header>
     <div class="content-layout" id="content-layout">
       <div class="discovery-section">
@@ -146,13 +153,6 @@
             <button id="next-btn" class="next-btn" aria-label="Next">⏭</button>
             <button id="favorite-btn" class="additional-btn" aria-label="Add to resonates" title="Add to resonates"></button>
           </div>
-          <!-- Secondary controls moved into the bottom sheet — see #player-options-sheet below -->
-          <div class="header-controls">
-            <button class="more-options-btn" id="more-options-btn" type="button"
-                    aria-label="More player options" aria-expanded="false"
-                    aria-controls="player-options-sheet"
-                    data-always-enabled>⋯</button>
-          </div>
         </div>
       </div>
 
@@ -178,18 +178,6 @@
         </div>
 
         <div class="sheet-content">
-
-          <!-- Theme / Brightness toggle (was first item in .header-controls) -->
-          <button id="theme-toggle" class="theme-selector sheet-action-item" type="button"
-                  aria-label="Theme toggle" aria-current="page">
-            <span class="sheet-item-icon theme-icon" aria-hidden="true">
-              <svg class="sheet-item-svg theme-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <use href="/icons/sprite.svg?v=2#theme-moon"></use>
-              </svg>
-            </span>
-            <span class="sheet-item-label">Brightness</span>
-            <span class="theme-label" aria-hidden="true">Eco</span>
-          </button>
 
           <!-- Resonates toggle (was second item in .header-controls) -->
           <button id="resontes-toggle" class="theme-selector resontes-toggle sheet-action-item"
@@ -236,8 +224,20 @@
             <span class="sheet-item-label">Share track</span>
           </span>
 
+          <!-- Theme / Brightness toggle (was first item in .header-controls) -->
+          <button id="theme-toggle" class="theme-selector sheet-action-item" type="button"
+                  aria-label="Theme toggle" aria-current="page">
+            <span class="sheet-item-icon theme-icon" aria-hidden="true">
+              <svg class="sheet-item-svg theme-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <use href="/icons/sprite.svg?v=2#theme-moon"></use>
+              </svg>
+            </span>
+            <span class="sheet-item-label">Brightness</span>
+            <span class="theme-label" aria-hidden="true">Eco</span>
+          </button>
+
           <!-- Equalizer (new item) -->
-          <button class="sheet-action-item sheet-new-item" type="button" aria-label="Equalizer">
+          <!--<button class="sheet-action-item sheet-new-item" type="button" aria-label="Equalizer">
             <span class="sheet-item-icon" aria-hidden="true">
               <svg class="sheet-item-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false"
                    fill="none" stroke="currentColor" stroke-width="1.8"
@@ -254,10 +254,10 @@
               </svg>
             </span>
             <span class="sheet-item-label">Equalizer</span>
-          </button>
+          </button>-->
 
           <!-- Visualizer (new item) -->
-          <button class="sheet-action-item sheet-new-item" type="button" aria-label="Visualizer">
+          <!--<button class="sheet-action-item sheet-new-item" type="button" aria-label="Visualizer">
             <span class="sheet-item-icon" aria-hidden="true">
               <svg class="sheet-item-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false"
                    fill="none" stroke="currentColor" stroke-width="1.8"
