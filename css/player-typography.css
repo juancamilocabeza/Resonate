@@ -1,0 +1,39 @@
+/**
+ * player-typography.css — Mobile Typography Hierarchy
+ *
+ * Defines a clear typographic scale for the player on mobile.
+ * Loaded after resonate.css; these rules refine (not replace) the base styles.
+ *
+ * Scale:
+ *   Track title  → 22px / weight 600 / tight letter-spacing
+ *   Artist text  → 14px / weight 400 / opacity 0.7
+ */
+
+/* =====================================================================
+   MOBILE PORTRAIT — Typography refinements
+   ===================================================================== */
+@media (max-width: 767px) and (min-height: 480px) {
+
+  /* Track title: slightly smaller than desktop (24px → 22px), but bolder feel */
+  .title {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    line-height: 1.25;
+  }
+
+  /* Artist / creator: subdued secondary line */
+  .creator {
+    font-size: 14px;
+    font-weight: 400;
+    opacity: 0.7;
+    letter-spacing: 0.01em;
+    line-height: 1.35;
+  }
+}
+
+/* =====================================================================
+   COMPACT LANDSCAPE — Already handled by resonate.css height queries.
+   No overrides needed here; the min-height guard above ensures those
+   rules remain in effect.
+   ===================================================================== */

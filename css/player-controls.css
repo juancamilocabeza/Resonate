@@ -1,0 +1,106 @@
+/**
+ * player-controls.css — Playback Controls Redesign
+ *
+ * Establishes a clear visual hierarchy for the playback controls:
+ *   Primary:   Play/Pause button — large, accent-colored, with shadow
+ *   Secondary: Prev, Next, Shuffle, Favorite — smaller, standard style
+ *
+ * Loaded after resonate.css; overrides mobile control styles only.
+ *
+ * Color strategy:
+ *   Uses `--primary` and `--primary-rgb` (defined in resonate.css) for the
+ *   play button accent so all four themes are respected:
+ *     Dark/night themes: --primary = #3da9ff  --primary-rgb = 61, 169, 255
+ *     Day theme:         --primary = #10b981  --primary-rgb = 16, 185, 129
+ *     Energy-saver:      --primary = #7aa7b8  --primary-rgb = 122, 167, 184
+ */
+
+/* =====================================================================
+   PLAY BUTTON — Dominant accent-colored circular button
+   ===================================================================== */
+
+/* Apply accent color to play button globally (all breakpoints) */
+.play-btn,
+.play-btn-favorite {
+  background: var(--primary) !important;
+  color: #fff !important;
+  box-shadow:
+    0 4px 20px rgba(var(--primary-rgb), 0.45),
+    0 2px 6px rgba(var(--primary-rgb), 0.3) !important;
+}
+
+.play-btn:hover:not(:disabled),
+.play-btn-favorite:hover:not(:disabled) {
+  background: var(--primary) !important;
+  box-shadow:
+    0 8px 28px rgba(var(--primary-rgb), 0.55),
+    0 4px 10px rgba(var(--primary-rgb), 0.35) !important;
+}
+
+.play-btn:active,
+.play-btn-favorite:active {
+  background: var(--primary) !important;
+  box-shadow:
+    inset 0 2px 8px rgba(0, 0, 0, 0.25),
+    0 2px 8px rgba(var(--primary-rgb), 0.3) !important;
+}
+
+/* Press microinteraction: scale down then bounce back */
+.play-btn:active {
+  transform: scale(0.93);
+  transition: transform 0.1s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+/* =====================================================================
+   MOBILE PORTRAIT — Control sizing and spacing
+   ===================================================================== */
+@media (max-width: 767px) and (min-height: 480px) {
+
+  /* Controls row: generous gap for comfortable thumb reach */
+  .main-player-section .controls {
+    gap: clamp(8px, 3.5vw, 20px);
+    margin-top: 8px;
+    padding-left: calc(16px + env(safe-area-inset-left, 0));
+    padding-right: calc(16px + env(safe-area-inset-right, 0));
+  }
+
+  /* Secondary buttons: 48px touch target (WCAG AA: 44px minimum) */
+  .main-player-section .controls button:not(.play-btn):not(.play-btn-favorite) {
+    width: 48px;
+    height: 48px;
+  }
+
+  /* Play button stays larger at 72px */
+  .main-player-section .controls .play-btn,
+  .main-player-section .controls .play-btn-favorite {
+    width: 72px;
+    height: 72px;
+  }
+
+  /* Shuffle active indicator: use primary accent */
+  .shuffle-favorites-btn.active {
+    color: var(--primary);
+    outline-color: var(--primary) !important;
+  }
+
+  /* Favorite button active: primary accent */
+  .main-player-section .controls #favorite-btn.active {
+    color: var(--primary);
+  }
+}
+
+/* =====================================================================
+   TOUCH DEVICES — Remove hover transforms that cause sticky tap effects
+   Already handled in resonate.css; play button override ensures color
+   consistency even without hover.
+   ===================================================================== */
+@media (hover: none) and (pointer: coarse) {
+  /* On touch, ensure accent color is preserved (no transform side-effects) */
+  .play-btn:hover,
+  .play-btn-favorite:hover {
+    background: var(--primary) !important;
+    box-shadow:
+      0 4px 20px rgba(var(--primary-rgb), 0.45),
+      0 2px 6px rgba(var(--primary-rgb), 0.3) !important;
+  }
+}

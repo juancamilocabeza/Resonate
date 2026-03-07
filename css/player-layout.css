@@ -1,0 +1,88 @@
+/**
+ * player-layout.css — Mobile Player Layout Enhancements
+ *
+ * Improves the visual quality and spacing of the Resonate Player on mobile.
+ * Loaded after resonate.css to extend/override mobile-specific styles.
+ *
+ * Targets:
+ *   - Portrait mobile (max-width: 767px, min-height: 480px)
+ *   - Landscape exclusion via min-height guard to preserve compact modes
+ *   - Does NOT affect tablet (≥768px) or desktop (≥1024px) layouts
+ */
+
+/* =====================================================================
+   ALBUM ARTWORK — Primary visual element
+   Previous mobile size: clamp(140px, 26vh, 220px) — viewport-height
+   New mobile size:      clamp(200px, 75vw, 360px) — viewport-width
+   Guard: min-height: 480px excludes landscape phones where space is tight
+   ===================================================================== */
+@media (max-width: 767px) and (min-height: 480px) {
+  .art {
+    /* Larger, viewport-width-based artwork for portrait mobile */
+    width: clamp(200px, 75vw, 360px);
+    height: clamp(200px, 75vw, 360px);
+
+    /* Modern rounded corners (up from 12px) */
+    border-radius: 20px;
+
+    /* Rich depth shadow */
+    box-shadow:
+      0 24px 64px rgba(0, 0, 0, 0.45),
+      0 8px 24px rgba(0, 0, 0, 0.28),
+      0 2px 6px rgba(0, 0, 0, 0.18);
+
+    /* Breathing room below artwork */
+    margin: 0 auto var(--spacing-xl, 20px);
+
+    /* Smooth size/shadow transitions */
+    transition: transform 0.35s ease, box-shadow 0.35s ease;
+  }
+
+  /* Player content: consistent 16px horizontal padding */
+  .player-content {
+    padding: 0 16px;
+  }
+
+  /* Track info section: tighter top/bottom padding */
+  .current-track-info {
+    padding: var(--spacing-md, 12px) 0 var(--spacing-xs, 4px);
+    gap: 4px;
+  }
+
+  /* Description/icon controls: compact spacing */
+  #description-container {
+    margin-top: var(--spacing-xs, 4px);
+    margin-bottom: var(--spacing-xs, 4px);
+  }
+
+  /* Progress section: 20–24px vertical breathing room */
+  .progress-section {
+    padding: 10px 0 30px 0;
+    margin: 4px 0 0 0;
+  }
+
+  /* Secondary controls (theme/resonates/cast/share) */
+  .header-controls {
+    margin-top: var(--spacing-md, 12px);
+    gap: 16px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  /* Main player section: consistent top padding */
+  .main-player-section {
+    padding-top: var(--spacing-xl, 20px);
+  }
+}
+
+/* =====================================================================
+   DAY THEME — Softer artwork shadow for light backgrounds
+   ===================================================================== */
+@media (max-width: 767px) and (min-height: 480px) {
+  [data-theme="day"] .art {
+    box-shadow:
+      0 20px 50px rgba(0, 0, 0, 0.18),
+      0 6px 18px rgba(0, 0, 0, 0.12),
+      0 2px 4px rgba(0, 0, 0, 0.08);
+  }
+}

@@ -1,0 +1,73 @@
+/**
+ * player-progress.css — Touch-Friendly Progress Bar
+ *
+ * Refines the seek bar for one-handed mobile interaction.
+ * Loaded after resonate.css; only overrides mobile-relevant properties.
+ *
+ * Goals:
+ *   - 6px visual track (modern and refined)
+ *   - 18px draggable thumb, always visible on touch devices
+ *   - Larger invisible touch target via padding on .progress-section
+ *   - Smooth transition on thumb appearance
+ */
+
+/* =====================================================================
+   PROGRESS BAR — Refined for touch (portrait mobile)
+   ===================================================================== */
+@media (max-width: 767px) and (min-height: 480px) {
+
+  /* Slim 6px track */
+  .progress-bar {
+    height: 6px;
+    border-radius: 3px;
+  }
+
+  /* Keep height at 6px on touch (don't expand on "hover" tap-stick) */
+  .progress-bar:hover {
+    height: 6px;
+  }
+
+  /* Thumb: always visible on touch devices, larger for finger precision */
+  .progress::after {
+    /* 18px thumb diameter */
+    width: 18px;
+    height: 18px;
+    right: -9px;
+
+    /* Always visible on touch (no hover required) */
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+
+    /* Larger glow ring */
+    box-shadow:
+      0 2px 10px rgba(0, 0, 0, 0.35),
+      0 0 0 2px rgba(255, 255, 255, 0.9);
+  }
+
+  /* Grow thumb slightly while dragging */
+  .progress-bar.dragging .progress::after {
+    width: 22px;
+    height: 22px;
+    right: -11px;
+    transform: translateY(-50%) scale(1);
+    box-shadow:
+      0 3px 14px rgba(0, 0, 0, 0.4),
+      0 0 0 3px rgba(255, 255, 255, 0.9);
+  }
+
+  /* Rounded track ends */
+  .progress,
+  .progress-buffered {
+    border-radius: 3px;
+  }
+}
+
+/* =====================================================================
+   TOUCH DEVICES — Ensure thumb is never hidden on coarse pointers
+   ===================================================================== */
+@media (hover: none) and (pointer: coarse) {
+  .progress::after {
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+  }
+}
