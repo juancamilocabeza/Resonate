@@ -5530,59 +5530,7 @@ function setupPlaybackAutosave() {
 }
 
 // Offline functionality setup
-function setupOfflineFunctionality() {
-  // Create offline indicator element
-  if (!document.getElementById('offline-indicator')) {
-    createOfflineIndicator();
-  }
 
-  // Initial check
-  state.networkOnline = navigator.onLine;
-  updateOfflineIndicator();
-
-  __resonateAttachConnectivityHandlersOnce();
-}
-
-// Create offline indicator in the UI
-function createOfflineIndicator() {
-  const indicator = document.createElement('div');
-  indicator.id = 'offline-indicator';
-  indicator.className = 'offline-indicator hidden';
-  indicator.setAttribute('role', 'status');
-  indicator.setAttribute('aria-live', 'polite');
-  indicator.innerHTML = `
-    <div class="offline-icon"></div>
-    <div class="offline-text">Disconnected</div>
-  `;
-
-  const header = document.querySelector('header');
-  if (header) {
-    header.appendChild(indicator);
-  } else {
-    document.body.insertBefore(indicator, document.body.firstChild);
-  }
-}
-
-// Update offline indicator visibility and state
-function updateOfflineIndicator() {
-  const indicator = document.getElementById('offline-indicator');
-  if (!indicator) return;
-
-  if (!state.networkOnline) {
-    indicator.classList.remove('hidden');
-    indicator.classList.add('active');
-    indicator.querySelector('.offline-text').textContent = 'Disconnected';
-
-    // Add offline class to body for styling
-    document.body.classList.add('offline-mode');
-  } else {
-    indicator.classList.remove('active');
-    indicator.classList.add('hidden');
-
-    // Remove offline class from body
-    document.body.classList.remove('offline-mode');
-  }
-}
 
 // Show offline-specific hints and information
 function showOfflineHints() {

@@ -1,20 +1,17 @@
 /**
- * player-bottom-sheet.css — Progressive Disclosure: More Options
+ * player-bottom-sheet.css — App Menu and Track Menu Sheets
  *
- * Replaces the secondary icon row (.header-controls) with a single
- * "More Options" button (⋯) that opens a bottom sheet menu.
- *
- * Follows mobile music player conventions (Spotify, Apple Music):
- *   - Slide-up bottom sheet with rounded top corners
- *   - Touch-friendly tap targets (min 44px)
- *   - Dismissible by tapping the overlay or swiping down
+ * Defines the two menu entry points introduced in the UI split:
+ *   - Header app menu trigger
+ *   - Contextual track menu trigger
+ * Both triggers reuse the same bottom sheet visual language.
  */
 
-/* =====================================================================
-   MORE OPTIONS BUTTON — Single button replacing the secondary icon row
-   ===================================================================== */
+.header-controls {
+  gap: 12px;
+}
 
-.more-options-btn {
+.app-menu-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -27,28 +24,63 @@
   border: 1px solid var(--header-btn-border, rgba(255, 255, 255, 0.12));
   border-radius: 999px;
   color: var(--primary);
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
+  font-size: 16px;
+  font-weight: 600;
   line-height: 1;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
-  transition: background 150ms ease, transform 100ms ease;
+  transition: background 150ms ease, border-color 150ms ease, transform 100ms ease;
 }
 
-.more-options-btn:hover {
+.menu-trigger-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.menu-trigger-svg {
+  width: 20px;
+  height: 20px;
+  display: block;
+  stroke: currentColor;
+  fill: none;
+}
+
+.app-menu-btn:hover,
+.app-menu-btn[aria-expanded="true"] {
   background: rgba(var(--primary-rgb), 0.18);
   border-color: rgba(var(--primary-rgb), 0.3);
 }
 
-.more-options-btn:active {
+.app-menu-btn:active {
   transform: scale(0.94);
 }
 
-.more-options-btn:focus-visible {
+.app-menu-btn:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
+}
+
+.player-menu-btn {
+  color: var(--muted);
+}
+
+.player-menu-btn:hover,
+.player-menu-btn:focus-visible,
+.player-menu-btn[aria-expanded="true"] {
+  color: var(--primary);
+  background: rgba(var(--primary-rgb), 0.12);
+  border-color: rgba(var(--primary-rgb), 0.22);
+}
+
+.player-menu-btn:active {
+  transform: scale(0.94);
+}
+
+.player-menu-btn .btn-svg {
+  width: 18px;
+  height: 18px;
 }
 
 /* =====================================================================
@@ -288,11 +320,6 @@
   color: var(--bg, #1a1a2e);
   font-size: 11px;
   font-weight: 700;
-}
-
-/* Disabled/unavailable items in the sheet */
-.sheet-action-item.sheet-new-item {
-  opacity: 0.72;
 }
 
 /* =====================================================================

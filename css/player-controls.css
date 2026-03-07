@@ -60,6 +60,10 @@
   .main-player-section .controls {
     gap: clamp(8px, 3.5vw, 20px);
     margin-top: 8px;
+    /* Keep the play button fully clear of the sticky footer on mobile. */
+    min-height: calc(72px + 16px + var(--vv-bottom-inset, 0px));
+    padding-top: 4px;
+    padding-bottom: calc(12px + var(--vv-bottom-inset, 0px));
     padding-left: calc(16px + env(safe-area-inset-left, 0));
     padding-right: calc(16px + env(safe-area-inset-right, 0));
   }

@@ -5,58 +5,82 @@
   if (window.__resonateOfflineIndicatorFixLoaded) return;
   window.__resonateOfflineIndicatorFixLoaded = true;
 
+  let listenersAttached = false;
+
   function getIndicator() {
     return document.getElementById('offline-indicator');
   }
 
-  function setIndicatorOffline(isOffline) {
-    const indicator = getIndicator();
-    if (!indicator) return;
+  function ensureIndicator() {
+    let indicator = getIndicator();
+    if (indicator || !document.body) return indicator;
 
-    if (isOffline) {
-      indicator.classList.remove('hidden');
-      indicator.classList.add('active');
-      const textEl = indicator.querySelector('.offline-text');
-      if (textEl) textEl.textContent = 'Offline';
-      document.body.classList.add('offline-mode');
-      return;
+    const host = document.querySelector('.header-controls') || document.querySelector('header') || document.body;
+    if (!host) return null;
+
+    indicator = document.createElement('div');
+    indicator.id = 'offline-indicator';
+    indicator.className = 'offline-indicator';
+    indicator.setAttribute('role', 'status');
+    indicator.setAttribute('aria-live', 'polite');
+    indicator.hidden = true;
+    host.appendChild(indicator);
+    return indicator;
+  }
+
+  function getIsOnline() {
+    if (window.state && typeof window.state.networkOnline === 'boolean') {
+      return window.state.networkOnline;
     }
 
-    indicator.classList.remove('active');
-    indicator.classList.add('hidden');
-    document.body.classList.remove('offline-mode');
+    return navigator.onLine !== false;
   }
 
-  function initFallbackIndicator() {
-    if (window.__resonateConnectivityStatusHandled) return;
-
-    const updateNow = () => {
-      const isOffline = typeof navigator !== 'undefined' && navigator && navigator.onLine === false;
-      setIndicatorOffline(isOffline);
-      if (getIndicator()) {
-        console.log('Offline indicator initialized');
-      }
-    };
-
-    updateNow();
-
-    // Listen for online/offline events for indicators only
-    window.addEventListener('online', function () {
-      setIndicatorOffline(false);
-    });
-
-    window.addEventListener('offline', function () {
-      setIndicatorOffline(true);
-    });
+  function syncNetworkState() {
+    if (!window.state || typeof window.state !== 'object') return;
+    window.state.networkOnline = navigator.onLine !== false;
   }
+
+  function updateOfflineIndicator() {
+    const indicator = ensureIndicator();
+    if (!indicator) return;
+
+    const isOnline = getIsOnline();
+    indicator.hidden = isOnline;
+    indicator.textContent = isOnline ? '' : 'Offline';
+    indicator.setAttribute('aria-hidden', isOnline ? 'true' : 'false');
+
+    if (isOnline) {
+      indicator.removeAttribute('data-offline');
+    } else {
+      indicator.setAttribute('data-offline', 'true');
+    }
+  }
+
+  function handleConnectivityChange() {
+    syncNetworkState();
+    updateOfflineIndicator();
+  }
+
+  function setupOfflineFunctionality() {
+    if (!listenersAttached) {
+      listenersAttached = true;
+      window.addEventListener('online', handleConnectivityChange, { passive: true });
+      window.addEventListener('offline', handleConnectivityChange, { passive: true });
+    }
+
+    handleConnectivityChange();
+  }
+
+  window.updateOfflineIndicator = updateOfflineIndicator;
+  window.setupOfflineFunctionality = setupOfflineFunctionality;
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () {
-      setTimeout(initFallbackIndicator, 100);
-    });
+    document.addEventListener('DOMContentLoaded', updateOfflineIndicator, { once: true });
   } else {
-    setTimeout(initFallbackIndicator, 0);
+    updateOfflineIndicator();
   }
-
-  console.log('Offline fix loaded');
 })();
+
+
+

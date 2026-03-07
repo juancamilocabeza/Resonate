@@ -1,10 +1,13 @@
 (function () {
   'use strict';
 
+  var CAST_SENDER_SCRIPT_URL = 'https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1';
   var DEFAULT_CAF_APP_ID = 'CC1AD845';
   var castReady = false;
   var castInitAttempted = false;
   var castInitError = null;
+  var castScriptLoadPromise = null;
+  var castApiWaiters = [];
   var lastMediaUrl = '';
   var lastSessionId = '';
   var castHintSessionId = '';
@@ -26,6 +29,131 @@
 
   function isCastFrameworkReady() {
     return !!(window.cast && window.cast.framework && window.chrome && window.chrome.cast);
+  }
+
+  function isStandaloneDisplayMode() {
+    try {
+      return !!((window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+        || window.navigator.standalone === true);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function hasSecureCastOrigin() {
+    try {
+      if (window.isSecureContext) return true;
+      var hostname = String(window.location && window.location.hostname || '').toLowerCase();
+      return hostname === 'localhost'
+        || hostname === '127.0.0.1'
+        || hostname === '[::1]'
+        || hostname.endsWith('.local');
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function isLikelyChromiumBrowser() {
+    try {
+      var uaData = navigator.userAgentData;
+      if (uaData && Array.isArray(uaData.brands) && uaData.brands.length) {
+        for (var i = 0; i < uaData.brands.length; i++) {
+          var brand = String(uaData.brands[i] && uaData.brands[i].brand || '').toLowerCase();
+          if (brand.indexOf('chromium') >= 0 || brand.indexOf('google chrome') >= 0 || brand.indexOf('microsoft edge') >= 0 || brand.indexOf('opera') >= 0) {
+            return true;
+          }
+        }
+      }
+    } catch (e) {}
+
+    try {
+      var ua = String(navigator.userAgent || '');
+      if (!ua) return false;
+      if (/iPad|iPhone|iPod/i.test(ua)) return false;
+      if (/Firefox|FxiOS/i.test(ua)) return false;
+      if (/Safari/i.test(ua) && !/Chrome|Chromium|CriOS|Edg|OPR/i.test(ua)) return false;
+      return /Chrome|Chromium|Edg|OPR/i.test(ua);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function shouldLoadCastSenderFramework() {
+    if (isCastFrameworkReady()) return true;
+    if (isStandaloneDisplayMode()) {
+      castInitError = 'Cast sender disabled in standalone mode';
+      return false;
+    }
+    if (!hasSecureCastOrigin()) {
+      castInitError = 'Cast sender requires HTTPS or localhost';
+      return false;
+    }
+    if (!isLikelyChromiumBrowser()) {
+      castInitError = 'Cast sender unsupported in this browser';
+      return false;
+    }
+    return true;
+  }
+
+  function settleCastApiWaiters(isAvailable) {
+    var waiters = castApiWaiters.splice(0, castApiWaiters.length);
+    for (var i = 0; i < waiters.length; i++) {
+      try {
+        waiters[i](!!isAvailable);
+      } catch (e) {}
+    }
+  }
+
+  function refreshCastButtonState() {
+    try {
+      if (typeof window.applyCastButtonState === 'function') {
+        window.applyCastButtonState(document.getElementById('current-track-cast'));
+      }
+    } catch (e) {}
+  }
+
+  function loadCastFrameworkScript() {
+    if (isCastFrameworkReady()) return Promise.resolve(true);
+    if (!shouldLoadCastSenderFramework()) return Promise.resolve(false);
+    if (castScriptLoadPromise) return castScriptLoadPromise;
+
+    castScriptLoadPromise = new Promise(function (resolve) {
+      castApiWaiters.push(resolve);
+
+      var existing = document.querySelector('script[data-resonate-cast-sender="true"]');
+      if (!existing) {
+        var script = document.createElement('script');
+        script.async = true;
+        script.defer = true;
+        script.src = CAST_SENDER_SCRIPT_URL;
+        script.dataset.resonateCastSender = 'true';
+        script.addEventListener('error', function () {
+          castInitError = 'Cast sender failed to load';
+          settleCastApiWaiters(false);
+          refreshCastButtonState();
+        }, { once: true });
+        (document.head || document.documentElement).appendChild(script);
+      }
+
+      window.setTimeout(function () {
+        if (!isCastFrameworkReady()) {
+          castInitError = castInitError || 'Cast sender load timed out';
+          settleCastApiWaiters(false);
+          refreshCastButtonState();
+        }
+      }, 8000);
+    });
+
+    return castScriptLoadPromise;
+  }
+
+  function ensureCastFrameworkReady() {
+    if (castReady) return Promise.resolve(true);
+    if (isCastFrameworkReady()) return Promise.resolve(initCastFramework());
+    return loadCastFrameworkScript().then(function (isAvailable) {
+      if (!isAvailable) return false;
+      return initCastFramework();
+    });
   }
 
   function getAudioElement() {
@@ -386,13 +514,16 @@
   }
 
   function initCastFramework() {
-    if (castInitAttempted) return castReady;
-    castInitAttempted = true;
+    if (castReady) return true;
 
     if (!isCastFrameworkReady()) {
-      castInitError = 'Cast framework not ready';
+      castInitError = castInitError || 'Cast framework not ready';
+      loadCastFrameworkScript();
       return false;
     }
+
+    if (castInitAttempted) return castReady;
+    castInitAttempted = true;
 
     try {
       var appId = getCastAppId();
@@ -445,6 +576,7 @@
 
       castReady = true;
       castInitError = null;
+      refreshCastButtonState();
       return true;
     } catch (e) {
       castInitError = e && e.message ? e.message : 'Cast init failed';
@@ -604,8 +736,15 @@
   }
 
   function onGCastApiAvailable(isAvailable) {
-    if (!isAvailable) return;
+    if (!isAvailable) {
+      castInitError = castInitError || 'Cast API unavailable';
+      settleCastApiWaiters(false);
+      refreshCastButtonState();
+      return;
+    }
     initCastFramework();
+    settleCastApiWaiters(true);
+    refreshCastButtonState();
   }
 
   function updateCastUi(state, session) {
@@ -644,6 +783,8 @@
       ensureRemotePlayer();
       updateLocalTransportState();
     } catch (e) {}
+  } else {
+    refreshCastButtonState();
   }
 
   window.CastManager = {
@@ -652,6 +793,7 @@
     getCastState: getCastState,
     getRemotePositionState: getRemotePositionState,
     init: initCastFramework,
+    ensureReady: ensureCastFrameworkReady,
     requestSession: requestSession,
     isSessionActive: isSessionActive,
     disconnect: disconnect,

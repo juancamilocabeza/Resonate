@@ -1258,14 +1258,8 @@ async function initializeApp() {
         } catch {}
       };
 
-      const showCastHint = (message) => {
-        try {
-          if (window && typeof window.showAutoplayCta === 'function') {
-            window.showAutoplayCta(message);
-            return;
-          }
-        } catch {}
-        try { showStatus(message, 'info', 6000); } catch {}
+      const logCastHint = (message) => {
+        try { window.logger?.info(message, 'CAST'); } catch {}
       };
 
       if (castBtn) {
@@ -1277,7 +1271,7 @@ async function initializeApp() {
       }
 
       if (!audioEl) {
-        showCastHint('Cast is available, pick a device to connect');
+        logCastHint('Cast is available, pick a device to connect');
       }
 
       const ensureRemotePlaybackAvailability = async (el) => {
@@ -1316,11 +1310,22 @@ async function initializeApp() {
         ? window.getCastCapabilities(audioEl)
         : { canRemotePlayback: false, canAirPlay: false };
 
-      if (window.CastManager && typeof window.CastManager.init === 'function') {
-        try { window.CastManager.init(); } catch {}
+      let castManagerReady = false;
+      if (window.CastManager && typeof window.CastManager.ensureReady === 'function') {
+        try {
+          castManagerReady = !!(await window.CastManager.ensureReady());
+        } catch {}
+      } else if (window.CastManager && typeof window.CastManager.init === 'function') {
+        try {
+          castManagerReady = !!window.CastManager.init();
+        } catch {}
       }
 
-      if (window.CastManager && typeof window.CastManager.isReady === 'function' && window.CastManager.isReady()) {
+      if (!castManagerReady && window.CastManager && typeof window.CastManager.isReady === 'function') {
+        castManagerReady = window.CastManager.isReady();
+      }
+
+      if (castManagerReady) {
         try {
           syncCastPlaybackContext();
           await window.CastManager.requestSession();
@@ -1328,7 +1333,7 @@ async function initializeApp() {
           var castTime = audioEl ? audioEl.currentTime : 0;
           var castUrl = pickCastUrl();
           if (!castUrl) {
-            showCastHint('Connected to Cast. Select a track to play.');
+            logCastHint('Connected to Cast. Select a track to play.');
             return;
           }
           var castDuration = null;
@@ -1338,10 +1343,10 @@ async function initializeApp() {
             castDuration = audioEl.duration;
           }
           await window.CastManager.loadMediaFromTrack(track, castUrl, castTime, castDuration, { force: true });
-          showCastHint('Casting to device');
+          logCastHint('Casting to device');
           return;
         } catch (err) {
-          showCastHint('Cast session failed. Check sender domain and devices.');
+          logCastHint('Cast session failed. Check sender domain and devices.');
         }
       }
 
@@ -1349,7 +1354,7 @@ async function initializeApp() {
         const availability = await ensureRemotePlaybackAvailability(audioEl);
         if (availability === false) {
           const isPwa = (typeof isRunningAsPWA === 'function') ? isRunningAsPWA() : false;
-          showCastHint(isPwa
+          logCastHint(isPwa
             ? 'Open in browser and use the Cast menu'
             : 'Use your browser menu to cast this track');
           return;
@@ -1359,11 +1364,11 @@ async function initializeApp() {
       if (caps.canRemotePlayback) {
         try {
           await audioEl.remote.prompt();
-          showStatus('Choose a device to cast', 'info', 4000);
+          logCastHint('Choose a device to cast');
           return;
         } catch (err) {
           if (err && (err.name === 'AbortError' || err.name === 'NotAllowedError')) {
-            showCastHint('Cast prompt dismissed');
+            logCastHint('Cast prompt dismissed');
             return;
           }
           window.logger?.warn({ message: 'Cast prompt failed', error: err }, 'UI');
@@ -1373,11 +1378,11 @@ async function initializeApp() {
       if (caps.canAirPlay) {
         try {
           audioEl.webkitShowPlaybackTargetPicker();
-          showStatus('Choose an AirPlay device', 'info', 4000);
+          logCastHint('Choose an AirPlay device');
           return;
         } catch (err) {
           if (err && (err.name === 'AbortError' || err.name === 'NotAllowedError')) {
-            showCastHint('AirPlay picker dismissed');
+            logCastHint('AirPlay picker dismissed');
             return;
           }
           window.logger?.warn({ message: 'AirPlay picker failed', error: err }, 'UI');
@@ -1388,7 +1393,7 @@ async function initializeApp() {
       try {
         const hintKey = 'resonate_cast_hint_shown';
         if (sessionStorage.getItem(hintKey) !== 'true') {
-          showCastHint(
+          logCastHint(
             isPwa
               ? 'Casting needs the browser menu. Opening a browser tab.'
               : 'Use your browser menu to cast this track'
@@ -1397,16 +1402,16 @@ async function initializeApp() {
         }
       } catch {}
       if (isPwa) {
-        showCastHint('Use your browser menu to cast this track');
+        logCastHint('Use your browser menu to cast this track');
         return;
       }
 
       if (!audioSrc) {
-        showCastHint('Play a track first to cast');
+        logCastHint('Play a track first to cast');
         return;
       }
 
-      showCastHint('Use your browser menu to cast this track');
+      logCastHint('Use your browser menu to cast this track');
     };
 
     elements.currentTrackCast.addEventListener('click', handleCast);

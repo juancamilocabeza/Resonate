@@ -61,6 +61,10 @@ async function run() {
     assert(indexRes.body.includes('id="app"'), 'Index should include #app');
     assert(indexRes.body.includes('id="search-input"'), 'Index should include #search-input');
     assert(indexRes.body.includes('id="play-btn"'), 'Index should include #play-btn');
+    assert(indexRes.body.includes('id="app-menu-btn"'), 'Index should include #app-menu-btn');
+    assert(indexRes.body.includes('id="app-options-sheet"'), 'Index should include #app-options-sheet');
+    assert(indexRes.body.includes('id="player-menu-btn"'), 'Index should include #player-menu-btn');
+    assert(indexRes.body.includes('id="player-options-sheet"'), 'Index should include #player-options-sheet');
 
     const manifestRes = await request('/manifest.json');
     assert(manifestRes.status === 200, 'GET /manifest.json should return 200');

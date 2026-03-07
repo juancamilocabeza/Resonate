@@ -33,7 +33,6 @@
   <link rel="stylesheet" href="css/player-controls.css" />
   <link rel="stylesheet" href="css/player-bottom-sheet.css" />
   <script src="js/cast.js"></script>
-  <script src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1"></script>
 </head>
 <body>
   <div class="app" id="app" data-nosnippet>
@@ -47,12 +46,18 @@
         </span>
         <span class="app-title-text">Resonate</span>
       </h1>
-      <!-- Secondary controls in the bottom sheet — see #player-options-sheet below -->
+      <!-- Global app menu trigger; player-specific actions live near the track info block -->
       <div class="header-controls">
-        <button class="more-options-btn" id="more-options-btn" type="button"
-                aria-label="More player options" aria-expanded="false"
-                aria-controls="player-options-sheet"
-                data-always-enabled>⋯</button>
+        <button class="app-menu-btn" id="app-menu-btn" type="button"
+                aria-label="Open app menu" aria-expanded="false"
+                aria-controls="app-options-sheet"
+                data-sheet-target="app-options-sheet">
+          <span class="menu-trigger-icon" aria-hidden="true">
+            <svg class="menu-trigger-svg" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+              <use href="/icons/sprite.svg?v=2#settings-icon"></use>
+            </svg>
+          </span>
+        </button>
       </div>
     </header>
     <div class="content-layout" id="content-layout">
@@ -133,6 +138,16 @@
                   </svg>
                 </span>
               </span>
+              <span id="player-menu-btn" class="icon-control player-menu-btn" role="button" tabindex="0"
+                    aria-label="More track options" aria-expanded="false"
+                    aria-controls="player-options-sheet"
+                    data-sheet-target="player-options-sheet">
+                <span class="btn-icon" aria-hidden="true">
+                  <svg class="btn-svg" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                    <use href="/icons/sprite.svg?v=2#more-icon"></use>
+                  </svg>
+                </span>
+              </span>
             </div>
           </div>
           <div class="progress-section">
@@ -168,27 +183,25 @@
       <div class="bottom-sheet-overlay" id="bottom-sheet-overlay" aria-hidden="true"></div>
 
       <!-- ============================================================
-           BOTTOM SHEET — secondary player controls (progressive disclosure)
-           Previously displayed as a row of icons in .header-controls.
-           All original element IDs are preserved so existing JS handlers
-           (cast.js, theme.js, ui.js, initialization.js) continue to work.
+           APP MENU SHEET — app-level actions triggered from the header
+           Existing element IDs are preserved so current JS integrations
+           (theme.js, ui.js, initialization.js) continue to work.
            ============================================================ -->
-      <div class="bottom-sheet" id="player-options-sheet"
-           role="dialog" aria-modal="true" aria-label="Player options" aria-hidden="true">
+      <div class="bottom-sheet" id="app-options-sheet"
+           role="dialog" aria-modal="true" aria-label="App menu" aria-hidden="true">
 
-        <!-- Drag handle (visual affordance for swipe-to-dismiss) -->
         <div class="sheet-drag-handle" aria-hidden="true"></div>
 
         <div class="sheet-header">
-          <span class="sheet-title">Player Options</span>
+          <span class="sheet-title">App Menu</span>
         </div>
 
         <div class="sheet-content">
 
-          <!-- Resonates toggle (was second item in .header-controls) -->
-          <button id="resontes-toggle" class="theme-selector resontes-toggle sheet-action-item"
+            <button id="resontes-toggle" class="theme-selector resontes-toggle sheet-action-item"
                   type="button" aria-label="View resonates"
-                  aria-expanded="false" aria-controls="resontes-list" aria-live="polite">
+              aria-expanded="false" aria-controls="resontes-list" aria-live="polite"
+              data-close-sheet-on-activate="true">
             <span class="sheet-item-icon resontes-icon" aria-hidden="true">
               <svg class="resonate-icon sheet-item-svg" viewBox="0 0 512 512" aria-hidden="true" focusable="false">
                 <use href="/icons/sprite.svg?v=2#resonate-icon"></use>
@@ -198,8 +211,42 @@
             <span class="resontes-count" id="resontes-count">0</span>
           </button>
 
-          <!-- Cast to device (was third item in .header-controls) -->
-          <button id="current-track-cast" class="theme-selector sheet-action-item" type="button"
+          <button id="theme-toggle" class="theme-selector sheet-action-item" type="button"
+                  aria-label="Theme toggle" aria-current="page">
+            <span class="sheet-item-icon theme-icon" aria-hidden="true">
+              <svg class="sheet-item-svg theme-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <use href="/icons/sprite.svg?v=2#theme-moon"></use>
+              </svg>
+            </span>
+            <span class="sheet-item-label">Brightness</span>
+            <span class="theme-label" aria-hidden="true">Eco</span>
+          </button>
+
+        </div>
+
+        <div class="sheet-footer">
+          <button class="sheet-cancel-btn" type="button">Close</button>
+        </div>
+
+      </div><!-- /#app-options-sheet -->
+
+      <!-- ============================================================
+           PLAYER MENU SHEET — contextual track actions triggered from the
+           track information block.
+           ============================================================ -->
+      <div class="bottom-sheet" id="player-options-sheet"
+           role="dialog" aria-modal="true" aria-label="Track options" aria-hidden="true">
+
+        <div class="sheet-drag-handle" aria-hidden="true"></div>
+
+        <div class="sheet-header">
+          <span class="sheet-title">Track Options</span>
+        </div>
+
+        <div class="sheet-content">
+
+            <button id="current-track-cast" class="theme-selector sheet-action-item" type="button"
+              data-close-sheet-on-activate="true"
                   aria-label="Cast current track">
             <span class="sheet-item-icon header-icon" aria-hidden="true">
               <svg class="header-svg sheet-item-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false"
@@ -215,8 +262,8 @@
             <span class="cast-badge" aria-hidden="true">!</span>
           </button>
 
-          <!-- Share track (was fourth item in .header-controls) -->
-          <span id="current-track-share" class="theme-selector sheet-action-item"
+              <span id="current-track-share" class="theme-selector sheet-action-item"
+                data-close-sheet-on-activate="true"
                 role="button" tabindex="0" aria-label="Share current track">
             <span class="sheet-item-icon header-icon" aria-hidden="true">
               <svg class="header-svg sheet-item-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false"
@@ -230,65 +277,10 @@
             <span class="sheet-item-label">Share track</span>
           </span>
 
-          <!-- Theme / Brightness toggle (was first item in .header-controls) -->
-          <button id="theme-toggle" class="theme-selector sheet-action-item" type="button"
-                  aria-label="Theme toggle" aria-current="page">
-            <span class="sheet-item-icon theme-icon" aria-hidden="true">
-              <svg class="sheet-item-svg theme-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <use href="/icons/sprite.svg?v=2#theme-moon"></use>
-              </svg>
-            </span>
-            <span class="sheet-item-label">Brightness</span>
-            <span class="theme-label" aria-hidden="true">Eco</span>
-          </button>
-
-          <!-- Equalizer (new item) -->
-          <!--<button class="sheet-action-item sheet-new-item" type="button" aria-label="Equalizer">
-            <span class="sheet-item-icon" aria-hidden="true">
-              <svg class="sheet-item-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false"
-                   fill="none" stroke="currentColor" stroke-width="1.8"
-                   stroke-linecap="round" stroke-linejoin="round">
-                <line x1="4" y1="21" x2="4" y2="14" />
-                <line x1="4" y1="10" x2="4" y2="3" />
-                <line x1="12" y1="21" x2="12" y2="12" />
-                <line x1="12" y1="8" x2="12" y2="3" />
-                <line x1="20" y1="21" x2="20" y2="16" />
-                <line x1="20" y1="12" x2="20" y2="3" />
-                <line x1="1" y1="14" x2="7" y2="14" />
-                <line x1="9" y1="8" x2="15" y2="8" />
-                <line x1="17" y1="16" x2="23" y2="16" />
-              </svg>
-            </span>
-            <span class="sheet-item-label">Equalizer</span>
-          </button>-->
-
-          <!-- Visualizer (new item) -->
-          <!--<button class="sheet-action-item sheet-new-item" type="button" aria-label="Visualizer">
-            <span class="sheet-item-icon" aria-hidden="true">
-              <svg class="sheet-item-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false"
-                   fill="none" stroke="currentColor" stroke-width="1.8"
-                   stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-              </svg>
-            </span>
-            <span class="sheet-item-label">Visualizer</span>
-          </button>
-
-          <!-- Track info (proxy for the existing toggle-description-btn) -->
-          <button class="sheet-action-item sheet-new-item" type="button"
-                  aria-label="Track info" id="sheet-track-info-btn">
-            <span class="sheet-item-icon" aria-hidden="true">
-              <svg class="sheet-item-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <use href="/icons/sprite.svg?v=2#info-icon"></use>
-              </svg>
-            </span>
-            <span class="sheet-item-label">Track info</span>
-          </button>
-
         </div><!-- /.sheet-content -->
 
         <div class="sheet-footer">
-          <button class="sheet-cancel-btn" id="sheet-cancel-btn" type="button">Cancel</button>
+          <button class="sheet-cancel-btn" type="button">Close</button>
         </div>
 
       </div><!-- /#player-options-sheet -->

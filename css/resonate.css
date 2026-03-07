@@ -1217,47 +1217,7 @@ header {
 
 
 /* ===== OFFLINE INDICATOR ===== */
-.offline-indicator {
-  display: inline-flex;
-  align-items: center;
-  height: 40px;
-  gap: 6px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--error);
-  position: static;
-  padding: 3px 6px;
-  border-radius: 6px;
-  background: transparent;
-  border: 1px solid transparent;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  line-height: 1;
-  width: auto;
-  justify-content: center;
-  min-width: 0;
-  text-align: center;
-  opacity: 0;
-  visibility: hidden;
-  transition: var(--transition-all-slow);
-  grid-column: 3;
-  grid-row: 1;
-  justify-self: end;
-}
 
-.offline-indicator.active {
-  opacity: 1;
-  visibility: visible;
-}
-
-.offline-indicator.hidden {
-  opacity: 0;
-  visibility: hidden;
-}
-
-.offline-icon {
-  display: none;
-}
 
 
 .offline-text {

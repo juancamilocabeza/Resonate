@@ -1,183 +1,249 @@
 /**
- * player-bottom-sheet.js — Progressive Disclosure Bottom Sheet
+ * player-bottom-sheet.js — Shared Bottom Sheet Controller
  *
- * Manages open/close for the "More Options" bottom sheet in the player.
- * Does NOT interfere with existing playback logic or event handlers.
- *
- * Interactions supported:
- *   - Tap "⋯" button → open sheet
- *   - Tap overlay     → close sheet
- *   - Tap Cancel btn  → close sheet
- *   - Swipe down      → close sheet
+ * Powers both the global app menu and the contextual track menu.
+ * Supports overlay dismiss, Escape, focus trapping, and swipe-to-dismiss.
  */
 
 (function () {
   'use strict';
 
-  /** Minimum px dragged down before the sheet dismisses on release. */
   var SWIPE_DISMISS_THRESHOLD = 80;
 
-  var sheet = null;
   var overlay = null;
-  var moreBtn = null;
-  var cancelBtn = null;
+  var controllers = [];
+  var activeController = null;
 
-  /** Touch-tracking state for swipe-to-dismiss. */
-  var touch = { startY: 0, currentY: 0, isDragging: false };
+  function getFocusableElements(sheet) {
+    return Array.prototype.slice.call(
+      sheet.querySelectorAll('button, [tabindex="0"], [tabindex]:not([tabindex="-1"])')
+    ).filter(function (el) {
+      return !el.disabled && el.offsetParent !== null;
+    });
+  }
 
-  /* ------------------------------------------------------------------
-     Open / Close helpers
-  ------------------------------------------------------------------ */
+  function setOverlayState(isOpen) {
+    if (!overlay) return;
+    overlay.classList.toggle('open', isOpen);
+    overlay.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+    document.body.classList.toggle('sheet-open', isOpen);
+  }
 
-  function openSheet() {
-    if (!sheet || !overlay) return;
-    sheet.classList.add('open');
-    overlay.classList.add('open');
-    document.body.classList.add('sheet-open');
-    sheet.removeAttribute('aria-hidden');
-    if (moreBtn) moreBtn.setAttribute('aria-expanded', 'true');
-    // Move focus into the sheet for keyboard users
-    var firstFocusable = sheet.querySelector('button, [tabindex="0"]');
+  function closeSheet(controller, options) {
+    var shouldRestoreFocus = !options || options.restoreFocus !== false;
+    if (!controller || !controller.sheet) return;
+
+    controller.sheet.classList.remove('open');
+    controller.sheet.setAttribute('aria-hidden', 'true');
+    controller.sheet.style.transform = '';
+
+    if (controller.trigger) {
+      controller.trigger.setAttribute('aria-expanded', 'false');
+      if (shouldRestoreFocus && typeof controller.trigger.focus === 'function') {
+        controller.trigger.focus();
+      }
+    }
+
+    controller.touch.startY = 0;
+    controller.touch.currentY = 0;
+    controller.touch.isDragging = false;
+
+    if (activeController === controller) {
+      activeController = null;
+      setOverlayState(false);
+    }
+  }
+
+  function openSheet(controller) {
+    if (!controller || !controller.sheet || !overlay) return;
+
+    if (activeController && activeController !== controller) {
+      closeSheet(activeController, { restoreFocus: false });
+    }
+
+    activeController = controller;
+    controller.sheet.classList.add('open');
+    controller.sheet.setAttribute('aria-hidden', 'false');
+    controller.trigger.setAttribute('aria-expanded', 'true');
+    setOverlayState(true);
+
+    var firstFocusable = getFocusableElements(controller.sheet)[0];
     if (firstFocusable) {
-      // Slight delay so the CSS transition doesn't fight focus scroll
-      setTimeout(function () { firstFocusable.focus(); }, 50);
+      setTimeout(function () {
+        if (activeController === controller) {
+          firstFocusable.focus();
+        }
+      }, 50);
     }
   }
 
-  function closeSheet() {
-    if (!sheet || !overlay) return;
-    sheet.classList.remove('open');
-    overlay.classList.remove('open');
-    document.body.classList.remove('sheet-open');
-    sheet.setAttribute('aria-hidden', 'true');
-    if (moreBtn) {
-      moreBtn.setAttribute('aria-expanded', 'false');
-      moreBtn.focus();
-    }
-    // Reset any inline transform applied during swipe
-    sheet.style.transform = '';
-  }
-
-  /* ------------------------------------------------------------------
-     Swipe-to-dismiss touch handlers (attached to the sheet)
-  ------------------------------------------------------------------ */
-
-  function onTouchStart(e) {
-    if (e.touches.length !== 1) return;
-    touch.startY = e.touches[0].clientY;
-    touch.currentY = touch.startY;
-    touch.isDragging = false;
-  }
-
-  function onTouchMove(e) {
-    if (e.touches.length !== 1) return;
-    touch.currentY = e.touches[0].clientY;
-    var delta = touch.currentY - touch.startY;
-    if (delta > 0) {
-      touch.isDragging = true;
-      // Translate the sheet downward as the user drags
-      sheet.style.transform = 'translateY(' + delta + 'px)';
-      // Prevent the page from scrolling while dragging the sheet
-      e.preventDefault();
-    }
-  }
-
-  function onTouchEnd() {
-    var delta = touch.currentY - touch.startY;
-    if (touch.isDragging && delta > SWIPE_DISMISS_THRESHOLD) {
-      closeSheet();
-    } else {
-      // Snap back
-      sheet.style.transform = '';
-    }
-    touch.isDragging = false;
-  }
-
-  /* ------------------------------------------------------------------
-     Wire up "Track info" proxy button (delegates to existing handler)
-  ------------------------------------------------------------------ */
-
-  function wireTrackInfoProxy() {
-    var proxyBtn = document.getElementById('sheet-track-info-btn');
-    var originalBtn = document.getElementById('toggle-description-btn');
-    if (proxyBtn && originalBtn) {
-      proxyBtn.addEventListener('click', function () {
-        closeSheet();
-        // Delay matches the sheet's close transition (250ms) so the modal
-        // does not open while the sheet is still animating away.
-        setTimeout(function () { originalBtn.click(); }, 260);
-      });
-    }
-  }
-
-  /* ------------------------------------------------------------------
-     Keyboard trap — keep focus inside the sheet while it is open
-  ------------------------------------------------------------------ */
-
-  function onKeyDown(e) {
-    if (!sheet || !sheet.classList.contains('open')) return;
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      closeSheet();
+  function toggleSheet(controller) {
+    if (!controller) return;
+    if (activeController === controller) {
+      closeSheet(controller);
       return;
     }
-    if (e.key !== 'Tab') return;
-    var focusable = Array.prototype.slice.call(
-      sheet.querySelectorAll('button, [tabindex="0"], [tabindex]:not([tabindex="-1"])')
-    ).filter(function (el) { return !el.disabled && el.offsetParent !== null; });
+    openSheet(controller);
+  }
+
+  function handleTriggerKeydown(controller, event) {
+    if (!controller || !event) return;
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    toggleSheet(controller);
+  }
+
+  function handleTouchStart(controller, event) {
+    if (!controller || activeController !== controller || event.touches.length !== 1) return;
+    controller.touch.startY = event.touches[0].clientY;
+    controller.touch.currentY = controller.touch.startY;
+    controller.touch.isDragging = false;
+  }
+
+  function handleTouchMove(controller, event) {
+    if (!controller || activeController !== controller || event.touches.length !== 1) return;
+
+    controller.touch.currentY = event.touches[0].clientY;
+    var delta = controller.touch.currentY - controller.touch.startY;
+    if (delta <= 0) return;
+
+    controller.touch.isDragging = true;
+    controller.sheet.style.transform = 'translateY(' + delta + 'px)';
+    event.preventDefault();
+  }
+
+  function handleTouchEnd(controller) {
+    if (!controller || activeController !== controller) return;
+
+    var delta = controller.touch.currentY - controller.touch.startY;
+    if (controller.touch.isDragging && delta > SWIPE_DISMISS_THRESHOLD) {
+      closeSheet(controller);
+    } else {
+      controller.sheet.style.transform = '';
+    }
+
+    controller.touch.isDragging = false;
+  }
+
+  function handleDocumentKeydown(event) {
+    if (!activeController || !activeController.sheet) return;
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeSheet(activeController);
+      return;
+    }
+
+    if (event.key !== 'Tab') return;
+
+    var focusable = getFocusableElements(activeController.sheet);
     if (focusable.length === 0) return;
+
     var first = focusable[0];
     var last = focusable[focusable.length - 1];
-    if (e.shiftKey) {
+
+    if (event.shiftKey) {
       if (document.activeElement === first) {
-        e.preventDefault();
+        event.preventDefault();
         last.focus();
       }
-    } else {
-      if (document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
+      return;
+    }
+
+    if (document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
     }
   }
 
-  /* ------------------------------------------------------------------
-     Initialise once the DOM is ready
-  ------------------------------------------------------------------ */
+  function wireAutoCloseActions(controller) {
+    Array.prototype.forEach.call(
+      controller.sheet.querySelectorAll('[data-close-sheet-on-activate="true"]'),
+      function (element) {
+        var scheduleClose = function () {
+          setTimeout(function () {
+            if (activeController === controller) {
+              closeSheet(controller, { restoreFocus: false });
+            }
+          }, 0);
+        };
+
+        element.addEventListener('click', scheduleClose);
+
+        if (element.tagName !== 'BUTTON') {
+          element.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter' || event.key === ' ') {
+              scheduleClose();
+            }
+          });
+        }
+      }
+    );
+  }
+
+  function createController(trigger) {
+    var sheetId = trigger.getAttribute('data-sheet-target') || trigger.getAttribute('aria-controls');
+    var sheet = sheetId ? document.getElementById(sheetId) : null;
+    if (!sheet) return null;
+
+    var controller = {
+      trigger: trigger,
+      sheet: sheet,
+      touch: { startY: 0, currentY: 0, isDragging: false }
+    };
+
+    trigger.addEventListener('click', function (event) {
+      event.preventDefault();
+      toggleSheet(controller);
+    });
+
+    if (trigger.tagName !== 'BUTTON') {
+      trigger.addEventListener('keydown', function (event) {
+        handleTriggerKeydown(controller, event);
+      });
+    }
+
+    sheet.addEventListener('touchstart', function (event) {
+      handleTouchStart(controller, event);
+    }, { passive: true });
+
+    sheet.addEventListener('touchmove', function (event) {
+      handleTouchMove(controller, event);
+    }, { passive: false });
+
+    sheet.addEventListener('touchend', function () {
+      handleTouchEnd(controller);
+    }, { passive: true });
+
+    Array.prototype.forEach.call(sheet.querySelectorAll('.sheet-cancel-btn'), function (button) {
+      button.addEventListener('click', function () {
+        closeSheet(controller);
+      });
+    });
+
+    wireAutoCloseActions(controller);
+
+    return controller;
+  }
 
   function init() {
-    sheet = document.getElementById('player-options-sheet');
     overlay = document.getElementById('bottom-sheet-overlay');
-    moreBtn = document.getElementById('more-options-btn');
-    cancelBtn = document.getElementById('sheet-cancel-btn');
+    if (!overlay) return;
 
-    if (!sheet || !overlay || !moreBtn) return;
+    controllers = Array.prototype.map.call(
+      document.querySelectorAll('[data-sheet-target]'),
+      createController
+    ).filter(Boolean);
 
-    // Open on "⋯" button click
-    moreBtn.addEventListener('click', function () {
-      if (sheet.classList.contains('open')) {
-        closeSheet();
-      } else {
-        openSheet();
+    if (controllers.length === 0) return;
+
+    overlay.addEventListener('click', function () {
+      if (activeController) {
+        closeSheet(activeController);
       }
     });
 
-    // Close on overlay click
-    overlay.addEventListener('click', closeSheet);
-
-    // Close on Cancel button click
-    if (cancelBtn) cancelBtn.addEventListener('click', closeSheet);
-
-    // Swipe-to-dismiss
-    sheet.addEventListener('touchstart', onTouchStart, { passive: true });
-    sheet.addEventListener('touchmove', onTouchMove, { passive: false });
-    sheet.addEventListener('touchend', onTouchEnd, { passive: true });
-
-    // Keyboard: Escape closes, Tab traps focus
-    document.addEventListener('keydown', onKeyDown);
-
-    // Wire proxy buttons to existing handlers
-    wireTrackInfoProxy();
+    document.addEventListener('keydown', handleDocumentKeydown);
   }
 
   if (document.readyState === 'loading') {
