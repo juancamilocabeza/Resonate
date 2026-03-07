@@ -243,6 +243,15 @@
                   ? window.playFromFavoritesQueue
                   : (typeof playFromFavoritesQueue === 'function' ? playFromFavoritesQueue : null));
               if (fn) {
+                window.preparePlaybackTransitionFromList?.({
+                  closeSearch: true,
+                  closeResontes: true,
+                  closeTracksPanel: true,
+                  collapseExpandedAlbums: true,
+                  showLoader: true,
+                  loaderContext: files.length > 1 ? 'album' : 'resontes',
+                  showProgress: false
+                });
                 fn(track);
               } else {
                 window.showStatus?.('Playback is not available yet', 'error', 2500);

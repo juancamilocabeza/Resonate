@@ -347,6 +347,10 @@ async function enrichSearchResultsWithMetadata(processedResults, query, { signal
         ? track.duration
         : (track && track.length !== undefined && track.length !== null)
           ? track.length
+          : (track && track.trackDuration !== undefined && track.trackDuration !== null)
+            ? track.trackDuration
+            : (track && track.track_duration !== undefined && track.track_duration !== null)
+              ? track.track_duration
           : null;
       const seconds = parseDurationSeconds(rawDuration);
       if (seconds !== null && seconds > 0) {
@@ -2169,6 +2173,54 @@ function isWifiEthernetConnection() {
   }
 }
 
+function parseArchiveDurationSeconds(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value > 0 ? value : null;
+  }
+
+  const raw = String(value).trim();
+  if (!raw) return null;
+
+  if (/^\d+(\.\d+)?$/.test(raw)) {
+    const numeric = Number(raw);
+    return Number.isFinite(numeric) && numeric > 0 ? numeric : null;
+  }
+
+  const parts = raw.split(':').map(part => Number(part));
+  if (!parts.length || parts.some(part => !Number.isFinite(part))) return null;
+  if (parts.length === 3) {
+    const totalSeconds = (parts[0] * 3600) + (parts[1] * 60) + parts[2];
+    return totalSeconds > 0 ? totalSeconds : null;
+  }
+  if (parts.length === 2) {
+    const totalSeconds = (parts[0] * 60) + parts[1];
+    return totalSeconds > 0 ? totalSeconds : null;
+  }
+
+  return null;
+}
+
+function resolveArchiveFileDurationSeconds(file, extraCandidates = []) {
+  const candidates = [
+    file && file.length,
+    file && file.duration,
+    file && file.trackDuration,
+    file && file.track_duration,
+    file && file.runtime,
+    file && file.time,
+    file && file.playtime,
+    ...extraCandidates
+  ];
+
+  for (const candidate of candidates) {
+    const seconds = parseArchiveDurationSeconds(candidate);
+    if (seconds !== null) return seconds;
+  }
+
+  return null;
+}
+
 function createPlayableFiles(audioFiles, identifier, metadata, { qualityTier, allowFlac = true } = {}) {
   let playableFiles;
   const tier = (qualityTier === 'disconnected') ? 'eco' : (qualityTier || 'standard');
@@ -2209,6 +2261,7 @@ function createPlayableFiles(audioFiles, identifier, metadata, { qualityTier, al
     let allFiles = audioFiles.map((file, index) => {
       const metaRoot = (metadata && metadata.metadata) ? metadata.metadata : {};
       const trackInfo = extractTrackInfo(file, metaRoot);
+      const durationSeconds = resolveArchiveFileDurationSeconds(file);
       
       // Safely extract creator, handling various data types
       let creator = trackInfo.artist || metaRoot.creator || 'Unknown artist';
@@ -2231,7 +2284,7 @@ function createPlayableFiles(audioFiles, identifier, metadata, { qualityTier, al
         id: identifier,
         format: (file.name.split('.').pop() || 'mp3').toUpperCase(),
         trackNumber: trackInfo.trackNumber,
-        duration: file.length || 0,
+        duration: durationSeconds,
         album: metaRoot.title || identifier,
         isAlbumTrack: true,
         albumId: identifier,
@@ -2289,6 +2342,14 @@ function createPlayableFiles(audioFiles, identifier, metadata, { qualityTier, al
     const audioFile = audioFiles[0];
     const metaRoot = (metadata && metadata.metadata) ? metadata.metadata : {};
     const trackInfo = extractTrackInfo(audioFile, metaRoot);
+    const durationSeconds = resolveArchiveFileDurationSeconds(audioFile, [
+      metaRoot && metaRoot.length,
+      metaRoot && metaRoot.duration,
+      metaRoot && metaRoot.trackDuration,
+      metaRoot && metaRoot.track_duration,
+      metaRoot && metaRoot.runtime,
+      metaRoot && metaRoot.time
+    ]);
     
     // Safely extract creator, handling various data types
     let creator = trackInfo.artist || metaRoot.creator || 'Unknown artist';
@@ -2310,6 +2371,7 @@ function createPlayableFiles(audioFiles, identifier, metadata, { qualityTier, al
       description: (metaRoot && metaRoot.description) ? metaRoot.description : '',
       id: identifier,
       format: (audioFile.name.split('.').pop() || 'mp3').toUpperCase(),
+      duration: durationSeconds,
       album: metaRoot.title || identifier,
       isAlbumTrack: false,
       trackIndex: 0,
@@ -2619,13 +2681,26 @@ async function playSpecificSearchTrack(track, albumId, trackIndex, totalTracks) 
   if (st && st.isLoading) return;
   
   try {
-    if (window.Loaders && typeof window.Loaders.showLoader === 'function') {
-      window.Loaders.showLoader({ type: 'spinner', showProgress: false, context: totalTracks > 1 ? 'album' : 'search' });
+    if (typeof window.preparePlaybackTransitionFromList === 'function') {
+      window.preparePlaybackTransitionFromList({
+        closeSearch: true,
+        closeResontes: true,
+        closeTracksPanel: true,
+        collapseExpandedAlbums: true,
+        showLoader: true,
+        loaderContext: totalTracks > 1 ? 'album' : 'search',
+        showProgress: false
+      });
+    } else {
+      window.hideTracksListPanel?.();
+      window.hideSearchResults?.();
+      if (window.Loaders && typeof window.Loaders.showLoader === 'function') {
+        window.Loaders.showLoader({ type: 'spinner', showProgress: false, context: totalTracks > 1 ? 'album' : 'search' });
+      }
     }
     
     logSearch('Loading track...', 'info', 'UI');
     window.showStatus?.(`Loading track...`, 'info', null, 'normal', true);
-    window.hideSearchResults?.();
     
     if (totalTracks > 1) {
       let files = (window.AlbumTracks && typeof window.AlbumTracks.getTracks === 'function')
@@ -2676,12 +2751,23 @@ async function playAlbumFromResontes(albumId, options = {}) {
   const force = !!(options && typeof options === 'object' && options.force);
   if (!force && st && st.isLoading) return;
 
-  if (window.Loaders && typeof window.Loaders.showLoader === 'function') {
-    window.Loaders.showLoader({ type: 'spinner', showProgress: false, context: 'album' });
+  if (typeof window.preparePlaybackTransitionFromList === 'function') {
+    window.preparePlaybackTransitionFromList({
+      closeSearch: true,
+      closeResontes: true,
+      closeTracksPanel: true,
+      collapseExpandedAlbums: true,
+      showLoader: true,
+      loaderContext: 'album',
+      showProgress: false
+    });
+  } else {
+    window.hideTracksListPanel?.();
+    if (typeof window.hideSearchResults === 'function') window.hideSearchResults();
+    if (window.Loaders && typeof window.Loaders.showLoader === 'function') {
+      window.Loaders.showLoader({ type: 'spinner', showProgress: false, context: 'album' });
+    }
   }
-
-  if (typeof window.hideSearchResults === 'function') window.hideSearchResults();
-  if (typeof window.hideResontesList === 'function') window.hideResontesList();
   
   try {
     logSearch('Loading album...', 'info', 'UI');
@@ -2820,6 +2906,23 @@ async function playRandomSearchResults() {
   const results = st && Array.isArray(st.searchResults) ? st.searchResults : [];
   if (!st || st.isLoading || results.length === 0) return;
   try {
+    if (typeof window.preparePlaybackTransitionFromList === 'function') {
+      window.preparePlaybackTransitionFromList({
+        closeSearch: true,
+        closeResontes: true,
+        closeTracksPanel: true,
+        collapseExpandedAlbums: true,
+        showLoader: true,
+        loaderContext: 'search',
+        showProgress: false
+      });
+    } else {
+      window.hideTracksListPanel?.();
+      window.hideSearchResults?.();
+      if (window.Loaders && typeof window.Loaders.showLoader === 'function') {
+        window.Loaders.showLoader({ type: 'spinner', showProgress: false, context: 'search' });
+      }
+    }
     logSearch('Loading playlist...', 'info', 'UI');
     window.showStatus?.('Loading playlist...', 'info', null, 'normal', true);
     // Ensure shuffle is ON for "random" mode

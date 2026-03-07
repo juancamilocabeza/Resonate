@@ -229,7 +229,17 @@
 
     const durationRaw = (normalized.duration !== undefined && normalized.duration !== null)
       ? normalized.duration
-      : (normalized.length !== undefined && normalized.length !== null ? normalized.length : null);
+      : (normalized.length !== undefined && normalized.length !== null)
+        ? normalized.length
+        : (normalized.trackDuration !== undefined && normalized.trackDuration !== null)
+          ? normalized.trackDuration
+          : (normalized.track_duration !== undefined && normalized.track_duration !== null)
+            ? normalized.track_duration
+            : (normalized.runtime !== undefined && normalized.runtime !== null)
+              ? normalized.runtime
+              : (normalized.time !== undefined && normalized.time !== null)
+                ? normalized.time
+                : null;
     const durationSeconds = parseDurationSeconds(durationRaw);
     if (durationSeconds !== null) {
       normalized.duration = durationSeconds;

@@ -2639,6 +2639,7 @@ function loadFavorites() {
 
     // Repair corrupted albumTitle data (migration)
     repairCorruptedAlbumTitles();
+    repairMissingFavoriteDurations();
 
     // Notify other modules (e.g., initialization/restore) that resontes/favorites are ready.
     try {
@@ -2745,6 +2746,102 @@ async function repairCorruptedAlbumTitles() {
     localStorage.setItem('resonate_album_title_migration_v1', 'true');
   } catch (err) {
     window.logger.warn(`Error during album title repair: ${err.message}`, 'UI');
+  }
+}
+
+let repairMissingFavoriteDurationsPromise = null;
+
+async function repairMissingFavoriteDurations() {
+  if (repairMissingFavoriteDurationsPromise) return repairMissingFavoriteDurationsPromise;
+
+  repairMissingFavoriteDurationsPromise = (async () => {
+    try {
+      const favorites = Array.isArray(state.favorites) ? state.favorites : [];
+      const missingDurationFavorites = favorites.filter(favorite => {
+        if (!favorite || typeof favorite !== 'object') return false;
+        return resolveTrackDurationSeconds(favorite) === null && !!(favorite.albumId || favorite.id || favorite.url);
+      });
+
+      if (!missingDurationFavorites.length) return;
+
+      const albumIds = Array.from(new Set(
+        missingDurationFavorites
+          .map(favorite => String(favorite.albumId || favorite.id || '').trim())
+          .filter(Boolean)
+      ));
+
+      let repairedCount = 0;
+
+      for (const albumId of albumIds) {
+        let fetchedTracks = [];
+
+        try {
+          if (window.AlbumTracks && typeof window.AlbumTracks.getTracks === 'function') {
+            fetchedTracks = await window.AlbumTracks.getTracks(albumId, {
+              preferCache: true,
+              allowFetch: true,
+              preferFullAlbum: true
+            });
+          } else if (typeof window.fetchOptimizedPlayableFiles === 'function') {
+            fetchedTracks = await window.fetchOptimizedPlayableFiles(albumId);
+          }
+        } catch (err) {
+          window.logger?.debug(`Could not repair durations for album ${albumId}: ${err.message}`, 'UI');
+          continue;
+        }
+
+        if (!Array.isArray(fetchedTracks) || fetchedTracks.length === 0) continue;
+
+        const tracksByKey = new Map();
+        fetchedTracks.forEach(track => {
+          const key = getTrackIdentityKey(track);
+          if (key) tracksByKey.set(key, track);
+        });
+
+        const albumFavorites = favorites
+          .filter(favorite => String(favorite.albumId || favorite.id || '') === albumId);
+
+        albumFavorites.forEach(favorite => {
+            if (resolveTrackDurationSeconds(favorite) !== null) return;
+
+            const favoriteKey = getTrackIdentityKey(favorite);
+            let match = favoriteKey ? tracksByKey.get(favoriteKey) : null;
+
+            if (!match && favorite.url) {
+              match = fetchedTracks.find(track => track && track.url === favorite.url) || null;
+            }
+
+            if (!match && Number.isFinite(Number(favorite.trackIndex))) {
+              const favoriteTrackIndex = Number(favorite.trackIndex);
+              match = fetchedTracks.find(track => Number(track && track.trackIndex) === favoriteTrackIndex) || null;
+            }
+
+            if (!match && albumFavorites.length === 1 && fetchedTracks.length === 1) {
+              match = fetchedTracks[0];
+            }
+
+            const durationSeconds = resolveTrackDurationSeconds(match);
+            if (durationSeconds !== null) {
+              favorite.duration = durationSeconds;
+              repairedCount += 1;
+            }
+          });
+      }
+
+      if (repairedCount > 0) {
+        saveFavorites();
+        updateFavoritesList();
+        window.logger?.info(`Favorite duration repair completed: ${repairedCount} tracks updated`, 'UI');
+      }
+    } catch (err) {
+      window.logger?.warn(`Error repairing favorite durations: ${err.message}`, 'UI');
+    }
+  })();
+
+  try {
+    await repairMissingFavoriteDurationsPromise;
+  } finally {
+    repairMissingFavoriteDurationsPromise = null;
   }
 }
 
@@ -2961,12 +3058,14 @@ function toggleFavorite(track) {
       showStatus('Track is already in your resonates', 'info');
       return;
     }
+    const favoriteDuration = resolveTrackDurationSeconds(track);
     const favoriteTrack = {
       id: track.id,
       trackId: track.trackId || track.id,
       title: track.title || 'Untitled',
       creator: track.creator || 'Unknown',
       url: track.url,
+      duration: favoriteDuration,
       isAlbumTrack: track.isAlbumTrack || false,
       albumId: track.albumId || track.id,
       trackIndex: track.trackIndex || 0,
@@ -3111,6 +3210,7 @@ function addAlbumToFavorites(albumId, files) {
         title: track.title || 'Untitled',
         creator: track.creator || 'Unknown',
         url: track.url,
+        duration: resolveTrackDurationSeconds(track),
         isAlbumTrack: true,
         albumId: albumId,
         trackIndex: index,
@@ -3378,6 +3478,52 @@ function formatTime(seconds) {
   const mins = Math.floor(seconds / 60);
   const secs = Math.floor(seconds % 60);
   return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+function hideTracksListPanel() {
+  if (!elements.tracksListContainer) return;
+
+  try { elements.tracksListContainer.style.display = 'none'; } catch {}
+  try { elements.tracksListContainer.classList.remove('tracks-inline'); } catch {}
+  try { document.body.classList.remove('tracks-open'); } catch {}
+  if (elements.toggleTracksBtn) {
+    try { elements.toggleTracksBtn.classList.remove('active'); } catch {}
+    try { elements.toggleTracksBtn.setAttribute('aria-expanded', 'false'); } catch {}
+  }
+}
+
+function hideOfflineMusicSection() {
+  const offlineSection = document.getElementById('offline-music-section');
+  if (!offlineSection) return;
+  try { offlineSection.style.display = 'none'; } catch {}
+}
+
+function preparePlaybackTransitionFromList({
+  closeSearch = true,
+  closeResontes = true,
+  closeTracksPanel = true,
+  closeOfflineList = false,
+  collapseExpandedAlbums = true,
+  showLoader = false,
+  loaderContext = 'playback',
+  showProgress = false
+} = {}) {
+  if (closeTracksPanel) hideTracksListPanel();
+  if (closeOfflineList) hideOfflineMusicSection();
+
+  if (closeSearch) {
+    hideSearchResults();
+  } else if (closeResontes) {
+    hideResontesList();
+  }
+
+  if (collapseExpandedAlbums && typeof window.collapseAllExpandedAlbums === 'function') {
+    try { window.collapseAllExpandedAlbums(); } catch {}
+  }
+
+  if (showLoader && window.Loaders && typeof window.Loaders.showLoader === 'function') {
+    window.Loaders.showLoader({ type: 'spinner', showProgress, context: loaderContext });
+  }
 }
 
 function hideSearchResults() {
@@ -4679,6 +4825,15 @@ function createSearchResultElement(result, globalIndex) {
   // Play UX: click cover or title/info area
   const playFromSearchResult = async (e) => {
     e.stopPropagation();
+    window.preparePlaybackTransitionFromList?.({
+      closeSearch: true,
+      closeResontes: true,
+      closeTracksPanel: true,
+      collapseExpandedAlbums: true,
+      showLoader: true,
+      loaderContext: result && result.trackCount > 1 ? 'album' : 'search',
+      showProgress: false
+    });
     showStatus('Getting track ready', 'info');
     await window.playOptimizedSearchResult(result, globalIndex, state.searchResults);
   };
@@ -5068,6 +5223,15 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
           }
         } else {
           const favoriteTrack = Array.isArray(item.tracks) && item.tracks.length ? item.tracks[0] : item;
+          window.preparePlaybackTransitionFromList?.({
+            closeSearch: true,
+            closeResontes: true,
+            closeTracksPanel: true,
+            collapseExpandedAlbums: true,
+            showLoader: true,
+            loaderContext: 'resontes',
+            showProgress: false
+          });
           if (typeof window.playFromFavoritesQueue === 'function') {
             window.playFromFavoritesQueue(favoriteTrack);
           } else if (typeof playFromFavoritesQueue === 'function') {
@@ -5292,6 +5456,15 @@ function displayAlbumTracks(albumId, tracksContainer) {
         const playFromTrackRow = () => {
           if (isFavoritesContext) {
             window.logger?.debug(`Track clicked in favorites context - calling playFromFavoritesQueue with track: ${track.title}`, 'PLAYBACK');
+            window.preparePlaybackTransitionFromList?.({
+              closeSearch: true,
+              closeResontes: true,
+              closeTracksPanel: true,
+              collapseExpandedAlbums: true,
+              showLoader: true,
+              loaderContext: files.length > 1 ? 'album' : 'resontes',
+              showProgress: false
+            });
             if (typeof window.playFromFavoritesQueue === 'function') {
               window.playFromFavoritesQueue(track);
             } else if (typeof playFromFavoritesQueue === 'function') {
@@ -8473,7 +8646,9 @@ window.getCastCapabilities = getCastCapabilities;
 window.applyCastButtonState = applyCastButtonState;
 window.displaySearchResults = displaySearchResults;
 window.hideSearchResults = hideSearchResults;
+window.hideTracksListPanel = hideTracksListPanel;
 window.hideResontesList = hideResontesList;
+window.preparePlaybackTransitionFromList = preparePlaybackTransitionFromList;
 window.loadSearchHistory = loadSearchHistory;
 window.initializeFavoritesPlayListener = initializeFavoritesPlayListener;
 window.initializeResontesPlayListener = initializeFavoritesPlayListener;

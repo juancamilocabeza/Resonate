@@ -964,6 +964,17 @@ async function initializeApp() {
       }
 
       window.state.userInteracted = true;
+      if (typeof window.preparePlaybackTransitionFromList === 'function') {
+        window.preparePlaybackTransitionFromList({
+          closeSearch: true,
+          closeResontes: true,
+          closeTracksPanel: true,
+          collapseExpandedAlbums: true,
+          showLoader: true,
+          loaderContext: 'resontes',
+          showProgress: false
+        });
+      }
       showStatus('Starting your resonates', 'info');
       await playFromFavoritesQueue();
     });
@@ -1705,6 +1716,19 @@ async function showOfflineMusicSection() {
 // Function to play an offline track
 async function playOfflineTrack(metadata) {
   try {
+    if (typeof window.preparePlaybackTransitionFromList === 'function') {
+      window.preparePlaybackTransitionFromList({
+        closeSearch: true,
+        closeResontes: true,
+        closeTracksPanel: true,
+        closeOfflineList: true,
+        collapseExpandedAlbums: true,
+        showLoader: true,
+        loaderContext: 'playback',
+        showProgress: false
+      });
+    }
+
     const track = {
       url: metadata.url,
       title: metadata.title || 'Untitled',
