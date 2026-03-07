@@ -39,14 +39,20 @@
   <div class="app" id="app" data-nosnippet>
     <header>
       <h1 id="app-title">
-        Resonate player
+        <span class="app-logo" aria-hidden="true">
+          <svg class="app-logo-svg" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+            <circle cx="256" cy="256" r="200" stroke="currentColor" stroke-width="32" fill="none"/>
+            <path d="M96 256 C140 256, 180 180, 220 180 C260 180, 300 332, 340 332 C380 332, 416 256, 416 256" stroke="currentColor" stroke-width="32" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span class="app-title-text">Resonate</span>
       </h1>
-      <!-- Secondary controls moved into the bottom sheet — see #player-options-sheet below -->
+      <!-- Secondary controls in the bottom sheet — see #player-options-sheet below -->
       <div class="header-controls">
-        <span class="more-options-btn" id="more-options-btn"
+        <button class="more-options-btn" id="more-options-btn" type="button"
                 aria-label="More player options" aria-expanded="false"
                 aria-controls="player-options-sheet"
-                data-always-enabled>⋯</span>
+                data-always-enabled>⋯</button>
       </div>
     </header>
     <div class="content-layout" id="content-layout">

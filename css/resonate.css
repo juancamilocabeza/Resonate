@@ -1052,101 +1052,57 @@ body {
 
 /* ===== HEADER & NAVIGATION ===== */
 header {
-  --header-status-slot: 160px;
   flex-shrink: 0;
-  display: grid;
-  grid-template-columns: 1fr auto var(--header-status-slot);
+  display: flex;
   align-items: center;
-  align-content: center;
-  grid-auto-rows: 1fr;
-  column-gap: 0;
+  justify-content: space-between;
   position: sticky;
   top: 0;
   background: var(--bg);
   z-index: 100;
-  padding: 6px var(--spacing-md);
+  padding: 8px var(--spacing-md);
   border-bottom: 1px solid rgba(var(--primary-rgb), 0.1);
   backdrop-filter: blur(8px);
   transition: var(--transition-all-slow);
   min-height: 54px;
-  gap: var(--spacing-lg);
+  gap: var(--spacing-md);
 }
 
-/* index.html: remove inline styles */
 #app-title {
   cursor: pointer;
-  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
   min-width: 0;
-  grid-column: 1;
-  grid-row: 1;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+/* App logo icon in the title */
+.app-logo {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--primary);
+}
+
+.app-logo-svg {
+  width: 28px;
+  height: 28px;
+  display: block;
+}
+
+.app-title-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Header Controls Container */
 .header-controls {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 14px;
-  flex-wrap: wrap;
   flex-shrink: 0;
-  width: 100%;
-  max-width: 520px;
-  margin: 10px auto 0;
-}
-
-/* Header-only button polish */
-.header-controls .theme-selector {
-  color: var(--primary);
-  background: var(--header-btn-bg, rgba(255, 255, 255, 0.12));
-  border: 1px solid var(--header-btn-border, rgba(255, 255, 255, 0.12));
-  border-radius: 999px;
-  padding: 0;
-  gap: 0;
-  height: var(--btn-size-mobile);
-  min-height: var(--btn-size-mobile);
-  width: var(--btn-size-mobile);
-  min-width: var(--btn-size-mobile);
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  box-shadow: none;
-  position: relative;
-}
-
-.header-controls .theme-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 0;
-  border: none;
-  background: transparent;
-  color: var(--primary);
-}
-
-.header-controls .theme-svg {
-  width: 22px;
-  height: 22px;
-  display: block;
-}
-
-.header-controls .header-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 0;
-  border: none;
-  background: transparent;
-  color: var(--primary);
-}
-
-.header-controls .header-svg {
-  width: 22px;
-  height: 22px;
-  display: block;
 }
 
 .track-share .header-icon,
@@ -1173,77 +1129,20 @@ header {
   border: 0;
 }
 
-.header-controls #resontes-toggle .resontes-label {
-  display: none;
-}
-
-.header-controls .resontes-count {
-  display: none;
-}
-
-.header-controls .theme-selector:hover {
-  background: var(--header-btn-bg, rgba(255, 255, 255, 0.12));
-  border-color: var(--header-btn-border, rgba(255, 255, 255, 0.12));
-  box-shadow: none;
-}
-
-.header-controls .theme-selector:active {
-  transform: none;
-  box-shadow: none;
-}
-
-.header-controls .theme-selector:focus {
-  box-shadow: none;
-}
-
-.header-controls .theme-selector:focus-visible {
-  outline: none;
-  box-shadow: none;
-}
-
-.header-controls .theme-selector.cast-fallback {
-  border-style: dashed;
-  opacity: 0.82;
-}
-
-.header-controls .theme-selector.cast-fallback .header-icon {
-  color: var(--muted);
-}
-
-.header-controls .cast-badge {
-  display: none;
-}
-
-.header-controls .theme-selector.cast-available .cast-badge {
-  display: none;
-}
-
-
-.header-controls .theme-selector.cast-pulse {
-  animation: castPulse 0.32s ease-out;
-}
-
 @keyframes castPulse {
   0% { transform: scale(1); }
   40% { transform: scale(1.06); }
   100% { transform: scale(1); }
 }
 
+.theme-selector.cast-pulse {
+  animation: castPulse 0.32s ease-out;
+}
+
 
 @media (max-width: 480px) {
-  .header-controls {
-    gap: 10px;
-  }
-  .header-controls .theme-selector {
-    height: 40px;
-    min-height: 40px;
-    width: 40px;
-    min-width: 40px;
-    padding: 0;
-  }
   header {
     padding: 6px var(--spacing-sm);
-    --header-status-slot: 120px;
   }
   h1 {
     font-size: 19px;
@@ -1863,9 +1762,6 @@ h3 {
   .main-player-section .controls {
     gap: clamp(6px, 2vw, 12px);
   }
-  header {
-    --header-status-slot: 44px;
-  }
   .offline-indicator {
     height: 36px;
   }
@@ -2460,9 +2356,6 @@ select:focus {
 }
 
 @media (max-width: 768px) and (min-width: 481px) {
-  .header-controls {
-    gap: 22px;
-  }
   header {
     padding: 6px var(--spacing-sm);
   }
@@ -4569,10 +4462,6 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
   
   header {
     padding: var(--spacing-sm);
-  }
-  
-  .header-controls {
-    gap: 12px;
   }
   
   /* Improve button sizing on mobile */
