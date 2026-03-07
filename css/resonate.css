@@ -600,6 +600,14 @@ body.tracks-open #tracks-list-container .tlv2-list {
 
   /* UI Components */
   --card: #262d35;
+  --sheet-bg: #303844;
+  --sheet-border: rgba(255, 255, 255, 0.14);
+  --sheet-border-subtle: rgba(255, 255, 255, 0.08);
+  --sheet-handle-bg: rgba(255, 255, 255, 0.22);
+  --sheet-shadow: 0 -18px 42px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(var(--primary-rgb), 0.08);
+  --sheet-item-hover-bg: rgba(var(--primary-rgb), 0.12);
+  --sheet-item-active-bg: rgba(var(--primary-rgb), 0.18);
+  --sheet-icon-bg: rgba(var(--primary-rgb), 0.14);
   --btn: #3d464f;
   --btn-hover: rgba(var(--primary-rgb), 0.12);
   --btn-active: #1a1a1a;
@@ -680,6 +688,14 @@ body.tracks-open #tracks-list-container .tlv2-list {
   --highlight: #e879c1;
   --secondary: #f59e0b;
   --card: #121212;
+  --sheet-bg: #181c21;
+  --sheet-border: rgba(255, 255, 255, 0.12);
+  --sheet-border-subtle: rgba(255, 255, 255, 0.08);
+  --sheet-handle-bg: rgba(255, 255, 255, 0.2);
+  --sheet-shadow: 0 -18px 44px rgba(0, 0, 0, 0.62), 0 0 0 1px rgba(var(--primary-rgb), 0.1);
+  --sheet-item-hover-bg: rgba(var(--primary-rgb), 0.14);
+  --sheet-item-active-bg: rgba(var(--primary-rgb), 0.2);
+  --sheet-icon-bg: rgba(var(--primary-rgb), 0.16);
   --btn: #1f1f1f;
   --btn-hover: rgba(var(--primary-rgb), 0.12);
   --btn-active: #0a0a0a;
@@ -727,6 +743,14 @@ body.tracks-open #tracks-list-container .tlv2-list {
   --success: #15803d;
   --warning: #ea580c;
   --card: #ffffff;
+  --sheet-bg: #ffffff;
+  --sheet-border: rgba(15, 23, 42, 0.1);
+  --sheet-border-subtle: rgba(15, 23, 42, 0.08);
+  --sheet-handle-bg: rgba(15, 23, 42, 0.18);
+  --sheet-shadow: 0 -18px 42px rgba(15, 23, 42, 0.16), 0 0 0 1px rgba(var(--primary-rgb), 0.08);
+  --sheet-item-hover-bg: rgba(var(--primary-rgb), 0.1);
+  --sheet-item-active-bg: rgba(var(--primary-rgb), 0.16);
+  --sheet-icon-bg: rgba(var(--primary-rgb), 0.12);
   --btn: #e5e5e5;
   --btn-hover: rgba(var(--primary-rgb), 0.12);
   --btn-active: #d0d0d0;
@@ -851,6 +875,14 @@ body.tracks-open #tracks-list-container .tlv2-list {
   --success: #66cc66;
   --warning: #dd9955;
   --card: #0a0a0a;
+  --sheet-bg: #0f1416;
+  --sheet-border: rgba(122, 167, 184, 0.18);
+  --sheet-border-subtle: rgba(122, 167, 184, 0.1);
+  --sheet-handle-bg: rgba(122, 167, 184, 0.2);
+  --sheet-shadow: 0 -18px 40px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(var(--primary-rgb), 0.08);
+  --sheet-item-hover-bg: rgba(var(--primary-rgb), 0.12);
+  --sheet-item-active-bg: rgba(var(--primary-rgb), 0.18);
+  --sheet-icon-bg: rgba(var(--primary-rgb), 0.14);
   --btn: #181818;
   --btn-hover: rgba(var(--primary-rgb), 0.08);
   --btn-active: #050505;

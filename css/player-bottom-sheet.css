@@ -20,17 +20,18 @@
   width: 44px;
   min-width: 44px;
   padding: 0;
-  background: var(--header-btn-bg, rgba(255, 255, 255, 0.12));
-  border: 1px solid var(--header-btn-border, rgba(255, 255, 255, 0.12));
+  background: transparent;
+  border: none;
   border-radius: 999px;
-  color: var(--primary);
+  box-shadow: none;
+  color: var(--muted);
   font-size: 16px;
   font-weight: 600;
   line-height: 1;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
-  transition: background 150ms ease, border-color 150ms ease, transform 100ms ease;
+  transition: color 150ms ease, opacity 150ms ease, transform 100ms ease;
 }
 
 .menu-trigger-icon {
@@ -49,8 +50,9 @@
 
 .app-menu-btn:hover,
 .app-menu-btn[aria-expanded="true"] {
-  background: rgba(var(--primary-rgb), 0.18);
-  border-color: rgba(var(--primary-rgb), 0.3);
+  background: transparent;
+  color: var(--primary);
+  opacity: 1;
 }
 
 .app-menu-btn:active {
@@ -63,19 +65,23 @@
 }
 
 .player-menu-btn {
-  color: var(--muted);
+  color: var(--fg);
+  background: var(--surface-subtle, rgba(var(--primary-rgb), 0.08));
+  border-color: var(--surface-border, rgba(var(--primary-rgb), 0.18));
+  box-shadow: inset 0 0 0 1px rgba(var(--primary-rgb), 0.06);
 }
 
 .player-menu-btn:hover,
 .player-menu-btn:focus-visible,
 .player-menu-btn[aria-expanded="true"] {
   color: var(--primary);
-  background: rgba(var(--primary-rgb), 0.12);
-  border-color: rgba(var(--primary-rgb), 0.22);
+  background: var(--surface-hover, rgba(var(--primary-rgb), 0.12));
+  border-color: rgba(var(--primary-rgb), 0.28);
 }
 
 .player-menu-btn:active {
   transform: scale(0.94);
+  background: rgba(var(--primary-rgb), 0.16);
 }
 
 .player-menu-btn .btn-svg {
@@ -112,9 +118,11 @@
   left: 0;
   right: 0;
   z-index: 900;
-  background: var(--bg, #1a1a2e);
+  background: var(--sheet-bg, var(--card, #1a1a2e));
+  border: 1px solid var(--sheet-border, var(--surface-border, rgba(255, 255, 255, 0.08)));
+  border-bottom: none;
   border-radius: 20px 20px 0 0;
-  box-shadow: 0 -4px 32px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--sheet-shadow, 0 -12px 36px rgba(0, 0, 0, 0.32), 0 0 0 1px rgba(var(--primary-rgb), 0.06));
   max-height: 70vh;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -136,7 +144,7 @@
 .sheet-drag-handle {
   width: 40px;
   height: 4px;
-  background: var(--muted, rgba(255, 255, 255, 0.25));
+  background: var(--sheet-handle-bg, var(--surface-border, rgba(255, 255, 255, 0.25)));
   border-radius: 2px;
   margin: 12px auto 0;
   flex-shrink: 0;
@@ -148,7 +156,7 @@
 
 .sheet-header {
   padding: 16px 20px 8px;
-  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  border-bottom: 1px solid var(--sheet-border-subtle, var(--surface-border-subtle, rgba(255, 255, 255, 0.08)));
   flex-shrink: 0;
 }
 
@@ -201,17 +209,17 @@
 }
 
 .sheet-action-item:hover {
-  background: rgba(var(--primary-rgb), 0.10);
+  background: var(--sheet-item-hover-bg, rgba(var(--primary-rgb), 0.10));
 }
 
 .sheet-action-item:active {
-  background: rgba(var(--primary-rgb), 0.18);
+  background: var(--sheet-item-active-bg, rgba(var(--primary-rgb), 0.18));
 }
 
 .sheet-action-item:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: -2px;
-  background: rgba(var(--primary-rgb), 0.10);
+  background: var(--sheet-item-hover-bg, rgba(var(--primary-rgb), 0.10));
 }
 
 /* Icon wrapper inside each sheet action item */
@@ -222,7 +230,7 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: rgba(var(--primary-rgb), 0.12);
+  background: var(--sheet-icon-bg, rgba(var(--primary-rgb), 0.12));
   color: var(--primary);
   flex-shrink: 0;
   /* Override header-icon defaults */
@@ -328,7 +336,7 @@
 
 .sheet-footer {
   padding: 8px 20px 16px;
-  border-top: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  border-top: 1px solid var(--sheet-border-subtle, var(--surface-border-subtle, rgba(255, 255, 255, 0.08)));
 }
 
 .sheet-cancel-btn {
@@ -338,7 +346,7 @@
   width: 100%;
   min-height: 50px;
   padding: 0 20px;
-  background: rgba(var(--primary-rgb), 0.10);
+  background: var(--sheet-item-hover-bg, rgba(var(--primary-rgb), 0.10));
   border: 1px solid rgba(var(--primary-rgb), 0.20);
   border-radius: 12px;
   color: var(--primary);
@@ -351,7 +359,7 @@
 }
 
 .sheet-cancel-btn:hover {
-  background: rgba(var(--primary-rgb), 0.18);
+  background: var(--sheet-item-active-bg, rgba(var(--primary-rgb), 0.18));
 }
 
 .sheet-cancel-btn:active {
@@ -384,7 +392,7 @@ body.sheet-open {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: rgba(var(--primary-rgb), 0.12);
+  background: var(--sheet-icon-bg, rgba(var(--primary-rgb), 0.12));
   color: var(--primary);
   flex-shrink: 0;
   border: none;

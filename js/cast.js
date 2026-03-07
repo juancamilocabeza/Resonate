@@ -18,13 +18,47 @@
   var lastMediaSessionId = '';
   var castPlaybackMonitorId = null;
 
+  function getDefaultCastAppId() {
+    try {
+      var sdkDefault = window.chrome
+        && window.chrome.cast
+        && window.chrome.cast.media
+        && window.chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID;
+      if (sdkDefault) return String(sdkDefault);
+    } catch (e) {}
+    return DEFAULT_CAF_APP_ID;
+  }
+
+  function isLocalDevelopmentOrigin() {
+    try {
+      var location = window.location || {};
+      var hostname = String(location.hostname || '').toLowerCase();
+      var port = String(location.port || '');
+      return hostname === 'localhost'
+        || hostname === '127.0.0.1'
+        || hostname === '[::1]'
+        || hostname.endsWith('.local')
+        || hostname.indexOf('dev.') >= 0
+        || port === '3000'
+        || port === '8080';
+    } catch (e) {
+      return false;
+    }
+  }
+
   function getCastAppId() {
+    var defaultAppId = getDefaultCastAppId();
     try {
       var meta = document.querySelector('meta[name="cast-app-id"]');
       var fromMeta = meta ? String(meta.getAttribute('content') || '').trim() : '';
-      if (fromMeta) return fromMeta;
+      var allowProduction = meta
+        ? String(meta.getAttribute('data-allow-production') || '').trim().toLowerCase() === 'true'
+        : false;
+      if (!fromMeta) return defaultAppId;
+      if (fromMeta === defaultAppId) return fromMeta;
+      if (allowProduction || isLocalDevelopmentOrigin()) return fromMeta;
     } catch (e) {}
-    return DEFAULT_CAF_APP_ID;
+    return defaultAppId;
   }
 
   function isCastFrameworkReady() {
