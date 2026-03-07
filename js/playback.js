@@ -3483,8 +3483,11 @@ function setupBufferingMonitoring() {
 
   const audio = window.elements.audio;
   const BUFFERING_SHOW_DELAY_MS = 350;
-  const BUFFERING_STALL_TIMEOUT_MS = 20000;
-  const BUFFERING_RECOVERY_COOLDOWN_MS = 12000;
+  const BUFFERING_STALL_TIMEOUT_MS = 8000; // Más rápido para detectar stalls
+  const BUFFERING_RECOVERY_COOLDOWN_MS = 6000;
+
+  let stallRecoveryAttempts = 0;
+  const MAX_STALL_RECOVERY_ATTEMPTS = 2;
 
   let isBuffering = false;
   let showTimer = null;
@@ -3533,13 +3536,32 @@ function setupBufferingMonitoring() {
     const now = Date.now();
     if (now - lastRecoveryAt < BUFFERING_RECOVERY_COOLDOWN_MS) return;
     lastRecoveryAt = now;
-    logPlayback('warn', 'Buffering stall detected; attempting recovery');
+    stallRecoveryAttempts++;
+    logPlayback('warn', `Buffering stall detected; attempt #${stallRecoveryAttempts} [readyState=${audio.readyState}, networkState=${audio.networkState}, currentTime=${audio.currentTime}]`);
     try {
       const maybePromise = audio.play();
       if (maybePromise && typeof maybePromise.catch === 'function') {
         maybePromise.catch(() => {});
       }
     } catch {}
+
+    // Si ya se intentó varias veces, forzar recarga de la fuente
+    if (stallRecoveryAttempts >= MAX_STALL_RECOVERY_ATTEMPTS) {
+      logPlayback('warn', `Forzando recarga de la fuente tras ${stallRecoveryAttempts} intentos fallidos`);
+      // Guardar el tiempo y la pista actual
+      const src = audio.currentSrc;
+      const pos = audio.currentTime;
+      audio.pause();
+      audio.src = '';
+      audio.load();
+      setTimeout(() => {
+        audio.src = src;
+        audio.load();
+        audio.currentTime = pos;
+        audio.play().catch(()=>{});
+        stallRecoveryAttempts = 0;
+      }, 500);
+    }
   };
 
   const scheduleShow = () => {
@@ -3580,6 +3602,7 @@ function setupBufferingMonitoring() {
     if (audio.currentTime !== lastPosition) {
       lastPosition = audio.currentTime;
       hideBuffering();
+      stallRecoveryAttempts = 0; // Resetear intentos si hay progreso
     }
   };
 

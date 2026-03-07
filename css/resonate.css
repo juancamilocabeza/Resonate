@@ -152,13 +152,13 @@
   box-sizing: border-box;
 }
 
-/* Current album tracks: inline panel (not modal) */
+/* Current album tracks: inline panel (not modal) — position overridden by #tracks-list-container.tracks-inline */
 .tracklist.tracks-inline {
   display: block;
   position: relative;
   width: 100%;
-  max-height: min(60vh, 520px);
-  margin-top: 10px;
+  max-height: none;
+  margin-top: 0;
   padding: 0;
   overflow-y: auto;
   overflow-x: hidden;
@@ -1007,6 +1007,47 @@ body {
   flex-direction: column;
   padding-bottom: env(safe-area-inset-bottom, 0);
   min-height: 0;
+}
+
+/* Cuando el listado de pistas está abierto, ocupa todo el espacio entre header y footer (position:fixed como search-results) */
+#tracks-list-container.tracks-inline {
+  display: block;
+  position: fixed;
+  left: 10px;
+  right: 10px;
+  top: var(--tracks-panel-top, 62px);
+  bottom: var(--tracks-panel-bottom, calc(var(--footer-height, 44px) + env(safe-area-inset-bottom, 0) + var(--vv-bottom-inset, 0px) + 10px));
+  width: auto;
+  max-width: none;
+  height: auto;
+  max-height: none;
+  min-height: 160px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  background: var(--card);
+  border: var(--panel-border);
+  border-radius: var(--panel-radius);
+  box-shadow: var(--panel-shadow);
+  z-index: 140;
+  box-sizing: border-box;
+}
+
+#tracks-list-container.tracks-inline .tlv2-list,
+#tracks-list-container.tracks-inline .tracklist__list {
+  max-height: none;
+  overflow: visible;
+}
+
+@media (min-width: 1024px) and (hover: hover) and (pointer: fine) {
+  #tracks-list-container.tracks-inline {
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    width: min(600px, calc(100vw - 48px));
+    max-width: min(600px, calc(100vw - 48px));
+  }
 }
 
 /* ===== HEADER & NAVIGATION ===== */
@@ -5414,15 +5455,6 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
 .tracklist .tlv2-duration {
   font-size: 12px;
   color: var(--muted);
-}
-/* Cached/preloaded track indicator: show a subtle dot after the duration */
-.tracklist .tlv2-row.tlv2-row--cached .tlv2-duration::after {
-  content: '●';
-  font-size: 7px;
-  color: var(--primary);
-  margin-left: 5px;
-  vertical-align: middle;
-  opacity: 0.75;
 }
 .tracklist .tlv2-action {
   background: transparent;

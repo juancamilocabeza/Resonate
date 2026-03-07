@@ -1757,10 +1757,12 @@ function updateDescriptionUI(track) {
           elements.tracksListContainer.style.display = 'none';
           elements.toggleTracksBtn.classList.remove('active');
           try { elements.tracksListContainer.classList.remove('tracks-inline'); } catch {}
+          try { document.body.classList.remove('tracks-open'); } catch {}
         } else {
           elements.tracksListContainer.style.display = 'block';
           elements.toggleTracksBtn.classList.add('active');
           try { elements.tracksListContainer.classList.add('tracks-inline'); } catch {}
+          try { document.body.classList.add('tracks-open'); } catch {}
 
           elements.tracksListContainer.innerHTML = `
             <div class="search-results-header panel-header" role="banner">
@@ -1781,6 +1783,7 @@ function updateDescriptionUI(track) {
               try { elements.tracksListContainer.style.display = 'none'; } catch {}
               try { elements.toggleTracksBtn.classList.remove('active'); } catch {}
               try { elements.tracksListContainer.classList.remove('tracks-inline'); } catch {}
+              try { document.body.classList.remove('tracks-open'); } catch {}
             });
           }
 
