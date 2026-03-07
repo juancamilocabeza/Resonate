@@ -7,6 +7,39 @@
     return `${mins}:${String(secs).padStart(2, '0')}`;
   }
 
+  function parseDurationSeconds(value) {
+    if (value === null || value === undefined) return null;
+    if (typeof value === 'number' && isFinite(value)) return value >= 0 ? value : null;
+
+    const raw = String(value).trim();
+    if (!raw) return null;
+
+    if (/^\d+(\.\d+)?$/.test(raw)) {
+      const numeric = Number(raw);
+      return isFinite(numeric) ? numeric : null;
+    }
+
+    const parts = raw.split(':').map(part => Number(part));
+    if (!parts.length || parts.some(part => !isFinite(part))) return null;
+    if (parts.length === 3) return (parts[0] * 3600) + (parts[1] * 60) + parts[2];
+    if (parts.length === 2) return (parts[0] * 60) + parts[1];
+    return null;
+  }
+
+  function resolveTrackDurationSeconds(track) {
+    if (!track || typeof track !== 'object') return null;
+
+    const rawDuration = (track.duration !== undefined && track.duration !== null)
+      ? track.duration
+      : (track.length !== undefined && track.length !== null)
+        ? track.length
+        : (track.trackDuration !== undefined && track.trackDuration !== null)
+          ? track.trackDuration
+          : track.track_duration;
+
+    return parseDurationSeconds(rawDuration);
+  }
+
   function isResontesContext(container) {
     return !!container.closest('#resontes-list');
   }
@@ -181,9 +214,10 @@
 
 
         // Duración
+  const durationSeconds = resolveTrackDurationSeconds(track);
         const duration = document.createElement('span');
         duration.className = 'tlv2-duration';
-        duration.textContent = formatTime(track.duration);
+  duration.textContent = formatTime(durationSeconds);
         duration.style.textAlign = 'center';
         row.appendChild(duration);
         // Eliminado: left, info, right (layout simplificado)
@@ -195,7 +229,7 @@
               row.classList.add('tlv2-row--cached');
               // Best-effort DOM attribute updates; failure doesn't affect playback
               duration.title = 'Available offline';
-              duration.setAttribute('aria-label', `${formatTime(track.duration)}, available offline`);
+              duration.setAttribute('aria-label', `${formatTime(durationSeconds)}, available offline`);
             }
           }).catch(() => {});
         }

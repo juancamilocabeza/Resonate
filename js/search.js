@@ -322,6 +322,41 @@ async function enrichSearchResultsWithMetadata(processedResults, query, { signal
   const enrichedResults = [];
   const batchSize = SEARCH_LIMITS.metadataBatchSize;
 
+  const parseDurationSeconds = (value) => {
+    if (value === null || value === undefined) return null;
+    if (typeof value === 'number' && Number.isFinite(value)) return value >= 0 ? value : null;
+    const raw = String(value).trim();
+    if (!raw) return null;
+    if (/^\d+(\.\d+)?$/.test(raw)) {
+      const numeric = Number(raw);
+      return Number.isFinite(numeric) ? numeric : null;
+    }
+    const parts = raw.split(':').map(part => Number(part));
+    if (!parts.length || parts.some(part => !Number.isFinite(part))) return null;
+    if (parts.length === 3) return (parts[0] * 3600) + (parts[1] * 60) + parts[2];
+    if (parts.length === 2) return (parts[0] * 60) + parts[1];
+    return null;
+  };
+
+  const sumTrackDurations = (tracks) => {
+    if (!Array.isArray(tracks) || !tracks.length) return null;
+    let totalSeconds = 0;
+    let foundAny = false;
+    tracks.forEach(track => {
+      const rawDuration = (track && track.duration !== undefined && track.duration !== null)
+        ? track.duration
+        : (track && track.length !== undefined && track.length !== null)
+          ? track.length
+          : null;
+      const seconds = parseDurationSeconds(rawDuration);
+      if (seconds !== null && seconds > 0) {
+        totalSeconds += seconds;
+        foundAny = true;
+      }
+    });
+    return foundAny ? totalSeconds : null;
+  };
+
   for (let i = 0; i < processedResults.length; i += batchSize) {
     if (signal && signal.aborted) throw new DOMException('Aborted', 'AbortError');
     const batch = processedResults.slice(i, i + batchSize);
@@ -333,13 +368,15 @@ async function enrichSearchResultsWithMetadata(processedResults, query, { signal
         const count = Array.isArray(files) ? files.length : 0;
         if (count > 0) {
           const isTrackList = item.isTrackList === true && count <= 1;
+          const totalDuration = count > 1 ? sumTrackDurations(files) : null;
           return {
             ...item,
             // Only force "single" for track-list items when there is a single playable file.
             // If multiple playable files exist, treat as an album.
             isTrackList,
             isAlbum: (count > 1),
-            trackCount: count
+            trackCount: count,
+            totalDuration: totalDuration !== null ? totalDuration : item.totalDuration
           };
         }
         return keepUnplayables

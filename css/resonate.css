@@ -3804,9 +3804,59 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
 }
 .card-subtitle { display: none; }
 .result-meta { grid-column: 1 / -1; grid-row: 2; display: block; }
-/* Ensure indicator renders as a single line under the title */
-.content-card .result-meta { display: block; padding-top: 4px; }
-.content-card .album-indicator { display: inline-block; margin: 0; }
+/* Ensure metadata stays visible and readable under the title in both cards and legacy list rows */
+.favorite-item .result-meta,
+.content-card .result-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 20px;
+  padding-top: 4px;
+  position: static;
+}
+
+.favorite-item .result-meta .result-meta-pill,
+.favorite-item .result-meta .result-meta-status,
+.content-card .result-meta .result-meta-pill,
+.content-card .result-meta .result-meta-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 20px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--surface-border-subtle);
+  background: var(--collection-subpanel-bg, rgba(var(--primary-rgb), 0.08));
+  color: var(--fg);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.favorite-item .result-meta .album-indicator,
+.content-card .result-meta .album-indicator {
+  position: static;
+  top: auto;
+  left: auto;
+  margin: 0;
+  box-shadow: none;
+}
+
+.favorite-item .result-meta .track-duration,
+.content-card .result-meta .track-duration {
+  background: rgba(var(--primary-rgb), 0.12);
+  border-color: rgba(var(--primary-rgb), 0.24);
+  color: var(--primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.favorite-item .result-meta .result-meta-status,
+.content-card .result-meta .result-meta-status {
+  color: var(--muted);
+  font-weight: 500;
+}
 
 .card-actions { display: flex; gap: 8px; align-items: center; justify-content: flex-end; padding: 10px 12px; min-height: 44px; }
 .card-btn { background: var(--btn); border: none; color: var(--fg); border-radius: 8px; width: 44px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 14px; transition: transform 0.15s, background 0.2s; }
@@ -5370,8 +5420,16 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
   gap: 8px;
 }
 .tracklist .tlv2-duration {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  justify-self: end;
+  min-width: 44px;
   font-size: 12px;
-  color: var(--muted);
+  color: var(--fg);
+  opacity: 0.82;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .tracklist .tlv2-action {
   background: transparent;

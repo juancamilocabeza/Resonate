@@ -4075,6 +4075,11 @@ try {
             if (expandBtn) {
               expandBtn.style.display = (tc && tc > 1) ? 'flex' : 'none';
             }
+
+            const metaElement = card.querySelector('.result-meta');
+            if (metaElement) {
+              renderResultMeta(metaElement, getResultMetaState(item));
+            }
           }
         }
 
@@ -4097,6 +4102,138 @@ try {
   }
 } catch {}
 
+function parseDurationSeconds(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value >= 0 ? value : null;
+  }
+
+  const raw = String(value).trim();
+  if (!raw) return null;
+
+  if (/^\d+(\.\d+)?$/.test(raw)) {
+    const numeric = Number(raw);
+    return Number.isFinite(numeric) ? numeric : null;
+  }
+
+  const parts = raw.split(':').map(part => Number(part));
+  if (!parts.length || parts.some(part => !Number.isFinite(part))) return null;
+  if (parts.length === 3) return (parts[0] * 3600) + (parts[1] * 60) + parts[2];
+  if (parts.length === 2) return (parts[0] * 60) + parts[1];
+  return null;
+}
+
+function resolveTrackDurationSeconds(track) {
+  if (!track || typeof track !== 'object') return null;
+
+  const rawDuration = (track.duration !== undefined && track.duration !== null)
+    ? track.duration
+    : (track.length !== undefined && track.length !== null)
+      ? track.length
+      : (track.trackDuration !== undefined && track.trackDuration !== null)
+        ? track.trackDuration
+        : track.track_duration;
+
+  return parseDurationSeconds(rawDuration);
+}
+
+function sumTrackDurations(tracks) {
+  if (!Array.isArray(tracks) || !tracks.length) return null;
+
+  let totalSeconds = 0;
+  let foundAny = false;
+
+  tracks.forEach(track => {
+    const seconds = resolveTrackDurationSeconds(track);
+    if (seconds !== null && seconds > 0) {
+      totalSeconds += seconds;
+      foundAny = true;
+    }
+  });
+
+  return foundAny ? totalSeconds : null;
+}
+
+function getResultMetaState(item, options = {}) {
+  const sourceItem = (item && typeof item === 'object') ? item : {};
+  const tracks = Array.isArray(options.tracks)
+    ? options.tracks
+    : (Array.isArray(sourceItem.tracks) ? sourceItem.tracks : null);
+  const sourceTotalDuration = parseDurationSeconds(sourceItem.totalDuration);
+
+  const explicitTrackCount = Number.isFinite(options.trackCount)
+    ? options.trackCount
+    : Number.isFinite(sourceItem.trackCount)
+      ? sourceItem.trackCount
+      : tracks
+        ? tracks.length
+        : null;
+
+  const singleTrackDuration = options.durationSeconds !== undefined
+    ? options.durationSeconds
+    : (tracks && tracks.length === 1)
+      ? resolveTrackDurationSeconds(tracks[0])
+      : resolveTrackDurationSeconds(sourceItem);
+
+  const inferredTrackCount = explicitTrackCount !== null
+    ? explicitTrackCount
+    : singleTrackDuration !== null
+      ? 1
+      : 0;
+
+  const forceSingle = options.forceSingle === true;
+  const isAlbum = options.isAlbum === true || (!forceSingle && inferredTrackCount > 1);
+  const totalDurationSeconds = options.totalDurationSeconds !== undefined
+    ? options.totalDurationSeconds
+    : sourceTotalDuration !== null
+      ? sourceTotalDuration
+      : (tracks && tracks.length > 1 ? sumTrackDurations(tracks) : null);
+
+  return {
+    trackCount: inferredTrackCount,
+    forceSingle,
+    isAlbum,
+    durationSeconds: isAlbum ? null : singleTrackDuration,
+    totalDurationSeconds: isAlbum ? totalDurationSeconds : null,
+    statusText: options.statusText || ''
+  };
+}
+
+function renderResultMeta(metaElement, metaState) {
+  if (!metaElement) return;
+
+  const state = metaState || {};
+  metaElement.replaceChildren();
+
+  if (state.statusText) {
+    const status = document.createElement('span');
+    status.className = 'result-meta-status';
+    status.textContent = state.statusText;
+    metaElement.appendChild(status);
+    return;
+  }
+
+  const trackCount = Number.isFinite(state.trackCount) ? state.trackCount : 0;
+  const isAlbum = !!state.isAlbum && state.forceSingle !== true && trackCount > 1;
+  const durationSeconds = isAlbum ? state.totalDurationSeconds : state.durationSeconds;
+
+  if (!trackCount && !(typeof durationSeconds === 'number' && Number.isFinite(durationSeconds) && durationSeconds > 0)) {
+    return;
+  }
+
+  const kind = document.createElement('span');
+  kind.className = 'result-meta-pill album-indicator';
+  kind.textContent = isAlbum ? `${trackCount} tracks` : 'Single track';
+  metaElement.appendChild(kind);
+
+  if (typeof durationSeconds === 'number' && Number.isFinite(durationSeconds) && durationSeconds > 0) {
+    const duration = document.createElement('span');
+    duration.className = 'result-meta-pill track-duration';
+    duration.textContent = isAlbum ? `${formatTime(durationSeconds)} total` : formatTime(durationSeconds);
+    metaElement.appendChild(duration);
+  }
+}
+
 // Load album info and update result element metadata
 async function loadAlbumInfoBackground(identifier, resultEl) {
   // Skip metadata loading only for file:// protocol to avoid CORS timeout errors
@@ -4104,7 +4241,7 @@ async function loadAlbumInfoBackground(identifier, resultEl) {
   if (isFileProtocol) {
     const metaElement = resultEl.querySelector('.result-meta');
     if (metaElement) {
-      metaElement.innerHTML = '<span style="color: var(--muted); font-size: 10px;">Info unavailable (file://)</span>';
+      renderResultMeta(metaElement, { statusText: 'Info unavailable (file://)' });
     }
     return;
   }
@@ -4113,7 +4250,7 @@ async function loadAlbumInfoBackground(identifier, resultEl) {
   if (typeof navigator !== 'undefined' && navigator && navigator.onLine === false) {
     const metaElement = resultEl.querySelector('.result-meta');
     if (metaElement) {
-      metaElement.innerHTML = '<span style="color: var(--muted); font-size: 10px;">Info not available offline</span>';
+      renderResultMeta(metaElement, { statusText: 'Info not available offline' });
     }
     return;
   }
@@ -4122,7 +4259,6 @@ async function loadAlbumInfoBackground(identifier, resultEl) {
     const metadata = (window.AlbumTracks && typeof window.AlbumTracks.getTracks === 'function')
       ? await window.AlbumTracks.getTracks(identifier, { preferCache: true, allowFetch: true })
       : await fetchOptimizedPlayableFiles(identifier);
-    const itemMetadata = metadata[0]?.metadata;
     const isAlbum = metadata.length > 1;
     const trackCount = metadata.length;
 
@@ -4132,11 +4268,16 @@ async function loadAlbumInfoBackground(identifier, resultEl) {
     if (metaElement) {
       const forceSingle = (resultEl.dataset.isTrackList === 'true') && trackCount <= 1;
       if (trackCount === 0) {
-        metaElement.innerHTML = '<span style="color: var(--muted); font-size: 10px;">No playable tracks</span>';
+        renderResultMeta(metaElement, { statusText: 'No playable tracks' });
       } else {
-        metaElement.innerHTML = (isAlbum && !forceSingle)
-          ? `<span class="album-indicator">${trackCount} tracks</span>`
-          : `<span class="album-indicator">Single track</span>`;
+        renderResultMeta(metaElement, getResultMetaState(resultEl.__resultData, {
+          tracks: metadata,
+          trackCount,
+          isAlbum,
+          forceSingle,
+          durationSeconds: trackCount === 1 ? resolveTrackDurationSeconds(metadata[0]) : null,
+          totalDurationSeconds: trackCount > 1 ? sumTrackDurations(metadata) : null
+        }));
       }
     }
 
@@ -4162,7 +4303,9 @@ async function loadAlbumInfoBackground(identifier, resultEl) {
 
     const metaElement = resultEl.querySelector('.result-meta');
     if (metaElement) {
-      metaElement.innerHTML = `<span style="color: var(--muted); font-size: 10px;">Error: ${error.message.includes('Timeout') ? 'Timeout' : 'Unknown error'}</span>`;
+      renderResultMeta(metaElement, {
+        statusText: `Error: ${error.message.includes('Timeout') ? 'Timeout' : 'Unknown error'}`
+      });
     }
   }
 }
@@ -4225,8 +4368,13 @@ function createFavoriteInfo(result) {
   creatorDiv.className = 'favorite-creator';
   creatorDiv.textContent = result.creator || 'Unknown';
 
+  const metaDiv = document.createElement('div');
+  metaDiv.className = 'result-meta';
+  renderResultMeta(metaDiv, getResultMetaState(result));
+
   infoDiv.appendChild(titleDiv);
   infoDiv.appendChild(creatorDiv);
+  infoDiv.appendChild(metaDiv);
 
   return infoDiv;
 }
@@ -4718,6 +4866,11 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
   t.textContent = title;
   t.title = title;
   body.appendChild(t);
+
+  const meta = document.createElement('div');
+  meta.className = 'result-meta';
+  renderResultMeta(meta, getResultMetaState(item));
+  body.appendChild(meta);
 
   // Actions
   const actions = document.createElement('div');
