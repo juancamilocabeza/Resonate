@@ -13,6 +13,12 @@
     try {
       const audio = getAudioEl();
       if (!audio) return false;
+      // Don't interfere while a track load is already in progress.
+      if (window.state && window.state.isLoading) return false;
+      // Only attempt to resume if the audio element actually has a source loaded.
+      // Without a src there is nothing to resume (saved-state currentTrack alone
+      // is not enough – the user must explicitly press Play to start fresh).
+      if (!audio.src) return false;
       // Si hay una pista cargada y no está pausado manualmente
       if (window.state && window.state.currentTrack && window.state.currentTrack.url) {
         if (audio.paused && !audio.ended && !lastUserPaused) {
@@ -2381,10 +2387,14 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
         updateLoaderProgress(88);
 
         timeoutId = setTimeout(() => {
-          if (audio.readyState < 1) {
-            cleanup();
-            reject(new Error('Timeout while loading audio'));
-          }
+          // Always clean up and reject if the audio hasn't become playable in time.
+          // Previously this only fired when readyState < 1, which meant a stalled
+          // load (readyState 1 or 2) would never time out and would leave
+          // state.isLoading=true permanently, blocking the player.
+          cleanup();
+          if (window.Loaders && typeof window.Loaders.hideLoader === 'function') window.Loaders.hideLoader();
+          state.isLoading = false;
+          reject(new Error('Timeout while loading audio'));
         }, PLAYBACK_CONSTANTS.AUDIO_LOAD_TIMEOUT_MS);
 
         audio.addEventListener('loadeddata', () => updateLoaderProgress(92), { once: true });
