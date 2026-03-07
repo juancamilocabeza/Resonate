@@ -1734,6 +1734,53 @@ function updateDescriptionUI(track) {
     const shouldShowTracks = !!albumId && (fallbackTracklist.length > 1 || (activeTrack && ((activeTrack.totalTracks && activeTrack.totalTracks > 1) || activeTrack.isAlbumTrack)) || !fallbackTracklist.length);
     elements.toggleTracksBtn.style.display = shouldShowTracks ? 'inline-flex' : 'none';
     setIconControlDisabled(elements.toggleTracksBtn, !albumId || !shouldShowTracks);
+
+    // Detectar cambio de álbum y refrescar lista si el panel está abierto
+    if (elements.tracksListContainer.style.display === 'block') {
+      // Obtener el álbum actualmente mostrado (guardado en dataset)
+      const shownAlbumId = elements.tracksListContainer.dataset.currentAlbumId;
+      if (shownAlbumId !== String(albumId)) {
+        // Actualizar el dataset y refrescar la lista
+        elements.tracksListContainer.dataset.currentAlbumId = String(albumId);
+        elements.tracksListContainer.innerHTML = `
+          <div class="search-results-header panel-header" role="banner">
+            <div class="search-results-summary" aria-live="polite">
+              <span class="tracks-overlay-count">Tracks</span>
+            </div>
+            <div class="search-results-controls" aria-label="Tracks controls">
+              <button class="search-clear-btn tracks-overlay-close" type="button" aria-label="Close tracks" title="Close">✕</button>
+            </div>
+          </div>
+          <div class="tracklist__list tracks-overlay-list" role="list" aria-label="Album tracks"></div>
+        `;
+        const closeBtn = elements.tracksListContainer.querySelector('.tracks-overlay-close');
+        if (closeBtn) {
+          closeBtn.addEventListener('click', (e) => {
+            try { e.preventDefault(); e.stopPropagation(); } catch {}
+            try { elements.tracksListContainer.style.display = 'none'; } catch {}
+            try { elements.toggleTracksBtn.classList.remove('active'); } catch {}
+            try { elements.tracksListContainer.classList.remove('tracks-inline'); } catch {}
+            try { document.body.classList.remove('tracks-open'); } catch {}
+          });
+        }
+        const listEl = elements.tracksListContainer.querySelector('.tracks-overlay-list');
+        try {
+          if (listEl && window.state) {
+            if (Array.isArray(window.state.currentTracklist) && window.state.currentTracklist.length) {
+              listEl.__albumTracks = window.state.currentTracklist;
+            } else if (window.state.savedPlaybackTracklist && Array.isArray(window.state.savedPlaybackTracklist.items)) {
+              listEl.__albumTracks = window.state.savedPlaybackTracklist.items;
+            }
+          }
+        } catch {}
+        if (window.displayAlbumTracksV2 && listEl) {
+          window.displayAlbumTracksV2(albumId, listEl);
+        } else if (listEl) {
+          listEl.innerHTML = '<div class="no-results">Can\'t show the track list</div>';
+        }
+      }
+    }
+
     // Solo asignar el handler una vez
     if (!elements.toggleTracksBtn._resonateHandlerSet) {
       elements.toggleTracksBtn._resonateHandlerSet = true;
@@ -1764,6 +1811,7 @@ function updateDescriptionUI(track) {
           try { elements.tracksListContainer.classList.add('tracks-inline'); } catch {}
           try { document.body.classList.add('tracks-open'); } catch {}
 
+          elements.tracksListContainer.dataset.currentAlbumId = String(currentAlbumId);
           elements.tracksListContainer.innerHTML = `
             <div class="search-results-header panel-header" role="banner">
               <div class="search-results-summary" aria-live="polite">
