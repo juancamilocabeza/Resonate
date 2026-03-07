@@ -47,6 +47,17 @@
     return tokens.map(token => escapeRegExp(token)).join("[\\s._'’/-]*");
   }
 
+  function segmentMatchesCreator(segment, creator) {
+    const normalizedSegment = normalizeString(segment);
+    const normalizedCreator = normalizeString(creator);
+    if (!normalizedSegment || !normalizedCreator) return false;
+
+    return getCreatorMatchVariants(normalizedCreator).some((variant) => {
+      const creatorPattern = buildFlexibleCreatorPattern(variant);
+      return new RegExp(`^${creatorPattern}$`, 'i').test(normalizedSegment);
+    });
+  }
+
   function getCreatorMatchVariants(creator) {
     const normalizedCreator = normalizeString(creator);
     if (!normalizedCreator) return [];
@@ -123,6 +134,25 @@
     return cleanedTitle || normalizedTitle;
   }
 
+  function stripCreatorSegmentFromAlbumTitle(title, creator) {
+    const normalizedTitle = normalizeString(title);
+    const normalizedCreator = normalizeString(creator);
+    if (!normalizedTitle || !normalizedCreator) return normalizedTitle;
+
+    const separator = normalizedTitle.includes(' — ') ? ' — ' : ' - ';
+    const segments = normalizedTitle
+      .split(/\s+[—-]\s+/)
+      .map(segment => normalizeString(segment))
+      .filter(Boolean);
+
+    if (segments.length < 2) return normalizedTitle;
+
+    const filteredSegments = segments.filter(segment => !segmentMatchesCreator(segment, normalizedCreator));
+    if (!filteredSegments.length || filteredSegments.length === segments.length) return normalizedTitle;
+
+    return cleanupTrackTitle(filteredSegments.join(separator));
+  }
+
   function normalizeCreatorDisplay(value) {
     return normalizeString(value).replace(/\s*\([^)]*\)\s*$/g, '').trim();
   }
@@ -133,14 +163,20 @@
     const normalizedCreator = normalizeCreatorDisplay(creator);
     if (!normalizedTitle) return '';
 
-    const dashMatch = normalizedTitle.match(/^(.+?)\s+[—-]\s+(.+)$/);
-    if (dashMatch) {
-      const leftPart = normalizeString(dashMatch[1]);
-      const rightPart = normalizeString(dashMatch[2]);
-      const albumMatch = normalizedAlbumTitle && leftPart.toLowerCase() === normalizedAlbumTitle.toLowerCase();
-      if (albumMatch) {
+    if (normalizedAlbumTitle) {
+      const lowerTitle = normalizedTitle.toLowerCase();
+      const albumPrefixes = [
+        `${normalizedAlbumTitle} — `,
+        `${normalizedAlbumTitle} - `
+      ];
+      const matchedPrefix = albumPrefixes.find(prefix => lowerTitle.startsWith(prefix.toLowerCase()));
+      if (matchedPrefix) {
+        const leftPart = normalizedTitle.slice(0, normalizedAlbumTitle.length).trim();
+        const rightPart = normalizedTitle.slice(matchedPrefix.length).trim();
+        const cleanedLeftPart = stripCreatorSegmentFromAlbumTitle(leftPart, normalizedCreator);
         const cleanedRightPart = stripCreatorFromTitle(rightPart, normalizedCreator);
-        return cleanedRightPart ? `${leftPart} — ${cleanedRightPart}` : leftPart;
+        const resolvedLeftPart = cleanedLeftPart || leftPart;
+        return cleanedRightPart ? `${resolvedLeftPart} — ${cleanedRightPart}` : resolvedLeftPart;
       }
     }
 
