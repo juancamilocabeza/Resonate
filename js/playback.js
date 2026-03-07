@@ -2158,7 +2158,12 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
     const albumId = track && (track.albumId || track.album_id || track.album_id_str || track.album_id_num || track.album_id_str_v2 || track.album_id_v2 || track.album_id_strict || track.album_id_fallback || track.album || track._albumId);
     window.elements.toggleTracksBtn.style.display = albumId ? 'inline-flex' : 'none';
     window.elements.toggleTracksBtn.disabled = !albumId;
-    window.elements.tracksListContainer.style.display = 'none';
+    if (!albumId) {
+      window.elements.tracksListContainer.style.display = 'none';
+      try { window.elements.toggleTracksBtn.classList.remove('active'); } catch {}
+      try { window.elements.tracksListContainer.classList.remove('tracks-inline'); } catch {}
+      try { document.body.classList.remove('tracks-open'); } catch {}
+    }
   }
 
   // Load artwork asynchronously (don't block playback)

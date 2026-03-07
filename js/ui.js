@@ -1735,6 +1735,14 @@ function updateDescriptionUI(track) {
     elements.toggleTracksBtn.style.display = shouldShowTracks ? 'inline-flex' : 'none';
     setIconControlDisabled(elements.toggleTracksBtn, !albumId || !shouldShowTracks);
 
+    // Cerrar el panel si ya no hay un álbum válido para mostrar
+    if (!shouldShowTracks && elements.tracksListContainer.style.display === 'block') {
+      elements.tracksListContainer.style.display = 'none';
+      try { elements.toggleTracksBtn.classList.remove('active'); } catch {}
+      try { elements.tracksListContainer.classList.remove('tracks-inline'); } catch {}
+      try { document.body.classList.remove('tracks-open'); } catch {}
+    }
+
     // Detectar cambio de álbum y refrescar lista si el panel está abierto
     if (elements.tracksListContainer.style.display === 'block') {
       // Obtener el álbum actualmente mostrado (guardado en dataset)
