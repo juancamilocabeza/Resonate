@@ -121,9 +121,13 @@
         }
 
         if (allowFetch) {
-          const fetched = await fetchAlbumTracks(albumId, options);
-          if (Array.isArray(fetched) && fetched.length > normalized.length) {
-            return fetched;
+          try {
+            const fetched = await fetchAlbumTracks(albumId, options);
+            if (Array.isArray(fetched) && fetched.length > normalized.length) {
+              return fetched;
+            }
+          } catch {
+            // Network or API failure: fall back to the already-normalized seed tracks.
           }
         }
 
@@ -139,7 +143,11 @@
     }
 
     if (!allowFetch) return [];
-    return fetchAlbumTracks(albumId, options);
+    try {
+      return await fetchAlbumTracks(albumId, options);
+    } catch {
+      return [];
+    }
   }
 
   function seedAlbumTracks(albumId, tracks, options = {}) {

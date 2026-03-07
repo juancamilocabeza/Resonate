@@ -32,17 +32,23 @@
           preferFullAlbum: !resonteContext
         });
       } else {
-        files = await (window.fetchOptimizedPlayableFiles || fetchOptimizedPlayableFiles)(albumId);
-        try {
-          if (window.TrackNormalizer && typeof window.TrackNormalizer.normalizeTrackList === 'function') {
-            const albumTitle = (files && files[0] && files[0].album) ? files[0].album : '';
-            files = window.TrackNormalizer.normalizeTrackList(files, {
-              albumId,
-              albumTitle,
-              totalTracks: Array.isArray(files) ? files.length : 0
-            });
+        if (typeof window.fetchOptimizedPlayableFiles === 'function') {
+          try {
+            const raw = await window.fetchOptimizedPlayableFiles(albumId);
+            if (window.TrackNormalizer && typeof window.TrackNormalizer.normalizeTrackList === 'function') {
+              const albumTitle = (raw && raw[0] && raw[0].album) ? raw[0].album : '';
+              files = window.TrackNormalizer.normalizeTrackList(raw, {
+                albumId,
+                albumTitle,
+                totalTracks: Array.isArray(raw) ? raw.length : 0
+              });
+            } else {
+              files = Array.isArray(raw) ? raw : [];
+            }
+          } catch {
+            files = [];
           }
-        } catch {}
+        }
       }
 
       try { tracksContainer.__albumTracks = files; } catch {}
