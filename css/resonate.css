@@ -600,7 +600,7 @@ body.tracks-open #tracks-list-container .tlv2-list {
 
   /* UI Components */
   --card: #262d35;
-  --sheet-bg: #303844;
+  --sheet-bg: #3b4756;
   --sheet-border: rgba(255, 255, 255, 0.14);
   --sheet-border-subtle: rgba(255, 255, 255, 0.08);
   --sheet-handle-bg: rgba(255, 255, 255, 0.22);
@@ -688,7 +688,7 @@ body.tracks-open #tracks-list-container .tlv2-list {
   --highlight: #e879c1;
   --secondary: #f59e0b;
   --card: #121212;
-  --sheet-bg: #181c21;
+  --sheet-bg: #242c36;
   --sheet-border: rgba(255, 255, 255, 0.12);
   --sheet-border-subtle: rgba(255, 255, 255, 0.08);
   --sheet-handle-bg: rgba(255, 255, 255, 0.2);
@@ -875,7 +875,7 @@ body.tracks-open #tracks-list-container .tlv2-list {
   --success: #66cc66;
   --warning: #dd9955;
   --card: #0a0a0a;
-  --sheet-bg: #0f1416;
+  --sheet-bg: #1a2428;
   --sheet-border: rgba(122, 167, 184, 0.18);
   --sheet-border-subtle: rgba(122, 167, 184, 0.1);
   --sheet-handle-bg: rgba(122, 167, 184, 0.2);

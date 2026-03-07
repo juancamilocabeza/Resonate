@@ -87,26 +87,40 @@
     }
   }
 
-  function isLikelyChromiumBrowser() {
+  function isSupportedCastSenderBrowser() {
+    try {
+      if (navigator.brave && typeof navigator.brave.isBrave === 'function') {
+        return false;
+      }
+    } catch (e) {}
+
     try {
       var uaData = navigator.userAgentData;
       if (uaData && Array.isArray(uaData.brands) && uaData.brands.length) {
         for (var i = 0; i < uaData.brands.length; i++) {
           var brand = String(uaData.brands[i] && uaData.brands[i].brand || '').toLowerCase();
-          if (brand.indexOf('chromium') >= 0 || brand.indexOf('google chrome') >= 0 || brand.indexOf('microsoft edge') >= 0 || brand.indexOf('opera') >= 0) {
+          if (brand.indexOf('opera') >= 0 || brand.indexOf('brave') >= 0 || brand.indexOf('vivaldi') >= 0) {
+            return false;
+          }
+          if (brand.indexOf('google chrome') >= 0 || brand.indexOf('microsoft edge') >= 0) {
             return true;
           }
         }
+        return false;
       }
     } catch (e) {}
 
     try {
       var ua = String(navigator.userAgent || '');
+      var vendor = String(navigator.vendor || '');
       if (!ua) return false;
       if (/iPad|iPhone|iPod/i.test(ua)) return false;
       if (/Firefox|FxiOS/i.test(ua)) return false;
+      if (/OPR|Opera|Vivaldi/i.test(ua)) return false;
       if (/Safari/i.test(ua) && !/Chrome|Chromium|CriOS|Edg|OPR/i.test(ua)) return false;
-      return /Chrome|Chromium|Edg|OPR/i.test(ua);
+      if (/Edg/i.test(ua)) return true;
+      if (/Chrome|Chromium/i.test(ua) && /Google Inc\./i.test(vendor)) return true;
+      return false;
     } catch (e) {
       return false;
     }
@@ -122,8 +136,8 @@
       castInitError = 'Cast sender requires HTTPS or localhost';
       return false;
     }
-    if (!isLikelyChromiumBrowser()) {
-      castInitError = 'Cast sender unsupported in this browser';
+    if (!isSupportedCastSenderBrowser()) {
+      castInitError = 'Cast sender unsupported in this browser; using native cast fallback';
       return false;
     }
     return true;
@@ -146,15 +160,24 @@
     } catch (e) {}
   }
 
+  function findCastSenderScript() {
+    try {
+      return document.querySelector('script[data-resonate-cast-sender="true"], script[src*="www.gstatic.com/cv/js/sender/v1/cast_sender.js"]');
+    } catch (e) {
+      return null;
+    }
+  }
+
   function loadCastFrameworkScript() {
     if (isCastFrameworkReady()) return Promise.resolve(true);
-    if (!shouldLoadCastSenderFramework()) return Promise.resolve(false);
+    var existing = findCastSenderScript();
+    if (!existing && !shouldLoadCastSenderFramework()) return Promise.resolve(false);
     if (castScriptLoadPromise) return castScriptLoadPromise;
 
     castScriptLoadPromise = new Promise(function (resolve) {
       castApiWaiters.push(resolve);
 
-      var existing = document.querySelector('script[data-resonate-cast-sender="true"]');
+      existing = existing || findCastSenderScript();
       if (!existing) {
         var script = document.createElement('script');
         script.async = true;
