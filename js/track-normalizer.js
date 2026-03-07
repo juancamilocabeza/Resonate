@@ -15,6 +15,138 @@
     return String(value).trim();
   }
 
+  function escapeRegExp(value) {
+    return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  const CREATOR_NOISE_WORDS = new Set([
+    'a',
+    'an',
+    'and',
+    'by',
+    'feat',
+    'featuring',
+    'ft',
+    'music',
+    'official',
+    'records',
+    'the',
+    'topic'
+  ]);
+
+  function tokenizeCreatorMatch(value) {
+    return normalizeString(value)
+      .split(/[\s._\-–—:|/()[\]{}&+,!]+/)
+      .map(token => token.replace(/^["'`]+|["'`]+$/g, ''))
+      .filter(Boolean);
+  }
+
+  function buildFlexibleCreatorPattern(value) {
+    const tokens = tokenizeCreatorMatch(value);
+    if (!tokens.length) return escapeRegExp(normalizeString(value));
+    return tokens.map(token => escapeRegExp(token)).join("[\\s._'’/-]*");
+  }
+
+  function getCreatorMatchVariants(creator) {
+    const normalizedCreator = normalizeString(creator);
+    if (!normalizedCreator) return [];
+
+    const tokens = tokenizeCreatorMatch(normalizedCreator);
+    const significantTokens = tokens.filter(token => !CREATOR_NOISE_WORDS.has(token.toLowerCase()));
+    const variants = [];
+    const seen = new Set();
+
+    const addVariant = (value) => {
+      const variant = normalizeString(value);
+      if (!variant) return;
+      const key = variant.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      variants.push(variant);
+    };
+
+    addVariant(normalizedCreator);
+
+    if (significantTokens.length > 0) {
+      addVariant(significantTokens.join(' '));
+    }
+
+    if (significantTokens.length >= 3) {
+      addVariant(significantTokens.slice(0, significantTokens.length - 1).join(' '));
+      addVariant(significantTokens.slice(1).join(' '));
+    }
+
+    if (significantTokens.length === 1 && significantTokens[0].length >= 4) {
+      addVariant(significantTokens[0]);
+    }
+
+    return variants;
+  }
+
+  function cleanupTrackTitle(value) {
+    return normalizeString(value)
+      .replace(/\s{2,}/g, ' ')
+      .replace(/\s+([)\]])/g, '$1')
+      .replace(/([([])\s+/g, '$1')
+      .replace(/^\s*[-–—:|/]\s*/g, '')
+      .replace(/\s*[-–—:|/]\s*$/g, '')
+      .trim();
+  }
+
+  function stripCreatorFromTitle(title, creator) {
+    const normalizedTitle = normalizeString(title);
+    const normalizedCreator = normalizeString(creator);
+    if (!normalizedTitle || !normalizedCreator) return normalizedTitle;
+
+    const patterns = getCreatorMatchVariants(normalizedCreator).flatMap((variant) => {
+      const creatorPattern = buildFlexibleCreatorPattern(variant);
+      return [
+        new RegExp(`^\\s*${creatorPattern}\\s*[-–—:|/]+\\s*`, 'i'),
+        new RegExp(`\\s*[-–—:|/]+\\s*${creatorPattern}\\s*$`, 'i'),
+        new RegExp(`^\\s*[([]\\s*(?:by\\s+)?${creatorPattern}\\s*[)]]\\s*`, 'i'),
+        new RegExp(`\\s*[([]\\s*(?:by\\s+)?${creatorPattern}\\s*[)]]\\s*$`, 'i'),
+        new RegExp(`\\s+by\\s+${creatorPattern}\\s*$`, 'i')
+      ];
+    });
+
+    let cleanedTitle = normalizedTitle;
+    let previousTitle = '';
+
+    while (cleanedTitle && cleanedTitle !== previousTitle) {
+      previousTitle = cleanedTitle;
+      patterns.forEach((pattern) => {
+        cleanedTitle = cleanedTitle.replace(pattern, ' ');
+      });
+      cleanedTitle = cleanupTrackTitle(cleanedTitle);
+    }
+
+    return cleanedTitle || normalizedTitle;
+  }
+
+  function normalizeCreatorDisplay(value) {
+    return normalizeString(value).replace(/\s*\([^)]*\)\s*$/g, '').trim();
+  }
+
+  function sanitizeDisplayTitle(title, creator, albumTitle) {
+    const normalizedTitle = normalizeString(title);
+    const normalizedAlbumTitle = normalizeString(albumTitle);
+    const normalizedCreator = normalizeCreatorDisplay(creator);
+    if (!normalizedTitle) return '';
+
+    const dashMatch = normalizedTitle.match(/^(.+?)\s+[—-]\s+(.+)$/);
+    if (dashMatch) {
+      const leftPart = normalizeString(dashMatch[1]);
+      const rightPart = normalizeString(dashMatch[2]);
+      const albumMatch = normalizedAlbumTitle && leftPart.toLowerCase() === normalizedAlbumTitle.toLowerCase();
+      if (albumMatch) {
+        const cleanedRightPart = stripCreatorFromTitle(rightPart, normalizedCreator);
+        return cleanedRightPart ? `${leftPart} — ${cleanedRightPart}` : leftPart;
+      }
+    }
+
+    return stripCreatorFromTitle(normalizedTitle, normalizedCreator);
+  }
+
   function toNumber(value) {
     if (value === null || value === undefined) return null;
     const num = Number(value);
@@ -72,6 +204,7 @@
     if (!normalized.album && albumTitle) normalized.album = albumTitle;
     if (!normalized.albumTitle && albumTitle) normalized.albumTitle = albumTitle;
     if (!normalized.creator && creator) normalized.creator = creator;
+    if (normalized.title) normalized.title = stripCreatorFromTitle(normalized.title, creator);
 
     if (normalized.trackIndex === null || normalized.trackIndex === undefined) {
       if (typeof opts.trackIndex === 'number' && Number.isFinite(opts.trackIndex)) {
@@ -126,6 +259,8 @@
     canonicalizeUrl,
     normalizeTrack,
     normalizeTrackList,
-    getTrackKey
+    getTrackKey,
+    stripCreatorFromTitle,
+    sanitizeDisplayTitle
   };
 })(window);

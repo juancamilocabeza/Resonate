@@ -398,6 +398,9 @@
       var displayTitle = (isAlbumTrack && albumTitle && albumTitle.toLowerCase() !== trackTitle.toLowerCase())
         ? albumTitle + ' - ' + trackTitle
         : trackTitle;
+      if (window.TrackNormalizer && typeof window.TrackNormalizer.sanitizeDisplayTitle === 'function') {
+        displayTitle = window.TrackNormalizer.sanitizeDisplayTitle(displayTitle, track.creator, albumTitle);
+      }
       if (typeof window.updateTitleTicker === 'function') {
         window.updateTitleTicker(displayTitle);
       } else if (elements.title) {

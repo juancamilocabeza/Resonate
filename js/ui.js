@@ -1990,14 +1990,39 @@ function clearTitleTicker() {
   }
 }
 
+function sanitizeTitleTickerText(titleText) {
+  const normalizedTitleText = titleText === null || titleText === undefined
+    ? ''
+    : String(titleText);
+  if (!normalizedTitleText) return '';
+
+  const currentTrack = window.state && typeof window.state.currentTrack === 'object'
+    ? window.state.currentTrack
+    : null;
+  const creatorText = currentTrack
+    ? (currentTrack.creator || currentTrack.artist || '')
+    : (elements && elements.creator ? String(elements.creator.textContent || '') : '');
+  const albumTitle = currentTrack
+    ? (currentTrack.albumTitle || currentTrack.album || '')
+    : '';
+
+  if (window.TrackNormalizer && typeof window.TrackNormalizer.sanitizeDisplayTitle === 'function') {
+    return window.TrackNormalizer.sanitizeDisplayTitle(normalizedTitleText, creatorText, albumTitle);
+  }
+
+  return normalizedTitleText;
+}
+
 function updateTitleTicker(titleText) {
   if (!elements || !elements.title) return;
   
   clearTitleTicker();
+
+  const safeTitleText = sanitizeTitleTickerText(titleText);
   
   const currentToken = ++tickerToken;
   
-  if (!titleText) {
+  if (!safeTitleText) {
     elements.title.textContent = '';
     return;
   }
@@ -2014,26 +2039,26 @@ function updateTitleTicker(titleText) {
     elements.title.appendChild(span);
   }
   
-  span.textContent = titleText;
+  span.textContent = safeTitleText;
   span.style.removeProperty('animation-duration');
   
   // Simple character-based check (more reliable than measuring)
   // Typical container is ~320-1100px, at 24px font ~50 chars fit in 1000px
   const charThreshold = 45; // Conservative threshold for overflow detection
   
-  if (titleText.length > charThreshold) {
+  if (safeTitleText.length > charThreshold) {
     // Estimate overflow based on character count
-    const estimatedWidth = titleText.length * 15; // ~15px per char at 24px font
+    const estimatedWidth = safeTitleText.length * 15; // ~15px per char at 24px font
     const containerWidth = elements.title.clientWidth || 1000;
     const overflowPx = Math.max(0, estimatedWidth - containerWidth);
-    const duration = calculateTickerDuration(titleText.length);
+    const duration = calculateTickerDuration(safeTitleText.length);
     
     console.log('TitleTicker:', { 
       containerWidth, 
       estimatedWidth, 
       overflow: overflowPx, 
-      chars: titleText.length,
-      text: titleText 
+      chars: safeTitleText.length,
+      text: safeTitleText 
     });
     
     if (overflowPx > 0) {

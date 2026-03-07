@@ -2167,12 +2167,15 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
     const titleText = (isAlbumTrack && albumTitle && albumTitle.toLowerCase() !== trackTitle.toLowerCase())
       ? `${albumTitle} — ${trackTitle}`
       : trackTitle;
+    const displayTitle = (window.TrackNormalizer && typeof window.TrackNormalizer.sanitizeDisplayTitle === 'function')
+      ? window.TrackNormalizer.sanitizeDisplayTitle(titleText, track.creator, albumTitle)
+      : titleText;
 
     // Delegate rendering to the ticker helper (it manages the inner span wrapper).
     if (typeof window.updateTitleTicker === 'function') {
-      window.updateTitleTicker(titleText);
+      window.updateTitleTicker(displayTitle);
     } else {
-      window.elements.title.textContent = titleText;
+      window.elements.title.textContent = displayTitle;
     }
     window.elements.creator.textContent = isAlbumTrack
       ? `${track.creator || 'Unknown'} (${trackIndex + 1}/${totalTracks})`
