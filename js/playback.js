@@ -64,15 +64,51 @@
     try {
       if (shouldBePlaying()) {
         tryResumePlayback();
+      } else if (shouldAdvanceTrack()) {
+        // Audio has ended but we are not loading a next track - this can happen
+        // when the page was throttled/frozen during the gap between tracks.
+        // Kick off the next track to recover continuous playback.
+        try {
+          if (typeof playNextInContext === 'function') {
+            playNextInContext().catch(() => {});
+          }
+        } catch {}
       }
     } catch {}
     setTimeout(periodicCheck, CHECK_INTERVAL);
   }
 
-  // Mejora: reintentar precarga al recuperar visibilidad
+  // When audio is in the ended state but should be playing (not user-paused,
+  // not loading), a track transition was lost (e.g. page was frozen/throttled).
+  function shouldAdvanceTrack() {
+    try {
+      const audio = getAudioEl();
+      if (!audio) return false;
+      if (window.state && window.state.isLoading) return false;
+      if (!audio.src) return false;
+      if (window.state && window.state.currentTrack && window.state.currentTrack.url) {
+        if (audio.ended && !lastUserPaused) {
+          return true;
+        }
+      }
+    } catch {}
+    return false;
+  }
+
+  // Mejora: reintentar precarga al recuperar visibilidad y recuperar reproducción
+  // si se interrumpió durante la transición de pista con pantalla bloqueada.
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) {
       preloadNextTrack(true);
+      // If audio ended while the screen was locked (track transition failed),
+      // attempt to advance to the next track now that the page is visible.
+      try {
+        if (shouldAdvanceTrack()) {
+          if (typeof playNextInContext === 'function') {
+            playNextInContext().catch(() => {});
+          }
+        }
+      } catch {}
     }
   });
 
@@ -389,6 +425,16 @@ function resetAutoSkipBudgetForCurrentContext() {
 function tryConsumeAutoSkipBudget(reason = 'auto-skip') {
   const key = computeAutoSkipContextKey();
   if (!key) return { allowed: true, remaining: AUTO_SKIP_MAX_PER_CONTEXT, contextKey: key };
+
+  // When the screen is locked the auto-skip budget must not be depleted by
+  // retries that are triggered by background throttling (timer delays, frozen
+  // page, autoplay blocks).  These are transient platform constraints, not
+  // broken tracks, so we report "allowed" without consuming any budget.
+  if (document.hidden) {
+    const existing = autoSkipStateByContextKey.get(key) || { remaining: AUTO_SKIP_MAX_PER_CONTEXT, updatedAt: Date.now() };
+    const remaining = Number.isFinite(existing.remaining) ? existing.remaining : AUTO_SKIP_MAX_PER_CONTEXT;
+    return { allowed: true, remaining, contextKey: key };
+  }
 
   const existing = autoSkipStateByContextKey.get(key) || { remaining: AUTO_SKIP_MAX_PER_CONTEXT, updatedAt: Date.now() };
   const remaining = Number.isFinite(existing.remaining) ? existing.remaining : AUTO_SKIP_MAX_PER_CONTEXT;
@@ -1834,19 +1880,28 @@ async function loadAudioWithCache(track) {
 
     if (cacheResult && cacheResult.blob) {
       logPlayback('info', `Playing from cache: ${track.title || track.url}`);
-      
-      // Simulate smooth progress from cache hit (20→85%) with very short steps
-      const cacheProgressStart = 20;
-      const cacheProgressEnd = 85;
-      const cacheSteps = 14;
-      const cacheStepDuration = 25; // faster cadence for cache
-      
-      for (let i = 1; i <= cacheSteps; i++) {
-        await new Promise(resolve => setTimeout(resolve, cacheStepDuration));
-        const pct = cacheProgressStart + Math.round(((i / cacheSteps) * (cacheProgressEnd - cacheProgressStart)));
-        updateLoaderProgress(pct);
+
+      // Only animate progress when the page is visible.
+      // When the screen is locked (document.hidden), background timer throttling
+      // delays each setTimeout(25 ms) to ~1 s, creating a ~14-second audio gap
+      // that allows the browser to freeze the page and block autoplay for the
+      // next track.  Skip the animation entirely in background mode.
+      if (!document.hidden) {
+        const cacheProgressStart = 20;
+        const cacheProgressEnd = 85;
+        const cacheSteps = 14;
+        const cacheStepDuration = 25; // faster cadence for cache
+
+        for (let i = 1; i <= cacheSteps; i++) {
+          await new Promise(resolve => setTimeout(resolve, cacheStepDuration));
+          const pct = cacheProgressStart + Math.round(((i / cacheSteps) * (cacheProgressEnd - cacheProgressStart)));
+          updateLoaderProgress(pct);
+        }
+      } else {
+        // Background: jump straight to the final progress value
+        updateLoaderProgress(85);
       }
-      
+
       if (cacheResult.blob.size > 0) {
         const blobUrl = URL.createObjectURL(cacheResult.blob);
         return blobUrl;
@@ -2347,6 +2402,28 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
           showAutoplayCta('Tap Play to start');
           state.isLoading = false;
           resolve(false);
+          return;
+        }
+
+        // When the screen is locked and autoplay is blocked, retrying with
+        // setTimeout-based delays is counter-productive: the timers are throttled
+        // and the page may be frozen before they fire.  Instead, defer the retry
+        // until the page becomes visible again (user unlocks the screen).
+        if (isAutoplayBlockedError(error) && document.hidden) {
+          state.isLoading = false;
+          cleanup();
+          const onVisibleRetry = () => {
+            if (!document.hidden) {
+              audioEl.play().then(() => resolve(true)).catch(() => reject(error));
+            } else {
+              reject(error);
+            }
+          };
+          try {
+            document.addEventListener('visibilitychange', onVisibleRetry, { once: true });
+          } catch {
+            reject(error);
+          }
           return;
         }
 
