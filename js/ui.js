@@ -5781,9 +5781,16 @@ function setupPageVisibilityHandling() {
   try {
     document.addEventListener('freeze', () => {
       savePlaybackState();
-      // Cleanup MediaSession on freeze to save battery
+      // Only cleanup MediaSession when audio is truly idle.  If audio is playing
+      // or a track transition is in progress (isLoading), keep the handlers alive
+      // so that lock-screen controls continue to work during background playback.
       if (window.mediaSessionManager) {
-        window.mediaSessionManager.cleanup();
+        const audio = elements && elements.audio;
+        const isActiveOrTransitioning = (audio && !audio.paused) ||
+          (window.state && window.state.isLoading);
+        if (!isActiveOrTransitioning) {
+          window.mediaSessionManager.cleanup();
+        }
       }
     });
   } catch {
