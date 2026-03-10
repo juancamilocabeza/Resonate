@@ -588,6 +588,13 @@ function dispatchSearchWithFastPath(queryAtDispatch, { keepKeyboard = true, addT
 
     try { if (typeof window.abortAllSearchOperations === 'function') window.abortAllSearchOperations(); } catch {}
 
+    // Analytics: track search event
+    try {
+      if (window.ResonateAnalytics && typeof window.ResonateAnalytics.trackSearch === 'function') {
+        window.ResonateAnalytics.trackSearch(q);
+      }
+    } catch (_) {}
+
     state.searchRequestId = (state.searchRequestId || 0) + 1;
     const requestId = state.searchRequestId;
     try { markSearchPerfStart(q, requestId); } catch {}
@@ -8428,6 +8435,12 @@ async function shareTrack(identifier, title = 'Track', creator = null, albumTitl
     if (canCopy) {
       const copied = await tryCopyToClipboard(shareUrl);
       if (copied) {
+        // Analytics: track clipboard copy as share
+        try {
+          if (window.ResonateAnalytics && typeof window.ResonateAnalytics.trackShare === 'function') {
+            window.ResonateAnalytics.trackShare({ method: 'copy_link', content_type: shareKind, item_id: identifier });
+          }
+        } catch (_) {}
         showStatus('Link copied to clipboard', 'info', 4000);
         return;
       }
@@ -8466,6 +8479,17 @@ async function shareTrack(identifier, title = 'Track', creator = null, albumTitl
 
   try {
     window.logger?.debug('Using Web Share API with enriched message', 'NETWORK');
+
+    // Analytics: track share event
+    try {
+      if (window.ResonateAnalytics && typeof window.ResonateAnalytics.trackShare === 'function') {
+        window.ResonateAnalytics.trackShare({
+          method: 'web_share',
+          content_type: shareKind,
+          item_id: identifier
+        });
+      }
+    } catch (_) {}
 
     const baseShareData = {
       title: shareDataTitle,
