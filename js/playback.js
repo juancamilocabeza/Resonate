@@ -2386,6 +2386,18 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
           }
         }
 
+        // Analytics: track play event
+        try {
+          if (window.ResonateAnalytics && typeof window.ResonateAnalytics.trackPlay === 'function') {
+            window.ResonateAnalytics.trackPlay({
+              title: track.title,
+              creator: track.creator,
+              id: state.currentTrack.id,
+              duration: audio.duration
+            });
+          }
+        } catch (_) {}
+
         // Mejora: forzar precarga extendida de próximas pistas al terminar la actual
         preloadNextTrack(true);
 
@@ -2569,6 +2581,13 @@ function playPrevious() {
   showStatus('Going back to previous track', 'info');
   if (state.isLoading) return;
 
+  // Analytics: track skip previous
+  try {
+    if (window.ResonateAnalytics && typeof window.ResonateAnalytics.trackSkipPrev === 'function') {
+      window.ResonateAnalytics.trackSkipPrev();
+    }
+  } catch (_) {}
+
   showManualSkipLoader();
   scheduleHideManualSkipLoaderFallback();
 
@@ -2585,6 +2604,13 @@ async function playNext() {
   showStatus('Skipping to next track now', 'info');
 
   if (state.isLoading) return;
+
+  // Analytics: track skip next
+  try {
+    if (window.ResonateAnalytics && typeof window.ResonateAnalytics.trackSkipNext === 'function') {
+      window.ResonateAnalytics.trackSkipNext();
+    }
+  } catch (_) {}
 
   showManualSkipLoader();
   scheduleHideManualSkipLoaderFallback();
@@ -2817,6 +2843,19 @@ function togglePlay() {
     audio.pause();
     setMainPlayButtonState(false);
     safeShowStatus('Music is now paused', 'info');
+
+    // Analytics: track pause event
+    try {
+      if (window.ResonateAnalytics && typeof window.ResonateAnalytics.trackPause === 'function') {
+        const ct = state.currentTrack || {};
+        window.ResonateAnalytics.trackPause({
+          title: ct.title,
+          creator: ct.creator,
+          id: ct.id,
+          currentTime: audio.currentTime
+        });
+      }
+    } catch (_) {}
 
     // Update MediaSession playback state and position
     if (window.mediaSessionManager && window.mediaSessionManager.isSupported) {
