@@ -159,10 +159,6 @@
 
   function shouldLoadCastSenderFramework() {
     if (isCastFrameworkReady()) return true;
-    if (isStandaloneDisplayMode()) {
-      castInitError = 'Cast sender disabled in standalone mode';
-      return false;
-    }
     if (!hasSecureCastOrigin()) {
       castInitError = 'Cast sender requires HTTPS or localhost';
       return false;
@@ -794,6 +790,59 @@
     return 'https://archive.org/services/img/' + encodeURIComponent(id);
   }
 
+  function getCastMediaContentType(track, url) {
+    var format = '';
+    try {
+      format = track && track.format ? String(track.format).trim().toLowerCase() : '';
+    } catch (e) {
+      format = '';
+    }
+
+    if (!format) {
+      try {
+        var fileName = track && track.fileName ? String(track.fileName).trim().toLowerCase() : '';
+        if (fileName) {
+          var parts = fileName.split('.');
+          format = parts.length > 1 ? String(parts.pop() || '').trim().toLowerCase() : '';
+        }
+      } catch (e) {
+        format = '';
+      }
+    }
+
+    if (!format) {
+      try {
+        var pathname = new URL(String(url || ''), window.location.href).pathname.toLowerCase();
+        var match = pathname.match(/\.([a-z0-9]+)$/i);
+        format = match && match[1] ? String(match[1]).toLowerCase() : '';
+      } catch (e) {
+        var rawUrl = String(url || '').toLowerCase();
+        var fallbackMatch = rawUrl.match(/\.([a-z0-9]+)(?:\?|#|$)/i);
+        format = fallbackMatch && fallbackMatch[1] ? String(fallbackMatch[1]).toLowerCase() : '';
+      }
+    }
+
+    switch (format) {
+      case 'flac':
+        return 'audio/flac';
+      case 'ogg':
+      case 'oga':
+      case 'opus':
+        return 'audio/ogg';
+      case 'wav':
+      case 'wave':
+        return 'audio/wav';
+      case 'aac':
+        return 'audio/aac';
+      case 'm4a':
+      case 'mp4':
+        return 'audio/mp4';
+      case 'mp3':
+      default:
+        return 'audio/mpeg';
+    }
+  }
+
   function loadMediaFromTrack(track, audioUrl, currentTime, duration, options) {
     if (!isCastFrameworkReady()) return Promise.reject(new Error('Cast framework not available'));
 
@@ -813,8 +862,9 @@
     var totalTracks = (track && typeof track.totalTracks === 'number' && isFinite(track.totalTracks)) ? track.totalTracks : null;
     var artUrl = getCoverUrl(track);
     var durationSeconds = (typeof duration === 'number' && isFinite(duration) && duration > 0) ? duration : null;
+    var contentType = getCastMediaContentType(track, url);
 
-    var mediaInfo = new window.chrome.cast.media.MediaInfo(url, 'audio/mpeg');
+    var mediaInfo = new window.chrome.cast.media.MediaInfo(url, contentType);
     mediaInfo.streamType = window.chrome.cast.media.StreamType.BUFFERED;
     if (durationSeconds) {
       mediaInfo.duration = durationSeconds;
