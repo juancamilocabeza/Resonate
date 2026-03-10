@@ -36,9 +36,46 @@
   <script>
     (function () {
       try {
-        if (typeof window.__resonatePreloadCastSender === 'function') {
-          window.__resonatePreloadCastSender();
+        var locationRef = window.location || {};
+        var hostname = String(locationRef.hostname || '').toLowerCase();
+        var port = String(locationRef.port || '');
+        var isLocalDevelopment = hostname === 'localhost'
+          || hostname === '127.0.0.1'
+          || hostname === '[::1]'
+          || hostname.endsWith('.local')
+          || hostname.indexOf('dev.') >= 0
+          || port === '3000'
+          || port === '8080';
+
+        var queryParams = new URLSearchParams(String(locationRef.search || ''));
+        var castDevFlag = String(queryParams.get('castDev') || '').trim().toLowerCase();
+        var storedCastDevFlag = '';
+
+        try {
+          storedCastDevFlag = String(window.localStorage && window.localStorage.getItem('resonate_cast_dev') || '').trim().toLowerCase();
+        } catch (storageError) {
+          storedCastDevFlag = '';
         }
+
+        var allowLocalSenderSdk = castDevFlag === 'sdk'
+          || castDevFlag === 'sender'
+          || castDevFlag === 'force'
+          || storedCastDevFlag === 'sdk'
+          || storedCastDevFlag === 'sender'
+          || storedCastDevFlag === 'force';
+
+        if (isLocalDevelopment && !allowLocalSenderSdk) return;
+
+        if (document.querySelector('script[data-resonate-cast-sender="true"], script[src*="www.gstatic.com/cv/js/sender/v1/cast_sender.js"]')) {
+          return;
+        }
+
+        var senderScript = document.createElement('script');
+        senderScript.async = true;
+        senderScript.defer = true;
+        senderScript.src = 'https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1';
+        senderScript.setAttribute('data-resonate-cast-sender', 'true');
+        (document.head || document.documentElement).appendChild(senderScript);
       } catch (e) {
         // ignore cast preload failures; cast.js will fall back internally
       }
