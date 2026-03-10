@@ -112,12 +112,22 @@ const Battery = (() => {
       } catch {}
 
       if (shouldRestore) {
-        themeManager?.applyTheme?.(prevTheme);
-        showBatteryNotification(level, false);
+        // Clear eco override keys before restoring so applyTimeBasedTheme can proceed
         try {
           localStorage.removeItem(ECO_OVERRIDE_ACTIVE_KEY);
           localStorage.removeItem(ECO_OVERRIDE_PREV_THEME_KEY);
         } catch {}
+
+        // Restore to time-based theme if no user preference, otherwise restore previous theme
+        const hasUserPreference = typeof themeManager?.hasUserThemePreference === 'function'
+          ? themeManager.hasUserThemePreference()
+          : (() => { try { return localStorage.getItem('resonate-theme') !== null; } catch { return false; } })();
+        if (!hasUserPreference && typeof themeManager?.applyTimeBasedTheme === 'function') {
+          themeManager.applyTimeBasedTheme();
+        } else {
+          themeManager?.applyTheme?.(prevTheme);
+        }
+        showBatteryNotification(level, false);
       }
     }
   }
