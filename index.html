@@ -33,7 +33,17 @@
   <link rel="stylesheet" href="css/player-controls.css" />
   <link rel="stylesheet" href="css/player-bottom-sheet.css" />
   <script src="js/cast.js"></script>
-  <script src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1" data-resonate-cast-sender="true"></script>
+  <script>
+    (function () {
+      try {
+        if (typeof window.__resonatePreloadCastSender === 'function') {
+          window.__resonatePreloadCastSender();
+        }
+      } catch (e) {
+        // ignore cast preload failures; cast.js will fall back internally
+      }
+    })();
+  </script>
 </head>
 <body>
   <div class="app" id="app" data-nosnippet>

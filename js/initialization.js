@@ -1269,8 +1269,9 @@ async function initializeApp() {
         } catch {}
       };
 
-      const logCastHint = (message) => {
+      const logCastHint = (message, type = 'info', duration = 3500) => {
         try { window.logger?.info(message, 'CAST'); } catch {}
+        try { safeShowStatus(message, type, duration); } catch {}
       };
 
       if (castBtn) {
@@ -1321,18 +1322,37 @@ async function initializeApp() {
         ? window.getCastCapabilities(audioEl)
         : { canRemotePlayback: false, canAirPlay: false };
 
+      const isLocalDevelopmentCastOrigin = (() => {
+        try {
+          const location = window.location || {};
+          const hostname = String(location.hostname || '').toLowerCase();
+          const port = String(location.port || '');
+          return hostname === 'localhost'
+            || hostname === '127.0.0.1'
+            || hostname === '[::1]'
+            || hostname.endsWith('.local')
+            || hostname.includes('dev.')
+            || port === '3000'
+            || port === '8080';
+        } catch {
+          return false;
+        }
+      })();
+
+      const shouldPreferNativeRemotePlayback = isLocalDevelopmentCastOrigin;
+
       let castManagerReady = false;
-      if (window.CastManager && typeof window.CastManager.ensureReady === 'function') {
+      if (!shouldPreferNativeRemotePlayback && window.CastManager && typeof window.CastManager.ensureReady === 'function') {
         try {
           castManagerReady = !!(await window.CastManager.ensureReady());
         } catch {}
-      } else if (window.CastManager && typeof window.CastManager.init === 'function') {
+      } else if (!shouldPreferNativeRemotePlayback && window.CastManager && typeof window.CastManager.init === 'function') {
         try {
           castManagerReady = !!window.CastManager.init();
         } catch {}
       }
 
-      if (!castManagerReady && window.CastManager && typeof window.CastManager.isReady === 'function') {
+      if (!shouldPreferNativeRemotePlayback && !castManagerReady && window.CastManager && typeof window.CastManager.isReady === 'function') {
         castManagerReady = window.CastManager.isReady();
       }
 
@@ -1357,7 +1377,7 @@ async function initializeApp() {
           logCastHint('Casting to device');
           return;
         } catch (err) {
-          logCastHint('Cast session failed. Check sender domain and devices.');
+          logCastHint('Cast session failed. Check sender domain and devices.', 'warning', 4500);
         }
       }
 
@@ -1367,7 +1387,7 @@ async function initializeApp() {
           const isPwa = (typeof isRunningAsPWA === 'function') ? isRunningAsPWA() : false;
           logCastHint(isPwa
             ? 'Open in browser and use the Cast menu'
-            : 'Use your browser menu to cast this track');
+            : 'Use your browser menu to cast this track', 'info', 4000);
           return;
         }
       }
@@ -1379,7 +1399,7 @@ async function initializeApp() {
           return;
         } catch (err) {
           if (err && (err.name === 'AbortError' || err.name === 'NotAllowedError')) {
-            logCastHint('Cast prompt dismissed');
+            logCastHint('Cast prompt dismissed', 'info', 2500);
             return;
           }
           window.logger?.warn({ message: 'Cast prompt failed', error: err }, 'UI');
@@ -1393,11 +1413,16 @@ async function initializeApp() {
           return;
         } catch (err) {
           if (err && (err.name === 'AbortError' || err.name === 'NotAllowedError')) {
-            logCastHint('AirPlay picker dismissed');
+            logCastHint('AirPlay picker dismissed', 'info', 2500);
             return;
           }
           window.logger?.warn({ message: 'AirPlay picker failed', error: err }, 'UI');
         }
+      }
+
+      if (isLocalDevelopmentCastOrigin) {
+        logCastHint('Local Cast uses the browser remote playback flow. The Google sender SDK stays off on localhost to avoid console errors.', 'info', 5000);
+        return;
       }
 
       const isPwa = (typeof isRunningAsPWA === 'function') ? isRunningAsPWA() : false;
@@ -1407,22 +1432,24 @@ async function initializeApp() {
           logCastHint(
             isPwa
               ? 'Casting needs the browser menu. Opening a browser tab.'
-              : 'Use your browser menu to cast this track'
+              : 'Use your browser menu to cast this track',
+            'info',
+            4000
           );
           sessionStorage.setItem(hintKey, 'true');
         }
       } catch {}
       if (isPwa) {
-        logCastHint('Use your browser menu to cast this track');
+        logCastHint('Use your browser menu to cast this track', 'info', 4000);
         return;
       }
 
       if (!audioSrc) {
-        logCastHint('Play a track first to cast');
+        logCastHint('Play a track first to cast', 'info', 3000);
         return;
       }
 
-      logCastHint('Use your browser menu to cast this track');
+      logCastHint('Use your browser menu to cast this track', 'info', 4000);
     };
 
     elements.currentTrackCast.addEventListener('click', handleCast);

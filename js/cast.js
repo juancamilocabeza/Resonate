@@ -46,6 +46,37 @@
     }
   }
 
+  function parseCastDevFlag(value) {
+    var normalized = String(value || '').trim().toLowerCase();
+    if (!normalized) return null;
+    if (normalized === 'sdk' || normalized === 'sender' || normalized === 'force') return 'sdk';
+    if (normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on') return true;
+    if (normalized === '0' || normalized === 'false' || normalized === 'no' || normalized === 'off') return false;
+    return null;
+  }
+
+  function isLocalDevelopmentCastEnabled() {
+    if (!isLocalDevelopmentOrigin()) return true;
+
+    try {
+      var search = window.location && window.location.search ? String(window.location.search) : '';
+      var queryValue = parseCastDevFlag(new URLSearchParams(search).get('castDev'));
+      if (queryValue === 'sdk') {
+        return true;
+      }
+      if (queryValue === false) {
+        try { window.localStorage.removeItem('resonate_cast_dev'); } catch (storageError) {}
+        return false;
+      }
+    } catch (e) {}
+
+    try {
+      return parseCastDevFlag(window.localStorage && window.localStorage.getItem('resonate_cast_dev')) === 'sdk';
+    } catch (e) {
+      return false;
+    }
+  }
+
   function getCastAppId() {
     var defaultAppId = getDefaultCastAppId();
     try {
@@ -140,6 +171,16 @@
       castInitError = 'Cast sender unsupported in this browser; using native cast fallback';
       return false;
     }
+    if (!isLocalDevelopmentCastEnabled()) {
+      castInitError = 'Cast sender disabled in local development; use native remote playback locally or force the sender SDK with ?castDev=sdk';
+      return false;
+    }
+    return true;
+  }
+
+  function shouldPreloadCastSenderFramework() {
+    if (!shouldLoadCastSenderFramework()) return false;
+    if (isLocalDevelopmentOrigin()) return false;
     return true;
   }
 
@@ -202,6 +243,15 @@
     });
 
     return castScriptLoadPromise;
+  }
+
+  function preloadCastFrameworkScript() {
+    try {
+      if (!shouldPreloadCastSenderFramework()) return Promise.resolve(false);
+      return loadCastFrameworkScript();
+    } catch (e) {
+      return Promise.resolve(false);
+    }
   }
 
   function ensureCastFrameworkReady() {
@@ -834,6 +884,7 @@
   }
 
   window.__onGCastApiAvailable = onGCastApiAvailable;
+  window.__resonatePreloadCastSender = preloadCastFrameworkScript;
 
   if (isCastFrameworkReady()) {
     initCastFramework();

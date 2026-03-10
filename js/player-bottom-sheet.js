@@ -22,6 +22,21 @@
     });
   }
 
+  function focusElement(element) {
+    if (!element || typeof element.focus !== 'function') return false;
+    try {
+      element.focus({ preventScroll: true });
+      return true;
+    } catch (e) {
+      try {
+        element.focus();
+        return true;
+      } catch (focusError) {
+        return false;
+      }
+    }
+  }
+
   function setOverlayState(isOpen) {
     if (!overlay) return;
     overlay.classList.toggle('open', isOpen);
@@ -29,18 +44,48 @@
     document.body.classList.toggle('sheet-open', isOpen);
   }
 
+  function setSheetInteractivity(sheet, isOpen) {
+    if (!sheet) return;
+    sheet.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+    try {
+      sheet.inert = !isOpen;
+    } catch (e) {
+      if (isOpen) {
+        sheet.removeAttribute('inert');
+      } else {
+        sheet.setAttribute('inert', '');
+      }
+    }
+  }
+
+  function moveFocusOutsideSheet(controller) {
+    if (!controller || !controller.sheet) return;
+
+    var activeElement = document.activeElement;
+    if (!activeElement || !controller.sheet.contains(activeElement)) return;
+
+    if (controller.trigger && !controller.sheet.contains(controller.trigger) && focusElement(controller.trigger)) {
+      return;
+    }
+
+    try {
+      activeElement.blur();
+    } catch (e) {}
+  }
+
   function closeSheet(controller, options) {
     var shouldRestoreFocus = !options || options.restoreFocus !== false;
     if (!controller || !controller.sheet) return;
 
+    moveFocusOutsideSheet(controller);
     controller.sheet.classList.remove('open');
-    controller.sheet.setAttribute('aria-hidden', 'true');
+    setSheetInteractivity(controller.sheet, false);
     controller.sheet.style.transform = '';
 
     if (controller.trigger) {
       controller.trigger.setAttribute('aria-expanded', 'false');
-      if (shouldRestoreFocus && typeof controller.trigger.focus === 'function') {
-        controller.trigger.focus();
+      if (shouldRestoreFocus) {
+        focusElement(controller.trigger);
       }
     }
 
@@ -63,7 +108,7 @@
 
     activeController = controller;
     controller.sheet.classList.add('open');
-    controller.sheet.setAttribute('aria-hidden', 'false');
+    setSheetInteractivity(controller.sheet, true);
     controller.trigger.setAttribute('aria-expanded', 'true');
     setOverlayState(true);
 
@@ -191,6 +236,8 @@
       sheet: sheet,
       touch: { startY: 0, currentY: 0, isDragging: false }
     };
+
+    setSheetInteractivity(sheet, false);
 
     trigger.addEventListener('click', function (event) {
       event.preventDefault();
