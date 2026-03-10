@@ -126,20 +126,6 @@
             </div>
             <div class="creator" id="creator"></div>
             <div id="description-container">
-              <span id="toggle-description-btn" class="icon-control" role="button" tabindex="0" aria-label="Show track description" title="Show description">
-                <span class="btn-icon" aria-hidden="true">
-                  <svg class="btn-svg" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-                    <use href="/icons/sprite.svg?v=2#info-icon"></use>
-                  </svg>
-                </span>
-              </span>
-              <span id="toggle-tracks-btn" class="icon-control" role="button" tabindex="0" aria-label="Show album tracks" title="Show tracks">
-                <span class="btn-icon" aria-hidden="true">
-                  <svg class="btn-svg" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-                    <use href="/icons/sprite.svg?v=2#tracks-icon"></use>
-                  </svg>
-                </span>
-              </span>
               <span id="player-menu-btn" class="icon-control player-menu-btn" role="button" tabindex="0"
                     aria-label="More track options" aria-expanded="false"
                     aria-controls="player-options-sheet"
@@ -250,6 +236,28 @@
         </div>
 
         <div class="sheet-content">
+
+            <button id="toggle-description-btn" class="sheet-action-item" type="button"
+              data-close-sheet-on-activate="true"
+              aria-label="Show track description" style="display:none">
+            <span class="sheet-item-icon" aria-hidden="true">
+              <svg class="sheet-item-svg" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                <use href="/icons/sprite.svg?v=2#info-icon"></use>
+              </svg>
+            </span>
+            <span class="sheet-item-label">Track info</span>
+          </button>
+
+          <button id="toggle-tracks-btn" class="sheet-action-item" type="button"
+              data-close-sheet-on-activate="true"
+              aria-label="Show album tracks" style="display:none">
+            <span class="sheet-item-icon" aria-hidden="true">
+              <svg class="sheet-item-svg" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                <use href="/icons/sprite.svg?v=2#tracks-icon"></use>
+              </svg>
+            </span>
+            <span class="sheet-item-label">Album tracks</span>
+          </button>
 
             <button id="current-track-cast" class="theme-selector sheet-action-item" type="button"
               data-close-sheet-on-activate="true"

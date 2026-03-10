@@ -1739,7 +1739,7 @@ function updateDescriptionUI(track) {
     );
 
     const shouldShowTracks = !!albumId && (fallbackTracklist.length > 1 || (activeTrack && ((activeTrack.totalTracks && activeTrack.totalTracks > 1) || activeTrack.isAlbumTrack)) || !fallbackTracklist.length);
-    elements.toggleTracksBtn.style.display = shouldShowTracks ? 'inline-flex' : 'none';
+    elements.toggleTracksBtn.style.display = shouldShowTracks ? 'flex' : 'none';
     setIconControlDisabled(elements.toggleTracksBtn, !albumId || !shouldShowTracks);
 
     // Cerrar el panel si ya no hay un álbum válido para mostrar
@@ -1903,7 +1903,7 @@ function updateDescriptionUI(track) {
   })();
 
   if (bestDescription && bestDescription.trim() !== '') {
-    elements.toggleDescriptionBtn.style.display = 'inline-flex';
+    elements.toggleDescriptionBtn.style.display = 'flex';
     setIconControlDisabled(elements.toggleDescriptionBtn, false);
     window.logger?.debug('[updateDescriptionUI] Showing description button', 'UI');
     elements.toggleDescriptionBtn.onclick = function() {
