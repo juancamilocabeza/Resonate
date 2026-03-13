@@ -1546,6 +1546,11 @@ function buildSearchSuggestionsHtml({ title, creator, album }) {
       `<span class="info-chip info-chip--action" role="button" tabindex="0" data-action="search-internal" data-query="${escapeHtml(creatorQuery)}">Resonate: ${escapeHtml(creatorQuery)}</span>`
     );
   }
+  if (albumQuery && albumQuery !== baseQuery && albumQuery !== creatorQuery) {
+    internalChips.push(
+      `<span class="info-chip info-chip--action" role="button" tabindex="0" data-action="search-internal" data-query="${escapeHtml(albumQuery)}">Resonate: ${escapeHtml(albumQuery)}</span>`
+    );
+  }
 
   const externalChips = [];
   if (queryForWeb) {
