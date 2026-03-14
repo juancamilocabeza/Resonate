@@ -2325,6 +2325,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
         : false;
       if (castActive) {
         try { audio.pause(); } catch {}
+        state.isLoading = false;
         resolve(true);
         return;
       }
