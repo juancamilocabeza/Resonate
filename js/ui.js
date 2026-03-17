@@ -5115,6 +5115,15 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
     // Play UX: click cover or title
     const playFromCard = async (e) => {
       e.stopPropagation();
+      window.preparePlaybackTransitionFromList?.({
+        closeSearch: true,
+        closeResontes: true,
+        closeTracksPanel: true,
+        collapseExpandedAlbums: true,
+        showLoader: true,
+        loaderContext: isAlbum ? 'album' : 'search',
+        showProgress: false
+      });
       showStatus('Loading your track', 'info');
       await window.playOptimizedSearchResult?.(item, globalIndex, state.searchResults);
     };
