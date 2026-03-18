@@ -5756,7 +5756,7 @@ function __resonateSetSearchOnlineState(isOnline) {
     // Avoid hard-disabling search: some environments report false offline.
     // Search will still fail gracefully at request-time if the network is truly down.
     elements.searchInput.disabled = false;
-    elements.searchInput.placeholder = isOnline ? "Search for music, artists, albums..." : "Offline (search may be unavailable)";
+    elements.searchInput.placeholder = isOnline ? "Search for songs, artists, albums..." : "Offline (search may be unavailable)";
   }
 }
 
