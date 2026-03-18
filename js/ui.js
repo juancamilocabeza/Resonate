@@ -244,6 +244,8 @@ const elements = {
   searchResultsClose: document.getElementById('search-results-close'),
 
   // Resontes panel
+  headerResontesBtn: document.getElementById('header-resontes-btn'),
+  headerResontesCount: document.getElementById('header-resontes-count'),
   resontesToggle: document.getElementById('resontes-toggle'),
   resontesCount: document.getElementById('resontes-count'),
   resontesList: document.getElementById('resontes-list'),
@@ -3100,6 +3102,17 @@ function toggleFavorite(track) {
     }
 
     showStatus('Track added to your resonates', 'info');
+
+    // Animate the header shortcut button to help users discover it
+    try {
+      const hb = elements.headerResontesBtn || document.getElementById('header-resontes-btn');
+      if (hb) {
+        hb.classList.remove('pop');
+        void hb.offsetWidth; // force reflow
+        hb.classList.add('pop');
+        hb.addEventListener('animationend', () => hb.classList.remove('pop'), { once: true });
+      }
+    } catch {}
   }
 
   saveFavorites();
@@ -7357,6 +7370,7 @@ class FavoritesToggle {
     if (this.isVisible) {
       this.listElement?.classList.add('active');
       this.element?.classList.add('active');
+      try { const hb = elements.headerResontesBtn; if (hb) { hb.classList.add('active'); hb.setAttribute('aria-expanded', 'true'); } } catch {}
       try { state.favoritesVisible = true; } catch {}
       try { setBodyUiState('resontes-open', true); } catch {}
 
@@ -7394,6 +7408,7 @@ class FavoritesToggle {
     } else {
       this.listElement?.classList.remove('active');
       this.element?.classList.remove('active');
+      try { const hb = elements.headerResontesBtn; if (hb) { hb.classList.remove('active'); hb.setAttribute('aria-expanded', 'false'); } } catch {}
       try { state.favoritesVisible = false; } catch {}
       try { setBodyUiState('resontes-open', false); } catch {}
     }
@@ -7408,9 +7423,13 @@ class FavoritesToggle {
     const isExpanded = this.isVisible ? 'true' : 'false';
     this.element.setAttribute('aria-expanded', isExpanded);
     const countText = (state && Array.isArray(state.favorites)) ? state.favorites.length : 0;
-    this.element.setAttribute('aria-label',
-      `View resonates (${countText} saved). ${this.isVisible ? 'Resonates list is visible' : 'Click to view your saved resonates'}`
-    );
+    const label = `View resonates (${countText} saved). ${this.isVisible ? 'Resonates list is visible' : 'Click to view your saved resonates'}`;
+    this.element.setAttribute('aria-label', label);
+
+    try {
+      const hb = elements.headerResontesBtn;
+      if (hb) { hb.setAttribute('aria-expanded', isExpanded); hb.setAttribute('aria-label', `View resonates (${countText} saved)`); }
+    } catch {}
   }
 
   /**
@@ -7445,6 +7464,9 @@ class FavoritesToggle {
 // Instancia global del componente
 let resontesToggleInstance = null;
 
+// Tracks which header buttons have already had listeners attached
+const _headerResontesListenerSet = new WeakSet();
+
 // Make the component available across scripts and provide an idempotent initializer.
 // Some startup paths (or future refactors) can otherwise leave the toggle unbound.
 window.ResontesToggle = FavoritesToggle;
@@ -7453,6 +7475,22 @@ window.ensureResontesToggleInitialized = function ensureResontesToggleInitialize
     if (resontesToggleInstance) return resontesToggleInstance;
     if (!elements.resontesToggle || !elements.resontesList) return null;
     resontesToggleInstance = new FavoritesToggle(elements.resontesToggle, elements.resontesList);
+
+    // Bind the header shortcut button to the same toggle instance
+    const hb = elements.headerResontesBtn || document.getElementById('header-resontes-btn');
+    if (hb && !_headerResontesListenerSet.has(hb)) {
+      _headerResontesListenerSet.add(hb);
+      hb.addEventListener('click', function () {
+        if (resontesToggleInstance) resontesToggleInstance.toggle();
+      });
+      hb.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          if (resontesToggleInstance) resontesToggleInstance.toggle();
+        }
+      });
+    }
+
     return resontesToggleInstance;
   } catch (e) {
     window.logger?.warn({ message: 'Failed to initialize ResontesToggle', error: e }, 'UI');
@@ -7475,19 +7513,25 @@ function toggleResontesList() {
 function updateFavoritesCount() {
   const countElement = (elements.resontesCount || document.getElementById('resontes-count') || elements.favoritesCount || document.getElementById('favorites-count'));
   const toggleBtn = (elements.resontesToggle || elements.favoritesToggle);
+  const headerBtn = elements.headerResontesBtn || document.getElementById('header-resontes-btn');
+  const headerCountEl = elements.headerResontesCount || document.getElementById('header-resontes-count');
   
   if (countElement && toggleBtn) {
     const count = state.favorites ? state.favorites.length : 0;
     countElement.textContent = count > 0 ? count : '0';
+    if (headerCountEl) headerCountEl.textContent = count > 0 ? count : '0';
     try { toggleBtn.classList.toggle('has-resontes', count > 0); } catch {}
+    try { if (headerBtn) headerBtn.classList.toggle('has-resontes', count > 0); } catch {}
     
     // Improve ARIA label for accessibility
     try { toggleBtn.setAttribute('aria-label', `View resonates (${count} saved)`); } catch {}
+    try { if (headerBtn) headerBtn.setAttribute('aria-label', `View resonates (${count} saved)`); } catch {}
     
     // Update aria-expanded based on visibility
     const panel = (elements.resontesList || elements.favoritesList);
     const isExpanded = panel?.classList.contains('active') || false;
     try { toggleBtn.setAttribute('aria-expanded', isExpanded ? 'true' : 'false'); } catch {}
+    try { if (headerBtn) headerBtn.setAttribute('aria-expanded', isExpanded ? 'true' : 'false'); } catch {}
 
     // Friendly placeholder copy for the filter input (English)
     try {
@@ -7527,6 +7571,10 @@ function hideResontesList() {
     elements.resontesToggle.classList.remove('active');
     elements.resontesToggle.setAttribute('aria-expanded', 'false');
   }
+  try {
+    const hb = elements.headerResontesBtn || document.getElementById('header-resontes-btn');
+    if (hb) { hb.classList.remove('active'); hb.setAttribute('aria-expanded', 'false'); }
+  } catch {}
 }
 
 // Backward-compatible alias (favorites -> resontes)
