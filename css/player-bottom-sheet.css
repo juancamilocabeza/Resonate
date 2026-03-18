@@ -405,3 +405,96 @@ body.sheet-open {
   stroke: currentColor;
   fill: none;
 }
+
+/* =====================================================================
+   HEADER RESONATES SHORTCUT — Direct access button in the app header
+   ===================================================================== */
+
+.header-resontes-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  min-height: 44px;
+  width: 44px;
+  min-width: 44px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  box-shadow: none;
+  color: var(--muted);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 150ms ease, opacity 150ms ease, transform 100ms ease;
+}
+
+.header-resontes-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.header-resontes-svg {
+  width: 20px;
+  height: 20px;
+  display: block;
+  stroke: currentColor;
+  fill: none;
+}
+
+.header-resontes-count {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  background: rgba(var(--primary-rgb), 0.15);
+  color: var(--primary);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 999px;
+  min-width: 15px;
+  text-align: center;
+  border: 1px solid rgba(var(--primary-rgb), 0.3);
+  opacity: 0;
+  transform: scale(0.7);
+  transition: opacity 200ms ease, transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  pointer-events: none;
+}
+
+.header-resontes-btn.has-resontes .header-resontes-count {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.header-resontes-btn:hover,
+.header-resontes-btn.active {
+  color: var(--primary);
+}
+
+.header-resontes-btn.active .header-resontes-icon {
+  filter: drop-shadow(0 1px 4px rgba(var(--primary-rgb), 0.35));
+}
+
+.header-resontes-btn:active {
+  transform: scale(0.94);
+}
+
+.header-resontes-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+@keyframes resontesBtnPop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.18); }
+  70%  { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}
+
+.header-resontes-btn.pop .header-resontes-icon {
+  animation: resontesBtnPop 0.38s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
