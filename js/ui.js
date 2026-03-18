@@ -579,6 +579,7 @@ function dispatchSearchWithFastPath(queryAtDispatch, { keepKeyboard = true, addT
     state.currentSearchPage = 0;
     state.currentSearchQuery = q;
     state.currentSearchHasMore = false;
+    state.currentSearchTotal = null;
     state.isLoadingMore = false;
 
     abortUiSearchControllers();
@@ -2398,6 +2399,7 @@ const state = {
 
   currentSearchPage: 0,
   currentSearchHasMore: false,
+  currentSearchTotal: null,
   currentSearchQuery: '',
   isLoadingMore: false,
   savedPlaybackState: null,
@@ -3619,6 +3621,7 @@ function performCompleteCleanup() {
   state.currentSearchQuery = '';
   state.currentSearchPage = 0;
   state.currentSearchHasMore = false;
+  state.currentSearchTotal = null;
   state.isLoadingMore = false;
   state.searchActive = false;
 
@@ -3739,11 +3742,13 @@ function displaySearchResults(searchData, clearExisting = true) {
     state.searchResults = results;
     state.currentSearchPage = 0;
     state.currentSearchHasMore = hasMore;
+    state.currentSearchTotal = (typeof total === 'number' && isFinite(total) && total >= 0) ? total : null;
     // Keep the executed query stable (input may change while results are inflight)
     state.currentSearchQuery = (state.currentSearchQuery || (elements.searchInput ? elements.searchInput.value : '') || '').trim();
   } else {
     state.searchResults = [...state.searchResults, ...results];
     state.currentSearchHasMore = hasMore;
+    if (typeof total === 'number' && isFinite(total) && total >= 0) state.currentSearchTotal = total;
   }
 
   // Perf: log submit → first paint for the initial page render.
@@ -3765,14 +3770,7 @@ function displaySearchResults(searchData, clearExisting = true) {
   // Update toolbar visibility + count
   try {
     if (elements.searchResultsHeader) elements.searchResultsHeader.hidden = false;
-    if (elements.searchResultsCount) {
-      const totalCount = (typeof total === 'number' && isFinite(total) && total > 0) ? total : null;
-      const visibleCount = Array.isArray(state.searchResults) ? state.searchResults.length : 0;
-      // Always include a label for clarity (especially for the X / total format).
-      elements.searchResultsCount.textContent = totalCount
-        ? `Results: ${visibleCount} / ${totalCount}`
-        : `Results: ${visibleCount}`;
-    }
+    updateSearchResultsCount();
     if (elements.searchOfflineOnly) {
       elements.searchOfflineOnly.checked = !!(state.searchUi && state.searchUi.offlineOnly);
       try { setBodyUiState('search-show-offline-chips', !!(state.searchUi && state.searchUi.offlineOnly)); } catch {}
@@ -3902,16 +3900,146 @@ function getNoResultsSuggestions(query) {
   }
 }
 
-function escapeHtml(s) {
+function getSearchResultsCountText(filteredCount = null) {
   try {
-    return String(s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
+    const baseCount = Array.isArray(state.searchResults) ? state.searchResults.length : 0;
+    const totalCount = (typeof state.currentSearchTotal === 'number' && isFinite(state.currentSearchTotal) && state.currentSearchTotal >= 0)
+      ? state.currentSearchTotal
+      : null;
+    const hasFilters = !!((state.searchUi && state.searchUi.offlineOnly) || (state.searchUi && state.searchUi.typeFilter));
+
+    if (hasFilters && typeof filteredCount === 'number' && isFinite(filteredCount)) {
+      const parts = [];
+      if (totalCount !== null && totalCount > baseCount) {
+        parts.push(`Showing ${filteredCount} of ${baseCount} loaded`);
+        parts.push(`Total: ${totalCount}`);
+      } else {
+        parts.push(`Results: ${filteredCount} / ${baseCount}`);
+      }
+      const typeLabel = (state.searchUi && state.searchUi.typeFilter) ? getSearchTypeFilterLabel(state.searchUi.typeFilter) : '';
+      if (typeLabel) parts.push(typeLabel);
+      if (state.searchUi && state.searchUi.offlineOnly) parts.push('Offline');
+      return parts.join(' • ');
+    }
+
+    return totalCount !== null && totalCount > 0
+      ? `Results: ${baseCount} / ${totalCount}`
+      : `Results: ${baseCount}`;
   } catch {
-    return '';
+    return 'Results: 0';
+  }
+}
+
+function updateSearchResultsCount(filteredCount = null) {
+  try {
+    if (!elements.searchResultsCount) return;
+    elements.searchResultsCount.textContent = getSearchResultsCountText(filteredCount);
+  } catch {}
+}
+
+async function loadNextSearchResultsPage() {
+  try {
+    if (!state.currentSearchHasMore || state.isLoadingMore) return false;
+
+    state.isLoadingMore = true;
+    const nextPage = (Number.isFinite(state.currentSearchPage) ? state.currentSearchPage : 0) + 1;
+    const result = await (window.performOptimizedSearch || performOptimizedSearch)(state.currentSearchQuery, nextPage, {
+      showLoader: false,
+      activateUI: false,
+      abortPrevious: false,
+      deferMetadata: true
+    });
+    state.currentSearchPage = nextPage;
+    displaySearchResults(result, false);
+    return true;
+  } catch (error) {
+    window.logger?.warn({ message: 'Error en lazy loading', error }, 'NETWORK');
+    return false;
+  } finally {
+    state.isLoadingMore = false;
+  }
+}
+
+function renderFilteredSearchEmptyState() {
+  try {
+    if (!elements.searchResultsList) return false;
+    const hasOffline = !!(state.searchUi && state.searchUi.offlineOnly);
+    const hasType = !!(state.searchUi && state.searchUi.typeFilter);
+    if (!hasOffline && !hasType) return false;
+
+    const activeParts = [];
+    if (hasOffline) activeParts.push('Offline only');
+    if (hasType) activeParts.push(getSearchTypeFilterLabel(state.searchUi.typeFilter));
+    const activeLabel = activeParts.length ? activeParts.join(' • ') : 'Filters';
+    const canLoadMore = !!state.currentSearchHasMore;
+    const hint = canLoadMore
+      ? `${activeLabel}. No match yet in the loaded results. Load more results or clear the filter.`
+      : `${activeLabel}. No matches were found in the loaded results. Clear the filter or try another search.`;
+
+    elements.searchResultsList.innerHTML = `
+      <div class="no-results">
+        <div class="no-results-icon">🔎</div>
+        <div class="no-results-title">No matches in loaded results</div>
+        <div class="no-results-hint">${hint}</div>
+        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px;">
+          ${canLoadMore ? '<button type="button" class="search-option-btn" data-action="load-more-results">Load more results</button>' : ''}
+          ${hasOffline ? '<button type="button" class="search-option-btn" data-action="clear-offline">Show online too</button>' : ''}
+          ${hasType ? '<button type="button" class="search-option-btn" data-action="clear-type">Show all types</button>' : ''}
+        </div>
+      </div>
+    `;
+
+    try {
+      const loadMoreBtn = elements.searchResultsList.querySelector('button[data-action="load-more-results"]');
+      if (loadMoreBtn) {
+        loadMoreBtn.addEventListener('click', async (e) => {
+          try { e.preventDefault(); e.stopPropagation(); } catch {}
+          if (loadMoreBtn.disabled) return;
+          loadMoreBtn.disabled = true;
+          const prevLabel = loadMoreBtn.textContent;
+          loadMoreBtn.textContent = 'Loading…';
+          try {
+            const loaded = await loadNextSearchResultsPage();
+            if (!loaded && !state.currentSearchHasMore) rerenderSearchResultsFromState(true);
+          } finally {
+            if (loadMoreBtn && loadMoreBtn.isConnected) {
+              loadMoreBtn.disabled = false;
+              loadMoreBtn.textContent = prevLabel;
+            }
+          }
+        });
+      }
+    } catch {}
+
+    try {
+      const clearOff = elements.searchResultsList.querySelector('button[data-action="clear-offline"]');
+      if (clearOff) {
+        clearOff.addEventListener('click', (e) => {
+          try { e.preventDefault(); e.stopPropagation(); } catch {}
+          state.searchUi = state.searchUi || {};
+          state.searchUi.offlineOnly = false;
+          try { ensureSearchFiltersHeader(); } catch {}
+          rerenderSearchResultsFromState(true);
+        });
+      }
+    } catch {}
+
+    try {
+      const clearType = elements.searchResultsList.querySelector('button[data-action="clear-type"]');
+      if (clearType) {
+        clearType.addEventListener('click', (e) => {
+          try { e.preventDefault(); e.stopPropagation(); } catch {}
+          state.searchUi = state.searchUi || {};
+          state.searchUi.typeFilter = '';
+          try { ensureSearchFiltersHeader(); } catch {}
+          rerenderSearchResultsFromState(true);
+        });
+      }
+    } catch {}
+
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -3947,54 +4075,9 @@ function rerenderSearchResultsFromState(clearExisting = true) {
 
   // Filtered empty-state: avoid a blank panel when the base results exist.
   try {
-    if (elements.searchResultsList && base.length > 0 && viewItems.length === 0) {
-      const hasOffline = !!(state.searchUi && state.searchUi.offlineOnly);
-      const hasType = !!(state.searchUi && state.searchUi.typeFilter);
-      if (hasOffline || hasType) {
-        const activeParts = [];
-        if (hasOffline) activeParts.push('Offline only');
-        if (hasType) activeParts.push(getSearchTypeFilterLabel(state.searchUi.typeFilter));
-        const activeLabel = activeParts.length ? activeParts.join(' • ') : 'Filters';
-
-        elements.searchResultsList.innerHTML = `
-          <div class="no-results">
-            <div class="no-results-icon">🔎</div>
-            <div class="no-results-title">No matches in loaded results</div>
-            <div class="no-results-hint">${activeLabel}. Keep scrolling to load more results, or clear the filter.</div>
-            <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px;">
-              ${hasOffline ? '<button type="button" class="search-option-btn" data-action="clear-offline">Show online too</button>' : ''}
-              ${hasType ? '<button type="button" class="search-option-btn" data-action="clear-type">Show all types</button>' : ''}
-            </div>
-          </div>
-        `;
-
-        try {
-          const clearOff = elements.searchResultsList.querySelector('button[data-action="clear-offline"]');
-          if (clearOff) {
-            clearOff.addEventListener('click', (e) => {
-              try { e.preventDefault(); e.stopPropagation(); } catch {}
-              state.searchUi = state.searchUi || {};
-              state.searchUi.offlineOnly = false;
-              try { ensureSearchFiltersHeader(); } catch {}
-              rerenderSearchResultsFromState(true);
-            });
-          }
-        } catch {}
-
-        try {
-          const clearType = elements.searchResultsList.querySelector('button[data-action="clear-type"]');
-          if (clearType) {
-            clearType.addEventListener('click', (e) => {
-              try { e.preventDefault(); e.stopPropagation(); } catch {}
-              state.searchUi = state.searchUi || {};
-              state.searchUi.typeFilter = '';
-              try { ensureSearchFiltersHeader(); } catch {}
-              rerenderSearchResultsFromState(true);
-            });
-          }
-        } catch {}
-        return;
-      }
+    if (elements.searchResultsList && base.length > 0 && viewItems.length === 0 && renderFilteredSearchEmptyState()) {
+      updateSearchResultsCount(0);
+      return;
     }
   } catch {}
 
@@ -4033,16 +4116,7 @@ function rerenderSearchResultsFromState(clearExisting = true) {
   // Refresh count label for filtered views (offline/type).
   // Otherwise, keep the main label managed by displaySearchResults (supports X / total).
   try {
-    if (elements.searchResultsCount) {
-      const showFilteredCount = !!((state.searchUi && state.searchUi.offlineOnly) || (state.searchUi && state.searchUi.typeFilter));
-      if (showFilteredCount) {
-        const parts = [`Results: ${viewItems.length} / ${base.length}`];
-        const t = (state.searchUi && state.searchUi.typeFilter) ? getSearchTypeFilterLabel(state.searchUi.typeFilter) : '';
-        if (t) parts.push(t);
-        if (state.searchUi && state.searchUi.offlineOnly) parts.push('Offline');
-        elements.searchResultsCount.textContent = parts.join(' • ');
-      }
-    }
+    updateSearchResultsCount(viewItems.length);
   } catch {}
 }
 
@@ -4131,23 +4205,8 @@ function setupLazyLoadingObserver() {
       state._searchLazyObserver = new IntersectionObserver(async (entries) => {
         try {
           if (!entries || !entries[0] || !entries[0].isIntersecting) return;
-          if (!state.currentSearchHasMore || state.isLoadingMore) return;
-
-          state.isLoadingMore = true;
-          state.currentSearchPage++;
-
-          const result = await (window.performOptimizedSearch || performOptimizedSearch)(state.currentSearchQuery, state.currentSearchPage, {
-            showLoader: false,
-            activateUI: false,
-            abortPrevious: false,
-            deferMetadata: true
-          });
-          displaySearchResults(result, false);
-        } catch (error) {
-          window.logger?.warn({ message: 'Error en lazy loading', error }, 'NETWORK');
-        } finally {
-          state.isLoadingMore = false;
-        }
+          await loadNextSearchResultsPage();
+        } catch {}
       }, {
         rootMargin: '100px',
         threshold: 0.1
