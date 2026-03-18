@@ -426,6 +426,7 @@ body.sheet-open {
   box-shadow: none;
   color: var(--muted);
   cursor: pointer;
+  overflow: visible;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   transition: color 150ms ease, opacity 150ms ease, transform 100ms ease;
@@ -458,6 +459,7 @@ body.sheet-open {
   padding: 2px 4px;
   border-radius: 999px;
   min-width: 15px;
+  white-space: nowrap;
   text-align: center;
   border: 1px solid rgba(var(--primary-rgb), 0.3);
   opacity: 0;

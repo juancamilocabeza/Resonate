@@ -59,6 +59,9 @@ def run():
         assert_true('id="player-menu-btn"' in body, "Index should include #player-menu-btn")
         assert_true('id="player-options-sheet"' in body, "Index should include #player-options-sheet")
         assert_true('id="current-track-share"' in body, "Index should include #current-track-share")
+        assert_true('id="header-resontes-btn"' in body, "Index should include #header-resontes-btn")
+        assert_true('id="header-resontes-count"' in body, "Index should include #header-resontes-count")
+        assert_true('id="resontes-list"' in body, "Index should include #resontes-list")
         assert_true('rel="manifest"' in body, "Index should include manifest link")
         assert_true('name="theme-color"' in body, "Index should include theme-color meta")
         assert_true('apple-mobile-web-app-capable' in body, "Index should include Apple PWA meta")
@@ -82,6 +85,11 @@ def run():
         assert_true(":root" in body or "body" in body, "CSS should contain styles")
         assert_true("safe-area" in body or "env(safe-area" in body, "CSS should handle safe-area")
 
+        status, body = request("/css/player-bottom-sheet.css")
+        assert_true(status == 200, "GET /css/player-bottom-sheet.css should return 200")
+        assert_true(".header-resontes-btn" in body, "Bottom sheet CSS should style #header-resontes-btn")
+        assert_true("overflow: visible;" in body, "Header resonates button should allow the count badge to overflow visibly")
+
         status, body = request("/js/ui.js")
         assert_true(status == 200, "GET /js/ui.js should return 200")
         assert_true("function setupPWAInstall" in body, "UI should include setupPWAInstall")
@@ -100,6 +108,7 @@ def run():
         assert_true(status == 200, "GET /js/initialization.js should return 200")
         assert_true("function handleSharedLink" in body, "Initialization should include handleSharedLink")
         assert_true("setupLaunchQueueHandling" in body, "Initialization should include launch queue handling")
+        assert_true("elements.headerResontesBtn" in body, "Initialization should treat the header resonates button as an in-panel click target")
 
         status, body = request("/js/battery.js")
         assert_true(status == 200, "GET /js/battery.js should return 200")
