@@ -1527,6 +1527,7 @@ async function initializeApp() {
       // Otherwise, the same click that opens favorites can bubble here and immediately close it.
       const clickedInsideFavorites =
         (elements.favoritesToggle && target && elements.favoritesToggle.contains(target)) ||
+        (elements.headerResontesBtn && target && elements.headerResontesBtn.contains(target)) ||
         (elements.favoritesList && target && elements.favoritesList.contains(target));
 
       if (!clickedInsideSearch && !clickedInsideFavorites) {

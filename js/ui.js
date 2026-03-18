@@ -7472,26 +7472,28 @@ const _headerResontesListenerSet = new WeakSet();
 window.ResontesToggle = FavoritesToggle;
 window.ensureResontesToggleInitialized = function ensureResontesToggleInitialized() {
   try {
-    if (resontesToggleInstance) return resontesToggleInstance;
-    if (!elements.resontesList) return null;
-    resontesToggleInstance = new FavoritesToggle(elements.resontesToggle || null, elements.resontesList);
-
-    // Bind the header shortcut button to the same toggle instance
     const hb = elements.headerResontesBtn || document.getElementById('header-resontes-btn');
     if (hb && !_headerResontesListenerSet.has(hb)) {
       _headerResontesListenerSet.add(hb);
-      hb.addEventListener('click', function () {
+      hb.addEventListener('click', function (event) {
+        try { event?.preventDefault?.(); } catch {}
+        try { event?.stopPropagation?.(); } catch {}
         if (!resontesToggleInstance) window.ensureResontesToggleInitialized?.();
         if (resontesToggleInstance) resontesToggleInstance.toggle();
       });
       hb.addEventListener('keydown', function (e) {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
+          try { e.stopPropagation(); } catch {}
           if (!resontesToggleInstance) window.ensureResontesToggleInitialized?.();
           if (resontesToggleInstance) resontesToggleInstance.toggle();
         }
       });
     }
+
+    if (resontesToggleInstance) return resontesToggleInstance;
+    if (!elements.resontesList) return null;
+    resontesToggleInstance = new FavoritesToggle(elements.resontesToggle || null, elements.resontesList);
 
     return resontesToggleInstance;
   } catch (e) {
