@@ -601,6 +601,7 @@ async function fetchArchiveMetadataWithFallback(url, init) {
       lastResponse = resp;
       lastUsedProxy = isProxy;
       if (resp && resp.ok) {
+        try { window.archiveMonitor && window.archiveMonitor.reportSuccess(); } catch {}
         return { response: resp, usedProxy: isProxy };
       }
       if (isProxy && resp && resp.status === 404) {
@@ -621,6 +622,7 @@ async function fetchArchiveMetadataWithFallback(url, init) {
   }
 
   if (lastResponse) return { response: lastResponse, usedProxy: lastUsedProxy };
+  try { window.archiveMonitor && window.archiveMonitor.reportFailure(lastError); } catch {}
   throw lastError || new Error('Network request failed');
 }
 
@@ -657,6 +659,7 @@ async function fetchArchiveAdvancedSearchWithFallback(url, init) {
       lastResponse = resp;
       lastUsedProxy = isProxy;
       if (resp && resp.ok) {
+        try { window.archiveMonitor && window.archiveMonitor.reportSuccess(); } catch {}
         return { response: resp, usedProxy: isProxy };
       }
       // If proxy endpoint doesn't exist (static server), try direct next.
@@ -682,6 +685,7 @@ async function fetchArchiveAdvancedSearchWithFallback(url, init) {
   if (lastResponse) {
     return { response: lastResponse, usedProxy: lastUsedProxy };
   }
+  try { window.archiveMonitor && window.archiveMonitor.reportFailure(lastError); } catch {}
   throw lastError || new Error('Network request failed');
 }
 
