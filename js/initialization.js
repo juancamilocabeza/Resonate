@@ -1778,6 +1778,9 @@ async function playOfflineTrack(metadata) {
   }
 }
 
+// Expose playOfflineTrack globally so other modules (e.g. archive-monitor.js) can call it.
+window.playOfflineTrack = playOfflineTrack;
+
 // Helper function to format bytes
 function formatBytes(bytes) {
   if (bytes === 0) return '0 Bytes';

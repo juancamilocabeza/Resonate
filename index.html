@@ -120,6 +120,44 @@
         </button>
       </div>
     </header>
+
+    <!-- Archive.org maintenance banner — shown by archive-monitor.js when archive.org is unreachable -->
+    <div id="archive-maintenance-banner"
+         class="archive-maintenance-banner"
+         role="alert"
+         aria-live="assertive"
+         aria-atomic="true"
+         hidden>
+      <div class="archive-banner-inner">
+        <div class="archive-banner-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
+        </div>
+        <div class="archive-banner-body">
+          <p class="archive-banner-title">archive.org is temporarily unavailable</p>
+          <p class="archive-banner-subtitle">We're monitoring the service and will notify you when it's back online.</p>
+          <p class="archive-banner-notice" hidden aria-live="polite"></p>
+        </div>
+        <div class="archive-banner-actions">
+          <button class="archive-banner-play-btn" type="button" disabled
+                  aria-label="Play a random cached track from your resonates">
+            <span class="archive-banner-play-icon" aria-hidden="true">&#9654;</span>
+            <span class="archive-banner-play-label">
+              Play from cache<br>
+              <small class="archive-banner-cache-count">Loading…</small>
+            </span>
+          </button>
+          <button class="archive-banner-retry-btn" type="button"
+                  aria-label="Check if archive.org is back online">Check again</button>
+          <button class="archive-banner-dismiss-btn" type="button"
+                  aria-label="Dismiss this notification">✕</button>
+        </div>
+      </div>
+    </div>
+
     <div class="content-layout" id="content-layout">
       <div class="discovery-section">
         <div id="tracks-list-container" class="tracks-container tracklist"></div>
@@ -444,6 +482,7 @@
   <script src="js/tracklist.js"></script>
   <script src="js/ui.js" defer></script>
   <script src="js/offline.js"></script>
+  <script src="js/archive-monitor.js"></script>
   <script src="js/battery.js"></script>
   <script src="js/initialization.js" defer></script>
   <script src="js/player-bottom-sheet.js" defer></script>
