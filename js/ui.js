@@ -102,6 +102,30 @@ if (document.readyState === 'complete' || document.readyState === 'interactive')
 // Refresca todos los iconos de resonte en todos los listados
 window.resonateLogoSVG = `<svg class="resonate-icon" width="24" height="24" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false"><circle cx="256" cy="256" r="200" stroke="currentColor" stroke-width="32" fill="none"></circle><path d="M96 256 C140 256, 180 180, 220 180 C260 180, 300 332, 340 332 C380 332, 416 256, 416 256" stroke="currentColor" stroke-width="32" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>`;
 
+/**
+ * Shared helper: update a resonate button's visual state.
+ * @param {HTMLElement} btn   - the button element to update
+ * @param {boolean}     active - whether the track is now in the resonates list
+ * @param {object}      [opts]
+ * @param {boolean}     [opts.animate=false] - trigger the pop animation on the icon
+ */
+function applyResonteButtonState(btn, active, { animate = false } = {}) {
+  if (!btn) return;
+  btn.classList.toggle('active', !!active);
+  btn.innerHTML = window.resonateLogoSVG || '';
+  const label = active ? 'Remove from resonates' : 'Add to resonates';
+  btn.title = label;
+  try { btn.setAttribute('aria-label', label); } catch {}
+  if (animate) {
+    btn.classList.remove('resonate-btn-pop');
+    // Force reflow so the animation restarts if triggered twice quickly
+    void btn.offsetWidth;
+    btn.classList.add('resonate-btn-pop');
+    btn.addEventListener('animationend', () => btn.classList.remove('resonate-btn-pop'), { once: true });
+  }
+}
+window.applyResonteButtonState = applyResonteButtonState;
+
 // Auto-collapse all expanded albums
 window.collapseAllExpandedAlbums = function collapseAllExpandedAlbums() {
   try {
@@ -187,10 +211,7 @@ window.refreshAllResonteButtons = function refreshAllResonteButtons() {
         }
       }
     } catch {}
-    btn.classList.toggle('active', isResonte);
-    btn.innerHTML = window.resonateLogoSVG;
-    btn.title = isResonte ? 'Remove from resonates' : 'Add to resonates';
-    try { btn.setAttribute('aria-label', btn.title); } catch {}
+    applyResonteButtonState(btn, isResonte);
   });
 
   // Search results (cards)
@@ -201,11 +222,7 @@ window.refreshAllResonteButtons = function refreshAllResonteButtons() {
     const isResonte = typeof window.isAlbumResonte === 'function'
       ? window.isAlbumResonte(albumId)
       : (typeof isAlbumInFavorites === 'function' ? isAlbumInFavorites(albumId) : false);
-    btn.classList.toggle('active', isResonte);
-    btn.innerHTML = window.resonateLogoSVG;
-    const label = isResonte ? 'Remove from resonates' : 'Add to resonates';
-    btn.title = label;
-    btn.setAttribute('aria-label', label);
+    applyResonteButtonState(btn, isResonte);
   });
 
   // Legacy search results
@@ -216,11 +233,7 @@ window.refreshAllResonteButtons = function refreshAllResonteButtons() {
     const isResonte = typeof window.isAlbumResonte === 'function'
       ? window.isAlbumResonte(albumId)
       : (typeof isAlbumInFavorites === 'function' ? isAlbumInFavorites(albumId) : false);
-    btn.classList.toggle('active', isResonte);
-    btn.innerHTML = window.resonateLogoSVG;
-    const label = isResonte ? 'Remove from resonates' : 'Add to resonates';
-    btn.title = label;
-    btn.setAttribute('aria-label', label);
+    applyResonteButtonState(btn, isResonte);
   });
 };
 
@@ -3353,11 +3366,7 @@ function updateTrackFavoriteStatesInContainer(albumId) {
           if (playBtn && playBtn.dataset.url) {
             const trackUrl = playBtn.dataset.url;
             const isFavorite = isTrackFavorite({ url: trackUrl });
-            favoriteBtn.classList.toggle('active', isFavorite);
-            favoriteBtn.innerHTML = window.resonateLogoSVG || '';
-            const label = isFavorite ? 'Remove from resonates' : 'Add to resonates';
-            favoriteBtn.title = label;
-            favoriteBtn.setAttribute('aria-label', label);
+            applyResonteButtonState(favoriteBtn, isFavorite);
           }
         }
       });
@@ -3376,11 +3385,7 @@ function updateSearchResultFavoriteState(albumId, isFavorite) {
     cards.forEach(card => {
       const favoriteBtn = card.querySelector('.card-btn.favorite');
       if (!favoriteBtn) return;
-      favoriteBtn.classList.toggle('active', !!isFavorite);
-      favoriteBtn.innerHTML = window.resonateLogoSVG || '';
-      const label = isFavorite ? 'Remove from resonates' : 'Add to resonates';
-      favoriteBtn.title = label;
-      favoriteBtn.setAttribute('aria-label', label);
+      applyResonteButtonState(favoriteBtn, !!isFavorite);
     });
   } catch {}
 
@@ -3391,11 +3396,7 @@ function updateSearchResultFavoriteState(albumId, isFavorite) {
     if (resultInfo && resultInfo.textContent.includes(safeAlbumId)) {
       const favoriteBtn = resultEl.querySelector('.result-favorite');
       if (favoriteBtn) {
-        favoriteBtn.classList.toggle('active', !!isFavorite);
-        favoriteBtn.innerHTML = window.resonateLogoSVG || '';
-        const label = isFavorite ? 'Remove from resonates' : 'Add to resonates';
-        favoriteBtn.title = label;
-        favoriteBtn.setAttribute('aria-label', label);
+        applyResonteButtonState(favoriteBtn, !!isFavorite);
       }
     }
   });
@@ -3436,12 +3437,7 @@ function updateFavoriteButton() {
   const hasTrack = !!(state.currentTrack && state.currentTrack.url);
   const isResonte = hasTrack ? isTrackFavorite(state.currentTrack) : false;
 
-  btn.classList.toggle('active', isResonte);
-  btn.innerHTML = window.resonateLogoSVG || '';
-
-  const label = isResonte ? 'Remove from resonates' : 'Add to resonates';
-  btn.title = label;
-  btn.setAttribute('aria-label', label);
+  applyResonteButtonState(btn, isResonte);
 }
 
 function showStatus(message, type = 'info', duration = null, priority = 'normal', showSpinner = false) {
@@ -4541,10 +4537,7 @@ async function loadAlbumInfoBackground(identifier, resultEl) {
     const favoriteBtn = resultEl.querySelector('.result-favorite');
     if (favoriteBtn) {
       const buttonState = isAlbum ? getAlbumButtonState(identifier, trackCount) : getAlbumButtonState(identifier, 1);
-      favoriteBtn.classList.toggle('active', buttonState.isActive);
-      favoriteBtn.innerHTML = window.resonateLogoSVG || '';
-      favoriteBtn.title = buttonState.label;
-      favoriteBtn.setAttribute('aria-label', buttonState.label);
+      applyResonteButtonState(favoriteBtn, buttonState.isActive);
     }
 
     // Mostrar/ocultar el botón de expandir basado en si es un álbum
@@ -4937,43 +4930,41 @@ function createSearchResultElement(result, globalIndex) {
   favoriteBtn.addEventListener('click', async (e) => {
     e.stopPropagation();
 
-    const applyResonteVisual = (active) => {
-      favoriteBtn.classList.toggle('active', !!active);
-      favoriteBtn.innerHTML = window.resonateLogoSVG || '';
-      const label = active ? 'Remove from resonates' : 'Add to resonates';
-      favoriteBtn.title = label;
-      favoriteBtn.setAttribute('aria-label', label);
-    };
+    // Show loading state while fetching
+    favoriteBtn.classList.add('resonate-btn-loading');
 
     try {
       const files = (window.AlbumTracks && typeof window.AlbumTracks.getTracks === 'function')
         ? await window.AlbumTracks.getTracks(result.identifier, { preferCache: true, allowFetch: true })
         : await fetchOptimizedPlayableFiles(result.identifier);
       if (files.length > 0) {
+        let newActive = false;
         if (files.length > 1) {
           // Album handling
           const buttonState = getAlbumButtonState(result.identifier, files.length);
           if (buttonState.action === 'remove') {
             removeAlbumFromFavorites(result.identifier);
-            applyResonteVisual(false);
+            newActive = false;
           } else if (buttonState.action === 'complete') {
             addAlbumToFavorites(result.identifier, files);
-            applyResonteVisual(true);
+            newActive = true;
           } else if (buttonState.action === 'add') {
             addAlbumToFavorites(result.identifier, files);
-            applyResonteVisual(true);
+            newActive = true;
           }
         } else {
           // Single track handling
           const track = files[0];
           toggleFavorite(track);
-          const isNowFavorite = isTrackFavorite(track);
-          applyResonteVisual(isNowFavorite);
+          newActive = isTrackFavorite(track);
         }
+        applyResonteButtonState(favoriteBtn, newActive, { animate: true });
       }
     } catch (error) {
       window.logger?.error({ message: 'Error managing favorite', error }, 'UI');
       showStatus('Couldn\'t update resonates', 'error');
+    } finally {
+      favoriteBtn.classList.remove('resonate-btn-loading');
     }
   });
 
@@ -5222,39 +5213,34 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
     // Favorite
     favBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
+      favBtn.classList.add('resonate-btn-loading');
       try {
-        const applyResonteVisual = (active) => {
-          favBtn.classList.toggle('active', !!active);
-          favBtn.innerHTML = window.resonateLogoSVG || '';
-          const label = active ? 'Remove from resonates' : 'Add to resonates';
-          favBtn.title = label;
-          favBtn.setAttribute('aria-label', label);
-        };
-
         const files = (window.AlbumTracks && typeof window.AlbumTracks.getTracks === 'function')
           ? await window.AlbumTracks.getTracks(identifier, { preferCache: true, allowFetch: true })
           : await fetchOptimizedPlayableFiles(identifier);
+        let newActive = false;
         if (files.length > 1) {
           const buttonState = getAlbumButtonState(identifier, files.length);
           if (buttonState.action === 'remove') {
             removeAlbumFromFavorites(identifier);
-            applyResonteVisual(false);
+            newActive = false;
             try { updateSearchResultFavoriteState(identifier, false); } catch {}
           } else {
             addAlbumToFavorites(identifier, files);
-            applyResonteVisual(true);
+            newActive = true;
             try { updateSearchResultFavoriteState(identifier, true); } catch {}
           }
         } else if (files.length === 1) {
           const track = files[0];
-          const before = isTrackFavorite(track);
           toggleFavorite(track);
-          const after = isTrackFavorite(track);
-          applyResonteVisual(after);
-          try { updateSearchResultFavoriteState(identifier, after); } catch {}
+          newActive = isTrackFavorite(track);
+          try { updateSearchResultFavoriteState(identifier, newActive); } catch {}
         }
+        applyResonteButtonState(favBtn, newActive, { animate: true });
       } catch (err) {
         showStatus('Couldn\'t update resonates', 'error');
+      } finally {
+        favBtn.classList.remove('resonate-btn-loading');
       }
     });
     // Expand
@@ -5592,11 +5578,7 @@ function displayAlbumTracks(albumId, tracksContainer) {
           e.stopPropagation(); // Evitar que el clic se propague al resultado principal
           toggleFavorite(track);
           const isNowFavorite = isTrackFavorite(track);
-          favoriteBtn.classList.toggle('active', isNowFavorite);
-          favoriteBtn.innerHTML = window.resonateLogoSVG || '';
-          const label = isNowFavorite ? 'Remove from resonates' : 'Add to resonates';
-          favoriteBtn.title = label;
-          favoriteBtn.setAttribute('aria-label', label);
+          applyResonteButtonState(favoriteBtn, isNowFavorite, { animate: true });
         });
 
         if (shareBtn) {

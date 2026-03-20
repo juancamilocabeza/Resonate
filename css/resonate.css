@@ -1979,14 +1979,27 @@ button:active:not(:disabled) {
 /* Playback control "Resonate" button (#favorite-btn) uses currentColor SVG */
 .main-player-section .controls #favorite-btn {
   color: var(--muted);
+  transition: color var(--transition-fast), transform var(--transition-bounce), background-color var(--transition-fast);
 }
 
 .main-player-section .controls #favorite-btn.active {
   color: var(--primary);
+  background: rgba(var(--primary-rgb), 0.1);
 }
 
 .main-player-section .controls #favorite-btn:hover:not(:disabled) {
   color: var(--primary);
+  background: rgba(var(--primary-rgb), 0.12);
+  transform: scale(1.1);
+}
+
+.main-player-section .controls #favorite-btn:active:not(:disabled) {
+  transform: scale(0.92);
+  transition: transform 0.08s ease;
+}
+
+.main-player-section .controls #favorite-btn.active:hover:not(:disabled) {
+  background: rgba(var(--primary-rgb), 0.2);
 }
 
 .favorite-item:hover {
@@ -2261,6 +2274,34 @@ select:focus {
 @keyframes heartBeat {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.2); }
+}
+
+/* Resonate button pop animation — triggered when a track is added/removed */
+@keyframes resonatePop {
+  0%   { transform: scale(1); filter: none; }
+  35%  { transform: scale(1.35); filter: drop-shadow(0 0 6px rgba(var(--primary-rgb), 0.55)); }
+  65%  { transform: scale(0.92); filter: drop-shadow(0 0 3px rgba(var(--primary-rgb), 0.2)); }
+  100% { transform: scale(1); filter: none; }
+}
+
+/* Resonate button loading pulse */
+@keyframes resonateLoadingPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.45; transform: scale(0.88); }
+}
+
+/* Applied via JS after toggling a resonate button */
+.resonate-btn-pop .resonate-icon {
+  animation: resonatePop 0.38s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* Applied via JS while an async resonate action is in-flight */
+.resonate-btn-loading {
+  pointer-events: none;
+  cursor: wait !important;
+}
+.resonate-btn-loading .resonate-icon {
+  animation: resonateLoadingPulse 0.7s ease-in-out infinite;
 }
 
 .favorites-label.active .favorites-icon {
@@ -3083,28 +3124,32 @@ select:focus {
   justify-content: center;
   cursor: pointer;
   font-size: 16px;
-  transition: background-color 0.2s, color 0.2s, transform 0.15s, box-shadow 0.2s;
+  transition: background-color var(--transition-fast), color var(--transition-fast), transform var(--transition-bounce), box-shadow 0.2s;
   color: var(--muted);
 }
 
 .result-favorite:hover {
-  background: var(--card);
+  background: rgba(var(--primary-rgb), 0.1);
   color: var(--primary);
-  transform: scale(1.08);
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(var(--primary-rgb), 0.18);
 }
 
 .result-favorite:active {
-  transform: scale(0.95);
+  transform: scale(0.92);
   background: rgba(var(--primary-rgb), 0.2);
+  transition: transform 0.08s ease;
 }
 
 .result-favorite.active {
   color: var(--primary);
   background: rgba(var(--primary-rgb), 0.14);
+  box-shadow: 0 2px 8px rgba(var(--primary-rgb), 0.2);
 }
 
 .result-favorite.active:hover {
   background: rgba(var(--primary-rgb), 0.25);
+  box-shadow: 0 4px 14px rgba(var(--primary-rgb), 0.28);
 }
 
 .result-expand {
@@ -3122,7 +3167,6 @@ select:focus {
   display: none;
 }
 
-.result-favorite:active,
 .result-expand:active {
   background: var(--card);
 }
@@ -3285,21 +3329,27 @@ body.offline-mode .share-track-button {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background-color 0.2s, color 0.2s, transform 0.15s;
+  transition: background-color var(--transition-fast), color var(--transition-fast), transform var(--transition-bounce);
 }
 
 .track-favorite:hover {
-  background: var(--favorite-bg);
-  color: var(--favorite);
-  transform: scale(1.08);
+  background: rgba(var(--primary-rgb), 0.1);
+  color: var(--primary);
+  transform: scale(1.12);
 }
 
 .track-favorite:active {
-  transform: scale(0.95);
+  transform: scale(0.9);
+  transition: transform 0.08s ease;
 }
 
 .track-favorite.active {
-  color: var(--favorite);
+  color: var(--primary);
+  background: rgba(var(--primary-rgb), 0.08);
+}
+
+.track-favorite.active:hover {
+  background: rgba(var(--primary-rgb), 0.18);
 }
 
 .track-number {
@@ -5256,7 +5306,7 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
   cursor: pointer;
   padding: 4px 6px;
   border-radius: 6px;
-  transition: background 0.15s, color 0.15s;
+  transition: background var(--transition-fast), color var(--transition-fast), transform var(--transition-bounce);
   font-size: 15px;
 }
 .tracklist .tlv2-action:hover,
@@ -5271,11 +5321,31 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
 .tracklist .tlv2-resonte,
 .tracklist .track-resonte {
   color: var(--muted);
+  transition: color var(--transition-fast), background var(--transition-fast), transform var(--transition-bounce);
+}
+
+.tracklist .tlv2-resonte:hover,
+.tracklist .track-resonte:hover {
+  color: var(--primary);
+  background: rgba(var(--primary-rgb), 0.1);
+  transform: scale(1.12);
+}
+
+.tracklist .tlv2-resonte:active,
+.tracklist .track-resonte:active {
+  transform: scale(0.9);
+  transition: transform 0.08s ease;
 }
 
 .tracklist .tlv2-resonte.active,
 .tracklist .track-resonte.active {
   color: var(--primary);
+  background: rgba(var(--primary-rgb), 0.08);
+}
+
+.tracklist .tlv2-resonte.active:hover,
+.tracklist .track-resonte.active:hover {
+  background: rgba(var(--primary-rgb), 0.18);
 }
 .tracklist .tlv2-offline {
   font-size: 12px;
