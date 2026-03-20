@@ -1093,6 +1093,7 @@ async function initializeApp() {
   if (elements.favoriteBtn && !elements.favoriteBtn.dataset.resonateFavoriteBound) {
     elements.favoriteBtn.dataset.resonateFavoriteBound = 'true';
     elements.favoriteBtn.addEventListener('click', async () => {
+      const btn = elements.favoriteBtn;
       const current = (window.state && window.state.currentTrack)
         ? window.state.currentTrack
         : ((window.state && window.state.savedPlaybackState && window.state.savedPlaybackState.track)
@@ -1109,6 +1110,7 @@ async function initializeApp() {
       }
 
       if (!current.url && current.id) {
+        btn.classList.add('resonate-btn-loading');
         try {
           const files = await fetchOptimizedPlayableFiles(current.id);
           if (files.length > 0) {
@@ -1116,6 +1118,8 @@ async function initializeApp() {
           }
         } catch (error) {
           window.logger.error(`Error fetching URL for favorite: ${error.message}`, 'UI');
+        } finally {
+          btn.classList.remove('resonate-btn-loading');
         }
       }
 
@@ -1124,6 +1128,13 @@ async function initializeApp() {
           window.toggleResonteTrack(current);
         } else {
           toggleFavorite(current);
+        }
+        // Apply visual feedback with animation
+        const isNowFavorite = typeof window.isTrackFavorite === 'function'
+          ? window.isTrackFavorite(current)
+          : (typeof isTrackFavorite === 'function' ? isTrackFavorite(current) : null);
+        if (isNowFavorite !== null && typeof window.applyResonteButtonState === 'function') {
+          window.applyResonteButtonState(btn, isNowFavorite, { animate: true });
         }
       }
     });

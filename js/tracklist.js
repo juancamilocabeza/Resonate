@@ -298,16 +298,20 @@
 
             toggle(track);
 
-              // Inline update for the clicked button (immediate feedback)
+            // Inline update for the clicked button (immediate feedback with animation)
             let isResonteNow = false;
             try {
               if (typeof window.isTrackResonte === 'function') isResonteNow = !!window.isTrackResonte(track);
               else if (typeof window.isTrackFavorite === 'function') isResonteNow = !!window.isTrackFavorite(track);
             } catch {}
-            resonteBtn.classList.toggle('active', isResonteNow);
-            resonteBtn.innerHTML = window.resonateLogoSVG;
-            resonteBtn.title = isResonteNow ? 'Remove from resonates' : 'Add to resonates';
-            try { resonteBtn.setAttribute('aria-label', resonteBtn.title); } catch {}
+            if (typeof window.applyResonteButtonState === 'function') {
+              window.applyResonteButtonState(resonteBtn, isResonteNow, { animate: true });
+            } else {
+              resonteBtn.classList.toggle('active', isResonteNow);
+              resonteBtn.innerHTML = window.resonateLogoSVG;
+              resonteBtn.title = isResonteNow ? 'Remove from resonates' : 'Add to resonates';
+              try { resonteBtn.setAttribute('aria-label', resonteBtn.title); } catch {}
+            }
 
             // Then sync any other surfaces
             if (typeof window.refreshAllResonteButtons === 'function') {
