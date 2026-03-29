@@ -7,10 +7,6 @@
  * Both triggers reuse the same bottom sheet visual language.
  */
 
-.header-controls {
-  gap: 12px;
-}
-
 .app-menu-btn {
   display: inline-flex;
   align-items: center;

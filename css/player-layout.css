@@ -61,14 +61,6 @@
     margin: 4px 0 0 0;
   }
 
-  /* Secondary controls (theme/resonates/cast/share) */
-  .header-controls {
-    margin-top: var(--spacing-md, 12px);
-    gap: 16px;
-    flex-wrap: wrap;
-    justify-content: center;
-  }
-
   /* Main player section: consistent top padding */
   .main-player-section {
     padding-top: var(--spacing-xl, 20px);

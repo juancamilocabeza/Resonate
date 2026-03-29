@@ -92,6 +92,94 @@ function setHeaderHeightVar() {
   }
 }
 
+function setPwaBannerHeightVar() {
+  try {
+    const banner = document.getElementById('pwa-install-banner');
+    if (!banner || !banner.classList.contains('active')) return;
+    const heightPx = Math.max(0, Math.round(banner.getBoundingClientRect().height || banner.offsetHeight || 0));
+    if (!heightPx) return;
+    document.documentElement.style.setProperty('--pwa-banner-h', `${heightPx}px`);
+  } catch {
+    // ignore
+  }
+}
+
+function clearPwaBannerHeightVar() {
+  try {
+    document.documentElement.style.removeProperty('--pwa-banner-h');
+  } catch {
+    // ignore
+  }
+}
+
+// Observe the document body for the install banner being added and toggled
+(function initPwaBannerObserver() {
+  try {
+    if (typeof MutationObserver === 'undefined') return;
+    let bannerObserver = null;
+
+    const watchBanner = (el) => {
+      if (bannerObserver) return;
+      bannerObserver = new MutationObserver(() => {
+        if (el.classList.contains('active')) {
+          setPwaBannerHeightVar();
+        } else {
+          clearPwaBannerHeightVar();
+        }
+      });
+      bannerObserver.observe(el, { attributes: true, attributeFilter: ['class'] });
+      // Set immediately if already active
+      if (el.classList.contains('active')) {
+        setPwaBannerHeightVar();
+      }
+    };
+
+    // Check if the banner already exists
+    const existing = document.getElementById('pwa-install-banner');
+    if (existing) {
+      watchBanner(existing);
+      return;
+    }
+
+    // Otherwise watch for it being added to the DOM
+    const bodyObserver = new MutationObserver((mutations) => {
+      for (const m of mutations) {
+        for (const node of m.addedNodes) {
+          if (node.nodeType === 1 && node.id === 'pwa-install-banner') {
+            watchBanner(node);
+            bodyObserver.disconnect();
+            return;
+          }
+        }
+      }
+    });
+    bodyObserver.observe(document.documentElement, { childList: true, subtree: true });
+  } catch {
+    // ignore
+  }
+})();
+
+function initHeaderScrollElevation() {
+  try {
+    const header = document.querySelector('header');
+    if (!header) return;
+    const scroller = document.querySelector('.app') || document.documentElement;
+    const onScroll = () => {
+      try {
+        const scrolled = (scroller.scrollTop || window.scrollY || 0) > 2;
+        header.classList.toggle('header--elevated', scrolled);
+      } catch {
+        // ignore
+      }
+    };
+    scroller.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+  } catch {
+    // ignore
+  }
+}
+
 function setVisualViewportInsetsVars() {
   try {
     const vv = window.visualViewport;
@@ -189,6 +277,7 @@ try {
       setAppViewportHeightVar();
       setHeaderHeightVar();
       setFooterHeightVar();
+      setPwaBannerHeightVar();
       setVisualViewportInsetsVars();
 
       // Keep overlays above the keyboard in the same frame as viewport vars.
@@ -1500,25 +1589,36 @@ async function initializeApp() {
   // Event listener para el h1 - ocultar resultados de búsqueda o favoritos al hacer clic
   const appTitle = document.getElementById('app-title');
   if (appTitle) {
-    appTitle.addEventListener('click', (e) => {
+    const handleAppTitleActivate = (e) => {
       e.preventDefault();
       e.stopPropagation();
-      
+
       // Ocultar resultados de búsqueda si están visibles
       const searchVisible = elements.searchResults && elements.searchResults.classList.contains('active');
       if (searchVisible) {
         hideSearchResults();
       }
-      
+
       // Ocultar lista de favoritos si está visible
       const favoritesVisible = elements.favoritesList && elements.favoritesList.classList.contains('active');
       if (favoritesVisible) {
         hideFavoritesList();
       }
-      
-      window.logger?.info('App title clicked - hiding search results and favorites list', 'UI');
+
+      window.logger?.info('App title activated - hiding search results and favorites list', 'UI');
+    };
+
+    appTitle.addEventListener('click', handleAppTitleActivate);
+    appTitle.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault(); // Prevent page scroll on Space
+        handleAppTitleActivate(e);
+      }
     });
   }
+
+  // Scroll-elevation for the app header
+  initHeaderScrollElevation();
 
   document.addEventListener('click', (e) => {
     try {
