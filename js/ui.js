@@ -3403,6 +3403,27 @@ function updateSearchResultFavoriteState(albumId, isFavorite) {
   });
 }
 
+function updateContentCardPlayingState(albumId) {
+  try {
+    document.querySelectorAll('.content-card.is-playing').forEach(card => {
+      card.classList.remove('is-playing');
+      const prev = card.getAttribute('aria-label') || '';
+      if (prev.startsWith('Now playing: ')) {
+        card.setAttribute('aria-label', prev.slice('Now playing: '.length));
+      }
+    });
+    const safeId = albumId ? String(albumId) : '';
+    if (!safeId) return;
+    document.querySelectorAll(`.content-card[data-album-id="${CSS.escape(safeId)}"]`).forEach(card => {
+      card.classList.add('is-playing');
+      const prev = card.getAttribute('aria-label') || '';
+      if (!prev.startsWith('Now playing: ')) {
+        card.setAttribute('aria-label', `Now playing: ${prev}`);
+      }
+    });
+  } catch { /* DOM operation failures are non-critical and safe to ignore */ }
+}
+
 // FUNCIÓN: Actualizar el botón de álbum cuando cambia el estado de una pista individual
 function updateAlbumButtonForTrack(albumId) {
   // Buscar todos los botones de álbum que correspondan a este albumId
@@ -3918,6 +3939,8 @@ function getSearchResultsCountText(filteredCount = null) {
       ? state.currentSearchTotal
       : null;
     const hasFilters = !!((state.searchUi && state.searchUi.offlineOnly) || (state.searchUi && state.searchUi.typeFilter));
+    const query = (state.currentSearchQuery || '').trim();
+    const forLabel = query ? ` for "${query}"` : '';
 
     if (hasFilters && typeof filteredCount === 'number' && isFinite(filteredCount)) {
       const parts = [];
@@ -3925,7 +3948,7 @@ function getSearchResultsCountText(filteredCount = null) {
         parts.push(`Showing ${filteredCount} of ${baseCount} loaded`);
         parts.push(`Total: ${totalCount}`);
       } else {
-        parts.push(`Results: ${filteredCount} / ${baseCount}`);
+        parts.push(`${filteredCount} / ${baseCount} results${forLabel}`);
       }
       const typeLabel = (state.searchUi && state.searchUi.typeFilter) ? getSearchTypeFilterLabel(state.searchUi.typeFilter) : '';
       if (typeLabel) parts.push(typeLabel);
@@ -3934,10 +3957,10 @@ function getSearchResultsCountText(filteredCount = null) {
     }
 
     return totalCount !== null && totalCount > 0
-      ? `Results: ${baseCount} / ${totalCount}`
-      : `Results: ${baseCount}`;
+      ? `${baseCount} of ${totalCount} results${forLabel}`
+      : `${baseCount} result${baseCount !== 1 ? 's' : ''}${forLabel}`;
   } catch {
-    return 'Results: 0';
+    return '0 results';
   }
 }
 
@@ -5030,6 +5053,15 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
     card.dataset.globalIndex = String(globalIndex);
   } catch {}
 
+  // Mark card as currently playing if it matches the active track
+  try {
+    const playingId = state.currentTrack && (state.currentTrack.albumId || state.currentTrack.id);
+    if (playingId && String(playingId) === String(identifier)) {
+      card.classList.add('is-playing');
+      card.setAttribute('aria-label', `Now playing: ${title} by ${creator}`);
+    }
+  } catch {}
+
   try {
     if (context === 'favorites' && Array.isArray(item.tracks)) {
       card.__albumTracks = item.tracks;
@@ -5115,6 +5147,14 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
   }
   media.appendChild(chips);
 
+  // Play indicator overlay (appears on hover for search/favorites context)
+  if (context === 'search' || context === 'favorites') {
+    const playOverlay = document.createElement('div');
+    playOverlay.className = 'card-play-overlay';
+    playOverlay.setAttribute('aria-hidden', 'true');
+    media.appendChild(playOverlay);
+  }
+
   // Body
   const body = document.createElement('div');
   body.className = 'card-body';
@@ -5124,6 +5164,14 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
   t.textContent = title;
   t.title = title;
   body.appendChild(t);
+
+  if (creator && creator !== 'Unknown') {
+    const c = document.createElement('div');
+    c.className = 'card-creator';
+    c.textContent = creator;
+    c.title = creator;
+    body.appendChild(c);
+  }
 
   const meta = document.createElement('div');
   meta.className = 'result-meta';
@@ -5181,6 +5229,7 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
     // Play UX: click cover or title
     const playFromCard = async (e) => {
       e.stopPropagation();
+      updateContentCardPlayingState(identifier);
       window.preparePlaybackTransitionFromList?.({
         closeSearch: true,
         closeResontes: true,
@@ -8837,6 +8886,7 @@ window.addAlbumToFavorites = addAlbumToFavorites;
 window.removeAlbumFromFavorites = removeAlbumFromFavorites;
 window.updateFavoritesList = updateFavoritesList;
 window.updateFavoritesCount = updateFavoritesCount;
+window.updateContentCardPlayingState = updateContentCardPlayingState;
 window.loadVolume = loadVolume;
 window.saveVolume = saveVolume;
 // ...existing code...
