@@ -3893,17 +3893,18 @@ function getNoResultsSuggestions(query) {
     if (!Array.isArray(history) || history.length === 0) return [];
     // Prefer recent history containing the query or sharing tokens.
     const tokens = qn.split(/\s+/g).filter(t => t.length >= 2).slice(0, 6);
-    const scored = history.map(h => {
-      const hn = String(h || '').toLowerCase();
+    const scored = history.map(item => {
+      const hq = item.query;
+      const hn = hq.toLowerCase();
       let score = 0;
       if (hn.includes(qn)) score += 5;
       for (const t of tokens) {
         if (hn.includes(t)) score += 1;
       }
-      return { h, score };
+      return { hq, score };
     }).filter(x => x.score > 0);
     scored.sort((a, b) => b.score - a.score);
-    return scored.slice(0, 5).map(x => x.h);
+    return scored.slice(0, 5).map(x => x.hq);
   } catch {
     return [];
   }
@@ -8225,10 +8226,25 @@ function isRunningAsPWA() {
 }
 
 // Search history management
+// Returns a normalized array of history entries as {query, timestamp} objects.
+// Handles migration from the old plain-string format transparently.
 function loadSearchHistory() {
   try {
-    const history = localStorage.getItem('resonate_search_history');
-    return history ? JSON.parse(history) : [];
+    const raw = localStorage.getItem('resonate_search_history');
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    const normalized = parsed.map(item => {
+      if (item && typeof item === 'object' && typeof item.query === 'string') {
+        return { query: item.query, timestamp: item.timestamp || 0 };
+      }
+      // Migrate old plain-string entries
+      if (typeof item === 'string' && item.trim()) {
+        return { query: item.trim(), timestamp: 0 };
+      }
+      return null;
+    }).filter(Boolean);
+    return normalized;
   } catch (e) {
     window.logger?.warn(`Error loading search history: ${e.message}`, 'UI');
     return [];
@@ -8249,21 +8265,47 @@ function addToSearchHistory(query) {
   const history = loadSearchHistory();
   const trimmedQuery = query.trim();
 
-  // Remove if already exists (to move to front)
-  const filtered = history.filter(item => item !== trimmedQuery);
+  // Remove any existing entry with the same query (to move it to the front)
+  const filtered = history.filter(item => item.query !== trimmedQuery);
 
-  // Add to beginning, limit to 10 items
-  filtered.unshift(trimmedQuery);
-  const limited = filtered.slice(0, 10);
+  // Add to beginning with current timestamp, limit to 20 items
+  filtered.unshift({ query: trimmedQuery, timestamp: Date.now() });
+  const limited = filtered.slice(0, 20);
 
   saveSearchHistory(limited);
+}
+
+// Returns a human-readable relative time label for a timestamp.
+function formatSearchHistoryTime(timestamp) {
+  if (!timestamp) return '';
+  try {
+    const now = Date.now();
+    const diffMs = now - timestamp;
+    if (diffMs < 0) return '';
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 1) return 'Just now';
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffH = Math.floor(diffMin / 60);
+    if (diffH < 24) return `${diffH}h ago`;
+    const diffD = Math.floor(diffH / 24);
+    if (diffD === 1) return 'Yesterday';
+    if (diffD < 7) return `${diffD}d ago`;
+    return '';
+  } catch {
+    return '';
+  }
 }
 
 function displaySearchHistory() {
   const history = loadSearchHistory();
 
   if (history.length === 0) {
-    elements.searchResultsList.innerHTML = '<div class="no-results">No recent searches</div>';
+    elements.searchResultsList.innerHTML = `
+      <div class="no-results search-history-empty">
+        <div class="no-results-icon">🕐</div>
+        <div class="no-results-title">No recent searches</div>
+        <div class="no-results-hint">Your search history will appear here</div>
+      </div>`;
     elements.searchResults.classList.add('active');
     try {
       initializePanelToolbarsOnce();
@@ -8278,44 +8320,75 @@ function displaySearchHistory() {
 
   const fragment = document.createDocumentFragment();
 
-  history.forEach((query, index) => {
+  history.forEach((item, index) => {
+    const query = item.query;
+    const timeLabel = formatSearchHistoryTime(item.timestamp);
+
     const historyItem = document.createElement('div');
     historyItem.className = 'search-history-item';
+    historyItem.setAttribute('role', 'option');
+    historyItem.setAttribute('tabindex', '0');
+    historyItem.setAttribute('aria-label', query);
 
     historyItem.innerHTML = `
-      <span class="history-query">${query}</span>
-      <button class="history-remove btn-tertiary" data-index="${index}" title="Remove">✕</button>
+      <span class="history-icon" aria-hidden="true">🕐</span>
+      <span class="history-query">${escapeHtml(query)}</span>
+      ${timeLabel ? `<span class="history-time" aria-hidden="true">${escapeHtml(timeLabel)}</span>` : ''}
+      <button class="history-remove btn-tertiary" data-index="${index}" title="Remove" aria-label="Remove ${escapeHtml(query)}">✕</button>
     `;
 
-    // Click on query to search
+    const triggerSearch = () => {
+      elements.searchInput.value = query;
+      try {
+        if (window.SEARCH_UI_CONFIG && window.SEARCH_UI_CONFIG.closeKeyboardOnSubmit) {
+          elements.searchInput.blur();
+          setKeyboardOpenState(false);
+        }
+      } catch {}
+      dispatchSearchWithFastPath(query, { keepKeyboard: true, addToHistory: false, showLoader: true });
+    };
+
+    const removeItem = (e) => {
+      e.stopPropagation();
+      removeFromSearchHistory(index);
+      displaySearchHistory();
+    };
+
+    // Click: search on item click, remove on button click
     historyItem.addEventListener('click', (e) => {
-      if (!e.target.classList.contains('history-remove')) {
-        elements.searchInput.value = query;
-        try {
-          if (window.SEARCH_UI_CONFIG && window.SEARCH_UI_CONFIG.closeKeyboardOnSubmit) {
-            elements.searchInput.blur();
-            setKeyboardOpenState(false);
-          }
-        } catch {}
-        // Trigger search with showLoader enabled
-        dispatchSearchWithFastPath(query, { keepKeyboard: true, addToHistory: false, showLoader: true });
+      if (e.target.closest('.history-remove')) return;
+      triggerSearch();
+    });
+
+    // Keyboard: Enter to search, Delete/Backspace to remove
+    historyItem.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        triggerSearch();
+      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        removeItem(e);
       }
     });
+
+    // Remove button click
+    const removeBtn = historyItem.querySelector('.history-remove');
+    if (removeBtn) {
+      removeBtn.addEventListener('click', removeItem);
+    }
 
     fragment.appendChild(historyItem);
   });
 
-  // Add clear all button
-  if (history.length > 0) {
-    const clearAllDiv = document.createElement('div');
-    clearAllDiv.className = 'search-history-clear';
-    clearAllDiv.innerHTML = '<button class="clear-history-btn">Clear history</button>';
-    clearAllDiv.querySelector('.clear-history-btn').addEventListener('click', () => {
-      clearSearchHistory();
-      displaySearchHistory();
-    });
-    fragment.appendChild(clearAllDiv);
-  }
+  // Clear all button
+  const clearAllDiv = document.createElement('div');
+  clearAllDiv.className = 'search-history-clear';
+  clearAllDiv.innerHTML = '<button class="clear-history-btn">Clear history</button>';
+  clearAllDiv.querySelector('.clear-history-btn').addEventListener('click', () => {
+    clearSearchHistory();
+    displaySearchHistory();
+  });
+  fragment.appendChild(clearAllDiv);
 
   elements.searchResultsList.innerHTML = '';
   elements.searchResultsList.appendChild(fragment);
@@ -8328,16 +8401,6 @@ function displaySearchHistory() {
   state.searchActive = true;
   setSearchOpenState(true);
   scheduleSearchInsetsBurst();
-
-  // Add event listeners for remove buttons
-  document.querySelectorAll('.history-remove').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const index = parseInt(btn.dataset.index);
-      removeFromSearchHistory(index);
-      displaySearchHistory();
-    });
-  });
 }
 
 function clearSearchHistory() {
