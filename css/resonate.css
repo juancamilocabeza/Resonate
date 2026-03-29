@@ -2783,16 +2783,48 @@ select:focus {
   max-width: var(--content-max-width);
 }
 
+.search-input-wrapper {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.search-input-icon {
+  position: absolute;
+  left: var(--spacing-md);
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color var(--transition-fast);
+  z-index: 1;
+}
+
+.search-input-icon svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.search-input-wrapper:has(.search-input:focus) .search-input-icon {
+  color: var(--primary);
+}
+
 .search-input {
   height: var(--search-height-mobile);
   background: var(--btn);
-  border: 2px solid transparent;
+  border: 2px solid var(--surface-border);
   border-radius: var(--border-radius-large);
   color: var(--fg);
   /* Avoid showing the native search clear icon (we provide our own clear button). */
   -webkit-appearance: none;
   font-size: 16px;
-  padding: 0 var(--spacing-md);
+  padding: 0 var(--spacing-md) 0 calc(var(--spacing-md) + 18px + 8px); /* left: spacing-md + icon(18px) + gap(8px) */
   transition: var(--transition-all-slow);
   width: 100%;
   min-width: 0;
@@ -2817,9 +2849,7 @@ select:focus {
   border-radius: 8px;
   border: none;
   background: var(--btn);
-  color: var(--accent);
-  font-size: 12px;
-  font-weight: 500;
+  color: var(--muted);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2827,7 +2857,13 @@ select:focus {
   touch-action: manipulation;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
-  transition: background-color 0.2s, transform 0.15s, box-shadow 0.15s ease;
+  transition: background-color 0.2s, color 0.2s, transform 0.15s, box-shadow 0.15s ease;
+}
+
+.search-clear-btn svg {
+  width: 16px;
+  height: 16px;
+  display: block;
 }
 
 /* Respect the HTML hidden attribute (author styles can override UA defaults). */
@@ -2837,11 +2873,13 @@ select:focus {
 
 .search-clear-btn:active {
   background: var(--card);
+  color: var(--fg);
   transform: none;
 }
 
 .search-clear-btn:hover {
   background: var(--card);
+  color: var(--fg);
 }
 
 .search-clear-btn:focus-visible {
@@ -3013,22 +3051,32 @@ select:focus {
 .search-control-btn {
   background: var(--btn);
   border: none;
-  color: var(--accent);
-  font-size: 12px;
+  color: var(--muted);
   cursor: pointer;
   padding: 10px 14px;
   border-radius: 8px;
   height: 48px;
   min-width: 48px;
-  font-weight: 500;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background-color 0.2s, transform 0.15s;
+  transition: background-color 0.2s, color 0.2s, transform 0.15s;
+}
+
+.search-control-btn svg {
+  width: 16px;
+  height: 16px;
+  display: block;
 }
 
 .search-control-btn:active {
   background: var(--card);
+  color: var(--fg);
+}
+
+.search-control-btn:hover {
+  background: var(--card);
+  color: var(--fg);
 }
 
 .search-results-list {
