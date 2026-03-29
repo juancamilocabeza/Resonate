@@ -561,6 +561,7 @@ body.tracks-open #tracks-list-container .tlv2-list {
 :root {
   /* Color Palette - Modo Día (por defecto) - Ahorro de energía con colores oscuros */
   --bg: #0f0f0f;
+  --bg-rgb: 15, 15, 15;
   --fg: #ffffff;
   --muted: #b0b8c1;
   --accent: #e8e8f5;
@@ -683,6 +684,7 @@ body.tracks-open #tracks-list-container .tlv2-list {
 /* ===== TEMA NOCHE - Colores más profundos para OLED ===== */
 [data-theme="night"] {
   --bg: #000000;
+  --bg-rgb: 0, 0, 0;
   --fg: #f0f0f0;
   --muted: #a0a0a0;
   --accent: #d0d0e0;
@@ -743,6 +745,7 @@ body.tracks-open #tracks-list-container .tlv2-list {
 /* ===== TEMA DÍA - Colores claros optimizados ===== */
 [data-theme="day"] {
   --bg: #f5f5f5;
+  --bg-rgb: 245, 245, 245;
   --fg: #1a1a1a;
   --muted: #4a4a4a;
   --accent: #1a1a2e;
@@ -1110,14 +1113,28 @@ header {
   justify-content: space-between;
   position: sticky;
   top: 0;
-  background: var(--bg);
-  z-index: 100;
+  background: rgba(var(--bg-rgb, 15, 15, 15), 0.92);
+  z-index: 200;
   padding: 6px var(--spacing-md);
   border-bottom: 1px solid rgba(var(--primary-rgb), 0.1);
-  backdrop-filter: blur(8px);
-  transition: var(--transition-all-slow);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: box-shadow var(--transition-slow), background var(--transition-slow);
   min-height: 54px;
   gap: var(--spacing-md);
+}
+
+/* Elevated state — applied via JS when page is scrolled */
+header.header--elevated {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.22), 0 1px 0 rgba(var(--primary-rgb), 0.08);
+  border-bottom-color: rgba(var(--primary-rgb), 0.14);
+}
+
+/* Offset the app container below the PWA install banner so the sticky header stays visible */
+body:has(#pwa-install-banner.active) .app {
+  top: var(--pwa-banner-h, 95px);
+  height: calc(var(--app-height, 100vh) - var(--pwa-banner-h, 95px));
+  min-height: calc(var(--app-height, 100vh) - var(--pwa-banner-h, 95px));
 }
 
 #app-title {
@@ -1127,6 +1144,30 @@ header {
   gap: var(--spacing-sm);
   flex: 1 1 auto;
   overflow: hidden;
+  border-radius: var(--border-radius);
+  padding: 4px var(--spacing-xs);
+  margin-left: calc(-1 * var(--spacing-xs));
+  transition: background var(--transition-fast);
+}
+
+#app-title:hover {
+  background: rgba(var(--primary-rgb), 0.07);
+}
+
+#app-title:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+@media (forced-colors: active) {
+  #app-title:focus-visible {
+    outline: 2px solid ButtonText;
+    outline-offset: 2px;
+  }
+}
+
+#app-title:hover .app-logo-svg {
+  filter: drop-shadow(0 0 6px rgba(var(--primary-rgb), 0.45));
 }
 
 /* App logo icon in the title */
@@ -1141,6 +1182,11 @@ header {
   width: 28px;
   height: 28px;
   display: block;
+  transition: filter var(--transition-fast), transform var(--transition-fast);
+}
+
+#app-title:active .app-logo-svg {
+  transform: scale(0.93);
 }
 
 .app-title-text {
@@ -1154,6 +1200,7 @@ header {
   display: flex;
   align-items: center;
   flex-shrink: 0;
+  gap: 4px;
 }
 
 .track-share .header-icon,

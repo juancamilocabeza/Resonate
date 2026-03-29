@@ -85,8 +85,11 @@
 </head>
 <body>
   <div class="app" id="app" data-nosnippet>
-    <header>
-      <h1 id="app-title">
+    <header id="app-header">
+      <h1 id="app-title"
+          role="button"
+          tabindex="0"
+          aria-label="Resonate — go to home">
         <span class="app-logo" aria-hidden="true">
           <svg class="app-logo-svg" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
             <circle cx="256" cy="256" r="200" stroke="currentColor" stroke-width="32" fill="none"/>
@@ -96,7 +99,7 @@
         <span class="app-title-text">Resonate</span>
       </h1>
       <!-- Global app menu trigger; player-specific actions live near the track info block -->
-      <div class="header-controls">
+      <nav class="header-controls" aria-label="Header actions">
         <button id="header-resontes-btn" class="header-resontes-btn" type="button"
                 aria-label="View resonates (0 saved)" aria-expanded="false"
                 aria-controls="resontes-list" title="My Resonates">
@@ -110,6 +113,7 @@
         <button class="app-menu-btn" id="app-menu-btn" type="button"
                 aria-label="Open app menu" aria-expanded="false"
                 aria-controls="app-options-sheet"
+                title="App menu"
                 data-sheet-target="app-options-sheet">
           <span class="menu-trigger-icon" aria-hidden="true">
             <svg class="menu-trigger-svg" viewBox="0 0 24 24" focusable="false" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -119,7 +123,7 @@
             </svg>
           </span>
         </button>
-      </div>
+      </nav>
     </header>
 
     <!-- Archive.org maintenance banner — shown by archive-monitor.js when archive.org is unreachable -->
