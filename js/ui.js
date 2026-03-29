@@ -3526,6 +3526,15 @@ function formatTime(seconds) {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
+function formatAlbumDuration(seconds) {
+  if (!seconds || !isFinite(seconds) || seconds <= 0) return '';
+  const totalMins = Math.round(seconds / 60);
+  if (totalMins < 60) return `${totalMins} min`;
+  const hours = Math.floor(totalMins / 60);
+  const mins = totalMins % 60;
+  return mins === 0 ? `${hours}h` : `${hours}h ${mins}min`;
+}
+
 function hideTracksListPanel() {
   if (!elements.tracksListContainer) return;
 
@@ -4506,7 +4515,7 @@ function renderResultMeta(metaElement, metaState) {
   if (typeof durationSeconds === 'number' && Number.isFinite(durationSeconds) && durationSeconds > 0) {
     const duration = document.createElement('span');
     duration.className = 'result-meta-pill track-duration';
-    duration.textContent = isAlbum ? `${formatTime(durationSeconds)} total` : formatTime(durationSeconds);
+    duration.textContent = isAlbum ? formatAlbumDuration(durationSeconds) : formatTime(durationSeconds);
     metaElement.appendChild(duration);
   }
 }
