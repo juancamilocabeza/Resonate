@@ -6459,6 +6459,10 @@ const SW_UPDATE_CHECK_THROTTLE_MS = 60 * 1000;
 const SW_UPDATE_PERIODIC_CHECK_PWA_MS = 10 * 60 * 1000;
 const SW_UPDATE_PERIODIC_CHECK_BROWSER_MS = 30 * 60 * 1000;
 const SW_UPDATE_PLAYBACK_QUERY_TIMEOUT_MS = 700;
+const SW_UPDATE_SCHEDULED_REMINDER_KEY = 'resonate_sw_update_scheduled_reminder';
+const SW_UPDATE_SCHEDULE_30MIN_MS = 30 * 60 * 1000;
+const SW_UPDATE_SCHEDULE_1HOUR_MS = 60 * 60 * 1000;
+const SW_UPDATE_SCHEDULE_2HOURS_MS = 2 * 60 * 60 * 1000;
 
 // Force autoupdate: apply updates automatically when ready.
 // Safety: if playback is active, activation/reload is deferred until idle.
@@ -6646,6 +6650,43 @@ function dismissUpdateBannerForSession(newVersion = null) {
   } catch {}
 }
 
+function getScheduledUpdateReminderTs(newVersion = null) {
+  try {
+    const raw = localStorage.getItem(SW_UPDATE_SCHEDULED_REMINDER_KEY);
+    if (!raw) return null;
+    const entry = JSON.parse(raw);
+    if (!entry || !entry.ts) return null;
+    if (newVersion && entry.version && String(entry.version) !== String(newVersion)) return null;
+    return Number(entry.ts) || null;
+  } catch {
+    return null;
+  }
+}
+
+function setScheduledUpdateReminderTs(ts, newVersion = null) {
+  try {
+    localStorage.setItem(SW_UPDATE_SCHEDULED_REMINDER_KEY, JSON.stringify({ ts: Number(ts), version: newVersion || null }));
+  } catch {
+    // ignore
+  }
+}
+
+function clearScheduledUpdateReminder() {
+  try { localStorage.removeItem(SW_UPDATE_SCHEDULED_REMINDER_KEY); } catch {}
+}
+
+function isUpdateReminderDue(newVersion = null) {
+  const ts = getScheduledUpdateReminderTs(newVersion);
+  if (!ts) return false;
+  return Date.now() >= ts;
+}
+
+function isUpdateSnoozed(newVersion = null) {
+  const ts = getScheduledUpdateReminderTs(newVersion);
+  if (!ts) return false;
+  return Date.now() < ts;
+}
+
 function tryBecomeUpdateLeader() {
   try {
     const now = Date.now();
@@ -6747,6 +6788,133 @@ function showServiceWorkerUpdateBanner({ currentVersion = null, newVersion = nul
   }, Math.max(2000, Math.floor(SW_UPDATE_LEADER_TTL_MS / 3)));
 }
 
+function showUpdateModal({ currentVersion = null, newVersion = null } = {}) {
+  if (document.getElementById('sw-update-modal-overlay')) return;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'sw-update-modal-overlay';
+  overlay.className = 'sw-update-modal-overlay';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.setAttribute('aria-labelledby', 'sw-update-modal-title');
+
+  const versionLine = (currentVersion && newVersion)
+    ? `v${currentVersion} → v${newVersion}`
+    : (newVersion ? `v${newVersion}` : null);
+
+  overlay.innerHTML = `
+    <div class="sw-update-modal" id="sw-update-modal">
+      <button class="sw-update-modal-close" aria-label="Cerrar">✕</button>
+      <span class="sw-update-modal-icon" aria-hidden="true">🚀</span>
+      <h2 class="sw-update-modal-title" id="sw-update-modal-title">¡Hay mejoras disponibles!</h2>
+      ${versionLine ? `<div class="sw-update-modal-version">${versionLine}</div>` : ''}
+      <p class="sw-update-modal-body">
+        Resonate tiene una nueva versión con mejoras y correcciones.<br>
+        ¿Deseas actualizar ahora o programarlo para más tarde?
+      </p>
+      <div class="sw-update-modal-actions">
+        <button class="sw-update-modal-btn-primary sw-update-modal-apply">Actualizar ahora</button>
+        <button class="sw-update-modal-btn-secondary sw-update-modal-later">Recordar más tarde</button>
+        <div class="sw-update-modal-schedule" id="sw-update-schedule-panel">
+          <div class="sw-update-modal-schedule-label">¿Cuándo quieres que te recordemos?</div>
+          <div class="sw-update-modal-schedule-options">
+            <button class="sw-update-modal-schedule-btn" data-delay="${SW_UPDATE_SCHEDULE_30MIN_MS}">En 30 min</button>
+            <button class="sw-update-modal-schedule-btn" data-delay="${SW_UPDATE_SCHEDULE_1HOUR_MS}">En 1 hora</button>
+            <button class="sw-update-modal-schedule-btn" data-delay="${SW_UPDATE_SCHEDULE_2HOURS_MS}">En 2 horas</button>
+            <button class="sw-update-modal-schedule-btn" data-delay="0">Esta sesión</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const applyBtn = overlay.querySelector('.sw-update-modal-apply');
+  const laterBtn = overlay.querySelector('.sw-update-modal-later');
+  const closeBtn = overlay.querySelector('.sw-update-modal-close');
+  const schedulePanel = overlay.querySelector('#sw-update-schedule-panel');
+  const scheduleBtns = overlay.querySelectorAll('.sw-update-modal-schedule-btn');
+
+  let onKeyDown = null;
+
+  const hide = () => {
+    try {
+      if (onKeyDown) {
+        document.removeEventListener('keydown', onKeyDown);
+        onKeyDown = null;
+      }
+      overlay.classList.remove('active');
+      setTimeout(() => {
+        try { overlay.remove(); } catch {}
+      }, 300);
+    } catch {
+      try { overlay.remove(); } catch {}
+    }
+  };
+
+  applyBtn?.addEventListener('click', async () => {
+    try {
+      clearScheduledUpdateReminder();
+      hide();
+      await applyServiceWorkerUpdateAcrossTabs();
+    } catch (e) {
+      window.logger?.warn({ message: 'Apply update failed', error: e }, 'SYSTEM');
+      showStatus('Error al aplicar la actualización', 'warning', 3500);
+    }
+  });
+
+  laterBtn?.addEventListener('click', () => {
+    schedulePanel?.classList.toggle('visible');
+  });
+
+  scheduleBtns.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const delay = Number(btn.getAttribute('data-delay')) || 0;
+      if (delay > 0) {
+        setScheduledUpdateReminderTs(Date.now() + delay, newVersion);
+      } else {
+        dismissUpdateBannerForSession(newVersion);
+        clearScheduledUpdateReminder();
+      }
+      hide();
+      broadcastUpdateMessage({ type: 'UPDATE_BANNER_DISMISSED', newVersion: newVersion || null });
+    });
+  });
+
+  closeBtn?.addEventListener('click', () => {
+    dismissUpdateBannerForSession(newVersion);
+    hide();
+  });
+
+  // Close on backdrop click
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) {
+      dismissUpdateBannerForSession(newVersion);
+      hide();
+    }
+  });
+
+  // Close on Escape key
+  onKeyDown = (e) => {
+    if (e.key === 'Escape') {
+      dismissUpdateBannerForSession(newVersion);
+      hide();
+    }
+  };
+  document.addEventListener('keydown', onKeyDown);
+
+  document.body.appendChild(overlay);
+  setTimeout(() => overlay.classList.add('active'), 50);
+
+  // Keep leadership alive while visible so only one tab prompts.
+  const leaseTimer = window.setInterval(() => {
+    if (!document.getElementById('sw-update-modal-overlay')) {
+      window.clearInterval(leaseTimer);
+      return;
+    }
+    renewUpdateLeaderLease();
+  }, Math.max(2000, Math.floor(SW_UPDATE_LEADER_TTL_MS / 3)));
+}
+
 function requestWorkerVersion(worker) {
   return new Promise((resolve) => {
     try {
@@ -6820,7 +6988,9 @@ async function maybeAnnounceUpdateReady(registration) {
       return;
     }
 
-    showServiceWorkerUpdateBanner(versions);
+    if (isUpdateSnoozed(versions.newVersion)) return;
+    if (isUpdateReminderDue(versions.newVersion)) clearScheduledUpdateReminder();
+    showUpdateModal(versions);
   } catch {
     // ignore
   }
@@ -7034,7 +7204,8 @@ function ensureServiceWorkerUpdateCoordinationHandlers() {
       }
 
       if (isUpdateBannerDismissedForSession(msg.newVersion || null)) return;
-      showServiceWorkerUpdateBanner({ currentVersion: msg.currentVersion || null, newVersion: msg.newVersion || null });
+      if (isUpdateSnoozed(msg.newVersion || null)) return;
+      showUpdateModal({ currentVersion: msg.currentVersion || null, newVersion: msg.newVersion || null });
       return;
     }
 
