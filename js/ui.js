@@ -754,6 +754,7 @@ function ensureSearchFiltersHeader() {
           host.setAttribute('aria-label', 'Search filters');
           summary.appendChild(host);
         }
+        host.hidden = false;
 
         const active = (state.searchUi && typeof state.searchUi.typeFilter === 'string') ? state.searchUi.typeFilter : '';
         const defs = [
@@ -8311,6 +8312,8 @@ function displaySearchHistory() {
       initializePanelToolbarsOnce();
       if (elements.searchResultsHeader) elements.searchResultsHeader.hidden = false;
       if (elements.searchResultsCount) elements.searchResultsCount.textContent = 'Recent searches';
+      const filterSummary = elements.searchResultsHeader && elements.searchResultsHeader.querySelector('.search-filter-summary');
+      if (filterSummary) filterSummary.hidden = true;
     } catch {}
     state.searchActive = true;
     setSearchOpenState(true);
@@ -8397,6 +8400,8 @@ function displaySearchHistory() {
     initializePanelToolbarsOnce();
     if (elements.searchResultsHeader) elements.searchResultsHeader.hidden = false;
     if (elements.searchResultsCount) elements.searchResultsCount.textContent = `Recent searches (${history.length})`;
+    const filterSummary = elements.searchResultsHeader && elements.searchResultsHeader.querySelector('.search-filter-summary');
+    if (filterSummary) filterSummary.hidden = true;
   } catch {}
   state.searchActive = true;
   setSearchOpenState(true);
