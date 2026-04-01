@@ -2536,7 +2536,7 @@ select:focus {
   width: 100%;
   max-width: 100%;
   height: auto;
-  max-height: min(45vh, 520px);
+  max-height: min(55vh, 600px);
   min-height: 160px;
   opacity: 1;
   background: var(--collection-panel-bg, var(--card));
@@ -2554,12 +2554,16 @@ select:focus {
     border-radius: 12px;
     box-shadow: var(--collection-shadow, 0 12px 30px rgba(0, 0, 0, 0.22));
   }
+
+  .resontes-list.active {
+    max-height: min(65vh, 800px);
+  }
 }
 
 .favorites-list-content,
 .resontes-list-content {
   /* Keep existing list padding behavior but inside the content region */
-  padding: 0 10px;
+  padding: 10px 10px 0;
 }
 
 .favorites-results-header {
@@ -3085,7 +3089,7 @@ select:focus {
   max-width: 1024px;
   margin: 0 auto;
   /* Match Resonates list horizontal padding for identical card layout */
-  padding: 0 10px;
+  padding: 10px 10px 0;
   width: 100%;
   box-sizing: border-box;
   display: flex;
@@ -3663,7 +3667,7 @@ body.offline-mode .share-track-button {
 
 .search-results-list .card-media,
 .favorites-list-content .card-media,
-.resontes-list-content .card-media { aspect-ratio: 4 / 5; }
+.resontes-list-content .card-media { aspect-ratio: 1 / 1; }
 
 .search-results-list .card-chips,
 .favorites-list-content .card-chips,
@@ -3679,7 +3683,7 @@ body.offline-mode .share-track-button {
 
 .search-results-list .card-title,
 .favorites-list-content .card-title,
-.resontes-list-content .card-title { font-size: 13px; line-height: 1.2; -webkit-line-clamp: 4; line-clamp: 4; }
+.resontes-list-content .card-title { font-size: 13px; line-height: 1.2; -webkit-line-clamp: 2; line-clamp: 2; }
 
 .search-results-list .card-creator,
 .favorites-list-content .card-creator,
@@ -3832,7 +3836,7 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
 /* Favorites: keep titles compact even on desktop */
 @media (min-width: 1024px) {
   .favorites-list-content .card-title,
-  .resontes-list-content .card-title { -webkit-line-clamp: 4; line-clamp: 4; }
+  .resontes-list-content .card-title { -webkit-line-clamp: 2; line-clamp: 2; }
 }
 .card-subtitle { display: none; }
 .card-creator {
@@ -4002,21 +4006,23 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
 
 /* Grid breakpoints */
 @media (min-width: 768px) {
-  .search-results-list { padding: 0 16px; }
-  .favorites-list-content { padding: 0 12px; }
+  .search-results-list { padding: 10px 16px 0; }
+  .favorites-list-content { padding: 10px 12px 0; }
+  .resontes-list-content { padding: 10px 12px 0; }
   .card-grid { grid-template-columns: repeat(3, minmax(160px, 1fr)); gap: 14px; }
-  /* Keep favorites stable: 2 columns to match search card sizing */
-  .favorites-list-content .card-grid,
-  .resontes-list-content .card-grid { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
+  /* Resonates: show 3 columns on tablets and up */
+  .favorites-list-content .card-grid { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
+  .resontes-list-content .card-grid { grid-template-columns: repeat(3, minmax(140px, 1fr)); }
 }
 @media (min-width: 1024px) {
-  .search-results-list { max-width: 1200px; padding: 0 24px; }
-  .favorites-list-content { padding: 0 12px; }
+  .search-results-list { max-width: 1200px; padding: 10px 24px 0; }
+  .favorites-list-content { padding: 10px 12px 0; }
+  .resontes-list-content { padding: 10px 12px 0; }
   .card-grid { grid-template-columns: repeat(4, minmax(180px, 1fr)); gap: 16px; }
   .search-results-list .card-grid { grid-template-columns: repeat(5, minmax(160px, 1fr)); }
-  /* Desktop requirement: favorites always 2 columns */
-  .favorites-list-content .card-grid,
-  .resontes-list-content .card-grid { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
+  /* Desktop: favorites keeps 2 columns, resonates expands to 3 */
+  .favorites-list-content .card-grid { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
+  .resontes-list-content .card-grid { grid-template-columns: repeat(3, minmax(160px, 1fr)); }
 }
 
 /* Extra desktop (1280px and up) - Wider container and denser grid */
@@ -4025,22 +4031,24 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
   .search-container,
   .search-results-list { max-width: 1200px; }
   .card-grid { grid-template-columns: repeat(5, minmax(200px, 1fr)); gap: 18px; }
-  /* Keep favorites stable: 2 columns on wide desktop too */
-  .favorites-list-content .card-grid,
-  .resontes-list-content .card-grid { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
+  /* Keep favorites stable: 2 columns; resonates gets 4 columns on wide desktop */
+  .favorites-list-content .card-grid { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
+  .resontes-list-content .card-grid { grid-template-columns: repeat(4, minmax(160px, 1fr)); }
 }
 
 /* Mobile tightening for 2-column search grid (3 action buttons fit without wrapping) */
 @media (max-width: 420px) {
-  .search-results-list { padding: 8px; }
+  .search-results-list { padding: 8px 8px 0; }
   .search-results-list .card-grid { gap: 8px; }
   .search-results-list .card-actions { padding: 8px 8px; gap: 6px; }
   .search-results-list .card-btn { width: 40px; height: 40px; }
 
-  .favorites-list-content { padding: 8px; }
+  .favorites-list-content { padding: 8px 8px 0; }
   .favorites-list-content .card-grid { gap: 8px; }
   .favorites-list-content .card-actions { padding: 8px 8px; gap: 6px; }
   .favorites-list-content .card-btn { width: 40px; height: 40px; }
+
+  .resontes-list-content { padding: 8px 8px 0; }
 }
 
 .no-results-icon {
