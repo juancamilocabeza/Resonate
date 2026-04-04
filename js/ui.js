@@ -547,6 +547,7 @@ function ensureSearchFilterDefaults() {
     if (typeof state.searchUi.isSearching !== 'boolean') state.searchUi.isSearching = false;
     if (typeof state.searchUi.offlineOnly !== 'boolean') state.searchUi.offlineOnly = false;
     if (typeof state.searchUi.typeFilter !== 'string') state.searchUi.typeFilter = '';
+    if (typeof state.searchUi.showingHistory !== 'boolean') state.searchUi.showingHistory = false;
   } catch {
     // ignore
   }
@@ -620,6 +621,7 @@ function dispatchSearchWithFastPath(queryAtDispatch, { keepKeyboard = true, addT
       ensureSearchFilterDefaults();
       state.searchUi.isSearching = true;
       state.searchUi.isUpgrading = false;
+      state.searchUi.showingHistory = false;
       ensureSearchFiltersHeader();
     } catch {}
 
@@ -743,6 +745,7 @@ function ensureSearchFiltersHeader() {
     } catch {}
 
     // Render local (client-side) type filters for the current loaded results.
+    // Hide filter buttons when showing recent search history.
     try {
       const summary = elements.searchResultsHeader.querySelector('.search-results-summary');
       if (summary) {
@@ -754,34 +757,40 @@ function ensureSearchFiltersHeader() {
           host.setAttribute('aria-label', 'Search filters');
           summary.appendChild(host);
         }
-        host.hidden = false;
 
-        const active = (state.searchUi && typeof state.searchUi.typeFilter === 'string') ? state.searchUi.typeFilter : '';
-        const defs = [
-          { id: '', label: 'All' },
-          { id: 'single', label: 'Single' },
-          { id: 'album', label: 'Album' }
-        ];
+        const showingHistory = !!(state.searchUi && state.searchUi.showingHistory);
+        if (showingHistory) {
+          host.hidden = true;
+        } else {
+          host.hidden = false;
 
-        host.innerHTML = defs.map(d => {
-          const isActive = d.id === active || (!d.id && !active);
-          const pressed = isActive ? 'true' : 'false';
-          const cls = `search-option-btn${isActive ? ' active' : ''}`;
-          return `<button type="button" class="${cls}" data-type-filter="${escapeHtml(d.id)}" aria-pressed="${pressed}">${escapeHtml(d.label)}</button>`;
-        }).join('');
+          const active = (state.searchUi && typeof state.searchUi.typeFilter === 'string') ? state.searchUi.typeFilter : '';
+          const defs = [
+            { id: '', label: 'All' },
+            { id: 'single', label: 'Single' },
+            { id: 'album', label: 'Album' }
+          ];
 
-        if (!host.dataset.bound) {
-          host.dataset.bound = 'true';
-          host.addEventListener('click', (e) => {
-            const btn = e && e.target ? e.target.closest('button[data-type-filter]') : null;
-            if (!btn) return;
-            try { e.preventDefault(); e.stopPropagation(); } catch {}
-            const next = String(btn.getAttribute('data-type-filter') || '').trim();
-            ensureSearchFilterDefaults();
-            state.searchUi.typeFilter = next;
-            try { ensureSearchFiltersHeader(); } catch {}
-            rerenderSearchResultsFromState(true);
-          });
+          host.innerHTML = defs.map(d => {
+            const isActive = d.id === active || (!d.id && !active);
+            const pressed = isActive ? 'true' : 'false';
+            const cls = `search-option-btn${isActive ? ' active' : ''}`;
+            return `<button type="button" class="${cls}" data-type-filter="${escapeHtml(d.id)}" aria-pressed="${pressed}">${escapeHtml(d.label)}</button>`;
+          }).join('');
+
+          if (!host.dataset.bound) {
+            host.dataset.bound = 'true';
+            host.addEventListener('click', (e) => {
+              const btn = e && e.target ? e.target.closest('button[data-type-filter]') : null;
+              if (!btn) return;
+              try { e.preventDefault(); e.stopPropagation(); } catch {}
+              const next = String(btn.getAttribute('data-type-filter') || '').trim();
+              ensureSearchFilterDefaults();
+              state.searchUi.typeFilter = next;
+              try { ensureSearchFiltersHeader(); } catch {}
+              rerenderSearchResultsFromState(true);
+            });
+          }
         }
       }
     } catch {}
@@ -8305,6 +8314,12 @@ function isRunningAsPWA() {
 // are exposed on window by that module.
 
 function displaySearchHistory() {
+  // Mark that we are showing history so ensureSearchFiltersHeader hides the type filter buttons.
+  try {
+    ensureSearchFilterDefaults();
+    state.searchUi.showingHistory = true;
+  } catch {}
+
   const history = loadSearchHistory();
 
   if (history.length === 0) {
@@ -8319,8 +8334,7 @@ function displaySearchHistory() {
       initializePanelToolbarsOnce();
       if (elements.searchResultsHeader) elements.searchResultsHeader.hidden = false;
       if (elements.searchResultsCount) elements.searchResultsCount.textContent = 'Recent searches';
-      const filterSummary = elements.searchResultsHeader && elements.searchResultsHeader.querySelector('.search-filter-summary');
-      if (filterSummary) filterSummary.hidden = true;
+      try { ensureSearchFiltersHeader(); } catch {}
     } catch {}
     state.searchActive = true;
     setSearchOpenState(true);
@@ -8408,8 +8422,7 @@ function displaySearchHistory() {
     initializePanelToolbarsOnce();
     if (elements.searchResultsHeader) elements.searchResultsHeader.hidden = false;
     if (elements.searchResultsCount) elements.searchResultsCount.textContent = `Recent searches (${history.length})`;
-    const filterSummary = elements.searchResultsHeader && elements.searchResultsHeader.querySelector('.search-filter-summary');
-    if (filterSummary) filterSummary.hidden = true;
+    try { ensureSearchFiltersHeader(); } catch {}
   } catch {}
   state.searchActive = true;
   setSearchOpenState(true);
