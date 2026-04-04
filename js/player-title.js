@@ -120,17 +120,16 @@
           isEnergySaverMode() ? 'important' : ''
         );
 
-        // Start ticker automatically in all modes (including energy-saver)
-        // Energy-saver is slower but still auto-starts for mobile readability
-        setTimeout(() => {
-          const el = getTitleElement();
-          if (currentToken !== tickerToken || !el) return;
+        // Apply ticker immediately — the keyframe animation pauses at position 0
+        // for the first 15% of the cycle so users always see the title at start.
+        const el = getTitleElement();
+        if (currentToken === tickerToken && el) {
           const liveSpan = el.querySelector('.title-text');
           if (liveSpan) {
             void liveSpan.offsetWidth;
             el.classList.add('ticker');
           }
-        }, isEnergySaverMode() ? 1500 : 1000); // Slight delay in eco mode
+        }
       }
     }
   }
