@@ -94,6 +94,8 @@ def run():
         assert_true(status == 200, "GET /js/ui.js should return 200")
         assert_true("function setupPWAInstall" in body, "UI should include setupPWAInstall")
         assert_true("function shareTrack" in body, "UI should include shareTrack")
+        assert_true("showingHistory" in body, "UI should track showingHistory to hide type-filter buttons in Recent Searches panel")
+        assert_true("function displaySearchHistory" in body, "UI should include displaySearchHistory function for the Recent Searches panel")
 
         status, body = request("/js/cache.js")
         assert_true(status == 200, "GET /js/cache.js should return 200")
