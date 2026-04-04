@@ -4357,21 +4357,18 @@ function renderResultMeta(metaElement, metaState) {
   const durationSeconds = isAlbum ? state.totalDurationSeconds : state.durationSeconds;
 
   // Move duration to the chips area at the top of the card (next to the track count chip)
-  const card = metaElement.closest('.content-card');
-  if (card) {
-    const chips = card.querySelector('.card-chips');
-    if (chips) {
-      let chipTime = chips.querySelector('.chip-total-time');
-      if (typeof durationSeconds === 'number' && Number.isFinite(durationSeconds) && durationSeconds > 0) {
-        if (!chipTime) {
-          chipTime = document.createElement('span');
-          chipTime.className = 'chip chip-quiet chip-total-time';
-          chips.appendChild(chipTime);
-        }
-        chipTime.textContent = isAlbum ? formatAlbumDuration(durationSeconds) : formatTime(durationSeconds);
-      } else if (chipTime) {
-        chipTime.remove();
+  const chips = metaElement.closest('.content-card')?.querySelector('.card-chips');
+  if (chips) {
+    let chipTime = chips.querySelector('.chip-total-time');
+    if (typeof durationSeconds === 'number' && Number.isFinite(durationSeconds) && durationSeconds > 0) {
+      if (!chipTime) {
+        chipTime = document.createElement('span');
+        chipTime.className = 'chip chip-quiet chip-total-time';
+        chips.appendChild(chipTime);
       }
+      chipTime.textContent = isAlbum ? formatAlbumDuration(durationSeconds) : formatTime(durationSeconds);
+    } else if (chipTime) {
+      chipTime.remove();
     }
   }
 }
