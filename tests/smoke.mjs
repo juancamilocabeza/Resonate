@@ -82,6 +82,10 @@ async function run() {
     assert(uiRes.status === 200, 'GET /js/ui.js should return 200');
     assert(uiRes.body.includes('function setupPWAInstall'), 'UI should include setupPWAInstall');
 
+    const searchHistoryRes = await request('/js/search-history.js');
+    assert(searchHistoryRes.status === 200, 'GET /js/search-history.js should return 200');
+    assert(searchHistoryRes.body.includes('loadSearchHistory'), 'search-history should include loadSearchHistory');
+
     const cacheRes = await request('/js/cache.js');
     assert(cacheRes.status === 200, 'GET /js/cache.js should return 200');
     assert(cacheRes.body.includes('class AudioCache'), 'Cache should include AudioCache');
