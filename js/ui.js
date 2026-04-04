@@ -4356,20 +4356,23 @@ function renderResultMeta(metaElement, metaState) {
   const isAlbum = !!state.isAlbum && state.forceSingle !== true && trackCount > 1;
   const durationSeconds = isAlbum ? state.totalDurationSeconds : state.durationSeconds;
 
-  if (!trackCount && !(typeof durationSeconds === 'number' && Number.isFinite(durationSeconds) && durationSeconds > 0)) {
-    return;
-  }
-
-  const kind = document.createElement('span');
-  kind.className = 'result-meta-pill album-indicator';
-  kind.textContent = isAlbum ? `${trackCount} tracks` : 'Single track';
-  metaElement.appendChild(kind);
-
-  if (typeof durationSeconds === 'number' && Number.isFinite(durationSeconds) && durationSeconds > 0) {
-    const duration = document.createElement('span');
-    duration.className = 'result-meta-pill track-duration';
-    duration.textContent = isAlbum ? formatAlbumDuration(durationSeconds) : formatTime(durationSeconds);
-    metaElement.appendChild(duration);
+  // Move duration to the chips area at the top of the card (next to the track count chip)
+  const card = metaElement.closest('.content-card');
+  if (card) {
+    const chips = card.querySelector('.card-chips');
+    if (chips) {
+      let chipTime = chips.querySelector('.chip-total-time');
+      if (typeof durationSeconds === 'number' && Number.isFinite(durationSeconds) && durationSeconds > 0) {
+        if (!chipTime) {
+          chipTime = document.createElement('span');
+          chipTime.className = 'chip chip-quiet chip-total-time';
+          chips.appendChild(chipTime);
+        }
+        chipTime.textContent = isAlbum ? formatAlbumDuration(durationSeconds) : formatTime(durationSeconds);
+      } else if (chipTime) {
+        chipTime.remove();
+      }
+    }
   }
 }
 
