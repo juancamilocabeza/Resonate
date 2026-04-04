@@ -2,6 +2,7 @@ const Loaders = (() => {
   let activeLoader = null;
   let activeLoaderShownAt = 0;
   let hideTimer = null;
+  let pendingRemovalEl = null;
   const MIN_VISIBLE_MS = 220;
 
   // Loader explanations by context
@@ -19,6 +20,12 @@ const Loaders = (() => {
     if (hideTimer) {
       clearTimeout(hideTimer);
       hideTimer = null;
+    }
+    // Remove any element that was waiting for the MIN_VISIBLE_MS delay before its fade.
+    // Without this, clearing hideTimer would leave that element permanently in the DOM.
+    if (pendingRemovalEl) {
+      try { pendingRemovalEl.remove(); } catch { /* best-effort: element may already be detached */ }
+      pendingRemovalEl = null;
     }
     activeLoaderShownAt = Date.now();
 
@@ -80,9 +87,18 @@ const Loaders = (() => {
     const el = activeLoader;
     activeLoader = null;
     if (elapsed < MIN_VISIBLE_MS) {
-      if (hideTimer) clearTimeout(hideTimer);
+      if (hideTimer) {
+        clearTimeout(hideTimer);
+        hideTimer = null;
+      }
+      // Defensively clean up any prior pending element before tracking the new one.
+      if (pendingRemovalEl) {
+        try { pendingRemovalEl.remove(); } catch { /* best-effort: element may already be detached */ }
+      }
+      pendingRemovalEl = el;
       hideTimer = setTimeout(() => {
         hideTimer = null;
+        pendingRemovalEl = null;
         _removeWithFade(el);
       }, MIN_VISIBLE_MS - elapsed);
       return;
