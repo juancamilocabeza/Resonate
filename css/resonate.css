@@ -235,8 +235,8 @@
 
 /* Track title ticker inside Tracks overlay */
 @keyframes tracksTicker {
-  0% { transform: translateX(0%); }
-  100% { transform: translateX(-60%); }
+  0%, 15% { transform: translateX(0%); }
+  85%, 100% { transform: translateX(-60%); }
 }
 
 .tracklist .track-item-info,
@@ -1444,10 +1444,10 @@ h3 {
 
 /* Title Ticker Animation */
 @keyframes titleTicker {
-  0% {
-    transform: translateX(0%);
+  0%, 15% {
+    transform: translateX(0);
   }
-  100% {
+  85%, 100% {
     transform: translateX(calc(-1 * var(--title-overflow, 0px)));
   }
 }
