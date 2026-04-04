@@ -8455,76 +8455,10 @@ function isRunningAsPWA() {
   return standalone;
 }
 
-// Search history management
-// Returns a normalized array of history entries as {query, timestamp} objects.
-// Handles migration from the old plain-string format transparently.
-function loadSearchHistory() {
-  try {
-    const raw = localStorage.getItem('resonate_search_history');
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    const normalized = parsed.map(item => {
-      if (item && typeof item === 'object' && typeof item.query === 'string') {
-        return { query: item.query, timestamp: item.timestamp || 0 };
-      }
-      // Migrate old plain-string entries
-      if (typeof item === 'string' && item.trim()) {
-        return { query: item.trim(), timestamp: 0 };
-      }
-      return null;
-    }).filter(Boolean);
-    return normalized;
-  } catch (e) {
-    window.logger?.warn(`Error loading search history: ${e.message}`, 'UI');
-    return [];
-  }
-}
-
-function saveSearchHistory(history) {
-  try {
-    localStorage.setItem('resonate_search_history', JSON.stringify(history));
-  } catch (e) {
-    window.logger?.warn(`Error saving search history: ${e.message}`, 'UI');
-  }
-}
-
-function addToSearchHistory(query) {
-  if (!query || !query.trim()) return;
-
-  const history = loadSearchHistory();
-  const trimmedQuery = query.trim();
-
-  // Remove any existing entry with the same query (to move it to the front)
-  const filtered = history.filter(item => item.query !== trimmedQuery);
-
-  // Add to beginning with current timestamp, limit to 20 items
-  filtered.unshift({ query: trimmedQuery, timestamp: Date.now() });
-  const limited = filtered.slice(0, 20);
-
-  saveSearchHistory(limited);
-}
-
-// Returns a human-readable relative time label for a timestamp.
-function formatSearchHistoryTime(timestamp) {
-  if (!timestamp) return '';
-  try {
-    const now = Date.now();
-    const diffMs = now - timestamp;
-    if (diffMs < 0) return '';
-    const diffMin = Math.floor(diffMs / 60000);
-    if (diffMin < 1) return 'Just now';
-    if (diffMin < 60) return `${diffMin}m ago`;
-    const diffH = Math.floor(diffMin / 60);
-    if (diffH < 24) return `${diffH}h ago`;
-    const diffD = Math.floor(diffH / 24);
-    if (diffD === 1) return 'Yesterday';
-    if (diffD < 7) return `${diffD}d ago`;
-    return '';
-  } catch {
-    return '';
-  }
-}
+// Search history management is now in js/search-history.js.
+// The functions loadSearchHistory, saveSearchHistory, addToSearchHistory,
+// formatSearchHistoryTime, clearSearchHistory, and removeFromSearchHistory
+// are exposed on window by that module.
 
 function displaySearchHistory() {
   const history = loadSearchHistory();
@@ -8618,6 +8552,7 @@ function displaySearchHistory() {
   clearAllDiv.innerHTML = '<button class="clear-history-btn">Clear history</button>';
   clearAllDiv.querySelector('.clear-history-btn').addEventListener('click', () => {
     clearSearchHistory();
+    showStatus('Your search history cleared', 'info', 2000);
     displaySearchHistory();
   });
   fragment.appendChild(clearAllDiv);
@@ -8635,19 +8570,6 @@ function displaySearchHistory() {
   state.searchActive = true;
   setSearchOpenState(true);
   scheduleSearchInsetsBurst();
-}
-
-function clearSearchHistory() {
-  saveSearchHistory([]);
-  showStatus('Your search history cleared', 'info', 2000);
-}
-
-function removeFromSearchHistory(index) {
-  const history = loadSearchHistory();
-  if (index >= 0 && index < history.length) {
-    history.splice(index, 1);
-    saveSearchHistory(history);
-  }
 }
 
 function normalizeTrackTitle(title) {
@@ -9086,14 +9008,9 @@ window.hideSearchResults = hideSearchResults;
 window.hideTracksListPanel = hideTracksListPanel;
 window.hideResontesList = hideResontesList;
 window.preparePlaybackTransitionFromList = preparePlaybackTransitionFromList;
-window.loadSearchHistory = loadSearchHistory;
 window.initializeFavoritesPlayListener = initializeFavoritesPlayListener;
 window.initializeResontesPlayListener = initializeFavoritesPlayListener;
-window.saveSearchHistory = saveSearchHistory;
-window.addToSearchHistory = addToSearchHistory;
 window.displaySearchHistory = displaySearchHistory;
-window.clearSearchHistory = clearSearchHistory;
-window.removeFromSearchHistory = removeFromSearchHistory;
 window.loadSavedPlaybackState = loadSavedPlaybackState;
 window.setupPlaybackAutosave = setupPlaybackAutosave;
 window.state = state;

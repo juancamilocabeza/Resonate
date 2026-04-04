@@ -67,6 +67,7 @@ const STATIC_FILES = [
   '/js/album-tracks.js',
   '/js/playback.js',
   '/js/search.js',
+  '/js/search-history.js',
   '/js/ui.js',
   '/js/tracklist.js',
   '/js/offline.js',
