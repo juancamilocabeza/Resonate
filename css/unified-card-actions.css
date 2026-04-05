@@ -1,15 +1,24 @@
 /**
  * Unified Card Actions CSS
- * 
- * Simplified action overlay for cards:
- * - Only 2 visible actions: Favorite + More (⋯)
- * - Clean dark gradient background for contrast
- * - Circular 40px buttons
+ *
+ * - .card-actions: normal-flow horizontal button row (used by resonates list)
+ * - .card-actions-overlay: absolutely-positioned overlay over card media (used by search)
+ * - Only 2 visible actions on mobile: Favorite + More (⋯)
  * - Works on any album art (light or dark)
  */
 
-/* ===== CARD ACTIONS OVERLAY ===== */
-.card-actions,
+/* ===== CARD ACTIONS (normal flow – resonates list) ===== */
+.card-actions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 8px;
+  min-height: 0;
+}
+
+/* ===== CARD ACTIONS OVERLAY (absolutely positioned over cover art – search) ===== */
 .card-actions-overlay {
   position: absolute;
   left: 50%;
@@ -35,7 +44,6 @@
 
 /* Always visible on mobile for better UX */
 @media (hover: none), (max-width: 1023px) {
-  .card-actions,
   .card-actions-overlay {
     opacity: 1;
   }
@@ -43,14 +51,11 @@
 
 /* On desktop with hover, show on hover */
 @media (min-width: 1024px) and (hover: hover) {
-  .card-actions,
   .card-actions-overlay {
     opacity: 0.85;
   }
-  
-  .content-card:hover .card-actions,
+
   .content-card:hover .card-actions-overlay,
-  .content-card:focus-within .card-actions,
   .content-card:focus-within .card-actions-overlay {
     opacity: 1;
   }
@@ -125,8 +130,7 @@
   .card-btn.expand {
     display: flex;
   }
-  
-  .card-actions,
+
   .card-actions-overlay {
     gap: 6px;
     padding: 5px 8px;
@@ -134,19 +138,18 @@
 }
 
 /* ===== ACCESSIBILITY - Touch Targets ===== */
-/* Ensure minimum 44px touch target on mobile */
+/* Ensure adequate touch targets on mobile */
 @media (max-width: 1023px) {
   .card-btn {
-    width: 40px;
-    height: 40px;
-    min-width: 40px;
-    min-height: 40px;
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    min-height: 38px;
   }
-  
-  .card-actions,
+
   .card-actions-overlay {
-    padding: 4px 8px;
-    gap: 8px;
+    padding: 4px 6px;
+    gap: 6px;
     border-radius: 22px;
   }
 }
@@ -154,16 +157,15 @@
 /* ===== SMALL MOBILE ===== */
 @media (max-width: 420px) {
   .card-btn {
-    width: 38px;
-    height: 38px;
+    width: 36px;
+    height: 36px;
     font-size: 13px;
   }
-  
-  .card-actions,
+
   .card-actions-overlay {
     bottom: 6px;
-    padding: 3px 6px;
-    gap: 6px;
+    padding: 3px 5px;
+    gap: 5px;
     border-radius: 20px;
   }
 }
