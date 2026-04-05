@@ -7449,8 +7449,13 @@ function updateFavoritesList() {
     if (labelEl && filterText) {
       labelEl.textContent = `${items.length} resonates for '${filterText}'`;
     } else if (labelEl && typeFilter) {
-      // Show type filter but without the confusing "for 'type'" text
-      const typeLabel = typeFilter === 'single' ? 'singles' : 'albums';
+      // Show type filter with proper label based on value
+      let typeLabel = 'resonates';
+      if (typeFilter === 'single') {
+        typeLabel = 'singles';
+      } else if (typeFilter === 'album') {
+        typeLabel = 'albums';
+      }
       labelEl.textContent = `${items.length} ${typeLabel}`;
     }
   } catch {}
