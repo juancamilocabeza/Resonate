@@ -6,6 +6,7 @@
  * - Resonates list
  * 
  * Mobile-first, 2 columns on mobile, responsive breakpoints
+ * Both listings use identical column counts at every breakpoint for visual consistency.
  */
 
 /* ===== UNIFIED GRID ===== */
@@ -17,6 +18,12 @@
   width: 100%;
   padding: 0;
   margin: 0;
+}
+
+/* Prevent grid items from overflowing their column */
+.resonate-grid > *,
+.card-grid > * {
+  min-width: 0;
 }
 
 /* ===== LIST CONTENT AREAS ===== */
@@ -32,97 +39,104 @@
   padding: 10px 10px calc(10px + env(safe-area-inset-bottom, 0) + var(--vv-bottom-inset, 0px));
 }
 
-/* Ensure grid is used within these containers */
+/* Consistent grid inside both containers — no per-context overrides */
 .search-results-list .resonate-grid,
 .search-results-list .card-grid,
 .resontes-list-content .resonate-grid,
 .resontes-list-content .card-grid {
+  grid-template-columns: repeat(2, minmax(140px, 1fr));
   gap: 10px;
 }
 
 /* ===== TABLET RESPONSIVE (3 columns) ===== */
 @media (min-width: 600px) {
   .resonate-grid,
-  .card-grid {
+  .card-grid,
+  .search-results-list .resonate-grid,
+  .search-results-list .card-grid,
+  .resontes-list-content .resonate-grid,
+  .resontes-list-content .card-grid {
     grid-template-columns: repeat(3, minmax(140px, 1fr));
     gap: 12px;
   }
-  
+
   .search-results-list,
   .resontes-list-content {
     padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0));
   }
 }
 
-/* ===== DESKTOP RESPONSIVE (4-5 columns) ===== */
+/* ===== WIDE TABLET / SMALL DESKTOP (3 columns) ===== */
 @media (min-width: 768px) {
   .resonate-grid,
-  .card-grid {
+  .card-grid,
+  .search-results-list .resonate-grid,
+  .search-results-list .card-grid,
+  .resontes-list-content .resonate-grid,
+  .resontes-list-content .card-grid {
     grid-template-columns: repeat(3, minmax(160px, 1fr));
     gap: 14px;
   }
-  
+
   .search-results-list {
     max-width: 1024px;
     margin: 0 auto;
     padding: 10px 16px 0;
   }
-  
+
   .resontes-list-content {
     padding: 10px 12px 0;
   }
 }
 
+/* ===== DESKTOP (4 columns) ===== */
 @media (min-width: 1024px) {
   .resonate-grid,
-  .card-grid {
+  .card-grid,
+  .search-results-list .resonate-grid,
+  .search-results-list .card-grid,
+  .resontes-list-content .resonate-grid,
+  .resontes-list-content .card-grid {
     grid-template-columns: repeat(4, minmax(180px, 1fr));
     gap: 16px;
   }
-  
+
   .search-results-list {
     max-width: 1200px;
     padding: 10px 24px 0;
   }
-  
-  .search-results-list .resonate-grid,
-  .search-results-list .card-grid {
-    grid-template-columns: repeat(5, minmax(160px, 1fr));
-  }
-  
-  /* Resonates keeps more compact grid on desktop */
-  .resontes-list-content .resonate-grid,
-  .resontes-list-content .card-grid {
-    grid-template-columns: repeat(3, minmax(160px, 1fr));
-  }
 }
 
+/* ===== WIDE DESKTOP (5 columns) ===== */
 @media (min-width: 1280px) {
   .resonate-grid,
-  .card-grid {
+  .card-grid,
+  .search-results-list .resonate-grid,
+  .search-results-list .card-grid,
+  .resontes-list-content .resonate-grid,
+  .resontes-list-content .card-grid {
     grid-template-columns: repeat(5, minmax(200px, 1fr));
     gap: 18px;
   }
-  
+
   .search-results-list,
   .search-container {
     max-width: 1200px;
-  }
-  
-  .resontes-list-content .resonate-grid,
-  .resontes-list-content .card-grid {
-    grid-template-columns: repeat(4, minmax(160px, 1fr));
   }
 }
 
 /* ===== SMALL MOBILE TIGHTENING ===== */
 @media (max-width: 420px) {
   .resonate-grid,
-  .card-grid {
+  .card-grid,
+  .search-results-list .resonate-grid,
+  .search-results-list .card-grid,
+  .resontes-list-content .resonate-grid,
+  .resontes-list-content .card-grid {
     grid-template-columns: repeat(2, minmax(130px, 1fr));
     gap: 8px;
   }
-  
+
   .search-results-list,
   .resontes-list-content {
     padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0));
