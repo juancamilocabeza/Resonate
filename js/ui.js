@@ -745,19 +745,27 @@ function ensureSearchFiltersHeader() {
     } catch {}
 
     // Render local (client-side) type filters for the current loaded results.
-    // Hide filter buttons when showing recent search history.
+    // Use the dedicated filter-pills container for unified styling.
     try {
-      const summary = elements.searchResultsHeader.querySelector('.search-results-summary');
-      if (summary) {
-        let host = summary.querySelector('.search-filter-summary');
-        if (!host) {
-          host = document.createElement('div');
-          host.className = 'search-filter-summary';
-          host.setAttribute('role', 'group');
-          host.setAttribute('aria-label', 'Search filters');
-          summary.appendChild(host);
+      // Try to use the new dedicated filter pills container
+      let host = document.getElementById('search-type-filters');
+      
+      // Fallback to original location for backward compatibility
+      if (!host) {
+        const summary = elements.searchResultsHeader.querySelector('.search-results-summary');
+        if (summary) {
+          host = summary.querySelector('.search-filter-summary');
+          if (!host) {
+            host = document.createElement('div');
+            host.className = 'filter-pills';
+            host.setAttribute('role', 'group');
+            host.setAttribute('aria-label', 'Search filters');
+            summary.appendChild(host);
+          }
         }
-
+      }
+      
+      if (host) {
         const showingHistory = !!(state.searchUi && state.searchUi.showingHistory);
         if (showingHistory) {
           host.hidden = true;
@@ -774,7 +782,7 @@ function ensureSearchFiltersHeader() {
           host.innerHTML = defs.map(d => {
             const isActive = d.id === active || (!d.id && !active);
             const pressed = isActive ? 'true' : 'false';
-            const cls = `search-option-btn${isActive ? ' active' : ''}`;
+            const cls = `filter-pill${isActive ? ' active' : ''}`;
             return `<button type="button" class="${cls}" data-type-filter="${escapeHtml(d.id)}" aria-pressed="${pressed}">${escapeHtml(d.label)}</button>`;
           }).join('');
 
@@ -5040,18 +5048,31 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
   renderResultMeta(meta, getResultMetaState(item));
   body.appendChild(meta);
 
-  // Actions
+  // Actions - Simplified: Only Favorite + More button visible by default
+  // Share and Expand are hidden on mobile, shown on desktop or in context menu
   const actions = document.createElement('div');
   actions.className = 'card-actions';
+  
   const favBtn = document.createElement('button');
   favBtn.className = 'card-btn favorite';
   favBtn.innerHTML = window.resonateLogoSVG || '';
   favBtn.setAttribute('aria-label', 'Add to resonates');
+  
+  // More button (⋯) that opens context menu on mobile
+  const moreBtn = document.createElement('button');
+  moreBtn.className = 'card-btn more';
+  moreBtn.textContent = '⋯';
+  moreBtn.title = 'More options';
+  moreBtn.setAttribute('aria-label', 'More options');
+  moreBtn.setAttribute('aria-haspopup', 'true');
+  
+  // Secondary actions (hidden by default on mobile, shown on desktop)
   const shareBtn = document.createElement('button');
   shareBtn.className = 'card-btn share';
   shareBtn.title = 'Share';
   shareBtn.textContent = '🔗';
   applyShareButtonState(shareBtn);
+  
   const expandBtn = document.createElement('button');
   expandBtn.className = 'card-btn expand';
   expandBtn.innerHTML = '<span class="expand-icon">▼</span>';
@@ -5059,7 +5080,10 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
   expandBtn.setAttribute('aria-label', 'Show album tracks');
   expandBtn.setAttribute('aria-expanded', 'false');
   expandBtn.style.display = isAlbum ? 'flex' : 'none';
+  
+  // Order: Favorite, More, Share, Expand (share/expand hidden on mobile via CSS)
   actions.appendChild(favBtn);
+  actions.appendChild(moreBtn);
   actions.appendChild(shareBtn);
   actions.appendChild(expandBtn);
 
@@ -5192,6 +5216,22 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
         await shareTrack(identifier, title, creator, null, shareKind);
       } catch {}
     });
+    
+    // More button - shows context menu with additional options
+    moreBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // On mobile, show a mini action menu or bottom sheet
+      // For now, trigger share and expand as fallback
+      try {
+        if (isAlbum && expandBtn.style.display !== 'none') {
+          // For albums, clicking More triggers expand
+          expandBtn.click();
+        } else {
+          // For singles, clicking More triggers share
+          shareBtn.click();
+        }
+      } catch {}
+    });
   } else {
     // favorites context
     const isAlbumFavorite = Array.isArray(item.tracks) ? item.tracks.length > 1 : isAlbum;
@@ -5282,6 +5322,20 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
       try {
         const shareKind = isAlbumFavorite ? 'album' : 'track';
         shareTrack(identifier, title, creator, null, shareKind);
+      } catch {}
+    });
+    
+    // More button - shows context menu with additional options
+    moreBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // On mobile, show a mini action menu or bottom sheet
+      // For now, trigger expand for albums, share for singles
+      try {
+        if (isAlbumFavorite && expandBtn.style.display !== 'none') {
+          expandBtn.click();
+        } else {
+          shareBtn.click();
+        }
       } catch {}
     });
   }
@@ -7226,7 +7280,14 @@ function updateFavoritesList() {
       const labelEl = elements.favoritesCountLabel || elements.resontesCountLabel;
       if (labelEl) {
         const count = (state && Array.isArray(state.favorites)) ? state.favorites.length : 0;
-        labelEl.textContent = `Resonates (${count})`;
+        const filterText = (state.favoritesUi && typeof state.favoritesUi.filterText === 'string') ? state.favoritesUi.filterText.trim() : '';
+        
+        // Dynamic header similar to search results: "{N} resonates for '{term}'"
+        if (filterText) {
+          labelEl.textContent = `${count} resonates for '${filterText}'`;
+        } else {
+          labelEl.textContent = `${count} Resonates`;
+        }
       }
     }
 
@@ -7250,6 +7311,39 @@ function updateFavoritesList() {
       const ft = (state.favoritesUi && typeof state.favoritesUi.filterText === 'string') ? state.favoritesUi.filterText : '';
       if (filterEl.value !== ft) filterEl.value = ft;
     }
+    
+    // Render type filter pills for resonates (All, Single, Album)
+    try {
+      let filtersHost = document.getElementById('resontes-type-filters');
+      if (filtersHost) {
+        const activeTypeFilter = (state.favoritesUi && typeof state.favoritesUi.typeFilter === 'string') ? state.favoritesUi.typeFilter : '';
+        const filterDefs = [
+          { id: '', label: 'All' },
+          { id: 'single', label: 'Single' },
+          { id: 'album', label: 'Album' }
+        ];
+        
+        filtersHost.innerHTML = filterDefs.map(d => {
+          const isActive = d.id === activeTypeFilter || (!d.id && !activeTypeFilter);
+          const pressed = isActive ? 'true' : 'false';
+          const cls = `filter-pill${isActive ? ' active' : ''}`;
+          return `<button type="button" class="${cls}" data-type-filter="${escapeHtml(d.id)}" aria-pressed="${pressed}">${escapeHtml(d.label)}</button>`;
+        }).join('');
+        
+        if (!filtersHost.dataset.bound) {
+          filtersHost.dataset.bound = 'true';
+          filtersHost.addEventListener('click', (e) => {
+            const btn = e && e.target ? e.target.closest('button[data-type-filter]') : null;
+            if (!btn) return;
+            try { e.preventDefault(); e.stopPropagation(); } catch {}
+            const next = String(btn.getAttribute('data-type-filter') || '').trim();
+            if (!state.favoritesUi) state.favoritesUi = {};
+            state.favoritesUi.typeFilter = next;
+            updateFavoritesList();
+          });
+        }
+      }
+    } catch {}
   } catch {}
 
   favoritesList.innerHTML = '';
@@ -7323,6 +7417,14 @@ function updateFavoritesList() {
   if (filterText) {
     items = items.filter(item => getTextForSearchItem(item).includes(filterText));
   }
+  
+  // Type filter for resonates (single/album)
+  const typeFilter = (state.favoritesUi && typeof state.favoritesUi.typeFilter === 'string') ? state.favoritesUi.typeFilter : '';
+  if (typeFilter === 'single') {
+    items = items.filter(item => !item.isAlbum);
+  } else if (typeFilter === 'album') {
+    items = items.filter(item => item.isAlbum);
+  }
 
   const offlineOnly = !!(state.favoritesUi && state.favoritesUi.offlineOnly);
   if (offlineOnly && (!offlineIndex || !offlineIndex.builtAt)) {
@@ -7340,6 +7442,23 @@ function updateFavoritesList() {
       return tracks.some(t => t && t.url && isUrlOfflineAvailableSync(t.url));
     });
   }
+  
+  // Update the count label with filtered results if filters are active
+  try {
+    const labelEl = elements.favoritesCountLabel || elements.resontesCountLabel;
+    if (labelEl && filterText) {
+      labelEl.textContent = `${items.length} resonates for '${filterText}'`;
+    } else if (labelEl && typeFilter) {
+      // Show type filter with proper label based on value
+      let typeLabel = 'resonates';
+      if (typeFilter === 'single') {
+        typeLabel = 'singles';
+      } else if (typeFilter === 'album') {
+        typeLabel = 'albums';
+      }
+      labelEl.textContent = `${items.length} ${typeLabel}`;
+    }
+  } catch {}
 
   renderCardGrid(favoritesList, items, 'favorites', true);
 }

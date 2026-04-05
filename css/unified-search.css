@@ -1,0 +1,245 @@
+/**
+ * Unified Search Component CSS
+ * 
+ * This module provides a consistent search experience across:
+ * - Global search
+ * - Resonates list filter
+ * 
+ * Mobile-first, sticky behavior, compact and touch-friendly
+ */
+
+/* ===== CSS VARIABLES FOR SEARCH ===== */
+:root {
+  --search-height-mobile: 44px;
+  --search-height-tablet: 44px;
+  --search-height-desktop: 48px;
+  --search-border-radius: 12px;
+  --search-sticky-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+  --search-sticky-bg: var(--collection-panel-header-bg, var(--bg));
+}
+
+/* ===== UNIFIED SEARCH SECTION ===== */
+.search-section {
+  display: flex;
+  flex-direction: column;
+  padding: 0 4px;
+  margin-top: var(--spacing-sm, 6px);
+  z-index: 50;
+}
+
+/* Sticky search behavior */
+.search-section.is-sticky {
+  position: sticky;
+  top: 0;
+  background: var(--search-sticky-bg);
+  box-shadow: var(--search-sticky-shadow);
+  padding-top: 4px;
+  padding-bottom: 4px;
+  backdrop-filter: blur(10px);
+  z-index: 100;
+  transition: box-shadow 0.2s ease, background 0.2s ease;
+}
+
+/* ===== UNIFIED SEARCH CONTAINER ===== */
+.search-container {
+  flex-shrink: 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin: 0 auto;
+  gap: 8px;
+  width: 100%;
+  max-width: var(--content-max-width, 600px);
+}
+
+/* ===== UNIFIED SEARCH INPUT WRAPPER ===== */
+.search-input-wrapper {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+/* ===== UNIFIED SEARCH INPUT ICON ===== */
+.search-input-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease;
+  z-index: 1;
+}
+
+.search-input-icon svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.search-input-wrapper:has(.search-input:focus) .search-input-icon {
+  color: var(--primary);
+}
+
+/* ===== UNIFIED SEARCH INPUT ===== */
+.search-input {
+  height: var(--search-height-mobile);
+  background: var(--btn);
+  border: 2px solid var(--surface-border);
+  border-radius: var(--search-border-radius);
+  color: var(--fg);
+  -webkit-appearance: none;
+  appearance: none;
+  font-size: 16px;
+  padding: 0 12px 0 calc(12px + 18px + 8px); /* left: padding + icon + gap */
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  width: 100%;
+  min-width: 0;
+}
+
+/* Hide native search decorations */
+.search-input::-webkit-search-cancel-button,
+.search-input::-webkit-search-decoration,
+.search-input::-webkit-search-results-button,
+.search-input::-webkit-search-results-decoration {
+  -webkit-appearance: none;
+  display: none;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  background: var(--search-input-bg-focus, var(--btn));
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.12);
+}
+
+.search-input::placeholder {
+  color: var(--search-input-placeholder, var(--muted));
+}
+
+/* ===== UNIFIED SEARCH CLEAR BUTTON ===== */
+.search-clear-btn {
+  flex: 0 0 auto;
+  width: var(--search-height-mobile);
+  height: var(--search-height-mobile);
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 10px;
+  border: none;
+  background: var(--btn);
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+
+.search-clear-btn svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+.search-clear-btn[hidden] {
+  display: none !important;
+}
+
+.search-clear-btn:active {
+  background: var(--card);
+  color: var(--fg);
+  transform: scale(0.95);
+}
+
+.search-clear-btn:hover {
+  background: var(--card);
+  color: var(--fg);
+}
+
+.search-clear-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.22);
+}
+
+/* ===== TABLET & DESKTOP RESPONSIVE ===== */
+@media (min-width: 600px) {
+  .search-section {
+    padding: 4px 0;
+  }
+  
+  .search-container {
+    max-width: var(--content-max-width, 600px);
+    margin: 0 auto;
+  }
+  
+  .search-input {
+    height: var(--search-height-tablet);
+    font-size: 15px;
+  }
+  
+  .search-clear-btn {
+    width: var(--search-height-tablet);
+    height: var(--search-height-tablet);
+  }
+}
+
+@media (min-width: 1024px) {
+  .search-input {
+    height: var(--search-height-desktop);
+    font-size: 16px;
+    background: var(--search-input-bg, var(--btn));
+    border: 2px solid transparent;
+    color: var(--search-input-fg, var(--fg));
+  }
+  
+  .search-input:hover {
+    border-color: var(--surface-border);
+  }
+  
+  .search-input:focus {
+    border-color: var(--primary);
+    background: var(--search-input-bg-focus, var(--btn));
+  }
+  
+  .search-clear-btn {
+    width: var(--search-height-desktop);
+    height: var(--search-height-desktop);
+  }
+}
+
+/* ===== RESONATES FILTER BAR (Unified with search) ===== */
+.resontes-filter-bar {
+  padding: 8px 10px;
+  background: var(--collection-panel-header-bg, var(--bg));
+  border-bottom: 1px solid var(--surface-border);
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+
+.resontes-filter-bar .search-container {
+  margin: 0;
+  max-width: none;
+}
+
+.resontes-filter-bar .search-input {
+  height: 40px;
+  font-size: 14px;
+  border-radius: 10px;
+}
+
+.resontes-filter-bar .search-clear-btn {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  border-radius: 8px;
+}
