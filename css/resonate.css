@@ -1053,7 +1053,9 @@ body {
   padding-bottom: calc(var(--spacing-md) + env(safe-area-inset-bottom, 0) + var(--vv-bottom-inset, 0px));
   box-sizing: border-box;
   position: relative;
-  z-index: 50;
+  /* z-index removed: a stacking context here caused the artwork to render above
+     fixed panels (search results, track listings) due to compositing layer ordering.
+     Panels use z-index: 140 which is sufficient to appear above this section. */
 }
 
 .discovery-section {
