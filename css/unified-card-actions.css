@@ -1,0 +1,201 @@
+/**
+ * Unified Card Actions CSS
+ * 
+ * Simplified action overlay for cards:
+ * - Only 2 visible actions: Favorite + More (⋯)
+ * - Clean dark gradient background for contrast
+ * - Circular 40px buttons
+ * - Works on any album art (light or dark)
+ */
+
+/* ===== CARD ACTIONS OVERLAY ===== */
+.card-actions,
+.card-actions-overlay {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  min-height: 0;
+  /* Clean dark gradient for contrast on any image */
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.70),
+    rgba(0, 0, 0, 0.50)
+  );
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 24px;
+  backdrop-filter: blur(8px);
+  transition: opacity 0.18s ease, transform 0.15s ease;
+}
+
+/* Always visible on mobile for better UX */
+@media (hover: none), (max-width: 1023px) {
+  .card-actions,
+  .card-actions-overlay {
+    opacity: 1;
+  }
+}
+
+/* On desktop with hover, show on hover */
+@media (min-width: 1024px) and (hover: hover) {
+  .card-actions,
+  .card-actions-overlay {
+    opacity: 0.85;
+  }
+  
+  .content-card:hover .card-actions,
+  .content-card:hover .card-actions-overlay,
+  .content-card:focus-within .card-actions,
+  .content-card:focus-within .card-actions-overlay {
+    opacity: 1;
+  }
+}
+
+/* ===== ACTION BUTTON ===== */
+.card-btn {
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  min-height: 38px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease, border-color 0.15s ease;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.card-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.card-btn:hover {
+  background: rgba(var(--primary-rgb), 0.30);
+  border-color: rgba(var(--primary-rgb), 0.50);
+}
+
+.card-btn:active {
+  transform: scale(0.92);
+  background: rgba(var(--primary-rgb), 0.40);
+}
+
+.card-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.55);
+}
+
+/* ===== ACTIVE STATE (Favorited) ===== */
+.card-btn.favorite.active,
+.card-btn.resonte.active {
+  color: var(--primary);
+  background: rgba(var(--primary-rgb), 0.25);
+  border-color: rgba(var(--primary-rgb), 0.45);
+}
+
+/* ===== MORE BUTTON (ellipsis) ===== */
+.card-btn.more {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+/* ===== HIDE SECONDARY ACTIONS BY DEFAULT ===== */
+/* Only show Favorite and More, hide Share and Expand initially */
+.card-btn.share,
+.card-btn.expand {
+  display: none;
+}
+
+/* Show all actions in expanded/desktop mode */
+@media (min-width: 1024px) and (hover: hover) {
+  .card-btn.share,
+  .card-btn.expand {
+    display: flex;
+  }
+  
+  .card-actions,
+  .card-actions-overlay {
+    gap: 6px;
+    padding: 5px 8px;
+  }
+}
+
+/* ===== ACCESSIBILITY - Touch Targets ===== */
+/* Ensure minimum 44px touch target on mobile */
+@media (max-width: 1023px) {
+  .card-btn {
+    width: 40px;
+    height: 40px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+  
+  .card-actions,
+  .card-actions-overlay {
+    padding: 4px 8px;
+    gap: 8px;
+    border-radius: 22px;
+  }
+}
+
+/* ===== SMALL MOBILE ===== */
+@media (max-width: 420px) {
+  .card-btn {
+    width: 38px;
+    height: 38px;
+    font-size: 13px;
+  }
+  
+  .card-actions,
+  .card-actions-overlay {
+    bottom: 6px;
+    padding: 3px 6px;
+    gap: 6px;
+    border-radius: 20px;
+  }
+}
+
+/* ===== RESONATE LOGO BUTTON ANIMATION ===== */
+@keyframes resonate-btn-pop {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.25); }
+  60% { transform: scale(0.9); }
+  100% { transform: scale(1); }
+}
+
+.card-btn.resonate-btn-pop {
+  animation: resonate-btn-pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ===== SVG ICON SIZING ===== */
+.card-btn .resonate-icon {
+  width: 18px;
+  height: 18px;
+}
+
+/* Ensure proper display for emoji-based buttons */
+.card-btn.share::before {
+  content: '🔗';
+}
+
+.card-btn.expand .expand-icon {
+  font-size: 12px;
+  transition: transform 0.2s ease;
+}
+
+.card-btn.expand[aria-expanded="true"] .expand-icon {
+  transform: rotate(180deg);
+}

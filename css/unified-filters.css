@@ -1,0 +1,224 @@
+/**
+ * Unified Filter Pills CSS
+ * 
+ * Compact, touch-friendly filter buttons used in:
+ * - Search results (All, Single, Album)
+ * - Resonates list filtering
+ * 
+ * Mobile-first, pill style, horizontal scroll support
+ */
+
+/* ===== FORCE FILTER PILLS HORIZONTAL LAYOUT ===== */
+#search-type-filters,
+#resontes-type-filters,
+.filter-pills {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+#search-type-filters > button,
+#resontes-type-filters > button,
+.filter-pills > button {
+  display: inline-flex !important;
+  flex-shrink: 0 !important;
+}
+
+/* ===== COMPACT FILTER PILL BUTTON ===== */
+.filter-pill,
+.filter-pills > button,
+.search-option-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid rgba(var(--primary-rgb), 0.18);
+  background: transparent;
+  color: var(--fg);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  min-height: 26px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  scroll-snap-align: start;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  flex-shrink: 0;
+}
+
+.filter-pill:hover,
+.search-option-btn:hover {
+  background: rgba(var(--primary-rgb), 0.08);
+  border-color: rgba(var(--primary-rgb), 0.24);
+}
+
+.filter-pill:active,
+.search-option-btn:active {
+  transform: scale(0.96);
+}
+
+.filter-pill.active,
+.search-option-btn.active {
+  background: rgba(var(--primary-rgb), 0.14);
+  border-color: rgba(var(--primary-rgb), 0.30);
+  color: var(--primary);
+}
+
+.filter-pill:disabled,
+.search-option-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+  pointer-events: none;
+}
+
+.filter-pill:focus-visible,
+.search-option-btn:focus-visible {
+  outline: 2px solid rgba(var(--primary-rgb), 0.50);
+  outline-offset: 2px;
+}
+
+/* ===== FILTER CLOSE/CLEAR BUTTON ===== */
+.filter-close-btn {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  min-height: 26px;
+  border-radius: 50%;
+  border: 1px solid rgba(var(--primary-rgb), 0.18);
+  background: transparent;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  margin-left: auto;
+}
+
+.filter-close-btn svg {
+  width: 12px;
+  height: 12px;
+}
+
+.filter-close-btn:hover {
+  background: rgba(var(--primary-rgb), 0.12);
+  color: var(--fg);
+}
+
+.filter-close-btn:active {
+  background: rgba(var(--primary-rgb), 0.18);
+}
+
+/* ===== RESULTS HEADER WITH FILTERS ===== */
+.search-results-header,
+.resontes-results-header {
+  position: sticky;
+  top: 0;
+  z-index: 25;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--surface-border);
+  background: var(--collection-panel-header-bg, var(--bg));
+  backdrop-filter: blur(10px);
+}
+
+/* ===== RESULTS SUMMARY ===== */
+.search-results-summary {
+  font-size: 11px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-weight: 500;
+  flex: 1 1 auto;
+}
+
+/* ===== RESULTS CONTROLS ===== */
+.search-results-controls {
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+/* Force filter-pills inside controls to be horizontal */
+.search-results-controls .filter-pills {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ===== CONTROL BUTTON (Close, etc) ===== */
+.search-control-btn {
+  background: var(--btn);
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+  border-radius: 8px;
+  height: 36px;
+  width: 36px;
+  min-width: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.search-control-btn svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
+.search-control-btn:hover {
+  background: var(--card);
+  color: var(--fg);
+}
+
+.search-control-btn:active {
+  background: rgba(var(--primary-rgb), 0.12);
+}
+
+/* ===== TABLET & DESKTOP RESPONSIVE ===== */
+@media (min-width: 600px) {
+  .filter-pill,
+  .search-option-btn {
+    font-size: 12px;
+    padding: 6px 12px;
+    min-height: 28px;
+  }
+  
+  .search-results-header,
+  .resontes-results-header {
+    padding: 8px 12px;
+  }
+  
+  .search-control-btn {
+    height: 40px;
+    width: 40px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .search-results-header,
+  .resontes-results-header {
+    padding: 8px 16px;
+    row-gap: 6px;
+  }
+}

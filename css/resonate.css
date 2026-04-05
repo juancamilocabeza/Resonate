@@ -2973,12 +2973,11 @@ select:focus {
   position: sticky;
   top: 0;
   z-index: 25;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-auto-rows: auto;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  column-gap: 10px;
-  row-gap: 6px;
+  justify-content: space-between;
+  gap: 8px;
   padding: 8px 10px;
   border-bottom: 1px solid var(--surface-border);
   /* Opaque header so scrolling chips/content never show through */
@@ -2987,16 +2986,17 @@ select:focus {
 }
 
 .search-results-summary {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--muted);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
+  flex: 0 1 auto;
 }
 
 .search-filter-summary {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
   flex-wrap: nowrap;
@@ -3013,42 +3013,60 @@ select:focus {
 .search-option-btn {
   appearance: none;
   -webkit-appearance: none;
-  border: 1px solid rgba(var(--primary-rgb), 0.14);
+  border: 1px solid rgba(var(--primary-rgb), 0.18);
   background: transparent;
   color: var(--fg);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   line-height: 1;
-  min-height: 28px;
-  padding: 6px 10px;
-  border-radius: 12px;
+  min-height: 26px;
+  padding: 5px 10px;
+  border-radius: 999px;
   cursor: pointer;
   white-space: nowrap;
   user-select: none;
   scroll-snap-align: start;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.search-option-btn:hover {
+  background: rgba(var(--primary-rgb), 0.08);
 }
 
 .search-option-btn.active {
-  background: rgba(var(--primary-rgb), 0.12);
-  border-color: rgba(var(--primary-rgb), 0.26);
+  background: rgba(var(--primary-rgb), 0.14);
+  border-color: rgba(var(--primary-rgb), 0.30);
+  color: var(--primary);
 }
 
 .search-option-btn:disabled {
-  opacity: 0.65;
+  opacity: 0.55;
   cursor: default;
 }
 
 .search-option-btn:focus-visible {
-  outline: 2px solid rgba(var(--primary-rgb), 0.55);
+  outline: 2px solid rgba(var(--primary-rgb), 0.50);
   outline-offset: 2px;
 }
 
 .search-results-controls {
-  display: flex;
-  gap: 8px;
+  display: inline-flex;
+  flex-direction: row;
+  gap: 6px;
   align-items: center;
   flex-wrap: nowrap;
   justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+/* Force horizontal layout for filter pills inside controls */
+.search-results-controls > .filter-pills,
+#search-type-filters,
+#resontes-type-filters {
+  display: inline-flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 6px;
 }
 
 
