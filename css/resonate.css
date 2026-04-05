@@ -3722,7 +3722,7 @@ body.offline-mode .share-track-button {
 
 .search-results-list .card-media,
 .favorites-list-content .card-media,
-.resontes-list-content .card-media { aspect-ratio: 1 / 1; max-height: 200px; }
+.resontes-list-content .card-media { aspect-ratio: 1 / 1; }
 
 .search-results-list .card-chips,
 .favorites-list-content .card-chips,
