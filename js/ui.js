@@ -4955,6 +4955,7 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
       width: '100%',
       height: '100%',
       objectFit: 'cover',
+      borderRadius: '0',
       lazy: true,
       showFallback: true,
       fallbackType: 'svg',

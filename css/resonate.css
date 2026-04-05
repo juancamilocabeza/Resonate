@@ -3722,7 +3722,7 @@ body.offline-mode .share-track-button {
 
 .search-results-list .card-media,
 .favorites-list-content .card-media,
-.resontes-list-content .card-media { aspect-ratio: 1 / 1; }
+.resontes-list-content .card-media { aspect-ratio: 1 / 1; max-height: 200px; }
 
 .search-results-list .card-chips,
 .favorites-list-content .card-chips,
@@ -3873,8 +3873,8 @@ body.offline-mode .share-track-button {
   transform: scale(1);
 }
 
-.card-media { position: relative; width: 100%; aspect-ratio: 1 / 1; background: var(--btn); }
-.card-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.card-media { position: relative; width: 100%; aspect-ratio: 1 / 1; background: var(--btn); overflow: hidden; }
+.card-media img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
 
 .card-chips { position: absolute; top: 8px; left: 8px; display: flex; gap: 6px; flex-wrap: wrap; z-index: 10; }
 .chip {
