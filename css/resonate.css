@@ -1115,13 +1115,13 @@ header {
   top: 0;
   background: rgba(var(--bg-rgb, 15, 15, 15), 0.92);
   z-index: 200;
-  padding: 6px var(--spacing-md);
+  padding: 4px var(--spacing-md);
   border-bottom: 1px solid rgba(var(--primary-rgb), 0.1);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   transition: box-shadow var(--transition-slow), background var(--transition-slow);
-  min-height: 54px;
-  gap: var(--spacing-md);
+  min-height: 48px;
+  gap: var(--spacing-sm);
 }
 
 /* Elevated state — applied via JS when page is scrolled */
@@ -2773,7 +2773,7 @@ select:focus {
   display: flex;
   flex-direction: column;
   padding: 2px 4px;
-  margin-top: var(--spacing-lg);
+  margin-top: var(--spacing-sm, 8px);
 }
 
 .search-container {
@@ -2977,8 +2977,8 @@ select:focus {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: 6px;
+  padding: 6px 10px;
   border-bottom: 1px solid var(--surface-border);
   /* Opaque header so scrolling chips/content never show through */
   background: var(--collection-panel-header-bg, var(--bg));
@@ -3067,6 +3067,41 @@ select:focus {
   flex-direction: row !important;
   align-items: center;
   gap: 6px;
+}
+
+/* Filter pill button styles */
+.filter-pill {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid rgba(var(--primary-rgb), 0.18);
+  background: transparent;
+  color: var(--fg);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  min-height: 26px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  flex-shrink: 0;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.filter-pill:hover {
+  background: rgba(var(--primary-rgb), 0.08);
+}
+
+.filter-pill.active {
+  background: rgba(var(--primary-rgb), 0.14);
+  border-color: rgba(var(--primary-rgb), 0.30);
+  color: var(--primary);
+}
+
+.filter-pill:focus-visible {
+  outline: 2px solid rgba(var(--primary-rgb), 0.50);
+  outline-offset: 2px;
 }
 
 

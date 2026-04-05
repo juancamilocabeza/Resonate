@@ -139,8 +139,8 @@
   .card-btn {
     width: 40px;
     height: 40px;
-    min-width: 44px;
-    min-height: 44px;
+    min-width: 40px;
+    min-height: 40px;
   }
   
   .card-actions,
@@ -186,11 +186,7 @@
   height: 18px;
 }
 
-/* Ensure proper display for emoji-based buttons */
-.card-btn.share::before {
-  content: '🔗';
-}
-
+/* Expand button icon */
 .card-btn.expand .expand-icon {
   font-size: 12px;
   transition: transform 0.2s ease;

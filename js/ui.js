@@ -757,7 +757,7 @@ function ensureSearchFiltersHeader() {
           host = summary.querySelector('.search-filter-summary');
           if (!host) {
             host = document.createElement('div');
-            host.className = 'search-filter-summary filter-pills';
+            host.className = 'filter-pills';
             host.setAttribute('role', 'group');
             host.setAttribute('aria-label', 'Search filters');
             summary.appendChild(host);
@@ -7446,9 +7446,12 @@ function updateFavoritesList() {
   // Update the count label with filtered results if filters are active
   try {
     const labelEl = elements.favoritesCountLabel || elements.resontesCountLabel;
-    if (labelEl && (filterText || typeFilter)) {
-      const displayFilterText = filterText || (typeFilter ? typeFilter : '');
-      labelEl.textContent = `${items.length} resonates${displayFilterText ? ` for '${displayFilterText}'` : ''}`;
+    if (labelEl && filterText) {
+      labelEl.textContent = `${items.length} resonates for '${filterText}'`;
+    } else if (labelEl && typeFilter) {
+      // Show type filter but without the confusing "for 'type'" text
+      const typeLabel = typeFilter === 'single' ? 'singles' : 'albums';
+      labelEl.textContent = `${items.length} ${typeLabel}`;
     }
   } catch {}
 
