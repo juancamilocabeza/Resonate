@@ -5089,11 +5089,14 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
 
   card.appendChild(body);
 
-  // Compact overlay action bar over the cover (search + resonates cards)
-  if (context === 'search' || context === 'favorites') {
+  // Compact overlay action bar over the cover (search cards only)
+  // Favorites/resonates show buttons in a horizontal row below the card
+  if (context === 'search') {
     actions.classList.add('card-actions-overlay');
     card.classList.add('actions-overlay');
     media.appendChild(actions);
+    // Prevent clicks on the bar background from bubbling to the media click handler
+    actions.addEventListener('click', (e) => { e.stopPropagation(); });
   } else {
     card.appendChild(actions);
   }
@@ -5233,7 +5236,7 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
       } catch {}
     });
   } else {
-    // favorites context
+    // favorites / resonates context
     const isAlbumFavorite = Array.isArray(item.tracks) ? item.tracks.length > 1 : isAlbum;
     // Mark card type for CSS layout tweaks
     card.classList.add(isAlbumFavorite ? 'album' : 'single');
@@ -7460,7 +7463,7 @@ function updateFavoritesList() {
     }
   } catch {}
 
-  renderCardGrid(favoritesList, items, 'favorites', true);
+  renderCardGrid(favoritesList, items, 'resonates', true);
 }
 
 // Inicializar el listener de event delegation para los botones play en favoritos
