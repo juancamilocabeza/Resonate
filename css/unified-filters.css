@@ -19,6 +19,13 @@
   gap: 6px !important;
 }
 
+/* Ensure [hidden] attribute hides filter pills even when display: flex !important is set above */
+#search-type-filters[hidden],
+#resontes-type-filters[hidden],
+.filter-pills[hidden] {
+  display: none !important;
+}
+
 #search-type-filters > button,
 #resontes-type-filters > button,
 .filter-pills > button {
