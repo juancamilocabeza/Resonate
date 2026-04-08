@@ -987,8 +987,8 @@ class ContinuousPlaybackManager {
 
     const context = this.contextData[this.currentContext];
 
-    const isDeckShuffle = (this.currentContext === 'album' || this.currentContext === 'resontes' || this.currentContext === 'search' || this.currentContext === 'searchPlaylist')
-      && state.shuffleResontes;
+    const isDeckShuffle = (this.currentContext === 'album' || this.currentContext === 'resontes' || this.currentContext === 'favorites' || this.currentContext === 'search' || this.currentContext === 'searchPlaylist')
+      && state.shuffleFavorites;
 
     if (isDeckShuffle) {
       const currentKey = (() => {
@@ -1054,7 +1054,7 @@ class ContinuousPlaybackManager {
 
     const context = this.contextData[this.currentContext];
 
-    const isDeckShuffle = (this.currentContext === 'album' || this.currentContext === 'favorites' || this.currentContext === 'search' || this.currentContext === 'searchPlaylist')
+    const isDeckShuffle = (this.currentContext === 'album' || this.currentContext === 'favorites' || this.currentContext === 'resontes' || this.currentContext === 'search' || this.currentContext === 'searchPlaylist')
       && state.shuffleFavorites;
 
     if (isDeckShuffle) {
@@ -1152,8 +1152,8 @@ class AlbumContextHandler extends BaseContextHandler {
 
     if (repeatMode === RepeatMode.ONE) {
       // Replay current track
-      window.elements.audio.currentTime = 0;
-      window.elements.audio.play();
+      const audio = getAudioEl();
+      if (audio) { audio.currentTime = 0; audio.play(); }
       return;
     }
 
@@ -1249,8 +1249,8 @@ class ResontesContextHandler extends BaseContextHandler {
     const repeatMode = this.stateManager.getRepeatMode();
 
     if (repeatMode === RepeatMode.ONE) {
-      window.elements.audio.currentTime = 0;
-      window.elements.audio.play();
+      const audio = getAudioEl();
+      if (audio) { audio.currentTime = 0; audio.play(); }
       return;
     }
 
@@ -1276,8 +1276,8 @@ class ResontesContextHandler extends BaseContextHandler {
       }
 
       if (shouldLoop) {
-        // Restart favorites (loop current context)
-        loadPlaybackQueue('favorites', state.favorites, 0);
+        // Restart resontes (loop current context)
+        loadPlaybackQueue('resontes', state.resontes || state.favorites, 0);
         const firstTrack = state.playbackQueue.shift();
         if (firstTrack) {
           await this.retryManager.executeWithRetry(async () => {
@@ -1364,8 +1364,8 @@ class SearchContextHandler extends BaseContextHandler {
     const repeatMode = this.stateManager.getRepeatMode();
 
     if (repeatMode === RepeatMode.ONE) {
-      window.elements.audio.currentTime = 0;
-      window.elements.audio.play();
+      const audio = getAudioEl();
+      if (audio) { audio.currentTime = 0; audio.play(); }
       return;
     }
 
@@ -1459,8 +1459,8 @@ class SearchPlaylistContextHandler extends BaseContextHandler {
     window.logger && window.logger.info && window.logger.info('[DEBUG] handleTrackEnd called', { repeatMode });
 
     if (repeatMode === RepeatMode.ONE) {
-      window.elements.audio.currentTime = 0;
-      window.elements.audio.play();
+      const audio = getAudioEl();
+      if (audio) { audio.currentTime = 0; audio.play(); }
       return;
     }
 
@@ -4176,12 +4176,12 @@ function setupProgressBarInteraction() {
 
 function updateShuffleButton() {
   const ctx = playbackManager.getCurrentContext();
-  let noun = ctx === 'search' ? 'search results' : ctx === 'searchPlaylist' ? 'playlist' : ctx === 'album' ? 'album' : 'favorites';
+  let noun = ctx === 'search' ? 'search results' : ctx === 'searchPlaylist' ? 'playlist' : ctx === 'album' ? 'album' : 'resonates';
 
   if (!window.elements || !window.elements.shuffleFavoritesBtn) return;
 
   const resolveContextItems = () => {
-    if (ctx === 'favorites') return Array.isArray(state.favorites) ? state.favorites : [];
+    if (ctx === 'favorites' || ctx === 'resontes') return Array.isArray(state.favorites) ? state.favorites : [];
     if (ctx === 'album') {
       const albumCtx = playbackManager && playbackManager.contextData ? playbackManager.contextData.album : null;
       return albumCtx && Array.isArray(albumCtx.items) ? albumCtx.items : [];
@@ -4223,7 +4223,7 @@ function toggleShuffleFavorites() {
   state.playbackForward = [];
 
   const resolveContextItems = () => {
-    if (context === 'favorites') return Array.isArray(state.favorites) ? state.favorites : [];
+    if (context === 'favorites' || context === 'resontes') return Array.isArray(state.favorites) ? state.favorites : [];
     if (context === 'album') {
       const albumCtx = playbackManager && playbackManager.contextData ? playbackManager.contextData.album : null;
       return albumCtx && Array.isArray(albumCtx.items) ? albumCtx.items : [];
