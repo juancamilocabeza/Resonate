@@ -3000,48 +3000,6 @@ function toggleFavorite(track) {
   if (track.albumId && track.albumId !== track.id) {
     updateAlbumButtonForTrack(track.albumId);
   }
-// Reconciliación básica tras reconexión: merge de favoritos locales y persistidos
-window.addEventListener('online', () => {
-  try {
-    // Cargar favoritos persistidos
-    const persisted = localStorage.getItem('resonate_favorites');
-    let parsed = [];
-    if (persisted) {
-      parsed = JSON.parse(persisted);
-    }
-    // Merge con los favoritos en memoria
-    const all = [...parsed, ...(state.favorites || [])];
-    const unique = [];
-    const seen = new Set();
-    for (const fav of all) {
-      const key = getTrackIdentityKey(fav) || (fav && fav.url ? String(fav.url) : '');
-      if (key && !seen.has(key)) {
-        unique.push(fav);
-        seen.add(key);
-      }
-    }
-    state.favorites = unique;
-    localStorage.setItem('resonate_favorites', JSON.stringify(unique));
-    window.logger.info('Favorites reconciled after reconnect', 'UI');
-    updateFavoritesList();
-    updateFavoritesCount();
-
-    // Sincronizar caché de audio: recargar favoritas y resultados de búsqueda
-    if (typeof window.audioCache === 'object' && window.audioCache) {
-      // Precarga favoritas (mínimo 10)
-      window.audioCache.preloadFavorites(state.favorites);
-      // Precarga resultados de búsqueda actuales si existen
-      if (Array.isArray(state.searchResults) && state.searchResults.length > 0) {
-        window.audioCache.preloadSearchResults(state.searchResults);
-      }
-    }
-    if (typeof window.showStatus === 'function') {
-      window.showStatus('Connection restored: syncing offline cache', 'info', 4000, 'info');
-    }
-  } catch (e) {
-    window.logger.error('Error during favorites reconciliation: ' + (e && e.message ? e.message : e), 'UI');
-  }
-});
 }
 
 // Toggle per-track offline download preference
@@ -5940,7 +5898,7 @@ function setupPlaybackAutosave() {
 
 // Show offline-specific hints and information
 function showOfflineHints() {
-  const resontes = state.resontes || state.favorites || [];
+  const resontes = state.favorites || [];
   const favoritesCount = Array.isArray(resontes) ? resontes.length : 0;
 
   if (favoritesCount > 0) {
@@ -5953,7 +5911,7 @@ function showOfflineHints() {
   if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.getUsageStats === 'function') {
     audioCache.getUsageStats().then(stats => {
       if (stats.itemCount > 0) {
-        showStatus('Cache has saved many tracks', 'info', 4000);
+        showStatus(`Cache has ${stats.itemCount} track${stats.itemCount !== 1 ? 's' : ''} saved`, 'info', 4000);
       }
     }).catch(error => {
       window.logger?.warn({ message: 'Failed to get cache stats', error }, 'CACHE');
@@ -5964,11 +5922,43 @@ function showOfflineHints() {
 // Sync data when back online
 async function syncOfflineData() {
   try {
+    // Reconciliación básica tras reconexión: merge de favoritos locales y persistidos
+    try {
+      const persisted = localStorage.getItem('resonate_favorites');
+      if (persisted) {
+        const parsed = JSON.parse(persisted);
+        const all = [...parsed, ...(state.favorites || [])];
+        const unique = [];
+        const seen = new Set();
+        for (const fav of all) {
+          const key = getTrackIdentityKey(fav) || (fav && fav.url ? String(fav.url) : '');
+          if (key && !seen.has(key)) {
+            unique.push(fav);
+            seen.add(key);
+          }
+        }
+        state.favorites = unique;
+        localStorage.setItem('resonate_favorites', JSON.stringify(unique));
+        window.logger?.info('Favorites reconciled after reconnect', 'UI');
+        updateFavoritesList();
+        updateFavoritesCount();
+      }
+    } catch (reconcileError) {
+      window.logger?.warn(`Failed to reconcile favorites: ${reconcileError.message}`, 'UI');
+    }
+
     // Preload any pending favorites that weren't cached while offline
     if (state.favoritesPreloadEnabled && state.favorites && state.favorites.length > 0) {
       if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.preloadFavorites === 'function') {
         await audioCache.preloadFavorites(state.favorites);
         showStatus('Syncing your offline library', 'info', 2000);
+      }
+    }
+
+    // Preload current search results if any
+    if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.preloadSearchResults === 'function') {
+      if (Array.isArray(state.searchResults) && state.searchResults.length > 0) {
+        audioCache.preloadSearchResults(state.searchResults);
       }
     }
 
