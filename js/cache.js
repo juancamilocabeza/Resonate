@@ -786,8 +786,6 @@ class AudioCache {
         return;
       }
     }
-    this.lastSearchPreloadSig = signature || this.lastSearchPreloadSig;
-    this.lastSearchPreloadAt = nowMs();
 
     const shouldFetch = await this.shouldPrefetch(false);
     if (!shouldFetch) {
@@ -795,6 +793,9 @@ class AudioCache {
       this.scheduleSilentPrefetchRetry(() => this.preloadSearchResults(tracks), this.lastPrefetchBlockReason);
       return;
     }
+
+    this.lastSearchPreloadSig = signature || this.lastSearchPreloadSig;
+    this.lastSearchPreloadAt = nowMs();
 
     this.isPreloadingSearchResults = true;
     try {
@@ -821,8 +822,6 @@ class AudioCache {
         return;
       }
     }
-    this.lastOfflinePreloadSig = signature || this.lastOfflinePreloadSig;
-    this.lastOfflinePreloadAt = nowMs();
 
     const shouldFetch = await this.shouldPrefetch(false);
     if (!shouldFetch) {
@@ -830,6 +829,9 @@ class AudioCache {
       this.scheduleSilentPrefetchRetry(() => this.preloadOffline(tracks), this.lastPrefetchBlockReason);
       return;
     }
+
+    this.lastOfflinePreloadSig = signature || this.lastOfflinePreloadSig;
+    this.lastOfflinePreloadAt = nowMs();
 
     this.isPreloadingOffline = true;
     try {

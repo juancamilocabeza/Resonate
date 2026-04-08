@@ -303,6 +303,10 @@ async function preloadUpcomingCovers(currentContext, currentIndex = 0) {
       return;
     }
 
+    if (!window.CoverManager || typeof window.CoverManager.preloadCovers !== 'function') {
+      return;
+    }
+
     // Get identifiers for next 2-3 tracks
     const identifiersToPreload = [];
     const maxPreload = 3;
@@ -317,11 +321,9 @@ async function preloadUpcomingCovers(currentContext, currentIndex = 0) {
 
     if (identifiersToPreload.length > 0) {
       // Preload in background without blocking
-      if (window.CoverManager && typeof window.CoverManager.preloadCovers === 'function') {
-        window.CoverManager.preloadCovers(identifiersToPreload).catch(err => {
-          logPlayback('warn', 'Cover preload failed', err);
-        });
-      }
+      window.CoverManager.preloadCovers(identifiersToPreload).catch(err => {
+        logPlayback('warn', 'Cover preload failed', err);
+      });
     }
   } catch (error) {
     logPlayback('warn', 'Error during cover preloading', error);
