@@ -92,16 +92,17 @@ class EnhancedCache {
 
     const typeCache = this.cache.get(type);
 
-    // Enforce size limit - remove oldest items if needed
-    if (typeCache.size >= this.maxSize) {
+    // Enforce size limit - remove oldest items if needed (skip eviction when updating an existing key)
+    if (typeCache.size >= this.maxSize && !typeCache.has(key)) {
       const oldestKey = typeCache.keys().next().value;
       typeCache.delete(oldestKey);
     }
 
+    const now = nowMs();
     const item = {
       data: data,
-      expires: nowMs() + ttl,
-      timestamp: nowMs()
+      expires: now + ttl,
+      timestamp: now
     };
 
     typeCache.set(key, item);
@@ -619,7 +620,7 @@ class AudioCache {
       if (!shouldFetch) {
         logCache('info', `Skipping prefetch due to network or quota limits: ${url}`);
         if (priority) {
-          this.scheduleSilentPrefetchRetry(() => this.prefetchAudio(url, priority), this.lastPrefetchBlockReason);
+          this.scheduleSilentPrefetchRetry(() => this.prefetchAudio(url, opts), this.lastPrefetchBlockReason);
         }
         return;
       }
@@ -744,8 +745,6 @@ class AudioCache {
         return;
       }
     }
-    this.lastResontesPreloadSig = signature || this.lastResontesPreloadSig;
-    this.lastResontesPreloadAt = nowMs();
 
     this.isPreloadingResontes = true;
     try {
@@ -755,6 +754,9 @@ class AudioCache {
         this.scheduleSilentPrefetchRetry(() => this.preloadResontes(resontes), this.lastPrefetchBlockReason);
         return;
       }
+
+      this.lastResontesPreloadSig = signature || this.lastResontesPreloadSig;
+      this.lastResontesPreloadAt = nowMs();
 
       logCache('info', `Preloading ${resontes.length} resontes for offline playback`);
       // Garantiza mínimo de resontes cacheadas
