@@ -288,18 +288,19 @@ class AudioCache {
     const isResonteContext = context === AudioCache.CONTEXTS.RESONTES || context === AudioCache.CONTEXTS.FAVORITES;
     await this.preloadTracks(toCache, { priority: isResonteContext, context });
   }
-    // Calcula el hash SHA-256 de un blob
-    async computeBlobHash(blob) {
-      try {
-        const arrayBuffer = await blob.arrayBuffer();
-        const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-      } catch (err) {
-        logCache('warn', `Error calculando hash de blob: ${err}`);
-        return null;
-      }
+  // Calcula el hash SHA-256 de un blob
+  async computeBlobHash(blob) {
+    try {
+      const arrayBuffer = await blob.arrayBuffer();
+      const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    } catch (err) {
+      logCache('warn', `Error calculando hash de blob: ${err}`);
+      return null;
     }
+  }
+
   constructor() {
     this.cache = null;
     this.db = null;
@@ -785,6 +786,14 @@ class AudioCache {
         return;
       }
     }
+
+    const shouldFetch = await this.shouldPrefetch(false);
+    if (!shouldFetch) {
+      logCache('info', 'Skipping search preload due to network or quota limits');
+      this.scheduleSilentPrefetchRetry(() => this.preloadSearchResults(tracks), this.lastPrefetchBlockReason);
+      return;
+    }
+
     this.lastSearchPreloadSig = signature || this.lastSearchPreloadSig;
     this.lastSearchPreloadAt = nowMs();
 
@@ -813,6 +822,14 @@ class AudioCache {
         return;
       }
     }
+
+    const shouldFetch = await this.shouldPrefetch(false);
+    if (!shouldFetch) {
+      logCache('info', 'Skipping offline preload due to network or quota limits');
+      this.scheduleSilentPrefetchRetry(() => this.preloadOffline(tracks), this.lastPrefetchBlockReason);
+      return;
+    }
+
     this.lastOfflinePreloadSig = signature || this.lastOfflinePreloadSig;
     this.lastOfflinePreloadAt = nowMs();
 
@@ -824,18 +841,6 @@ class AudioCache {
     }
   }
 
-  // --- El siguiente bloque pertenece a preloadFavorites, reubicado correctamente ---
-  // (esto estaba después del cierre de preloadOffline por error de indentación)
-
-  // (Método: preloadFavorites, continuación)
-  // NOTA: Este bloque debe estar dentro de preloadFavorites, después de await this.ensureMinTracksPerContext(...)
-
-  // El siguiente código debe estar dentro de preloadFavorites, después de await this.ensureMinTracksPerContext(...)
-  // (pero aquí lo dejamos comentado para referencia, ya que la lógica ya está implementada correctamente arriba)
-  //
-  // this.isPreloadingFavorites = true;
-  // ...
-
   async preloadTracks(tracks, options = false) {
     if (!this.isInitialized) await this.init();
     if (!tracks || tracks.length === 0) return;
@@ -846,7 +851,7 @@ class AudioCache {
     const shouldFetch = await this.shouldPrefetch(priority);
     if (!shouldFetch) {
       logCache('info', 'Skipping track preload due to network or quota limits');
-      this.scheduleSilentPrefetchRetry(() => this.preloadTracks(tracks, priority), this.lastPrefetchBlockReason);
+      this.scheduleSilentPrefetchRetry(() => this.preloadTracks(tracks, opts), this.lastPrefetchBlockReason);
       return;
     }
 

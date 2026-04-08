@@ -303,6 +303,10 @@ async function preloadUpcomingCovers(currentContext, currentIndex = 0) {
       return;
     }
 
+    if (!window.CoverManager || typeof window.CoverManager.preloadCovers !== 'function') {
+      return;
+    }
+
     // Get identifiers for next 2-3 tracks
     const identifiersToPreload = [];
     const maxPreload = 3;
@@ -332,14 +336,6 @@ function logPlayback(level, message, error) {
       const combined = error
         ? (error instanceof Error ? { message, error } : { message, data: error })
         : message;
-      window.logger._call(level, combined, 'PLAYBACK');
-      return;
-    }
-  } catch {}
-
-  try {
-    if (window.logger && typeof window.logger._call === 'function') {
-      const combined = error ? { message, error } : message;
       window.logger._call(level, combined, 'PLAYBACK');
     }
   } catch {}
@@ -2087,12 +2083,6 @@ async function loadAudioWithCache(track) {
 
   } catch (error) {
     logPlayback('error', 'Error loading audio', error);
-
-    // Intentar estrategias de fallback
-    if (!state.networkOnline) {
-      // Precargar pistas siguientes si estamos en un contexto
-      preloadNextTrack();
-    }
 
     throw error;
   }
