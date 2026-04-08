@@ -2269,6 +2269,7 @@ const state = {
   initialPreloadDone: false,
   playbackHistory: [],
   playbackQueue: [],
+  playbackForward: [],
   favoritesPreloadEnabled: true,
   resontesPreloadEnabled: true,
   contextReloadCount: {},
