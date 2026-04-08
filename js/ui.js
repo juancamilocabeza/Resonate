@@ -5925,24 +5925,22 @@ async function syncOfflineData() {
     // Reconciliación básica tras reconexión: merge de favoritos locales y persistidos
     try {
       const persisted = localStorage.getItem('resonate_favorites');
-      if (persisted) {
-        const parsed = JSON.parse(persisted);
-        const all = [...parsed, ...(state.favorites || [])];
-        const unique = [];
-        const seen = new Set();
-        for (const fav of all) {
-          const key = getTrackIdentityKey(fav) || (fav && fav.url ? String(fav.url) : '');
-          if (key && !seen.has(key)) {
-            unique.push(fav);
-            seen.add(key);
-          }
+      const parsed = persisted ? JSON.parse(persisted) : [];
+      const all = [...parsed, ...(state.favorites || [])];
+      const unique = [];
+      const seen = new Set();
+      for (const fav of all) {
+        const key = getTrackIdentityKey(fav) || (fav && fav.url ? String(fav.url) : '');
+        if (key && !seen.has(key)) {
+          unique.push(fav);
+          seen.add(key);
         }
-        state.favorites = unique;
-        localStorage.setItem('resonate_favorites', JSON.stringify(unique));
-        window.logger?.info('Favorites reconciled after reconnect', 'UI');
-        updateFavoritesList();
-        updateFavoritesCount();
       }
+      state.favorites = unique;
+      localStorage.setItem('resonate_favorites', JSON.stringify(unique));
+      window.logger?.info('Favorites reconciled after reconnect', 'UI');
+      updateFavoritesList();
+      updateFavoritesCount();
     } catch (reconcileError) {
       window.logger?.warn(`Failed to reconcile favorites: ${reconcileError.message}`, 'UI');
     }
@@ -5958,7 +5956,7 @@ async function syncOfflineData() {
     // Preload current search results if any
     if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.preloadSearchResults === 'function') {
       if (Array.isArray(state.searchResults) && state.searchResults.length > 0) {
-        audioCache.preloadSearchResults(state.searchResults);
+        await audioCache.preloadSearchResults(state.searchResults);
       }
     }
 
