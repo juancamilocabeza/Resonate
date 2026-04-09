@@ -1598,7 +1598,7 @@ function buildSearchSuggestionsHtml({ title, creator, album }) {
 
   return `
     <div class="info-searches">
-      <div class="info-searches-title">Búsquedas sugeridas</div>
+      <div class="info-searches-title">Suggested searches</div>
       <div class="info-searches-chips">
         ${internalChips.join('')}
         ${externalChips.join('')}
@@ -1611,20 +1611,20 @@ function buildInfoModalHtml({ title, creator, album, descriptionHtml, descriptio
   const normalizedText = normalizeDescriptionText(descriptionText);
   const preview = truncateText(normalizedText, INFO_UX_CONFIG.previewCharLimit);
   const previewHtml = formatPlainTextAsHtml(preview.text);
-  const safeFullHtml = descriptionHtml || previewHtml || '<p>No hay información disponible.</p>';
+  const safeFullHtml = descriptionHtml || previewHtml || '<p>No information available.</p>';
 
   const metaParts = [];
   if (creator) metaParts.push(`<span class="info-meta-item">${escapeHtml(creator)}</span>`);
 
   return `
     <div class="info-header">
-      <div class="info-title" id="info-modal-title">${escapeHtml(title || 'Información')}</div>
+      <div class="info-title" id="info-modal-title">${escapeHtml(title || 'Information')}</div>
       <div class="info-meta">${metaParts.join('')}</div>
     </div>
     <div class="info-content">
-      <div class="info-body info-body--preview">${previewHtml || '<p>No hay información disponible.</p>'}</div>
+      <div class="info-body info-body--preview">${previewHtml || '<p>No information available.</p>'}</div>
       <div class="info-body info-body--full" hidden>${safeFullHtml}</div>
-      ${preview.truncated ? '<span class="info-toggle" role="button" tabindex="0" data-action="toggle-info" aria-expanded="false">Ver más</span>' : ''}
+      ${preview.truncated ? '<span class="info-toggle" role="button" tabindex="0" data-action="toggle-info" aria-expanded="false">Show more</span>' : ''}
     </div>
     ${buildSearchSuggestionsHtml({ title, creator, album })}
   `;
@@ -1653,13 +1653,13 @@ function bindInfoModalInteractions() {
       if (isExpanded) {
         full.hidden = true;
         preview.hidden = false;
-        actionEl.textContent = 'Ver más';
+        actionEl.textContent = 'Show more';
         actionEl.setAttribute('aria-expanded', 'false');
         elements.modalDescription.dataset.infoExpanded = 'false';
       } else {
         full.hidden = false;
         preview.hidden = true;
-        actionEl.textContent = 'Ver menos';
+        actionEl.textContent = 'Show less';
         actionEl.setAttribute('aria-expanded', 'true');
         elements.modalDescription.dataset.infoExpanded = 'true';
         try {
@@ -6704,24 +6704,24 @@ function showUpdateModal({ currentVersion = null, newVersion = null } = {}) {
 
   overlay.innerHTML = `
     <div class="sw-update-modal" id="sw-update-modal">
-      <button class="sw-update-modal-close" aria-label="Cerrar">✕</button>
+      <button class="sw-update-modal-close" aria-label="Close">✕</button>
       <span class="sw-update-modal-icon" aria-hidden="true">🚀</span>
-      <h2 class="sw-update-modal-title" id="sw-update-modal-title">¡Hay mejoras disponibles!</h2>
+      <h2 class="sw-update-modal-title" id="sw-update-modal-title">Updates available!</h2>
       ${versionLine ? `<div class="sw-update-modal-version">${versionLine}</div>` : ''}
       <p class="sw-update-modal-body">
-        Resonate tiene una nueva versión con mejoras y correcciones.<br>
-        ¿Deseas actualizar ahora o programarlo para más tarde?
+        Resonate has a new version with improvements and fixes.<br>
+        Do you want to update now or schedule it for later?
       </p>
       <div class="sw-update-modal-actions">
-        <button class="sw-update-modal-btn-primary sw-update-modal-apply">Actualizar ahora</button>
-        <button class="sw-update-modal-btn-secondary sw-update-modal-later">Recordar más tarde</button>
+        <button class="sw-update-modal-btn-primary sw-update-modal-apply">Update now</button>
+        <button class="sw-update-modal-btn-secondary sw-update-modal-later">Remind me later</button>
         <div class="sw-update-modal-schedule" id="sw-update-schedule-panel">
-          <div class="sw-update-modal-schedule-label">¿Cuándo quieres que te recordemos?</div>
+          <div class="sw-update-modal-schedule-label">When would you like to be reminded?</div>
           <div class="sw-update-modal-schedule-options">
-            <button class="sw-update-modal-schedule-btn" data-delay="${SW_UPDATE_SCHEDULE_30MIN_MS}">En 30 min</button>
-            <button class="sw-update-modal-schedule-btn" data-delay="${SW_UPDATE_SCHEDULE_1HOUR_MS}">En 1 hora</button>
-            <button class="sw-update-modal-schedule-btn" data-delay="${SW_UPDATE_SCHEDULE_2HOURS_MS}">En 2 horas</button>
-            <button class="sw-update-modal-schedule-btn" data-delay="0">Esta sesión</button>
+            <button class="sw-update-modal-schedule-btn" data-delay="${SW_UPDATE_SCHEDULE_30MIN_MS}">In 30 min</button>
+            <button class="sw-update-modal-schedule-btn" data-delay="${SW_UPDATE_SCHEDULE_1HOUR_MS}">In 1 hour</button>
+            <button class="sw-update-modal-schedule-btn" data-delay="${SW_UPDATE_SCHEDULE_2HOURS_MS}">In 2 hours</button>
+            <button class="sw-update-modal-schedule-btn" data-delay="0">This session</button>
           </div>
         </div>
       </div>
@@ -6758,7 +6758,7 @@ function showUpdateModal({ currentVersion = null, newVersion = null } = {}) {
       await applyServiceWorkerUpdateAcrossTabs();
     } catch (e) {
       window.logger?.warn({ message: 'Apply update failed', error: e }, 'SYSTEM');
-      showStatus('Error al aplicar la actualización', 'warning', 3500);
+      showStatus('Error applying the update', 'warning', 3500);
     }
   });
 
