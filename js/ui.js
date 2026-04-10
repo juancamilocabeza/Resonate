@@ -1281,10 +1281,12 @@ function ensureSearchInputControllerBound() {
 
     if (isCoarsePointer && config.suppressKeyboardWhenHistory && currentQuery === '' && !panelOpen && hasSearchHistory()) {
       suppressNextFocus = true;
-      try {
-        e.preventDefault();
-        e.stopPropagation();
-      } catch {}
+      // Do NOT call e.preventDefault() here: in iOS Safari, preventing the default
+      // on pointerdown disrupts the browser's touch-sequence tracking and can prevent
+      // subsequent taps from opening the keyboard. Instead, the suppressNextFocus flag
+      // handles keyboard suppression via a synchronous blur() inside the focus handler,
+      // which is the Safari-compatible approach.
+      try { e.stopPropagation(); } catch {}
 
       displaySearchHistory();
       state.searchActive = true;
