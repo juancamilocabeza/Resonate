@@ -4913,8 +4913,6 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
   if (window.CoverManager?.loadCover) {
     window.CoverManager.loadCover(identifier, {
       alt: `Cover for ${title}`,
-      width: '100%',
-      height: '100%',
       objectFit: 'cover',
       borderRadius: '0',
       lazy: true,
@@ -4932,6 +4930,7 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
         img.style.width = '100%';
         img.style.height = '100%';
         img.style.objectFit = 'cover';
+        img.style.objectPosition = 'center';
         img.src = cardCoverUrl;
         media.appendChild(img);
       }
@@ -4942,6 +4941,7 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
     img.style.width = '100%';
     img.style.height = '100%';
     img.style.objectFit = 'cover';
+    img.style.objectPosition = 'center';
     img.src = cardCoverUrl;
     media.appendChild(img);
   }
