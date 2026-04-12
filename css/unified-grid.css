@@ -92,23 +92,13 @@
 /* ===== DESKTOP (4 columns) ===== */
 @media (min-width: 1024px) {
   .resonate-grid,
-  .card-grid {
-    grid-template-columns: repeat(4, minmax(180px, 1fr));
-    gap: 16px;
-  }
-
-  /* Search results: 4 columns on desktop for good art size (~234px per card) */
+  .card-grid,
   .search-results-list .resonate-grid,
-  .search-results-list .card-grid {
-    grid-template-columns: repeat(4, minmax(160px, 1fr));
-    gap: 14px;
-  }
-
-  /* Resonates list: 4 columns on desktop for consistent art size */
+  .search-results-list .card-grid,
   .resontes-list-content .resonate-grid,
   .resontes-list-content .card-grid {
-    grid-template-columns: repeat(4, minmax(140px, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(4, minmax(160px, 1fr));
+    gap: 14px;
   }
 
   .search-results-list {
@@ -120,22 +110,12 @@
 /* ===== WIDE DESKTOP (5 columns) ===== */
 @media (min-width: 1280px) {
   .resonate-grid,
-  .card-grid {
-    grid-template-columns: repeat(5, minmax(200px, 1fr));
-    gap: 18px;
-  }
-
-  /* Search results: 5 columns on wide desktop */
+  .card-grid,
   .search-results-list .resonate-grid,
-  .search-results-list .card-grid {
-    grid-template-columns: repeat(5, minmax(160px, 1fr));
-    gap: 16px;
-  }
-
-  /* Resonates list: 4 columns on wide desktop (~200px art) */
+  .search-results-list .card-grid,
   .resontes-list-content .resonate-grid,
   .resontes-list-content .card-grid {
-    grid-template-columns: repeat(4, minmax(160px, 1fr));
+    grid-template-columns: repeat(5, minmax(160px, 1fr));
     gap: 16px;
   }
 
