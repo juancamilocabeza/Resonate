@@ -84,7 +84,9 @@
         }
       }
 
-      try { tracksContainer.__albumTracks = files; } catch {}
+      if (files.length > 0) {
+        try { tracksContainer.__albumTracks = files; } catch {}
+      }
 
       tracksContainer.innerHTML = '';
 
@@ -141,25 +143,20 @@
 
       // ...existing code...
 
-      files.forEach((track, index) => {
-          // Centrar verticalmente los botones
-          const buttonStyle = 'display:flex;align-items:center;justify-content:center;height:100%;';
-        // Asignar la mejor descripción disponible
-        // Solo mostrar la descripción propia de la pista, no la del álbum
-        track.description = (typeof track.description === 'string' && track.description.trim() !== '')
-          ? track.description
-          : '';
-        // Propagar descripción al reproducir desde resontes
-        track._albumDescription = albumDescription;
+      const currentTrackUrl = window.state?.currentTrack?.url ?? null;
 
-        // Actualizar la UI de descripción para cada track renderizado
-        if (window.updateDescriptionUI && typeof window.updateDescriptionUI === 'function') {
-          window.updateDescriptionUI(track);
-        }
+      files.forEach((track, index) => {
+        // Asignar la descripción del álbum al track para que el reproductor la use al reproducir
+        track._albumDescription = albumDescription;
 
         // New layout: <share><resonte><#><title><duration>
         const row = document.createElement('div');
         row.className = 'tlv2-row track-row';
+
+        // Mark the row that is currently playing
+        if (currentTrackUrl && track.url && track.url === currentTrackUrl) {
+          row.classList.add('tlv2-row--playing');
+        }
 
         // Share
         const shareBtn = document.createElement('button');
@@ -186,7 +183,7 @@
         if (track && track.url) resonteBtn.dataset.url = String(track.url);
         const nowResonte = typeof window.isTrackResonte === 'function' ? window.isTrackResonte(track) : false;
         resonteBtn.classList.toggle('active', nowResonte);
-        resonteBtn.innerHTML = nowResonte ? window.resonateLogoSVG : window.resonateLogoSVG;
+        resonteBtn.innerHTML = window.resonateLogoSVG;
         resonteBtn.title = nowResonte ? 'Remove from resonates' : 'Add to resonates';
         try { resonteBtn.setAttribute('aria-label', resonteBtn.title); } catch {}
         resonteBtn.style.display = 'flex';
@@ -268,10 +265,6 @@
         row.addEventListener('click', (e) => {
           if (e.target && e.target.closest && e.target.closest('button')) return;
           e.stopPropagation();
-          // Ensure the row is visible and scrolled into view
-          try {
-            row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-          } catch {}
           playFromRow();
         });
 
@@ -280,9 +273,9 @@
         row.setAttribute('tabindex', '0');
         row.addEventListener('keydown', (e) => {
           if (e.key === 'Enter' || e.key === ' ') {
+            if (e.target && e.target.closest && e.target.closest('button')) return;
             e.preventDefault();
             e.stopPropagation();
-            if (e.target && e.target.closest && e.target.closest('button')) return;
             playFromRow();
           }
         });
