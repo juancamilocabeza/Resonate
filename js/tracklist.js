@@ -143,9 +143,7 @@
 
       // ...existing code...
 
-      const currentTrackUrl = window.state && window.state.currentTrack && window.state.currentTrack.url
-        ? window.state.currentTrack.url
-        : null;
+      const currentTrackUrl = window.state?.currentTrack?.url ?? null;
 
       files.forEach((track, index) => {
         // Asignar la descripción del álbum al track para que el reproductor la use al reproducir
