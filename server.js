@@ -36,9 +36,9 @@ function shouldNoCache(urlPath) {
   return (
     urlPath === '/' ||
     urlPath.endsWith('.html') ||
-    urlPath === '/sw.js' ||
-    urlPath.endsWith('/sw.js') ||
-    urlPath.endsWith('manifest.json')
+    urlPath.endsWith('sw.js') ||
+    urlPath.endsWith('manifest.json') ||
+    urlPath.endsWith('manifest.webmanifest')
   );
 }
 
