@@ -153,6 +153,9 @@
         const row = document.createElement('div');
         row.className = 'tlv2-row track-row';
 
+        // Staggered entrance animation index (capped to keep delays reasonable)
+        row.style.setProperty('--row-i', String(Math.min(index, 19)));
+
         // Mark the row that is currently playing
         if (currentTrackUrl && track.url && track.url === currentTrackUrl) {
           row.classList.add('tlv2-row--playing');
@@ -200,6 +203,8 @@
           : null;
         num.textContent = tn != null ? String(tn) : String(index + 1);
         num.style.textAlign = 'center';
+        // Store URL for efficient real-time playing-state lookup
+        if (track.url) row.dataset.trackUrl = track.url;
         row.appendChild(num);
 
         // Left-aligned title
@@ -333,6 +338,27 @@
 
       root.appendChild(list);
       tracksContainer.appendChild(root);
+
+      // Real-time playing state: update row highlights when the audio track changes.
+      // The handler removes itself once the list leaves the DOM, avoiding leaks.
+      try {
+        const audioEl = document.getElementById('audio') || (window.elements && window.elements.audio);
+        if (audioEl) {
+          const updatePlayingRows = () => {
+            if (!list.isConnected) {
+              audioEl.removeEventListener('play', updatePlayingRows);
+              return;
+            }
+            try {
+              const url = window.state?.currentTrack?.url ?? null;
+              list.querySelectorAll('.tlv2-row').forEach(r => {
+                r.classList.toggle('tlv2-row--playing', !!(url && r.dataset.trackUrl && r.dataset.trackUrl === url));
+              });
+            } catch {}
+          };
+          audioEl.addEventListener('play', updatePlayingRows);
+        }
+      } catch {}
     } catch (error) {
       try {
         tracksContainer.innerHTML = '<div class="no-results">Error loading tracks</div>';
