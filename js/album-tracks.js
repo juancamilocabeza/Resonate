@@ -78,8 +78,9 @@
   async function fetchAlbumTracks(albumId, options = {}) {
     if (!albumId) return [];
 
-    if (IN_FLIGHT.has(albumId)) {
-      return IN_FLIGHT.get(albumId);
+    const albumKey = String(albumId);
+    if (IN_FLIGHT.has(albumKey)) {
+      return IN_FLIGHT.get(albumKey);
     }
 
     const promise = (async () => {
@@ -92,11 +93,11 @@
       return normalized;
     })();
 
-    IN_FLIGHT.set(albumId, promise);
+    IN_FLIGHT.set(albumKey, promise);
     try {
       return await promise;
     } finally {
-      IN_FLIGHT.delete(albumId);
+      IN_FLIGHT.delete(albumKey);
     }
   }
 

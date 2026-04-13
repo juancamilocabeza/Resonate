@@ -5655,6 +5655,14 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
+.tracklist .tlv2-row--playing {
+  background: var(--collection-row-active-bg, rgba(var(--primary-rgb), 0.15));
+  font-weight: 600;
+}
+.tracklist .tlv2-row--playing .tlv2-title,
+.tracklist .tlv2-row--playing .track-row-title {
+  color: var(--primary);
+}
 .tracklist .tlv2-left {
   display: flex;
   align-items: center;
