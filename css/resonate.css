@@ -5796,6 +5796,104 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
   font-size: 13px;
 }
 
+/* ===== Tracklist V2: UX Improvements ===== */
+
+/* Staggered row entrance animation */
+@keyframes tlv2-row-enter {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tracklist .tlv2-row {
+  animation: tlv2-row-enter 0.2s ease both;
+  animation-delay: calc(var(--row-i, 0) * 0.028s);
+}
+
+/* Animated equalizer bars for the currently playing row */
+@keyframes eq-bars {
+  0%   { background-size: 3px 8px,  3px 4px,  3px 10px; }
+  25%  { background-size: 3px 12px, 3px 8px,  3px 5px;  }
+  50%  { background-size: 3px 4px,  3px 12px, 3px 8px;  }
+  75%  { background-size: 3px 10px, 3px 5px,  3px 12px; }
+  100% { background-size: 3px 8px,  3px 4px,  3px 10px; }
+}
+
+/* Track number column: show play icon on hover (non-playing rows) */
+.tracklist .tlv2-number {
+  position: relative;
+  transition: color 0.15s;
+}
+
+.tracklist .tlv2-row:hover:not(.tlv2-row--playing) .tlv2-number {
+  color: transparent;
+}
+
+.tracklist .tlv2-row:hover:not(.tlv2-row--playing) .tlv2-number::before {
+  content: '▶';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg);
+  font-size: 10px;
+}
+
+/* Track number column: show animated equalizer when playing */
+.tracklist .tlv2-row--playing .tlv2-number {
+  color: transparent;
+}
+
+.tracklist .tlv2-row--playing .tlv2-number::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  /* Offset = half the element's width (16px) to truly center the 3-bar graphic */
+  transform: translate(-8px, -50%);
+  width: 16px;
+  height: 14px;
+  background-image:
+    linear-gradient(var(--primary), var(--primary)),
+    linear-gradient(var(--primary), var(--primary)),
+    linear-gradient(var(--primary), var(--primary));
+  background-size: 3px 8px, 3px 4px, 3px 10px;
+  background-position: 0 bottom, 6px bottom, 12px bottom;
+  background-repeat: no-repeat;
+  animation: eq-bars 0.9s ease-in-out infinite;
+}
+
+/* Playing row: left accent border */
+.tracklist .tlv2-row--playing {
+  border-left: 3px solid var(--primary);
+  padding-left: calc(6px - 3px);
+}
+
+/* Cached/offline track: subtle dot on the duration badge */
+.tracklist .tlv2-row--cached .tlv2-duration {
+  position: relative;
+  padding-left: 10px;
+}
+
+.tracklist .tlv2-row--cached .tlv2-duration::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--primary);
+  opacity: 0.65;
+}
+
 /* Ensure expanded tracklists span the full width of the card grid */
 .card-grid .tracks-container {
   grid-column: 1 / -1;
