@@ -65,7 +65,7 @@ class ResonateHandler(BaseHTTPRequestHandler):
     def _send_common_headers(self, content_type: str, url_path: str) -> None:
         self.send_header("Content-Type", content_type)
         self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("Cache-Control", "no-cache" if _should_no_cache(url_path) else "no-cache")
+        self.send_header("Cache-Control", "no-cache" if _should_no_cache(url_path) else "public, max-age=3600")
 
     def do_HEAD(self):
         try:
