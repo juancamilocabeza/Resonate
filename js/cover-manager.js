@@ -34,6 +34,9 @@
     width: '100%',
     height: '100%',
     objectFit: 'cover',
+    objectPosition: 'center',
+    position: null,      // e.g. 'absolute' — set when image must fill a positioned container
+    inset: null,         // e.g. '0'        — used together with position:'absolute'
     borderRadius: '12px',
     lazy: false,
     showFallback: true,
@@ -152,7 +155,10 @@
       if (opts.width) img.style.width = opts.width;
       if (opts.height) img.style.height = opts.height;
       if (opts.objectFit) img.style.objectFit = opts.objectFit;
-      if (opts.borderRadius) img.style.borderRadius = opts.borderRadius;
+      if (opts.objectPosition) img.style.objectPosition = opts.objectPosition;
+      if (opts.position) img.style.position = opts.position;
+      if (opts.inset != null) img.style.inset = String(opts.inset);
+      if (opts.borderRadius != null) img.style.borderRadius = opts.borderRadius;
       if (opts.lazy) img.loading = 'lazy';
       
       img.onerror = () => {
@@ -186,7 +192,10 @@
     if (opts.width) img.style.width = opts.width;
     if (opts.height) img.style.height = opts.height;
     if (opts.objectFit) img.style.objectFit = opts.objectFit;
-    if (opts.borderRadius) img.style.borderRadius = opts.borderRadius;
+    if (opts.objectPosition) img.style.objectPosition = opts.objectPosition;
+    if (opts.position) img.style.position = opts.position;
+    if (opts.inset != null) img.style.inset = String(opts.inset);
+    if (opts.borderRadius != null) img.style.borderRadius = opts.borderRadius;
     
     // Set lazy loading
     if (opts.lazy) {
@@ -208,7 +217,6 @@
 
     // Get cover URL
     const coverUrl = getCoverUrl(identifier);
-    console.log(`[CoverManager] Loading cover for ${identifier}: ${coverUrl}`);
     
     if (!coverUrl) {
       // No valid identifier - use fallback immediately
@@ -250,7 +258,6 @@
     };
     
     img.onload = () => {
-      console.log(`[CoverManager] Cover loaded successfully: ${identifier}`, img.naturalWidth, 'x', img.naturalHeight);
       logDebug(`Cover loaded successfully: ${identifier}`);
     };
     

@@ -4840,6 +4840,21 @@ function renderCardGrid(container, items, context = 'search', clearExisting = tr
   grid.appendChild(fragment);
 }
 
+/**
+ * Apply inline fill styles to an image so it always covers its container,
+ * regardless of CSS cascade order. Used for card media covers.
+ * @param {HTMLImageElement} img
+ */
+function applyCardCoverFillStyles(img) {
+  img.style.position = 'absolute';
+  img.style.inset = '0';
+  img.style.width = '100%';
+  img.style.height = '100%';
+  img.style.objectFit = 'cover';
+  img.style.objectPosition = 'center';
+  img.style.display = 'block';
+}
+
 function buildContentCard(item, context = 'search', globalIndex = 0) {
   // Normalize fields across contexts
   const identifier = item.identifier || item.id || item.albumId || item.id;
@@ -4889,6 +4904,9 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
     window.CoverManager.loadCover(identifier, {
       alt: `Cover for ${title}`,
       objectFit: 'cover',
+      objectPosition: 'center',
+      position: 'absolute',
+      inset: '0',
       borderRadius: '0',
       lazy: true,
       showFallback: true,
@@ -4902,10 +4920,7 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
       if (cardCoverUrl) {
         const img = new Image();
         img.alt = `Cover for ${title}`;
-        img.style.width = '100%';
-        img.style.height = '100%';
-        img.style.objectFit = 'cover';
-        img.style.objectPosition = 'center';
+        applyCardCoverFillStyles(img);
         img.src = cardCoverUrl;
         media.appendChild(img);
       }
@@ -4913,10 +4928,7 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
   } else if (cardCoverUrl) {
     const img = new Image();
     img.alt = `Cover for ${title}`;
-    img.style.width = '100%';
-    img.style.height = '100%';
-    img.style.objectFit = 'cover';
-    img.style.objectPosition = 'center';
+    applyCardCoverFillStyles(img);
     img.src = cardCoverUrl;
     media.appendChild(img);
   }
