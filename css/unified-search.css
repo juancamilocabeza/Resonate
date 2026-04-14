@@ -10,9 +10,6 @@
 
 /* ===== CSS VARIABLES FOR SEARCH ===== */
 :root {
-  --search-height-mobile: 44px;
-  --search-height-tablet: 44px;
-  --search-height-desktop: 48px;
   --search-border-radius: 12px;
   --search-sticky-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
   --search-sticky-bg: var(--collection-panel-header-bg, var(--bg));
