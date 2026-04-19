@@ -38,6 +38,7 @@
   <link rel="stylesheet" href="css/player-progress.css" />
   <link rel="stylesheet" href="css/player-controls.css" />
   <link rel="stylesheet" href="css/player-bottom-sheet.css" />
+  <link rel="stylesheet" href="css/onboarding.css" />
   <script src="js/cast.js"></script>
   <script>
     (function () {
@@ -357,6 +358,21 @@
             <span class="theme-label" aria-hidden="true">Eco</span>
           </button>
 
+          <button id="tour-btn" class="theme-selector sheet-action-item" type="button"
+                  aria-label="Take the app tour"
+                  data-close-sheet-on-activate="true">
+            <span class="sheet-item-icon" aria-hidden="true">
+              <svg class="sheet-item-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false"
+                   fill="none" stroke="currentColor" stroke-width="1.8"
+                   stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+            </span>
+            <span class="sheet-item-label">How to use Resonate</span>
+          </button>
+
         </div>
 
         <div class="sheet-footer">
@@ -535,6 +551,7 @@
   <script src="js/battery.js"></script>
   <script src="js/initialization.js" defer></script>
   <script src="js/player-bottom-sheet.js" defer></script>
+  <script src="js/onboarding.js" defer></script>
   <script src="js/analytics.js"></script>
   <script>
     if (window.location.hostname !== 'localhost' && !window.location.hostname.startsWith('127.')) {
