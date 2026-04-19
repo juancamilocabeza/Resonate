@@ -16,11 +16,17 @@
 
   var STORAGE_KEY = 'resonate_onboarding_v1';
 
+  // Timing constants
+  var AUTO_START_DELAY_MS  = 900;  // wait for app to fully render before showing tour
+  var SHEET_CLOSE_DELAY_MS = 300;  // wait for app-menu sheet to finish closing
+  var FOCUS_DELAY_MS       = 60;   // short delay before moving focus to the next button
+  var CARD_FADE_MS         = 200;  // card fade-out duration before updating content
+
   var STEPS = [
     {
       icon: '🎵',
       title: 'Welcome to Resonate',
-      body: 'Discover and play millions of free tracks from the Internet Archive. Let us show you around in 4 quick steps.',
+      body: 'Discover and play millions of free tracks from the Internet Archive. Let us show you around in 5 quick steps.',
       target: null,
     },
     {
@@ -252,9 +258,9 @@
         setTimeout(function () {
           var btn = document.getElementById('ob-next-btn');
           if (btn) { try { btn.focus(); } catch (e) {} }
-        }, 60);
+        }, FOCUS_DELAY_MS);
       });
-    }, 200);
+    }, CARD_FADE_MS);
   }
 
   /* ------------------------------------------------------------------ */
@@ -293,7 +299,7 @@
         setTimeout(function () {
           if (overlayEl) overlayEl.classList.remove('onboarding-initial-show');
         }, 450);
-      }, 60);
+      }, FOCUS_DELAY_MS);
     });
   }
 
@@ -333,7 +339,7 @@
     if (btn) {
       btn.addEventListener('click', function () {
         // Small delay so the sheet finishes closing before the tour opens
-        setTimeout(show, 300);
+        setTimeout(show, SHEET_CLOSE_DELAY_MS);
       });
     }
   }
@@ -345,8 +351,8 @@
   function maybeAutoStart() {
     wireTourButton();
     if (isCompleted()) return;
-    // Give the app ~900 ms to fully render before showing the tour
-    setTimeout(show, 900);
+    // Give the app AUTO_START_DELAY_MS to fully render before showing the tour
+    setTimeout(show, AUTO_START_DELAY_MS);
   }
 
   if (document.readyState === 'loading') {
