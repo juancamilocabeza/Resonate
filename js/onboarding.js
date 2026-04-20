@@ -21,6 +21,8 @@
   var SHEET_CLOSE_DELAY_MS = 300;  // wait for app-menu sheet to finish closing
   var FOCUS_DELAY_MS       = 60;   // short delay before moving focus to the next button
   var CARD_FADE_MS         = 200;  // card fade-out duration before updating content
+  var MIN_CARD_HEIGHT_PX   = 120;  // avoids over-compressing onboarding content on tiny viewports
+  var MIN_VISIBLE_OPACITY  = 0.01; // treat near-transparent elements as effectively hidden
 
   var STEPS = [
     {
@@ -125,7 +127,7 @@
     document.getElementById('ob-next-btn').addEventListener('click', nextStep);
     document.addEventListener('keydown', handleKeyDown, true);
     window.addEventListener('resize', queueLayoutUpdate);
-    window.addEventListener('scroll', queueLayoutUpdate, true);
+    window.addEventListener('scroll', queueLayoutUpdate, { capture: true, passive: true });
   }
 
   /* ------------------------------------------------------------------ */
@@ -160,7 +162,9 @@
     if (!targetEl || typeof targetEl.getBoundingClientRect !== 'function') return false;
     if (targetEl.getClientRects().length === 0) return false;
     var style = window.getComputedStyle ? window.getComputedStyle(targetEl) : null;
-    if (style && (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0')) {
+    var opacity = style ? parseFloat(style.opacity) : 1;
+    if (isNaN(opacity)) opacity = 1;
+    if (style && (style.display === 'none' || style.visibility === 'hidden' || opacity <= MIN_VISIBLE_OPACITY)) {
       return false;
     }
     return true;
@@ -177,7 +181,14 @@
       rect.right > window.innerWidth - margin;
     if (needsScroll && typeof targetEl.scrollIntoView === 'function') {
       try {
-        targetEl.scrollIntoView({ block: 'center', inline: 'center', behavior: 'auto' });
+        var prefersReducedMotion =
+          typeof window.matchMedia === 'function'
+          && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        targetEl.scrollIntoView({
+          block: 'center',
+          inline: 'center',
+          behavior: prefersReducedMotion ? 'auto' : 'smooth',
+        });
       } catch (e) {
         try { targetEl.scrollIntoView(); } catch (err) {}
       }
@@ -240,7 +251,7 @@
     var ARROW  = 14;
     var vw = window.innerWidth;
     var vh = window.innerHeight;
-    var maxCardH = Math.max(120, vh - PAD * 2);
+    var maxCardH = Math.max(MIN_CARD_HEIGHT_PX, vh - PAD * 2);
     cardEl.style.maxHeight = maxCardH + 'px';
     var cardRect = cardEl.getBoundingClientRect();
     var CARD_W = cardRect.width || 300;
