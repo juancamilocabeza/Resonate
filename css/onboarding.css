@@ -183,7 +183,7 @@
 
 .onboarding-next-btn {
   background: var(--primary, #3da9ff);
-  color: var(--onboarding-cta-fg, #05131f);
+  color: var(--onboarding-cta-fg, #04131f);
   border: none;
   border-radius: 999px;
   padding: 10px 24px;
