@@ -63,6 +63,9 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  will-change: opacity, transform;
   opacity: 0;
   transition: opacity 0.22s ease;
 }
@@ -131,6 +134,11 @@
   transition: border-color 0.15s ease, color 0.15s ease;
   white-space: nowrap;
   -webkit-tap-highlight-color: transparent;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  will-change: color, border-color;
 }
 
 .onboarding-skip-btn:hover,
@@ -194,6 +202,11 @@
   transition: filter 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
   box-shadow: 0 4px 14px rgba(var(--primary-rgb, 61, 169, 255), 0.32);
   -webkit-tap-highlight-color: transparent;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  will-change: transform, filter, box-shadow, background-color, color;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -204,7 +217,7 @@
 }
 
 .onboarding-next-btn:active {
-  transform: scale(0.97);
+  transform: translateZ(0) scale(0.97);
 }
 
 .onboarding-next-btn:focus-visible {
