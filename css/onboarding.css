@@ -67,6 +67,8 @@
   backface-visibility: hidden;
   opacity: 0;
   transition: opacity 0.22s ease;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .onboarding-card.onboarding-card-visible {
