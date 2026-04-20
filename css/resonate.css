@@ -594,6 +594,9 @@ body.tracks-open #tracks-list-container .tlv2-list {
   /* Text color when placed on top of --accent surfaces */
   --on-accent: #000;
 
+  /* Text color when placed on top of --primary surfaces (e.g. CTA buttons) */
+  --on-primary: #fff;
+
   /* UI Components */
   --card: #262d35;
   --sheet-bg: #3b4756;
@@ -732,10 +735,11 @@ body.tracks-open #tracks-list-container .tlv2-list {
 
   --on-accent: #000;
 
+  /* Text color when placed on top of --primary surfaces (e.g. CTA buttons) */
+  --on-primary: #fff;
+
   --list-ticker-duration: 14s;
 }
-
-/* ===== TEMA DÍA - Colores claros optimizados ===== */
 [data-theme="day"] {
   --bg: #f5f5f5;
   --bg-rgb: 245, 245, 245;
@@ -810,10 +814,12 @@ body.tracks-open #tracks-list-container .tlv2-list {
 
   --on-accent: #fff;
 
+  /* Text color when placed on top of --primary surfaces (e.g. CTA buttons) */
+  /* Day primary (#10b981 emerald green) is light enough to need dark text for readability */
+  --on-primary: #000;
+
   --list-ticker-duration: 12s;
 }
-
-/* Ajustes adicionales para modo día */
 [data-theme="day"] header {
   border-bottom: 1px solid rgba(var(--primary-rgb), 0.12);
 }
@@ -920,9 +926,11 @@ body.tracks-open #tracks-list-container .tlv2-list {
   --header-btn-border: rgba(255, 255, 255, 0.12);
 
   --list-ticker-duration: 20s;
-}
 
-/* Reduce animaciones en modo ahorro de energía */
+  /* Text color when placed on top of --primary surfaces (e.g. CTA buttons) */
+  /* Energy-saver primary (#7aa7b8 light teal) is too light for white text */
+  --on-primary: #0a0a0a;
+}
 [data-theme="energy-saver"] * {
   animation-duration: 0.05s !important;
   transition-duration: 0.05s !important;
