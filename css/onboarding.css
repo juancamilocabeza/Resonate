@@ -63,6 +63,8 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
   opacity: 0;
   transition: opacity 0.22s ease;
 }
@@ -196,6 +198,14 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+.onboarding-skip-btn,
+.onboarding-next-btn {
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
 @media (hover: hover) and (pointer: fine) {
   .onboarding-next-btn:hover {
     filter: brightness(1.1);
@@ -204,7 +214,7 @@
 }
 
 .onboarding-next-btn:active {
-  transform: scale(0.97);
+  transform: translateZ(0) scale(0.97);
 }
 
 .onboarding-next-btn:focus-visible {
