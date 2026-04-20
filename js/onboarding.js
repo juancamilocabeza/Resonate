@@ -220,12 +220,14 @@
     var step = STEPS[index];
     if (!step) { finish(); return; }
 
+    var nextBtn = document.getElementById('ob-next-btn');
+
     document.getElementById('ob-icon').textContent  = step.icon;
     document.getElementById('ob-title').textContent = step.title;
     document.getElementById('ob-body').textContent  = step.body;
 
     var isLast = (index === STEPS.length - 1);
-    document.getElementById('ob-next-btn').textContent = isLast ? 'Start listening 🎶' : 'Next →';
+    nextBtn.textContent = isLast ? 'Start listening 🎶' : 'Next →';
 
     var skipBtn = document.getElementById('ob-skip-btn');
     skipBtn.style.visibility = isLast ? 'hidden' : 'visible';
@@ -235,6 +237,8 @@
     var targetEl = step.target ? document.querySelector(step.target) : null;
     positionSpotlight(targetEl);
     positionCard(targetEl);
+
+    void nextBtn.offsetWidth;
   }
 
   /* ------------------------------------------------------------------ */
