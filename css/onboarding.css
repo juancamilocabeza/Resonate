@@ -138,7 +138,6 @@
   transform: translateZ(0);
   -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
-  will-change: color, border-color;
 }
 
 .onboarding-skip-btn:hover,
@@ -206,7 +205,7 @@
   transform: translateZ(0);
   -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
-  will-change: transform, filter, box-shadow, background-color, color;
+  will-change: transform, filter;
 }
 
 @media (hover: hover) and (pointer: fine) {
