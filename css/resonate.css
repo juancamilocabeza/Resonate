@@ -596,6 +596,7 @@ body.tracks-open #tracks-list-container .tlv2-list {
 
   /* Text color when placed on top of --primary surfaces (e.g. CTA buttons) */
   --on-primary: #fff;
+  --onboarding-cta-fg: #04131f;
 
   /* UI Components */
   --card: #262d35;
@@ -817,6 +818,7 @@ body.tracks-open #tracks-list-container .tlv2-list {
   /* Text color when placed on top of --primary surfaces (e.g. CTA buttons) */
   /* Day primary (#10b981 emerald green) is light enough to need dark text for readability */
   --on-primary: #000;
+  --onboarding-cta-fg: #042115;
 
   --list-ticker-duration: 12s;
 }
@@ -930,6 +932,7 @@ body.tracks-open #tracks-list-container .tlv2-list {
   /* Text color when placed on top of --primary surfaces (e.g. CTA buttons) */
   /* Energy-saver primary (#7aa7b8 light teal) is too light for white text */
   --on-primary: #0a0a0a;
+  --onboarding-cta-fg: #071015;
 }
 [data-theme="energy-saver"] * {
   animation-duration: 0.05s !important;
