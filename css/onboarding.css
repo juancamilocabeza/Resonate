@@ -133,10 +133,6 @@
   transition: border-color 0.15s ease, color 0.15s ease;
   white-space: nowrap;
   -webkit-tap-highlight-color: transparent;
-  -webkit-transform: translateZ(0);
-  transform: translateZ(0);
-  -webkit-backface-visibility: hidden;
-  backface-visibility: hidden;
 }
 
 .onboarding-skip-btn:hover,
@@ -200,6 +196,10 @@
   transition: filter 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
   box-shadow: 0 4px 14px rgba(var(--primary-rgb, 61, 169, 255), 0.32);
   -webkit-tap-highlight-color: transparent;
+}
+
+.onboarding-skip-btn,
+.onboarding-next-btn {
   -webkit-transform: translateZ(0);
   transform: translateZ(0);
   -webkit-backface-visibility: hidden;
