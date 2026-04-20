@@ -61,6 +61,7 @@
   var spotlightEl = null;
   var cardEl = null;
   var fadeTimer = null;
+  var layoutRaf = null;
 
   /* ------------------------------------------------------------------ */
   /* Persistence helpers                                                  */
@@ -123,6 +124,8 @@
     document.getElementById('ob-skip-btn').addEventListener('click', finish);
     document.getElementById('ob-next-btn').addEventListener('click', nextStep);
     document.addEventListener('keydown', handleKeyDown, true);
+    window.addEventListener('resize', queueLayoutUpdate);
+    window.addEventListener('scroll', queueLayoutUpdate, true);
   }
 
   /* ------------------------------------------------------------------ */
@@ -153,6 +156,42 @@
     }
   }
 
+  function isTargetVisible(targetEl) {
+    if (!targetEl || typeof targetEl.getBoundingClientRect !== 'function') return false;
+    if (targetEl.getClientRects().length === 0) return false;
+    var style = window.getComputedStyle ? window.getComputedStyle(targetEl) : null;
+    if (style && (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0')) {
+      return false;
+    }
+    return true;
+  }
+
+  function ensureTargetInViewport(targetEl) {
+    if (!isTargetVisible(targetEl)) return null;
+    var rect = targetEl.getBoundingClientRect();
+    var margin = 20;
+    var needsScroll =
+      rect.top < margin ||
+      rect.left < margin ||
+      rect.bottom > window.innerHeight - margin ||
+      rect.right > window.innerWidth - margin;
+    if (needsScroll && typeof targetEl.scrollIntoView === 'function') {
+      try {
+        targetEl.scrollIntoView({ block: 'center', inline: 'center', behavior: 'auto' });
+      } catch (e) {
+        try { targetEl.scrollIntoView(); } catch (err) {}
+      }
+    }
+    return targetEl;
+  }
+
+  function getTargetForStep(step) {
+    if (!step || !step.target) return null;
+    var targetEl = document.querySelector(step.target);
+    if (!isTargetVisible(targetEl)) return null;
+    return ensureTargetInViewport(targetEl);
+  }
+
   function positionSpotlight(targetEl) {
     if (!targetEl) {
       spotlightEl.style.display = 'none';
@@ -160,14 +199,36 @@
       return;
     }
 
-    overlayEl.classList.remove('onboarding-full-backdrop');
     var rect = targetEl.getBoundingClientRect();
+    if (rect.width < 2 || rect.height < 2) {
+      spotlightEl.style.display = 'none';
+      overlayEl.classList.add('onboarding-full-backdrop');
+      return;
+    }
+
+    overlayEl.classList.remove('onboarding-full-backdrop');
     var pad = 10;
+    var minTop = 0;
+    var minLeft = 0;
+    var maxRight = window.innerWidth;
+    var maxBottom = window.innerHeight;
+    var top = Math.max(minTop, rect.top - pad);
+    var left = Math.max(minLeft, rect.left - pad);
+    var right = Math.min(maxRight, rect.right + pad);
+    var bottom = Math.min(maxBottom, rect.bottom + pad);
+    var width = Math.max(0, right - left);
+    var height = Math.max(0, bottom - top);
+    if (width < 2 || height < 2) {
+      spotlightEl.style.display = 'none';
+      overlayEl.classList.add('onboarding-full-backdrop');
+      return;
+    }
+
     spotlightEl.style.display = 'block';
-    spotlightEl.style.top    = (rect.top    - pad) + 'px';
-    spotlightEl.style.left   = (rect.left   - pad) + 'px';
-    spotlightEl.style.width  = (rect.width  + pad * 2) + 'px';
-    spotlightEl.style.height = (rect.height + pad * 2) + 'px';
+    spotlightEl.style.top    = top + 'px';
+    spotlightEl.style.left   = left + 'px';
+    spotlightEl.style.width  = width + 'px';
+    spotlightEl.style.height = height + 'px';
     spotlightEl.style.boxShadow =
       '0 0 0 9999px rgba(0,0,0,0.78), ' +
       '0 0 0 3px var(--primary, #3da9ff), ' +
@@ -175,12 +236,15 @@
   }
 
   function positionCard(targetEl) {
-    var CARD_W = 300;
-    var CARD_H = 230; // rough estimate
     var PAD    = 16;
     var ARROW  = 14;
     var vw = window.innerWidth;
     var vh = window.innerHeight;
+    var maxCardH = Math.max(120, vh - PAD * 2);
+    cardEl.style.maxHeight = maxCardH + 'px';
+    var cardRect = cardEl.getBoundingClientRect();
+    var CARD_W = cardRect.width || 300;
+    var CARD_H = cardRect.height || 230;
 
     if (!targetEl) {
       // Centered card
@@ -206,7 +270,7 @@
     // Horizontally centre on target, clamped within viewport
     left = rect.left + rect.width / 2 - CARD_W / 2;
     left = Math.max(PAD, Math.min(left, vw - CARD_W - PAD));
-    top  = Math.max(PAD, top);
+    top  = Math.max(PAD, Math.min(top, vh - CARD_H - PAD));
 
     cardEl.style.position  = 'fixed';
     cardEl.style.top       = top + 'px';
@@ -234,11 +298,20 @@
 
     updateProgressDots();
 
-    var targetEl = step.target ? document.querySelector(step.target) : null;
+    var targetEl = getTargetForStep(step);
     positionSpotlight(targetEl);
     positionCard(targetEl);
 
     void nextBtn.offsetWidth;
+  }
+
+  function queueLayoutUpdate() {
+    if (!active || !overlayEl || overlayEl.hasAttribute('hidden')) return;
+    if (layoutRaf) cancelAnimationFrame(layoutRaf);
+    layoutRaf = requestAnimationFrame(function () {
+      layoutRaf = null;
+      renderStep(currentStep);
+    });
   }
 
   /* ------------------------------------------------------------------ */
