@@ -18,7 +18,7 @@ const SEARCH_LIMITS = {
 
 // Cache schema/version for search result caching.
 // Bump when search query/ranking behavior changes to avoid mixing old results.
-const SEARCH_CACHE_SCHEMA = 'intent-pop-v2';
+const SEARCH_CACHE_SCHEMA = 'intent-pop-v3';
 
 // Curated filter options for Archive.org searches.
 // Note: Archive advancedsearch doesn't expose robust faceting; keep this list intentionally small.
@@ -409,7 +409,7 @@ async function enrichSearchResultsWithMetadata(processedResults, query, { signal
 
   // For deferred/background enrichment, preserve original order to avoid index churn.
   if (!keepUnplayables) {
-    // Apply priority ordering: Single > Album; Exact contains > Typo-similar > others
+    // Apply priority ordering: Album > Single; Exact contains > Typo-similar > others
     prioritizeResults(enrichedResults, query);
   }
   return enrichedResults;
@@ -1900,12 +1900,12 @@ function prioritizeResults(items, query) {
     if (aUn !== bUn) return aUn - bUn;
 
     // Type rank respecting requested priority:
-    // 1) Single exact; 2) Album exact; 3) Track list exact (rendered as single);
+    // 1) Album exact; 2) Track list exact (separate tier between album and single); 3) Single exact;
     // Then fuzzy in same order; finally relevance.
     const typeRank = (item) => {
-      if (item.isTrackList) return 2; // rank after album
-      if ((item.trackCount === 1) || (item.isAlbum === false)) return 0; // single
-      return 1; // album
+      if (item.isTrackList) return 1; // rank after album
+      if ((item.trackCount === 1) || (item.isAlbum === false)) return 2; // single
+      return 0; // album
     };
     const aType = typeRank(a);
     const bType = typeRank(b);
