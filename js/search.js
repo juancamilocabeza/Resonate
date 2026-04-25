@@ -1922,6 +1922,11 @@ function prioritizeResults(items, query) {
     const bCover = (b && b.hasNonDefaultCover) ? 1 : 0;
     if (aCover !== bCover) return bCover - aCover;
 
+    // Within the same tier, prefer albums with more tracks for continuous listening.
+    const aCount = (typeof a.trackCount === 'number' && a.trackCount > 0) ? a.trackCount : 0;
+    const bCount = (typeof b.trackCount === 'number' && b.trackCount > 0) ? b.trackCount : 0;
+    if (aCount !== bCount) return bCount - aCount;
+
     const ar = typeof a.relevanceScore === 'number' ? a.relevanceScore : 0;
     const br = typeof b.relevanceScore === 'number' ? b.relevanceScore : 0;
     return br - ar;
