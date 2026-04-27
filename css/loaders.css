@@ -151,8 +151,11 @@
 .search-skeleton-cover {
   width: 100%;
   /* 1:1 aspect ratio cover matching .card-media */
+  /* Fallback for browsers without aspect-ratio support */
+  padding-bottom: 100%;
+  height: 0;
+  /* Modern browsers use aspect-ratio */
   aspect-ratio: 1 / 1;
-  min-height: 120px;
   background: linear-gradient(
     90deg,
     var(--surface-1, #f5f5f5) 0%,
@@ -161,6 +164,13 @@
   );
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
+}
+@supports (aspect-ratio: 1 / 1) {
+  .search-skeleton-cover {
+    padding-bottom: 0;
+    height: auto;
+    min-height: 0;
+  }
 }
 
 .search-skeleton-content {

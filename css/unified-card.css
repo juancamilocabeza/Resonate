@@ -48,12 +48,24 @@
 .card-media {
   position: relative;
   width: 100%;
+  /* Fallback for browsers without aspect-ratio support: padding-bottom creates a 1:1 box */
+  padding-bottom: 100%;
+  height: 0;
+  /* Modern browsers: use aspect-ratio and reset padding/height */
   aspect-ratio: 1 / 1;
-  min-height: 120px;
   background: var(--btn);
   border-radius: 12px 12px 0 0;
   overflow: hidden;
   flex-shrink: 0;
+}
+
+/* Modern browsers that support aspect-ratio should reset the padding hack */
+@supports (aspect-ratio: 1 / 1) {
+  .card-media {
+    padding-bottom: 0;
+    height: auto;
+    min-height: 0;
+  }
 }
 
 .card-media img {

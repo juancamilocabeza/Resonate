@@ -3697,9 +3697,20 @@ body.offline-mode .share-track-button {
 .search-results-list .card-media,
 .resontes-list-content .card-media {
   width: 100%;
+  /* Fallback for browsers without aspect-ratio support */
+  padding-bottom: 100%;
+  height: 0;
+  /* Modern browsers use aspect-ratio */
   aspect-ratio: 1 / 1;
-  min-height: 120px;
   border-radius: 10px 10px 0 0;
+}
+@supports (aspect-ratio: 1 / 1) {
+  .search-results-list .card-media,
+  .resontes-list-content .card-media {
+    padding-bottom: 0;
+    height: auto;
+    min-height: 0;
+  }
 }
 
 /* Ensure images inside the card art always fill the container */
@@ -3855,7 +3866,26 @@ body.offline-mode .share-track-button {
   transform: scale(1);
 }
 
-.card-media { position: relative; width: 100%; aspect-ratio: 1 / 1; background: var(--btn); overflow: hidden; }
+/* Card media styles are now centralized in unified-card.css */
+/* These styles provide the same fallback pattern for consistent cover sizing */
+.card-media {
+  position: relative;
+  width: 100%;
+  /* Fallback for browsers without aspect-ratio support */
+  padding-bottom: 100%;
+  height: 0;
+  /* Modern browsers use aspect-ratio */
+  aspect-ratio: 1 / 1;
+  background: var(--btn);
+  overflow: hidden;
+}
+@supports (aspect-ratio: 1 / 1) {
+  .card-media {
+    padding-bottom: 0;
+    height: auto;
+    min-height: 0;
+  }
+}
 .card-media img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
 
 .card-chips { position: absolute; top: 8px; left: 8px; display: flex; gap: 6px; flex-wrap: wrap; z-index: 10; }
