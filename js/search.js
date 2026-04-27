@@ -409,8 +409,8 @@ async function enrichSearchResultsWithMetadata(processedResults, query, { signal
 
   // For deferred/background enrichment, preserve original order to avoid index churn.
   if (!keepUnplayables) {
-    // Apply priority ordering: Album > Single; Exact contains > Typo-similar > others
-    prioritizeResults(enrichedResults, query);
+    // Sort by track count descending (albums with more tracks first, singles last)
+    prioritizeResults(enrichedResults);
   }
   return enrichedResults;
 }
@@ -1881,7 +1881,7 @@ function isTypoSimilar(queryNorm, textNorm) {
   return dist <= threshold;
 }
 
-function prioritizeResults(items, query) {
+function prioritizeResults(items) {
   items.sort((a, b) => {
     // Always push known-unplayable items to the bottom.
     const aUn = (a && (a.unplayable || a.trackCount === 0)) ? 1 : 0;
