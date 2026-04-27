@@ -1,248 +1,139 @@
 /**
- * onboarding.css — Resonate App Onboarding Tour
+ * onboarding.css — Resonate Progressive Onboarding
  *
- * A 5-step coach-mark tour for new users.
- * Uses a spotlight technique: a fixed div over the highlighted element
- * casts a full-page box-shadow to dim everything outside it.
+ * Small, non-blocking tooltip cards that surface contextually
+ * as the user explores the app for the first time.
+ * No full-screen overlay — the app remains fully interactive.
  */
 
 /* =====================================================================
-   OVERLAY — Base layer that blocks interaction with the app
+   TIP CARD — floating contextual hint bubble
    ===================================================================== */
-.onboarding-overlay {
+.ob-tip {
   position: fixed;
-  inset: 0;
   z-index: 10000;
-  pointer-events: all;
-  /* No background — handled by spotlight box-shadow or .onboarding-full-backdrop */
-}
-
-.onboarding-overlay[hidden] {
-  display: none !important;
-}
-
-/* Full backdrop variant: used for steps with no spotlight target */
-.onboarding-overlay.onboarding-full-backdrop {
-  background: rgba(0, 0, 0, 0.78);
-}
-
-/* =====================================================================
-   SPOTLIGHT — Transparent window over the highlighted element
-   box-shadow creates the dimmed backdrop outside the window
-   ===================================================================== */
-.onboarding-spotlight {
-  position: fixed;
-  border-radius: 12px;
-  z-index: 10001;
-  pointer-events: none;
-  /* Animated position transitions between steps */
-  transition:
-    top    0.35s cubic-bezier(0.4, 0, 0.2, 1),
-    left   0.35s cubic-bezier(0.4, 0, 0.2, 1),
-    width  0.35s cubic-bezier(0.4, 0, 0.2, 1),
-    height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* =====================================================================
-   CARD — The tooltip / info bubble shown at each step
-   ===================================================================== */
-.onboarding-card {
-  position: fixed;
-  z-index: 10002;
   width: min(280px, calc(100vw - 32px));
   background: var(--card, #1e2530);
   border: 1px solid var(--surface-border, rgba(255, 255, 255, 0.08));
   border-radius: 14px;
-  padding: 16px 16px 14px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  padding: 14px 36px 14px 14px; /* right padding leaves room for the × button */
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
   color: var(--fg, #fff);
   pointer-events: all;
-  /* Default position: centered (overridden by JS for targeted steps) */
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  /* Entrance/exit transition */
+  opacity: 0;
+  transform: translateY(-6px) scale(0.97);
+  transition: opacity 0.22s ease, transform 0.22s ease;
+  will-change: opacity, transform;
   -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
-  opacity: 0;
-  transition: opacity 0.22s ease;
-  overflow-y: auto;
-  overscroll-behavior: contain;
 }
 
-.onboarding-card.onboarding-card-visible {
+.ob-tip.ob-tip-visible {
   opacity: 1;
-}
-
-/* Entrance animation on first show */
-@keyframes onboardingCardFadeIn {
-  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
-  100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-}
-
-.onboarding-overlay.onboarding-initial-show .onboarding-card.onboarding-card-visible {
-  animation: onboardingCardFadeIn 0.25s ease forwards;
+  transform: translateY(0) scale(1);
 }
 
 /* =====================================================================
-   CARD HEADER — progress dots + skip button
+   TIP ARROW — points toward the highlighted target element
+   The JS sets --ob-arrow-offset to shift it left/right when the tip
+   cannot be perfectly centred on the target.
    ===================================================================== */
-.onboarding-card-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
-  min-height: 20px;
+.ob-tip-below::before,
+.ob-tip-above::before {
+  content: '';
+  position: absolute;
+  left: calc(50% + var(--ob-arrow-offset, 0px));
+  transform: translateX(-50%);
+  border: 8px solid transparent;
 }
 
-/* Progress dots */
-.onboarding-progress {
-  display: flex;
-  gap: 6px;
-  align-items: center;
+/* Arrow points up (tip is below the target) */
+.ob-tip-below::before {
+  top: -8px;
+  border-top: none;
+  border-bottom-color: var(--card, #1e2530);
 }
 
-.onboarding-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--muted, #b0b8c1);
-  opacity: 0.35;
-  transition: all 0.25s ease;
-  flex-shrink: 0;
+/* Arrow points down (tip is above the target) */
+.ob-tip-above::before {
+  bottom: -8px;
+  border-bottom: none;
+  border-top-color: var(--card, #1e2530);
 }
 
-.onboarding-dot.onboarding-dot-active {
-  background: var(--primary, #3da9ff);
-  opacity: 1;
-  width: 18px;
-  border-radius: 3px;
-}
-
-/* Skip button */
-.onboarding-skip-btn {
+/* =====================================================================
+   CLOSE BUTTON — top-right dismiss (×)
+   ===================================================================== */
+.ob-tip-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
   background: transparent;
   border: none;
   border-radius: 4px;
   color: var(--muted, #b0b8c1);
-  font-size: 12px;
-  font-weight: 500;
-  padding: 2px 4px;
-  line-height: 1.5;
+  font-size: 18px;
+  line-height: 1;
   cursor: pointer;
+  padding: 2px 5px;
   transition: color 0.15s ease;
-  white-space: nowrap;
   -webkit-tap-highlight-color: transparent;
 }
 
-.onboarding-skip-btn:hover,
-.onboarding-skip-btn:focus-visible {
+.ob-tip-close:hover,
+.ob-tip-close:focus-visible {
   color: var(--fg, #fff);
 }
 
-.onboarding-skip-btn:focus-visible {
+.ob-tip-close:focus-visible {
   outline: 2px solid var(--primary, #3da9ff);
   outline-offset: 2px;
 }
 
 /* =====================================================================
-   CARD BODY — icon, title, description
+   TIP CONTENT — icon, title, body text
    ===================================================================== */
-.onboarding-icon {
-  font-size: 26px;
+.ob-tip-icon {
+  font-size: 22px;
   text-align: center;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
   line-height: 1;
   user-select: none;
 }
 
-.onboarding-title {
-  font-size: 15px;
+.ob-tip-title {
+  font-size: 14px;
   font-weight: 700;
   color: var(--fg, #fff);
-  margin: 0 0 6px;
+  margin: 0 0 4px;
   line-height: 1.3;
   text-align: center;
   letter-spacing: 0.01em;
 }
 
-.onboarding-body {
-  font-size: 13px;
-  line-height: 1.55;
+.ob-tip-body {
+  font-size: 12px;
+  line-height: 1.5;
   color: var(--muted, #b0b8c1);
-  margin: 0 0 14px;
+  margin: 0;
   text-align: center;
-}
-
-/* =====================================================================
-   CARD FOOTER — primary action button
-   ===================================================================== */
-.onboarding-actions {
-  display: flex;
-  justify-content: center;
-}
-
-.onboarding-next-btn {
-  appearance: none;
-  -webkit-appearance: none;
-  background: var(--primary, #3da9ff);
-  color: var(--onboarding-cta-fg, #04131f);
-  -webkit-text-fill-color: var(--onboarding-cta-fg, #04131f);
-  border: none;
-  border-radius: 8px;
-  padding: 9px 20px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  width: 100%;
-  transition: filter 0.15s ease, transform 0.1s ease;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.onboarding-skip-btn,
-.onboarding-next-btn {
-  -webkit-transform: translateZ(0);
-  transform: translateZ(0);
-  -webkit-backface-visibility: hidden;
-  backface-visibility: hidden;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .onboarding-next-btn:hover {
-    filter: brightness(1.08);
-  }
-}
-
-.onboarding-next-btn:active {
-  transform: translateZ(0) scale(0.97);
-}
-
-.onboarding-next-btn:focus-visible {
-  outline: 2px solid var(--primary, #3da9ff);
-  outline-offset: 2px;
-}
-
-/* =====================================================================
-   BODY SCROLL LOCK — while tour is active
-   ===================================================================== */
-body.onboarding-active {
-  overflow: hidden;
-  touch-action: none;
 }
 
 /* =====================================================================
    RESPONSIVE — tiny phones (< 360px wide)
    ===================================================================== */
 @media (max-width: 359px) {
-  .onboarding-card {
-    padding: 12px 12px 10px;
+  .ob-tip {
+    padding: 12px 32px 12px 12px;
     border-radius: 10px;
   }
 
-  .onboarding-title {
-    font-size: 14px;
+  .ob-tip-title {
+    font-size: 13px;
   }
 
-  .onboarding-body {
-    font-size: 12px;
+  .ob-tip-body {
+    font-size: 11px;
   }
 }
