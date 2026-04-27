@@ -7385,6 +7385,13 @@ function updateFavoritesList() {
     tracks: favoritesByAlbum[albumId].tracks
   }));
 
+  // Sort by track count descending (albums with more tracks first, singles last)
+  items.sort((a, b) => {
+    const aCount = (typeof a.trackCount === 'number' && a.trackCount > 0) ? a.trackCount : 0;
+    const bCount = (typeof b.trackCount === 'number' && b.trackCount > 0) ? b.trackCount : 0;
+    return bCount - aCount;
+  });
+
   // Update albumTitle for tracks that don't have it or have degraded info
   state.favorites.forEach(favorite => {
     const albumId = favorite.albumId || favorite.id;

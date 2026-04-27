@@ -1882,54 +1882,16 @@ function isTypoSimilar(queryNorm, textNorm) {
 }
 
 function prioritizeResults(items, query) {
-  const q = normalizeString(query);
-  const hasExact = (item) => {
-    const t = normalizeString(item.title || '');
-    const c = normalizeString(item.creator || '');
-    return t.includes(q) || c.includes(q);
-  };
-  const hasFuzzy = (item) => {
-    const t = normalizeString(item.title || '');
-    const c = normalizeString(item.creator || '');
-    return isTypoSimilar(q, t) || isTypoSimilar(q, c);
-  };
   items.sort((a, b) => {
     // Always push known-unplayable items to the bottom.
     const aUn = (a && (a.unplayable || a.trackCount === 0)) ? 1 : 0;
     const bUn = (b && (b.unplayable || b.trackCount === 0)) ? 1 : 0;
     if (aUn !== bUn) return aUn - bUn;
 
-    // Type rank respecting requested priority:
-    // 1) Album exact; 2) Track list exact (separate tier between album and single); 3) Single exact;
-    // Then fuzzy in same order; finally relevance.
-    const typeRank = (item) => {
-      if (item.isTrackList) return 1; // rank after album
-      if ((item.trackCount === 1) || (item.isAlbum === false)) return 2; // single
-      return 0; // album
-    };
-    const aType = typeRank(a);
-    const bType = typeRank(b);
-    if (aType !== bType) return aType - bType;
-    const aExact = hasExact(a) ? 1 : 0;
-    const bExact = hasExact(b) ? 1 : 0;
-    if (aExact !== bExact) return bExact - aExact;
-    const aFuzzy = hasFuzzy(a) ? 1 : 0;
-    const bFuzzy = hasFuzzy(b) ? 1 : 0;
-    if (aFuzzy !== bFuzzy) return bFuzzy - aFuzzy;
-
-    // Prefer results whose cover isn't the generic Archive placeholder.
-    const aCover = (a && a.hasNonDefaultCover) ? 1 : 0;
-    const bCover = (b && b.hasNonDefaultCover) ? 1 : 0;
-    if (aCover !== bCover) return bCover - aCover;
-
-    // Within the same tier, prefer albums with more tracks for continuous listening.
+    // Sort by track count descending (albums with more tracks first, singles last)
     const aCount = (typeof a.trackCount === 'number' && a.trackCount > 0) ? a.trackCount : 0;
     const bCount = (typeof b.trackCount === 'number' && b.trackCount > 0) ? b.trackCount : 0;
-    if (aCount !== bCount) return bCount - aCount;
-
-    const ar = typeof a.relevanceScore === 'number' ? a.relevanceScore : 0;
-    const br = typeof b.relevanceScore === 'number' ? b.relevanceScore : 0;
-    return br - ar;
+    return bCount - aCount;
   });
 }
 
