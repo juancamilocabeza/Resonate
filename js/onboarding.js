@@ -23,11 +23,12 @@
 (function () {
   'use strict';
 
-  var STORAGE_PREFIX       = 'resonate_ob_s';
+  var STEP_STORAGE_PREFIX  = 'resonate_ob_s';   // + step index = per-step seen flag
   var LEGACY_STORAGE_KEY   = 'resonate_onboarding_v1';
   var AUTO_START_DELAY_MS  = 900;   // wait for app to fully render
   var SHEET_CLOSE_DELAY_MS = 300;   // wait for app-menu sheet to close before replaying
   var HIDE_ANIM_MS         = 250;   // duration of tip fade-out animation
+  var PLAY_BTN_DELAY_MS    = 600;   // wait for player to load a track before showing favourite tip
   var MIN_VISIBLE_OPACITY  = 0.01;
 
   // ── Step definitions ────────────────────────────────────────────────
@@ -84,7 +85,7 @@
 
   function isStepSeen(index) {
     try {
-      return localStorage.getItem(STORAGE_PREFIX + index) === '1';
+      return localStorage.getItem(STEP_STORAGE_PREFIX + index) === '1';
     } catch (e) {
       return true;
     }
@@ -92,7 +93,7 @@
 
   function markStepSeen(index) {
     try {
-      localStorage.setItem(STORAGE_PREFIX + index, '1');
+      localStorage.setItem(STEP_STORAGE_PREFIX + index, '1');
     } catch (e) {}
   }
 
@@ -109,7 +110,7 @@
 
   function resetAll() {
     for (var i = 0; i < STEPS.length; i++) {
-      try { localStorage.removeItem(STORAGE_PREFIX + i); } catch (e) {}
+      try { localStorage.removeItem(STEP_STORAGE_PREFIX + i); } catch (e) {}
     }
     try { localStorage.removeItem(LEGACY_STORAGE_KEY); } catch (e) {}
   }
@@ -198,7 +199,8 @@
     top  = Math.max(PAD, Math.min(top, vh - TH - PAD));
 
     // Arrow offset: how far the arrow needs to shift from tip centre
-    var arrowOffset = (targetCX - (left + TW / 2));
+    var tipCenterX  = left + TW / 2;
+    var arrowOffset = targetCX - tipCenterX;
     // Clamp so the arrow stays within the tip bounds (with a small margin)
     var arrowMaxShift = TW / 2 - 20;
     arrowOffset = Math.max(-arrowMaxShift, Math.min(arrowOffset, arrowMaxShift));
@@ -264,8 +266,10 @@
 
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape') return;
-    // Find the highest step index currently visible
-    var keys = Object.keys(activeTips);
+    // Find the highest step index currently visible (sort numerically)
+    var keys = Object.keys(activeTips).sort(function (a, b) {
+      return parseInt(a, 10) - parseInt(b, 10);
+    });
     if (!keys.length) return;
     e.preventDefault();
     e.stopPropagation();
@@ -327,7 +331,7 @@
         document.removeEventListener('click', onDocClick, true);
         delete triggerCleanup[index];
         // Small delay so the player has time to load the track
-        setTimeout(function () { showTip(index); }, 600);
+        setTimeout(function () { showTip(index); }, PLAY_BTN_DELAY_MS);
       }
 
       document.addEventListener('click', onDocClick, true);
