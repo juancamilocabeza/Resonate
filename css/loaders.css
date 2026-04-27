@@ -88,10 +88,53 @@
 /* ===== SEARCH RESULT SKELETON CARDS ===== */
 .search-skeleton-container {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: var(--spacing-sm);
-  padding: 10px;
+  /* Match the .card-grid responsive column counts from unified-grid.css */
+  grid-template-columns: repeat(2, minmax(130px, 1fr));
+  gap: 8px;
+  padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0));
   animation: fadeIn 0.2s ease-in;
+}
+
+@media (min-width: 420px) {
+  .search-skeleton-container {
+    gap: 10px;
+    padding: 10px 10px calc(10px + env(safe-area-inset-bottom, 0));
+    grid-template-columns: repeat(2, minmax(140px, 1fr));
+  }
+}
+
+@media (min-width: 600px) {
+  .search-skeleton-container {
+    grid-template-columns: repeat(3, minmax(140px, 1fr));
+    gap: 12px;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0));
+  }
+}
+
+@media (min-width: 768px) {
+  .search-skeleton-container {
+    grid-template-columns: repeat(3, minmax(160px, 1fr));
+    gap: 14px;
+    padding: 10px 16px 0;
+    max-width: 1024px;
+    margin: 0 auto;
+  }
+}
+
+@media (min-width: 1024px) {
+  .search-skeleton-container {
+    grid-template-columns: repeat(4, minmax(160px, 1fr));
+    gap: 14px;
+    padding: 10px 24px 0;
+    max-width: 1200px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .search-skeleton-container {
+    grid-template-columns: repeat(5, minmax(160px, 1fr));
+    gap: 16px;
+  }
 }
 
 .search-skeleton-card {
@@ -100,14 +143,16 @@
   border-radius: 12px;
   overflow: hidden;
   box-shadow: var(--shadow-subtle);
-  height: 280px;
-  display: flex;
-  flex-direction: column;
+  /* Use aspect-ratio to match real content cards (cover + body) */
+  display: grid;
+  grid-template-rows: auto 1fr;
 }
 
 .search-skeleton-cover {
   width: 100%;
-  height: 180px;
+  /* 1:1 aspect ratio cover matching .card-media */
+  aspect-ratio: 1 / 1;
+  min-height: 120px;
   background: linear-gradient(
     90deg,
     var(--surface-1, #f5f5f5) 0%,

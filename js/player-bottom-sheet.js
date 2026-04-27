@@ -293,9 +293,70 @@
     document.addEventListener('keydown', handleDocumentKeydown);
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
+  function initAndExposeAPI() {
     init();
+
+    // Expose a programmatic API so dynamic UI (e.g., card context menus) can
+    // open/close sheets without needing a static data-sheet-target trigger.
+    window.BottomSheetAPI = {
+      /**
+       * Open a bottom sheet by its element ID.
+       * If a controller for that sheet already exists (auto-wired via data-sheet-target),
+       * it is reused. Otherwise a lightweight ad-hoc controller is created.
+       * @param {string} sheetId  - The id of the .bottom-sheet element to open.
+       * @param {Element} [triggerEl] - Optional trigger element for focus restoration.
+       */
+      openById: function (sheetId, triggerEl) {
+        if (!overlay) return false;
+        var sheet = document.getElementById(sheetId);
+        if (!sheet) return false;
+
+        var ctrl = null;
+        for (var i = 0; i < controllers.length; i++) {
+          if (controllers[i].sheet === sheet) {
+            ctrl = controllers[i];
+            break;
+          }
+        }
+
+        if (ctrl) {
+          if (triggerEl) ctrl.trigger = triggerEl;
+          openSheet(ctrl);
+          return true;
+        }
+
+        // Ad-hoc controller for sheets without a static trigger.
+        ctrl = {
+          sheet: sheet,
+          trigger: triggerEl || document.body,
+          touch: { startY: 0, currentY: 0, isDragging: false }
+        };
+        setSheetInteractivity(sheet, false);
+
+        sheet.addEventListener('touchstart', function (e) { handleTouchStart(ctrl, e); }, { passive: true });
+        sheet.addEventListener('touchmove', function (e) { handleTouchMove(ctrl, e); }, { passive: false });
+        sheet.addEventListener('touchend', function () { handleTouchEnd(ctrl); }, { passive: true });
+
+        Array.prototype.forEach.call(sheet.querySelectorAll('.sheet-cancel-btn'), function (btn) {
+          btn.addEventListener('click', function () { closeSheet(ctrl); });
+        });
+
+        wireAutoCloseActions(ctrl);
+        controllers.push(ctrl);
+        openSheet(ctrl);
+        return true;
+      },
+
+      /** Close whichever sheet is currently open. */
+      closeActive: function () {
+        if (activeController) closeSheet(activeController, { restoreFocus: false });
+      }
+    };
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initAndExposeAPI);
+  } else {
+    initAndExposeAPI();
   }
 })();

@@ -319,6 +319,78 @@
       <div class="bottom-sheet-overlay" id="bottom-sheet-overlay" aria-hidden="true"></div>
 
       <!-- ============================================================
+           CARD CONTEXT MENU SHEET — opened programmatically by the More (⋯)
+           button on search result and resonates cards.
+           ============================================================ -->
+      <div class="bottom-sheet" id="card-context-sheet"
+           role="dialog" aria-modal="true" aria-label="Track options" aria-hidden="true">
+
+        <div class="sheet-drag-handle" aria-hidden="true"></div>
+
+        <div class="sheet-header">
+          <span class="sheet-title" id="card-context-title">Options</span>
+          <span class="sheet-subtitle" id="card-context-subtitle"></span>
+        </div>
+
+        <div class="sheet-content">
+
+          <button id="card-ctx-play" class="sheet-action-item" type="button"
+                  data-close-sheet-on-activate="true">
+            <span class="sheet-item-icon" aria-hidden="true">
+              <svg class="sheet-item-svg" viewBox="0 0 24 24" fill="currentColor" stroke="none"
+                   focusable="false" aria-hidden="true">
+                <polygon points="5,3 19,12 5,21"></polygon>
+              </svg>
+            </span>
+            <span class="sheet-item-label" id="card-ctx-play-label">Play</span>
+          </button>
+
+          <button id="card-ctx-resonate" class="sheet-action-item" type="button"
+                  data-close-sheet-on-activate="true">
+            <span class="sheet-item-icon" aria-hidden="true">
+              <svg class="resonate-icon sheet-item-svg" viewBox="0 0 512 512" fill="none"
+                   focusable="false" aria-hidden="true">
+                <use href="/icons/sprite.svg?v=2#resonate-icon"></use>
+              </svg>
+            </span>
+            <span class="sheet-item-label" id="card-ctx-resonate-label">Add to Resonates</span>
+          </button>
+
+          <button id="card-ctx-tracks" class="sheet-action-item" type="button"
+                  data-close-sheet-on-activate="true" hidden>
+            <span class="sheet-item-icon" aria-hidden="true">
+              <svg class="sheet-item-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+                   focusable="false" aria-hidden="true">
+                <use href="/icons/sprite.svg?v=2#tracks-icon"></use>
+              </svg>
+            </span>
+            <span class="sheet-item-label">Show Tracks</span>
+          </button>
+
+          <button id="card-ctx-share" class="sheet-action-item" type="button"
+                  data-close-sheet-on-activate="true">
+            <span class="sheet-item-icon" aria-hidden="true">
+              <svg class="sheet-item-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+                   focusable="false" aria-hidden="true">
+                <path d="M12 3v10"></path>
+                <path d="M8 7l4-4 4 4"></path>
+                <path d="M5 11v7a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3v-7"></path>
+              </svg>
+            </span>
+            <span class="sheet-item-label">Share</span>
+          </button>
+
+        </div>
+
+        <div class="sheet-footer">
+          <button class="sheet-cancel-btn" type="button">Close</button>
+        </div>
+
+      </div><!-- /#card-context-sheet -->
+
+      <!-- ============================================================
            APP MENU SHEET — app-level actions triggered from the header
            Existing element IDs are preserved so current JS integrations
            (theme.js, ui.js, initialization.js) continue to work.
