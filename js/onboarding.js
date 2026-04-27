@@ -1,406 +1,347 @@
 /**
- * onboarding.js — Resonate App Onboarding Tour
+ * onboarding.js — Resonate Progressive Onboarding
  *
- * Displays a 5-step coach-mark tour for new users so they learn
- * the core features (search, play, resonate, app menu) quickly.
+ * Replaces the blocking 5-step modal tour with a progressive,
+ * contextual tip system. Each tip is a small non-blocking tooltip
+ * card that appears at the right moment as the user explores the app.
+ *
+ * Tips and their triggers:
+ *  0 — Welcome    : auto-shown 900 ms after first visit
+ *  1 — Search     : first focus on #search-input
+ *  2 — Play       : first time search results are rendered
+ *  3 — Favourite  : first click on a result play button
  *
  * Features:
- *  - Auto-shows once for new users (localStorage flag)
- *  - Can be replayed from the app menu
- *  - Spotlight technique highlights real UI elements
- *  - Keyboard support: Escape = skip, Tab-navigable buttons
- *  - Accessible: ARIA roles, live region, focus management
+ *  - Non-blocking: the user can interact with the app underneath
+ *  - Per-step localStorage flags so each tip is shown only once
+ *  - Auto-dismisses after a configurable timeout
+ *  - Dismiss (×) button on every tip
+ *  - Keyboard: Escape closes the frontmost visible tip
+ *  - Accessible: role="tooltip", aria-label on close button
+ *  - Backwards-compatible window.resonateOnboarding public API
  */
 (function () {
   'use strict';
 
-  var STORAGE_KEY = 'resonate_onboarding_v1';
+  var STORAGE_PREFIX       = 'resonate_ob_s';
+  var LEGACY_STORAGE_KEY   = 'resonate_onboarding_v1';
+  var AUTO_START_DELAY_MS  = 900;   // wait for app to fully render
+  var SHEET_CLOSE_DELAY_MS = 300;   // wait for app-menu sheet to close before replaying
+  var HIDE_ANIM_MS         = 250;   // duration of tip fade-out animation
+  var MIN_VISIBLE_OPACITY  = 0.01;
 
-  // Timing constants
-  var AUTO_START_DELAY_MS  = 900;  // wait for app to fully render before showing tour
-  var SHEET_CLOSE_DELAY_MS = 300;  // wait for app-menu sheet to finish closing
-  var FOCUS_DELAY_MS       = 60;   // short delay before moving focus to the next button
-  var CARD_FADE_MS         = 200;  // card fade-out duration before updating content
-  var MIN_CARD_HEIGHT_PX   = 120;  // avoids over-compressing onboarding content on tiny viewports
-  var MIN_VISIBLE_OPACITY  = 0.01; // treat near-transparent elements as effectively hidden
-
+  // ── Step definitions ────────────────────────────────────────────────
+  // trigger values:
+  //   'auto'   — shown automatically (handled by maybeAutoStart)
+  //   'focus'  — shown on first focus of step.target element
+  //   'event'  — shown when window event step.triggerEvent fires
+  //   'click'  — shown after first click on step.triggerTarget element
   var STEPS = [
     {
       icon: '🎵',
       title: 'Welcome to Resonate',
-      body: 'Discover and play millions of free tracks from the Internet Archive. Let us show you around in 5 quick steps.',
+      body: 'Discover and play millions of free tracks from the Internet Archive.',
       target: null,
+      trigger: 'auto',
+      autoDismissMs: 8000,
     },
     {
       icon: '🔍',
       title: 'Search any music',
-      body: 'Type a song, artist, album, or podcast. Resonate searches a huge free library for you instantly.',
+      body: 'Type a song, artist, album, or podcast — Resonate searches a huge free library instantly.',
       target: '#search-input',
+      trigger: 'focus',
+      autoDismissMs: 0,   // dismissed when the user starts typing
     },
     {
       icon: '▶',
       title: 'Play instantly',
-      body: 'Tap Play to start listening. No sign-up, no subscription — just hit play and enjoy.',
+      body: 'Tap any play button to start listening. No sign-up, no subscription.',
       target: '#play-btn',
+      trigger: 'event',
+      triggerEvent: 'resonate:results-rendered',
+      autoDismissMs: 6000,
     },
     {
       icon: '💙',
       title: 'Save what you love',
-      body: 'Tap the Resonate button to save favourite tracks. Access them any time, even offline.',
+      body: 'Tap the Resonate button to save favourite tracks — available any time, even offline.',
       target: '#favorite-btn',
-    },
-    {
-      icon: '🚀',
-      title: "You're all set!",
-      body: 'Search, play, and resonate with your favourite music. Have fun exploring!',
-      target: null,
+      trigger: 'click',
+      triggerTarget: '.result-play-btn',
+      autoDismissMs: 6000,
     },
   ];
 
-  var currentStep = 0;
-  var active = false;
-  var overlayEl = null;
-  var spotlightEl = null;
-  var cardEl = null;
-  var fadeTimer = null;
-  var layoutRaf = null;
+  // Keyed by step index: the live tip DOM element (if showing)
+  var activeTips = {};
+  // Keyed by step index: cleanup function that removes event listeners
+  var triggerCleanup = {};
 
   /* ------------------------------------------------------------------ */
   /* Persistence helpers                                                  */
   /* ------------------------------------------------------------------ */
 
+  function isStepSeen(index) {
+    try {
+      return localStorage.getItem(STORAGE_PREFIX + index) === '1';
+    } catch (e) {
+      return true;
+    }
+  }
+
+  function markStepSeen(index) {
+    try {
+      localStorage.setItem(STORAGE_PREFIX + index, '1');
+    } catch (e) {}
+  }
+
   function isCompleted() {
+    // Legacy compatibility: honour old "done" flag
     try {
-      return localStorage.getItem(STORAGE_KEY) === 'done';
-    } catch (e) {
-      return true; // If localStorage is unavailable, don't show
-    }
-  }
-
-  function markCompleted() {
-    try {
-      localStorage.setItem(STORAGE_KEY, 'done');
-    } catch (e) {
-      // ignore
-    }
-  }
-
-  /* ------------------------------------------------------------------ */
-  /* DOM construction (lazy, built once)                                  */
-  /* ------------------------------------------------------------------ */
-
-  function buildDom() {
-    if (overlayEl) return;
-
-    overlayEl = document.createElement('div');
-    overlayEl.id = 'onboarding-overlay';
-    overlayEl.className = 'onboarding-overlay';
-    overlayEl.setAttribute('role', 'dialog');
-    overlayEl.setAttribute('aria-modal', 'true');
-    overlayEl.setAttribute('aria-label', 'Resonate welcome tour');
-    overlayEl.setAttribute('hidden', '');
-
-    spotlightEl = document.createElement('div');
-    spotlightEl.className = 'onboarding-spotlight';
-    spotlightEl.setAttribute('aria-hidden', 'true');
-    overlayEl.appendChild(spotlightEl);
-
-    cardEl = document.createElement('div');
-    cardEl.className = 'onboarding-card';
-    cardEl.setAttribute('role', 'document');
-    cardEl.innerHTML =
-      '<div class="onboarding-card-top">' +
-        '<div class="onboarding-progress" id="ob-progress" aria-hidden="true"></div>' +
-        '<button class="onboarding-skip-btn" id="ob-skip-btn" type="button" aria-label="Skip tour">Skip</button>' +
-      '</div>' +
-      '<div class="onboarding-icon" id="ob-icon" aria-hidden="true"></div>' +
-      '<h2 class="onboarding-title" id="ob-title"></h2>' +
-      '<p class="onboarding-body" id="ob-body"></p>' +
-      '<div class="onboarding-actions">' +
-        '<button class="onboarding-next-btn" id="ob-next-btn" type="button">Next →</button>' +
-      '</div>';
-    overlayEl.appendChild(cardEl);
-
-    document.body.appendChild(overlayEl);
-
-    document.getElementById('ob-skip-btn').addEventListener('click', finish);
-    document.getElementById('ob-next-btn').addEventListener('click', nextStep);
-    document.addEventListener('keydown', handleKeyDown, true);
-    window.addEventListener('resize', queueLayoutUpdate);
-    window.addEventListener('scroll', queueLayoutUpdate, { capture: true, passive: true });
-  }
-
-  /* ------------------------------------------------------------------ */
-  /* Keyboard handler                                                     */
-  /* ------------------------------------------------------------------ */
-
-  function handleKeyDown(e) {
-    if (!active) return;
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      e.stopPropagation();
-      finish();
-    }
-  }
-
-  /* ------------------------------------------------------------------ */
-  /* Step rendering                                                       */
-  /* ------------------------------------------------------------------ */
-
-  function updateProgressDots() {
-    var container = document.getElementById('ob-progress');
-    if (!container) return;
-    container.innerHTML = '';
+      if (localStorage.getItem(LEGACY_STORAGE_KEY) === 'done') return true;
+    } catch (e) {}
     for (var i = 0; i < STEPS.length; i++) {
-      var dot = document.createElement('span');
-      dot.className = 'onboarding-dot' + (i === currentStep ? ' onboarding-dot-active' : '');
-      container.appendChild(dot);
-    }
-  }
-
-  function isTargetVisible(targetEl) {
-    if (!targetEl || typeof targetEl.getBoundingClientRect !== 'function') return false;
-    if (targetEl.getClientRects().length === 0) return false;
-    var style = window.getComputedStyle ? window.getComputedStyle(targetEl) : null;
-    var opacity = style ? parseFloat(style.opacity) : 1;
-    if (isNaN(opacity)) opacity = 1;
-    if (style && (style.display === 'none' || style.visibility === 'hidden' || opacity <= MIN_VISIBLE_OPACITY)) {
-      return false;
+      if (!isStepSeen(i)) return false;
     }
     return true;
   }
 
-  function ensureTargetInViewport(targetEl) {
-    if (!isTargetVisible(targetEl)) return null;
-    var rect = targetEl.getBoundingClientRect();
-    var margin = 20;
-    var needsScroll =
-      rect.top < margin ||
-      rect.left < margin ||
-      rect.bottom > window.innerHeight - margin ||
-      rect.right > window.innerWidth - margin;
-    if (needsScroll && typeof targetEl.scrollIntoView === 'function') {
-      try {
-        var prefersReducedMotion =
-          typeof window.matchMedia === 'function'
-          && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        targetEl.scrollIntoView({
-          block: 'center',
-          inline: 'center',
-          behavior: prefersReducedMotion ? 'auto' : 'smooth',
-        });
-      } catch (e) {
-        try { targetEl.scrollIntoView(); } catch (err) {}
-      }
+  function resetAll() {
+    for (var i = 0; i < STEPS.length; i++) {
+      try { localStorage.removeItem(STORAGE_PREFIX + i); } catch (e) {}
     }
-    return targetEl;
+    try { localStorage.removeItem(LEGACY_STORAGE_KEY); } catch (e) {}
   }
 
-  function getTargetForStep(step) {
-    if (!step || !step.target) return null;
-    var targetEl = document.querySelector(step.target);
-    if (!isTargetVisible(targetEl)) return null;
-    return ensureTargetInViewport(targetEl);
+  /* ------------------------------------------------------------------ */
+  /* Visibility helpers                                                   */
+  /* ------------------------------------------------------------------ */
+
+  function isElementVisible(el) {
+    if (!el || typeof el.getBoundingClientRect !== 'function') return false;
+    if (el.getClientRects().length === 0) return false;
+    var style = window.getComputedStyle ? window.getComputedStyle(el) : null;
+    if (!style) return true;
+    var opacity = parseFloat(style.opacity);
+    if (isNaN(opacity)) opacity = 1;
+    return style.display !== 'none'
+        && style.visibility !== 'hidden'
+        && opacity > MIN_VISIBLE_OPACITY;
   }
 
-  function positionSpotlight(targetEl) {
-    if (!targetEl) {
-      spotlightEl.style.display = 'none';
-      overlayEl.classList.add('onboarding-full-backdrop');
-      return;
-    }
+  /* ------------------------------------------------------------------ */
+  /* Tip DOM construction                                                 */
+  /* ------------------------------------------------------------------ */
 
-    var rect = targetEl.getBoundingClientRect();
-    if (rect.width < 2 || rect.height < 2) {
-      spotlightEl.style.display = 'none';
-      overlayEl.classList.add('onboarding-full-backdrop');
-      return;
-    }
+  function buildTip(index) {
+    var step = STEPS[index];
+    var tip = document.createElement('div');
+    tip.className = 'ob-tip';
+    tip.id = 'ob-tip-' + index;
+    tip.setAttribute('role', 'tooltip');
+    tip.innerHTML =
+      '<button class="ob-tip-close" type="button" aria-label="Dismiss tip">' +
+        '<span aria-hidden="true">×</span>' +
+      '</button>' +
+      '<div class="ob-tip-icon" aria-hidden="true">' + step.icon + '</div>' +
+      '<div class="ob-tip-title">' + step.title + '</div>' +
+      '<div class="ob-tip-body">' + step.body + '</div>';
 
-    overlayEl.classList.remove('onboarding-full-backdrop');
-    var pad = 10;
-    var minTop = 0;
-    var minLeft = 0;
-    var maxRight = window.innerWidth;
-    var maxBottom = window.innerHeight;
-    var top = Math.max(minTop, rect.top - pad);
-    var left = Math.max(minLeft, rect.left - pad);
-    var right = Math.min(maxRight, rect.right + pad);
-    var bottom = Math.min(maxBottom, rect.bottom + pad);
-    var width = Math.max(0, right - left);
-    var height = Math.max(0, bottom - top);
-    if (width < 2 || height < 2) {
-      spotlightEl.style.display = 'none';
-      overlayEl.classList.add('onboarding-full-backdrop');
-      return;
-    }
+    tip.querySelector('.ob-tip-close').addEventListener('click', function () {
+      hideTip(index);
+    });
 
-    spotlightEl.style.display = 'block';
-    spotlightEl.style.top    = top + 'px';
-    spotlightEl.style.left   = left + 'px';
-    spotlightEl.style.width  = width + 'px';
-    spotlightEl.style.height = height + 'px';
-    spotlightEl.style.boxShadow =
-      '0 0 0 9999px rgba(0,0,0,0.78), ' +
-      '0 0 0 3px var(--primary, #3da9ff), ' +
-      '0 0 18px rgba(61,169,255,0.38)';
+    document.body.appendChild(tip);
+    return tip;
   }
 
-  function positionCard(targetEl) {
-    var PAD    = 16;
-    var ARROW  = 14;
+  /* ------------------------------------------------------------------ */
+  /* Tip positioning                                                      */
+  /* ------------------------------------------------------------------ */
+
+  function positionTip(tip, targetEl) {
+    var PAD   = 12;
+    var ARROW = 10;
     var vw = window.innerWidth;
     var vh = window.innerHeight;
-    var maxCardH = Math.max(MIN_CARD_HEIGHT_PX, vh - PAD * 2);
-    cardEl.style.maxHeight = maxCardH + 'px';
-    var cardRect = cardEl.getBoundingClientRect();
-    var CARD_W = cardRect.width || 300;
-    var CARD_H = cardRect.height || 230;
 
-    if (!targetEl) {
-      // Centered card
-      cardEl.style.position  = 'fixed';
-      cardEl.style.top       = '50%';
-      cardEl.style.left      = '50%';
-      cardEl.style.transform = 'translate(-50%, -50%)';
-      cardEl.style.bottom    = 'auto';
-      cardEl.style.right     = 'auto';
+    if (!targetEl || !isElementVisible(targetEl)) {
+      // Float as a top-centre toast
+      tip.style.position  = 'fixed';
+      tip.style.top       = PAD + 'px';
+      tip.style.left      = '50%';
+      tip.style.transform = 'translateX(-50%)';
+      tip.classList.add('ob-tip-center');
       return;
     }
 
-    var rect = targetEl.getBoundingClientRect();
-    var top, left;
+    var rect = tip.getBoundingClientRect();
+    var TW   = rect.width  || 280;
+    var TH   = rect.height || 120;
 
-    // Prefer placing card below the target; fall back to above
-    if (rect.bottom + ARROW + CARD_H + PAD <= vh) {
-      top = rect.bottom + ARROW;
+    var targetRect = targetEl.getBoundingClientRect();
+    var targetCX   = targetRect.left + targetRect.width / 2;
+
+    var top, left, placement;
+
+    if (targetRect.bottom + ARROW + TH + PAD <= vh) {
+      top       = targetRect.bottom + ARROW;
+      placement = 'below';
     } else {
-      top = rect.top - ARROW - CARD_H;
+      top       = targetRect.top - ARROW - TH;
+      placement = 'above';
     }
 
-    // Horizontally centre on target, clamped within viewport
-    left = rect.left + rect.width / 2 - CARD_W / 2;
-    left = Math.max(PAD, Math.min(left, vw - CARD_W - PAD));
-    top  = Math.max(PAD, Math.min(top, vh - CARD_H - PAD));
+    left = targetCX - TW / 2;
+    left = Math.max(PAD, Math.min(left, vw - TW - PAD));
+    top  = Math.max(PAD, Math.min(top, vh - TH - PAD));
 
-    cardEl.style.position  = 'fixed';
-    cardEl.style.top       = top + 'px';
-    cardEl.style.left      = left + 'px';
-    cardEl.style.transform = 'none';
-    cardEl.style.bottom    = 'auto';
-    cardEl.style.right     = 'auto';
-  }
+    // Arrow offset: how far the arrow needs to shift from tip centre
+    var arrowOffset = (targetCX - (left + TW / 2));
+    // Clamp so the arrow stays within the tip bounds (with a small margin)
+    var arrowMaxShift = TW / 2 - 20;
+    arrowOffset = Math.max(-arrowMaxShift, Math.min(arrowOffset, arrowMaxShift));
 
-  function renderStep(index) {
-    var step = STEPS[index];
-    if (!step) { finish(); return; }
-
-    var nextBtn = document.getElementById('ob-next-btn');
-
-    document.getElementById('ob-icon').textContent  = step.icon;
-    document.getElementById('ob-title').textContent = step.title;
-    document.getElementById('ob-body').textContent  = step.body;
-
-    var isLast = (index === STEPS.length - 1);
-    nextBtn.textContent = isLast ? 'Start listening 🎶' : 'Next →';
-
-    var skipBtn = document.getElementById('ob-skip-btn');
-    skipBtn.style.visibility = isLast ? 'hidden' : 'visible';
-
-    updateProgressDots();
-
-    var targetEl = getTargetForStep(step);
-    positionSpotlight(targetEl);
-    positionCard(targetEl);
-
-    void nextBtn.offsetWidth;
-  }
-
-  function queueLayoutUpdate() {
-    if (!active || !overlayEl || overlayEl.hasAttribute('hidden')) return;
-    if (layoutRaf) cancelAnimationFrame(layoutRaf);
-    layoutRaf = requestAnimationFrame(function () {
-      layoutRaf = null;
-      renderStep(currentStep);
-    });
+    tip.style.position  = 'fixed';
+    tip.style.top       = top + 'px';
+    tip.style.left      = left + 'px';
+    tip.style.transform = 'none';
+    tip.style.setProperty('--ob-arrow-offset', arrowOffset + 'px');
+    tip.classList.toggle('ob-tip-above', placement === 'above');
+    tip.classList.toggle('ob-tip-below', placement === 'below');
   }
 
   /* ------------------------------------------------------------------ */
-  /* Step transitions — fade card out, update content, fade back in      */
+  /* Show / hide a single tip                                             */
   /* ------------------------------------------------------------------ */
 
-  function showStep(index) {
-    currentStep = index;
+  function showTip(index) {
+    if (isStepSeen(index)) return;
+    if (activeTips[index]) return;
 
-    if (fadeTimer) { clearTimeout(fadeTimer); fadeTimer = null; }
+    var step    = STEPS[index];
+    var tip     = buildTip(index);
+    activeTips[index] = tip;
 
-    // Fade out
-    cardEl.classList.remove('onboarding-card-visible');
+    var targetEl = step.target ? document.querySelector(step.target) : null;
 
-    fadeTimer = setTimeout(function () {
-      renderStep(index);
-      // Short RAF ensures the card has repositioned before fading in
-      requestAnimationFrame(function () {
-        cardEl.classList.add('onboarding-card-visible');
-        // Focus next button for keyboard users
-        setTimeout(function () {
-          var btn = document.getElementById('ob-next-btn');
-          if (btn) { try { btn.focus(); } catch (e) {} }
-        }, FOCUS_DELAY_MS);
-      });
-    }, CARD_FADE_MS);
-  }
-
-  /* ------------------------------------------------------------------ */
-  /* Public controls                                                      */
-  /* ------------------------------------------------------------------ */
-
-  function nextStep() {
-    if (currentStep < STEPS.length - 1) {
-      showStep(currentStep + 1);
-    } else {
-      finish();
-    }
-  }
-
-  function finish() {
-    markCompleted();
-    hide();
-  }
-
-  function show() {
-    buildDom();
-    active      = true;
-    currentStep = 0;
-
-    overlayEl.removeAttribute('hidden');
-    overlayEl.classList.add('onboarding-initial-show');
-    document.body.classList.add('onboarding-active');
-
-    renderStep(0);
+    // Two rAF passes: first lets the browser lay out the tip,
+    // second starts the CSS entrance transition.
     requestAnimationFrame(function () {
-      cardEl.classList.add('onboarding-card-visible');
-      setTimeout(function () {
-        var btn = document.getElementById('ob-next-btn');
-        if (btn) { try { btn.focus(); } catch (e) {} }
-        // Remove initial-show class after animation completes
-        setTimeout(function () {
-          if (overlayEl) overlayEl.classList.remove('onboarding-initial-show');
-        }, 450);
-      }, FOCUS_DELAY_MS);
+      positionTip(tip, targetEl);
+      requestAnimationFrame(function () {
+        tip.classList.add('ob-tip-visible');
+      });
     });
+
+    if (step.autoDismissMs > 0) {
+      setTimeout(function () { hideTip(index); }, step.autoDismissMs);
+    }
   }
 
-  function hide() {
-    active = false;
-    if (fadeTimer) { clearTimeout(fadeTimer); fadeTimer = null; }
+  function hideTip(index) {
+    var tip = activeTips[index];
+    if (!tip) return;
 
-    if (cardEl)   cardEl.classList.remove('onboarding-card-visible');
-    document.body.classList.remove('onboarding-active');
+    markStepSeen(index);
+    tip.classList.remove('ob-tip-visible');
 
     setTimeout(function () {
-      if (overlayEl) overlayEl.setAttribute('hidden', '');
-    }, 280);
+      if (tip.parentNode) tip.parentNode.removeChild(tip);
+      delete activeTips[index];
+    }, HIDE_ANIM_MS);
+
+    if (triggerCleanup[index]) {
+      triggerCleanup[index]();
+      delete triggerCleanup[index];
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Keyboard: Escape closes the highest-index visible tip               */
+  /* ------------------------------------------------------------------ */
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    // Find the highest step index currently visible
+    var keys = Object.keys(activeTips);
+    if (!keys.length) return;
+    e.preventDefault();
+    e.stopPropagation();
+    hideTip(parseInt(keys[keys.length - 1], 10));
+  }, true);
+
+  /* ------------------------------------------------------------------ */
+  /* Trigger wiring                                                       */
+  /* ------------------------------------------------------------------ */
+
+  function wireStep(index) {
+    if (isStepSeen(index)) return;
+
+    var step = STEPS[index];
+
+    if (step.trigger === 'focus') {
+      var focusEl = document.querySelector(step.target);
+      if (!focusEl) return;
+
+      function onFocus() {
+        showTip(index);
+        // Dismiss as soon as the user starts typing
+        function onInput() {
+          hideTip(index);
+          focusEl.removeEventListener('input', onInput);
+        }
+        focusEl.addEventListener('input', onInput);
+      }
+
+      focusEl.addEventListener('focus', onFocus, { once: true });
+      triggerCleanup[index] = function () {
+        focusEl.removeEventListener('focus', onFocus);
+      };
+      return;
+    }
+
+    if (step.trigger === 'event') {
+      function onWindowEvent() {
+        window.removeEventListener(step.triggerEvent, onWindowEvent);
+        delete triggerCleanup[index];
+        showTip(index);
+      }
+
+      window.addEventListener(step.triggerEvent, onWindowEvent);
+      triggerCleanup[index] = function () {
+        window.removeEventListener(step.triggerEvent, onWindowEvent);
+      };
+      return;
+    }
+
+    if (step.trigger === 'click') {
+      // Event-delegation on document for dynamically-added buttons
+      function onDocClick(e) {
+        var btn = e.target && (
+          e.target.matches(step.triggerTarget) ||
+          (typeof e.target.closest === 'function' && e.target.closest(step.triggerTarget))
+        );
+        if (!btn) return;
+        document.removeEventListener('click', onDocClick, true);
+        delete triggerCleanup[index];
+        // Small delay so the player has time to load the track
+        setTimeout(function () { showTip(index); }, 600);
+      }
+
+      document.addEventListener('click', onDocClick, true);
+      triggerCleanup[index] = function () {
+        document.removeEventListener('click', onDocClick, true);
+      };
+      return;
+    }
+  }
+
+  function wireAllSteps() {
+    for (var i = 1; i < STEPS.length; i++) {
+      wireStep(i);
+    }
   }
 
   /* ------------------------------------------------------------------ */
@@ -408,26 +349,42 @@
   /* ------------------------------------------------------------------ */
 
   window.resonateOnboarding = {
-    /** Start or replay the tour */
-    start: function () { show(); },
-    /** Check whether the user has already completed the tour */
-    isCompleted: isCompleted,
-    /** Reset completion flag (for testing) */
-    reset: function () {
-      try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+    /** Replay the progressive tips from the beginning */
+    start: function () {
+      resetAll();
+      // Dismiss any still-visible tips before replaying
+      var keys = Object.keys(activeTips);
+      for (var k = 0; k < keys.length; k++) {
+        hideTip(parseInt(keys[k], 10));
+      }
+      // Tear down existing trigger listeners
+      var ckeys = Object.keys(triggerCleanup);
+      for (var c = 0; c < ckeys.length; c++) {
+        if (typeof triggerCleanup[ckeys[c]] === 'function') triggerCleanup[ckeys[c]]();
+        delete triggerCleanup[ckeys[c]];
+      }
+      showTip(0);
+      wireAllSteps();
     },
+
+    /** Check whether the user has seen all tips */
+    isCompleted: isCompleted,
+
+    /** Reset all tip flags (useful for testing / debugging) */
+    reset: resetAll,
   };
 
   /* ------------------------------------------------------------------ */
-  /* Wire "How to use Resonate" button in app menu                        */
+  /* Wire "How to use Resonate" replay button in app menu                 */
   /* ------------------------------------------------------------------ */
 
   function wireTourButton() {
     var btn = document.getElementById('tour-btn');
     if (btn) {
       btn.addEventListener('click', function () {
-        // Small delay so the sheet finishes closing before the tour opens
-        setTimeout(show, SHEET_CLOSE_DELAY_MS);
+        setTimeout(function () {
+          window.resonateOnboarding.start();
+        }, SHEET_CLOSE_DELAY_MS);
       });
     }
   }
@@ -438,9 +395,10 @@
 
   function maybeAutoStart() {
     wireTourButton();
-    if (isCompleted()) return;
-    // Give the app AUTO_START_DELAY_MS to fully render before showing the tour
-    setTimeout(show, AUTO_START_DELAY_MS);
+    if (!isStepSeen(0)) {
+      setTimeout(function () { showTip(0); }, AUTO_START_DELAY_MS);
+    }
+    wireAllSteps();
   }
 
   if (document.readyState === 'loading') {
