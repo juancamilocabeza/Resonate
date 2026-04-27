@@ -1972,6 +1972,8 @@ document.addEventListener('DOMContentLoaded', function() {
       elements.toggleTracksBtn.classList.remove('active');
     }
   }
+  // Wire card context menu once DOM and BottomSheetAPI are ready.
+  try { initCardContextSheetHandlers(); } catch {}
 });
 
 // Title Ticker Management is handled by js/player-title.js
@@ -4815,6 +4817,156 @@ function createSearchResultElement(result, globalIndex) {
   return resultEl;
 }
 
+// ===== Card Context Menu =====
+
+// Holds the last item/context state for the shared card-context-sheet.
+let __cardContextState = null;
+
+/**
+ * Populate and open the shared card context bottom sheet.
+ * @param {object} item      - The card data object (search result or resonates item)
+ * @param {string} context   - 'search' | 'resonates' | 'favorites'
+ * @param {object} options   - { identifier, title, creator, isAlbum, expandBtn, favBtn, globalIndex }
+ */
+function openCardContextMenu(item, context, options = {}) {
+  const { identifier, title, creator, isAlbum, expandBtn, favBtn, globalIndex } = options;
+
+  const titleEl = document.getElementById('card-context-title');
+  if (titleEl) titleEl.textContent = title || 'Options';
+
+  const subtitleEl = document.getElementById('card-context-subtitle');
+  if (subtitleEl) subtitleEl.textContent = (creator && creator !== 'Unknown') ? `by ${creator}` : '';
+
+  const playLabelEl = document.getElementById('card-ctx-play-label');
+  if (playLabelEl) playLabelEl.textContent = isAlbum ? 'Play Album' : 'Play';
+
+  const resonateLabelEl = document.getElementById('card-ctx-resonate-label');
+  if (resonateLabelEl) {
+    const isFav = isAlbumInFavorites(identifier);
+    resonateLabelEl.textContent = isFav ? 'Remove from Resonates' : 'Add to Resonates';
+  }
+
+  const tracksBtn = document.getElementById('card-ctx-tracks');
+  if (tracksBtn) tracksBtn.hidden = !isAlbum;
+
+  __cardContextState = { item, context, identifier, title, creator, isAlbum, expandBtn, favBtn, globalIndex };
+
+  if (window.BottomSheetAPI) {
+    window.BottomSheetAPI.openById('card-context-sheet');
+  }
+}
+
+/**
+ * Wire up the static action buttons inside #card-context-sheet.
+ * Called once after DOM is ready.
+ */
+function initCardContextSheetHandlers() {
+  const playBtn = document.getElementById('card-ctx-play');
+  if (playBtn) {
+    playBtn.addEventListener('click', () => {
+      const st = __cardContextState;
+      __cardContextState = null;
+      if (!st) return;
+      const { item, context, identifier, isAlbum, globalIndex } = st;
+      try {
+        if (context === 'search') {
+          window.preparePlaybackTransitionFromList?.({
+            closeSearch: true,
+            closeResontes: true,
+            closeTracksPanel: true,
+            collapseExpandedAlbums: true,
+            showLoader: true,
+            loaderContext: isAlbum ? 'album' : 'search',
+            showProgress: false
+          });
+          window.playOptimizedSearchResult?.(item, typeof globalIndex === 'number' ? globalIndex : 0, state.searchResults);
+        } else {
+          if (isAlbum) {
+            window.preparePlaybackTransitionFromList?.({ closeResontes: true, closeTracksPanel: true, showLoader: true, loaderContext: 'album', showProgress: false });
+            const fn = window.playAlbumFromResontes || window.playAlbumFromFavorites;
+            if (typeof fn === 'function') fn(identifier, { force: true, origin: 'favorites' });
+          } else {
+            const track = (Array.isArray(item.tracks) && item.tracks.length) ? item.tracks[0] : item;
+            window.preparePlaybackTransitionFromList?.({ closeResontes: true, closeTracksPanel: true, showLoader: true, loaderContext: 'resontes', showProgress: false });
+            const playFn = window.playFromResontesQueue || window.playFromFavoritesQueue;
+            if (typeof playFn === 'function') playFn(track);
+          }
+        }
+      } catch {}
+    });
+  }
+
+  const resonateBtn = document.getElementById('card-ctx-resonate');
+  if (resonateBtn) {
+    resonateBtn.addEventListener('click', async () => {
+      const st = __cardContextState;
+      __cardContextState = null;
+      if (!st) return;
+      const { identifier, isAlbum } = st;
+      resonateBtn.disabled = true;
+      try {
+        const isFav = isAlbumInFavorites(identifier);
+        if (isFav) {
+          removeAlbumFromFavorites(identifier);
+          updateFavoritesList();
+          updateFavoriteButton();
+          showStatus('Removed from resonates', 'info');
+        } else {
+          const files = (window.AlbumTracks && typeof window.AlbumTracks.getTracks === 'function')
+            ? await window.AlbumTracks.getTracks(identifier, { preferCache: true, allowFetch: true })
+            : await fetchOptimizedPlayableFiles(identifier);
+          if (files.length > 1) {
+            addAlbumToFavorites(identifier, files);
+          } else if (files.length === 1) {
+            toggleFavorite(files[0]);
+          }
+          showStatus('Added to resonates', 'success');
+        }
+        try { if (typeof window.refreshAllResonteButtons === 'function') window.refreshAllResonteButtons(); } catch {}
+        try { updateFavoriteButton(); } catch {}
+      } catch {
+        showStatus("Couldn't update resonates", 'error');
+      } finally {
+        resonateBtn.disabled = false;
+      }
+    });
+  }
+
+  const tracksBtn = document.getElementById('card-ctx-tracks');
+  if (tracksBtn) {
+    tracksBtn.addEventListener('click', () => {
+      const st = __cardContextState;
+      __cardContextState = null;
+      if (!st) return;
+      const { identifier, expandBtn } = st;
+      try {
+        if (expandBtn) {
+          expandBtn.click();
+        } else {
+          const card = document.querySelector(`.content-card[data-album-id="${CSS.escape(String(identifier))}"]`);
+          if (card) {
+            const eb = card.querySelector('.card-btn.expand');
+            if (eb) eb.click();
+          }
+        }
+      } catch {}
+    });
+  }
+
+  const shareBtn = document.getElementById('card-ctx-share');
+  if (shareBtn) {
+    shareBtn.addEventListener('click', async () => {
+      const st = __cardContextState;
+      __cardContextState = null;
+      if (!st) return;
+      const { identifier, title, creator, isAlbum } = st;
+      try {
+        await shareTrack(identifier, title, creator, null, isAlbum ? 'album' : 'track');
+      } catch {}
+    });
+  }
+}
+
 // ===== Card Grid (New) =====
 function renderCardGrid(container, items, context = 'search', clearExisting = true) {
   if (!container) return;
@@ -4884,7 +5036,7 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
   } catch {}
 
   try {
-    if (context === 'favorites' && Array.isArray(item.tracks)) {
+    if ((context === 'favorites' || context === 'resonates') && Array.isArray(item.tracks)) {
       card.__albumTracks = item.tracks;
     }
   } catch {}
@@ -4941,12 +5093,13 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
   const isAlbum = ( !!item.isAlbum || (typeof item.trackCount === 'number' && item.trackCount > 1) || !!item.isAlbumTrack );
   const isPendingMeta = (context === 'search' && item && item.__metaPending === true);
   chipType.textContent = isAlbum ? 'Album' : (isPendingMeta ? '…' : 'Single');
+  if (isPendingMeta) chipType.classList.add('chip-pending');
   chips.appendChild(chipType);
 
   // Offline chip (when we can determine it cheaply)
 
   try {
-    if (context === 'favorites') {
+    if (context === 'favorites' || context === 'resonates') {
       const tracks = Array.isArray(item.tracks) ? item.tracks : [];
       const cachedCount = tracks.filter(t => t && t.url && isUrlOfflineAvailableSync(t.url)).length;
       if (cachedCount > 0) {
@@ -4966,8 +5119,8 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
   }
   media.appendChild(chips);
 
-  // Play indicator overlay (appears on hover for search/favorites context)
-  if (context === 'search' || context === 'favorites') {
+  // Play indicator overlay (appears on hover for search/favorites/resonates context)
+  if (context === 'search' || context === 'favorites' || context === 'resonates') {
     const playOverlay = document.createElement('div');
     playOverlay.className = 'card-play-overlay';
     playOverlay.setAttribute('aria-hidden', 'true');
@@ -5169,20 +5322,10 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
       } catch {}
     });
     
-    // More button - shows context menu with additional options
+    // More button - opens context menu with clear actions
     moreBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      // On mobile, show a mini action menu or bottom sheet
-      // For now, trigger share and expand as fallback
-      try {
-        if (isAlbum && expandBtn.style.display !== 'none') {
-          // For albums, clicking More triggers expand
-          expandBtn.click();
-        } else {
-          // For singles, clicking More triggers share
-          shareBtn.click();
-        }
-      } catch {}
+      openCardContextMenu(item, 'search', { identifier, title, creator, isAlbum, expandBtn, favBtn, globalIndex });
     });
   } else {
     // favorites / resonates context
@@ -5277,18 +5420,10 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
       } catch {}
     });
     
-    // More button - shows context menu with additional options
+    // More button - opens context menu with clear actions
     moreBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      // On mobile, show a mini action menu or bottom sheet
-      // For now, trigger expand for albums, share for singles
-      try {
-        if (isAlbumFavorite && expandBtn.style.display !== 'none') {
-          expandBtn.click();
-        } else {
-          shareBtn.click();
-        }
-      } catch {}
+      openCardContextMenu(item, context, { identifier, title, creator, isAlbum: isAlbumFavorite, expandBtn, favBtn, globalIndex });
     });
   }
 

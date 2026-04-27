@@ -211,6 +211,25 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* ===== PENDING METADATA CHIP ===== */
+/* Displayed while metadata is being fetched in the background */
+.chip.chip-pending {
+  background: linear-gradient(
+    90deg,
+    rgba(var(--primary-rgb), 0.25) 0%,
+    rgba(var(--primary-rgb), 0.50) 50%,
+    rgba(var(--primary-rgb), 0.25) 100%
+  );
+  background-size: 200% 100%;
+  animation: chip-shimmer 1.5s ease-in-out infinite;
+  border-color: rgba(var(--primary-rgb), 0.30);
+}
+
+@keyframes chip-shimmer {
+  0% { background-position: 200% center; }
+  100% { background-position: -200% center; }
+}
+
 /* ===== RESPONSIVE ADJUSTMENTS ===== */
 @media (min-width: 600px) {
   .content-card {

@@ -165,6 +165,17 @@
   color: var(--muted, rgba(255, 255, 255, 0.5));
 }
 
+.sheet-subtitle {
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted, rgba(255, 255, 255, 0.4));
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* =====================================================================
    SHEET CONTENT — List of action items
    ===================================================================== */
