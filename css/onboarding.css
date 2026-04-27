@@ -49,14 +49,12 @@
 .onboarding-card {
   position: fixed;
   z-index: 10002;
-  width: min(300px, calc(100vw - 32px));
-  background: var(--card, #262d35);
-  border: 1px solid var(--surface-border, rgba(255, 255, 255, 0.1));
-  border-radius: 18px;
-  padding: 20px 20px 18px;
-  box-shadow:
-    0 24px 64px rgba(0, 0, 0, 0.55),
-    0 0 0 1px rgba(var(--primary-rgb, 61, 169, 255), 0.16);
+  width: min(280px, calc(100vw - 32px));
+  background: var(--card, #1e2530);
+  border: 1px solid var(--surface-border, rgba(255, 255, 255, 0.08));
+  border-radius: 14px;
+  padding: 16px 16px 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   color: var(--fg, #fff);
   pointer-events: all;
   /* Default position: centered (overridden by JS for targeted steps) */
@@ -76,14 +74,13 @@
 }
 
 /* Entrance animation on first show */
-@keyframes onboardingCardBounce {
-  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.88); }
-  70%  { opacity: 1; transform: translate(-50%, -50%) scale(1.03); }
+@keyframes onboardingCardFadeIn {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
   100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 
 .onboarding-overlay.onboarding-initial-show .onboarding-card.onboarding-card-visible {
-  animation: onboardingCardBounce 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation: onboardingCardFadeIn 0.25s ease forwards;
 }
 
 /* =====================================================================
@@ -93,8 +90,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 14px;
-  min-height: 24px;
+  margin-bottom: 10px;
+  min-height: 20px;
 }
 
 /* Progress dots */
@@ -124,22 +121,21 @@
 /* Skip button */
 .onboarding-skip-btn {
   background: transparent;
-  border: 1px solid var(--surface-border, rgba(255, 255, 255, 0.12));
-  border-radius: 999px;
+  border: none;
+  border-radius: 4px;
   color: var(--muted, #b0b8c1);
   font-size: 12px;
   font-weight: 500;
-  padding: 4px 12px;
+  padding: 2px 4px;
   line-height: 1.5;
   cursor: pointer;
-  transition: border-color 0.15s ease, color 0.15s ease;
+  transition: color 0.15s ease;
   white-space: nowrap;
   -webkit-tap-highlight-color: transparent;
 }
 
 .onboarding-skip-btn:hover,
 .onboarding-skip-btn:focus-visible {
-  border-color: var(--primary, #3da9ff);
   color: var(--fg, #fff);
 }
 
@@ -152,28 +148,28 @@
    CARD BODY — icon, title, description
    ===================================================================== */
 .onboarding-icon {
-  font-size: 34px;
+  font-size: 26px;
   text-align: center;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   line-height: 1;
   user-select: none;
 }
 
 .onboarding-title {
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--fg, #fff);
-  margin: 0 0 8px;
+  margin: 0 0 6px;
   line-height: 1.3;
   text-align: center;
   letter-spacing: 0.01em;
 }
 
 .onboarding-body {
-  font-size: 13.5px;
-  line-height: 1.65;
+  font-size: 13px;
+  line-height: 1.55;
   color: var(--muted, #b0b8c1);
-  margin: 0 0 18px;
+  margin: 0 0 14px;
   text-align: center;
 }
 
@@ -192,14 +188,13 @@
   color: var(--onboarding-cta-fg, #04131f);
   -webkit-text-fill-color: var(--onboarding-cta-fg, #04131f);
   border: none;
-  border-radius: 999px;
-  padding: 10px 24px;
-  font-size: 14px;
+  border-radius: 8px;
+  padding: 9px 20px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   width: 100%;
-  transition: filter 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
-  box-shadow: 0 4px 14px rgba(var(--primary-rgb, 61, 169, 255), 0.32);
+  transition: filter 0.15s ease, transform 0.1s ease;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -213,8 +208,7 @@
 
 @media (hover: hover) and (pointer: fine) {
   .onboarding-next-btn:hover {
-    filter: brightness(1.1);
-    box-shadow: 0 6px 18px rgba(var(--primary-rgb, 61, 169, 255), 0.45);
+    filter: brightness(1.08);
   }
 }
 
@@ -240,15 +234,15 @@ body.onboarding-active {
    ===================================================================== */
 @media (max-width: 359px) {
   .onboarding-card {
-    padding: 16px 14px 14px;
-    border-radius: 14px;
+    padding: 12px 12px 10px;
+    border-radius: 10px;
   }
 
   .onboarding-title {
-    font-size: 15px;
+    font-size: 14px;
   }
 
   .onboarding-body {
-    font-size: 12.5px;
+    font-size: 12px;
   }
 }
