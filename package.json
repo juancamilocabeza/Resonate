@@ -28,8 +28,5 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.47.0"
-  },
-  "dependencies": {
-    "csslint": "^1.0.5"
   }
 }
