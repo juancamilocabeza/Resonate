@@ -7827,6 +7827,7 @@ function toggleResontesList() {
 // Shows a contextual message banner below the header.
 // Messages are dismissed per-session (sessionStorage).
 const INFO_STRIP_DISMISSED_KEY = 'resonate_info_strip_dismissed';
+const INFO_STRIP_NO_RESONATES_MSG = 'Search for music and tap ♥ to save your first resonate.';
 
 function updateInfoStrip() {
   const strip = document.getElementById('info-strip');
@@ -7840,9 +7841,8 @@ function updateInfoStrip() {
   if (count === 0) {
     // Don't show if already dismissed this session
     const dismissedMsg = sessionStorage.getItem(INFO_STRIP_DISMISSED_KEY) || '';
-    const noResonatesMsg = 'Search for music and tap ♥ to save your first resonate.';
-    if (dismissedMsg !== noResonatesMsg) {
-      message = noResonatesMsg;
+    if (dismissedMsg !== INFO_STRIP_NO_RESONATES_MSG) {
+      message = INFO_STRIP_NO_RESONATES_MSG;
     }
   }
 

@@ -129,9 +129,7 @@
         ? 'theme-sun'
         : theme === 'energy-saver'
           ? 'theme-leaf'
-          : theme === 'lavender'
-            ? 'theme-moon'
-            : 'theme-moon';
+          : 'theme-moon';
       useEl.setAttribute('href', `${SPRITE_URL}#${iconId}`);
     }
 
