@@ -132,6 +132,26 @@
       </nav>
     </header>
 
+    <!-- Info strip — shown contextually (e.g. when user has no resonates) -->
+    <div id="info-strip" class="info-strip" role="status" aria-live="polite" hidden>
+      <div class="info-strip-inner">
+        <div class="info-strip-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"></path>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
+        </div>
+        <span class="info-strip-text" id="info-strip-text"></span>
+        <button class="info-strip-dismiss" type="button" aria-label="Dismiss message">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true" width="16" height="16">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+
     <!-- Archive.org maintenance banner — shown by archive-monitor.js when archive.org is unreachable -->
     <div id="archive-maintenance-banner"
          class="archive-maintenance-banner"

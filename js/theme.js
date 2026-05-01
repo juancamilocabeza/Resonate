@@ -9,11 +9,12 @@
 
   const THEME_KEY = 'resonate-theme';
   const DEFAULT_THEME = 'night'; // Default to night for energy savings
-  const THEMES = ['day', 'night', 'energy-saver'];
+  const THEMES = ['day', 'night', 'energy-saver', 'lavender'];
   const THEME_LABELS = {
     'day': 'Day',
     'night': 'Night',
-    'energy-saver': 'Eco'
+    'energy-saver': 'Eco',
+    'lavender': 'Lavender'
   };
   const SPRITE_URL = '/icons/sprite.svg?v=2';
   const DAY_START_HOUR = 6;    // 6:00 AM – day theme begins
@@ -90,7 +91,8 @@
     const colors = {
       'day': '#10b981',
       'night': '#3da9ff',
-      'energy-saver': '#7aa7b8'
+      'energy-saver': '#7aa7b8',
+      'lavender': '#a987d6'
     };
 
     themeColorMeta.setAttribute('content', colors[theme] || colors['night']);
@@ -127,7 +129,9 @@
         ? 'theme-sun'
         : theme === 'energy-saver'
           ? 'theme-leaf'
-          : 'theme-moon';
+          : theme === 'lavender'
+            ? 'theme-moon'
+            : 'theme-moon';
       useEl.setAttribute('href', `${SPRITE_URL}#${iconId}`);
     }
 

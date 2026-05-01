@@ -7823,6 +7823,49 @@ function toggleResontesList() {
   }
 }
 
+// ── Info strip (issues #127, #128) ──────────────────────────────────────────
+// Shows a contextual message banner below the header.
+// Messages are dismissed per-session (sessionStorage).
+const INFO_STRIP_DISMISSED_KEY = 'resonate_info_strip_dismissed';
+
+function updateInfoStrip() {
+  const strip = document.getElementById('info-strip');
+  const textEl = document.getElementById('info-strip-text');
+  if (!strip || !textEl) return;
+
+  // Determine the message to show (null = hide strip)
+  const count = (state && Array.isArray(state.favorites)) ? state.favorites.length : 0;
+  let message = null;
+
+  if (count === 0) {
+    // Don't show if already dismissed this session
+    const dismissedMsg = sessionStorage.getItem(INFO_STRIP_DISMISSED_KEY) || '';
+    const noResonatesMsg = 'Search for music and tap ♥ to save your first resonate.';
+    if (dismissedMsg !== noResonatesMsg) {
+      message = noResonatesMsg;
+    }
+  }
+
+  if (message) {
+    textEl.textContent = message;
+    strip.hidden = false;
+
+    // Wire up dismiss button once
+    if (!strip.dataset.bound) {
+      strip.dataset.bound = 'true';
+      const dismissBtn = strip.querySelector('.info-strip-dismiss');
+      if (dismissBtn) {
+        dismissBtn.addEventListener('click', () => {
+          try { sessionStorage.setItem(INFO_STRIP_DISMISSED_KEY, textEl.textContent || ''); } catch {}
+          strip.hidden = true;
+        });
+      }
+    }
+  } else {
+    strip.hidden = true;
+  }
+}
+
 function updateFavoritesCount() {
   const countElement = (elements.resontesCount || document.getElementById('resontes-count') || elements.favoritesCount || document.getElementById('favorites-count'));
   const toggleBtn = (elements.resontesToggle || elements.favoritesToggle);
@@ -7858,6 +7901,9 @@ function updateFavoritesCount() {
       }
     } catch {}
   }
+
+  // Keep info strip in sync with resonates count
+  try { updateInfoStrip(); } catch {}
 }
 
 function hideResontesList() {
