@@ -9193,8 +9193,8 @@ async function updateServiceWorker() {
       const btn = document.getElementById('playlists-toggle');
       if (btn) btn.setAttribute('aria-expanded', 'true');
       // Close other panels
-      try { if (typeof hideSearchResults === 'function') hideSearchResults(); } catch {}
-      try { if (typeof hideResontesList === 'function') hideResontesList(); } catch {}
+      try { if (typeof hideSearchResults === 'function') hideSearchResults(); } catch { /* best-effort */ }
+      try { if (typeof hideResontesList === 'function') hideResontesList(); } catch { /* best-effort */ }
       renderPlaylistsPanel();
     } catch {}
   }
@@ -9317,7 +9317,7 @@ async function updateServiceWorker() {
     container.innerHTML = '';
     const tracks = Array.isArray(pl.tracks) ? pl.tracks : [];
     if (tracks.length === 0) {
-      container.innerHTML = '<div style="padding:10px 14px;font-size:13px;color:var(--muted,#888)">No tracks yet.</div>';
+      container.innerHTML = '<div class="pl-tracks-empty-msg">No tracks yet.</div>';
       return;
     }
     const currentUrl = window.state && window.state.currentTrack ? window.state.currentTrack.url : null;

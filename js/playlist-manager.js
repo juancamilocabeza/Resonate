@@ -14,6 +14,7 @@
       var parsed = JSON.parse(raw);
       return Array.isArray(parsed) ? parsed : [];
     } catch {
+      // Ignore parse/storage errors; return empty list as safe default
       return [];
     }
   }
@@ -26,15 +27,16 @@
           if (typeof window.showStatus === 'function') {
             window.showStatus('Playlist storage is getting full. Consider removing old playlists.', 'warning', 4000);
           }
-        } catch {}
+        } catch { /* best-effort UI notification */ }
       }
       localStorage.setItem(STORAGE_KEY, json);
     } catch {
+      // Storage may be full or blocked; notify user best-effort
       try {
         if (typeof window.showStatus === 'function') {
           window.showStatus('Could not save playlist: storage is full', 'error', 4000);
         }
-      } catch {}
+      } catch { /* ignore */ }
     }
   }
 
@@ -92,14 +94,14 @@
     if (!pl) return false;
     // Avoid duplicates by URL
     if (pl.tracks.some(function (t) { return t.url === track.url; })) return false;
-    var dur = Number(track.duration != null ? track.duration : track.length);
+    var trackDuration = Number(track.duration != null ? track.duration : track.length);
     pl.tracks.push({
       url: String(track.url || ''),
       title: String(track.title || ''),
       creator: String(track.creator || ''),
       album: String(track.album || ''),
       albumId: String(track.albumId || track.id || ''),
-      duration: Number.isFinite(dur) && dur >= 0 ? dur : null,
+      duration: Number.isFinite(trackDuration) && trackDuration >= 0 ? trackDuration : null,
       trackIndex: Number.isFinite(Number(track.trackIndex)) ? Number(track.trackIndex) : null
     });
     pl.updatedAt = Date.now();

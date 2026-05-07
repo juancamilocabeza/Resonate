@@ -324,6 +324,12 @@
 }
 
 /* ── "Add to playlist" button in track rows ────────────── */
+
+.pl-tracks-empty-msg {
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--muted, #888);
+}
 .tlv2-playlist-add {
   display: flex;
   align-items: center;

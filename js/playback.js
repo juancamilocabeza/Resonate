@@ -1134,6 +1134,7 @@ async function restorePlaybackQueueFromSnapshot(snapshot) {
         playbackManager.contextData.playlist.playlistId = playlistId;
         return true;
       } catch {
+        // Best-effort: playlist context restore; failure is non-fatal
         return false;
       }
     }
