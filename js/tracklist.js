@@ -1,5 +1,8 @@
 // Tracklist V2 - modular renderer for album tracks in search and resontes
 (function() {
+  // SVG icon for "Add to playlist" button
+  const PLAYLIST_ADD_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+
   function formatTime(seconds) {
     if (!seconds || !isFinite(seconds) || seconds < 0) return '0:00';
     const mins = Math.floor(seconds / 60);
@@ -195,7 +198,13 @@
         resonteBtn.style.height = '100%';
         row.appendChild(resonteBtn);
 
-        // Track number
+        // Add to playlist
+        const playlistAddBtn = document.createElement('button');
+        playlistAddBtn.className = 'tlv2-action tlv2-playlist-add';
+        playlistAddBtn.title = 'Add to playlist';
+        playlistAddBtn.setAttribute('aria-label', 'Add to playlist');
+        playlistAddBtn.innerHTML = PLAYLIST_ADD_SVG;
+        row.appendChild(playlistAddBtn);
         const num = document.createElement('span');
         num.className = 'tlv2-number';
         const tn = (track && typeof track.trackNumber === 'number' && isFinite(track.trackNumber) && track.trackNumber > 0)
@@ -329,6 +338,15 @@
               const shareAlbumTitle = (track && typeof track.album === 'string' ? track.album : '') || albumTitleForShare;
               const shareTrackIndex = (track && typeof track.trackIndex === 'number') ? track.trackIndex : index;
               window.shareTrack(track.id || albumId, track.title, track.creator, shareAlbumTitle, 'track', shareTrackIndex);
+            }
+          } catch {}
+        });
+
+        playlistAddBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          try {
+            if (typeof window.showPlaylistPicker === 'function') {
+              window.showPlaylistPicker(track, playlistAddBtn);
             }
           } catch {}
         });

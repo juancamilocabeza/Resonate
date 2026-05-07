@@ -895,6 +895,16 @@ async function initializeApp() {
     window.logger.warn('Resonates toggle class not available', 'UI');
   }
 
+  // Initialize PlaylistManager (localStorage-based; no async init needed)
+  try {
+    if (window.PlaylistManager && typeof window.PlaylistManager.getAll === 'function') {
+      window.PlaylistManager.getAll(); // Ensure storage is readable on startup
+      window.logger.info('PlaylistManager initialized', 'UI');
+    }
+  } catch (e) {
+    window.logger.warn('PlaylistManager init failed', 'UI');
+  }
+
   // Inicializar el listener de event delegation para botones play en resontes
   {
     const initPlayListener = (typeof window.initializeResontesPlayListener === 'function')

@@ -967,7 +967,8 @@ class ContinuousPlaybackManager {
       search: { currentIndex: -1, items: [] },
       resontes: { currentIndex: -1, items: [] },
       album: { currentIndex: -1, items: [], currentAlbumId: null },
-      searchPlaylist: { currentIndex: -1, items: [] }
+      searchPlaylist: { currentIndex: -1, items: [] },
+      playlist: { currentIndex: -1, items: [], playlistId: null }
     };
   }
 
@@ -987,7 +988,7 @@ class ContinuousPlaybackManager {
 
     const context = this.contextData[this.currentContext];
 
-    const isDeckShuffle = (this.currentContext === 'album' || this.currentContext === 'resontes' || this.currentContext === 'favorites' || this.currentContext === 'search' || this.currentContext === 'searchPlaylist')
+    const isDeckShuffle = (this.currentContext === 'album' || this.currentContext === 'resontes' || this.currentContext === 'favorites' || this.currentContext === 'search' || this.currentContext === 'searchPlaylist' || this.currentContext === 'playlist')
       && state.shuffleFavorites;
 
     if (isDeckShuffle) {
@@ -1054,7 +1055,7 @@ class ContinuousPlaybackManager {
 
     const context = this.contextData[this.currentContext];
 
-    const isDeckShuffle = (this.currentContext === 'album' || this.currentContext === 'favorites' || this.currentContext === 'resontes' || this.currentContext === 'search' || this.currentContext === 'searchPlaylist')
+    const isDeckShuffle = (this.currentContext === 'album' || this.currentContext === 'favorites' || this.currentContext === 'resontes' || this.currentContext === 'search' || this.currentContext === 'searchPlaylist' || this.currentContext === 'playlist')
       && state.shuffleFavorites;
 
     if (isDeckShuffle) {
@@ -1121,6 +1122,23 @@ async function restorePlaybackQueueFromSnapshot(snapshot) {
     }
 
     // Best-effort only: search/searchPlaylist contexts are often ephemeral.
+    if (context === 'playlist') {
+      try {
+        const playlistId = snap.playlistId ? String(snap.playlistId) : null;
+        if (!playlistId) return false;
+        const pm = window.PlaylistManager;
+        if (!pm || typeof pm.getById !== 'function') return false;
+        const pl = pm.getById(playlistId);
+        if (!pl || !Array.isArray(pl.tracks) || pl.tracks.length === 0) return false;
+        playbackManager.setContext('playlist', pl.tracks, clampIndex(snap.currentIndex, pl.tracks.length));
+        playbackManager.contextData.playlist.playlistId = playlistId;
+        return true;
+      } catch {
+        // Best-effort: playlist context restore; failure is non-fatal
+        return false;
+      }
+    }
+
     return false;
   } catch {
     return false;
@@ -1533,6 +1551,81 @@ class SearchPlaylistContextHandler extends BaseContextHandler {
   }
 }
 
+// Playlist context handler (user-created playlists via PlaylistManager)
+class PlaylistContextHandler extends BaseContextHandler {
+  constructor(playbackStateManager) {
+    super(playbackStateManager);
+  }
+
+  getContextType() {
+    return 'playlist';
+  }
+
+  async handleTrackEnd() {
+    const repeatMode = this.stateManager.getRepeatMode();
+
+    if (repeatMode === RepeatMode.ONE) {
+      const audio = getAudioEl();
+      if (audio) { audio.currentTime = 0; audio.play(); }
+      return;
+    }
+
+    const shouldLoop = repeatMode === RepeatMode.ALL;
+
+    const nextTrack = await this.getNextTrack(shouldLoop);
+    if (nextTrack) {
+      await this.retryManager.executeWithRetry(async () => {
+        await playAudioTrackOptimized(nextTrack, nextTrack.albumId || nextTrack.id, 0, 1);
+        this.stateManager.recordSuccess();
+      }, RetryStrategy.NETWORK);
+    } else {
+      if (repeatMode === RepeatMode.OFF) {
+        showStatus('Your playlist has finished playing', 'info', 2000);
+        return;
+      }
+
+      if (shouldLoop) {
+        const context = playbackManager.contextData.playlist;
+        if (context && context.items && context.items.length > 0) {
+          context.currentIndex = 0;
+          const firstTrack = context.items[0];
+          await playAudioTrackOptimized(firstTrack, firstTrack.albumId || firstTrack.id, 0, 1);
+        }
+        return;
+      }
+
+      showStatus('Your playlist has finished playing', 'info', 2000);
+    }
+  }
+
+  async getNextTrack(allowLoop = false) {
+    const context = playbackManager.contextData.playlist;
+    if (!context || !context.items || context.items.length === 0) return null;
+
+    const isShuffle = this.stateManager.getShuffleMode();
+    if (isShuffle) {
+      const currentKey = state && state.currentTrack && state.currentTrack.url ? canonicalizeUrl(state.currentTrack.url) : '';
+      const { deck } = ensureShuffleDeck('playlist', context.items, { currentKey });
+      const nextKey = Array.isArray(deck.order) ? deck.order[Number(deck.index) || 0] : '';
+      const idx = nextKey
+        ? context.items.findIndex(it => getItemKeyForDeck('playlist', it) === nextKey)
+        : -1;
+      context.currentIndex = idx >= 0 ? idx : (context.currentIndex || 0);
+    } else {
+      if (typeof context.currentIndex !== 'number') context.currentIndex = 0;
+      const nextIndex = context.currentIndex + 1;
+      if (nextIndex >= context.items.length) {
+        if (!allowLoop) return null;
+        context.currentIndex = 0;
+      } else {
+        context.currentIndex = nextIndex;
+      }
+    }
+
+    return context.items[context.currentIndex];
+  }
+}
+
 // Context handler factory
 class ContextHandlerFactory {
   static createHandler(contextType, playbackStateManager) {
@@ -1547,6 +1640,8 @@ class ContextHandlerFactory {
         return new SearchContextHandler(playbackStateManager);
       case 'searchPlaylist':
         return new SearchPlaylistContextHandler(playbackStateManager);
+      case 'playlist':
+        return new PlaylistContextHandler(playbackStateManager);
       default:
         return new ResontesContextHandler(playbackStateManager); // fallback
     }
@@ -2900,7 +2995,7 @@ function loadPlaybackQueue(context, items, startIndex = 0) {
   }
 
   // Unificar: para álbumes, favoritos, playlist y búsqueda, cargar toda la lista para reproducción continua
-  const useFullList = context === 'favorites' || context === 'resontes' || context === 'search' || context === 'album' || context === 'searchPlaylist';
+  const useFullList = context === 'favorites' || context === 'resontes' || context === 'search' || context === 'album' || context === 'searchPlaylist' || context === 'playlist';
 
   if (useFullList) {
     if (state.shuffleFavorites) {
@@ -2979,6 +3074,9 @@ function regenerateQueueFromCurrentContext(currentTrackUrl) {
   } else if (context === 'resontes') {
     const resontesCtx = playbackManager.contextData.resontes;
     items = resontesCtx && Array.isArray(resontesCtx.items) ? resontesCtx.items : [];
+  } else if (context === 'playlist') {
+    const playlistCtx = playbackManager.contextData.playlist;
+    items = playlistCtx && Array.isArray(playlistCtx.items) ? playlistCtx.items : [];
   } else {
     // Unknown context - cannot regenerate queue
     return;
@@ -3210,6 +3308,46 @@ async function playFromFavoritesQueue(specificTrack = null) {
     }
   }
 }
+
+// Play a user-created playlist from a given track index
+async function playFromPlaylist(playlist, startIndex = 0) {
+  try {
+    if (!playlist || !Array.isArray(playlist.tracks) || playlist.tracks.length === 0) {
+      safeShowStatus('This playlist is empty. Add tracks first.', 'info', 3000);
+      return;
+    }
+
+    const tracks = playlist.tracks;
+    const idx = (typeof startIndex === 'number' && Number.isFinite(startIndex) && startIndex >= 0 && startIndex < tracks.length)
+      ? Math.floor(startIndex)
+      : 0;
+
+    playbackManager.setContext('playlist', tracks, idx);
+    playbackManager.contextData.playlist.playlistId = playlist.id;
+
+    const queueStart = tracks.length > 1 ? (idx + 1) % tracks.length : 0;
+    loadPlaybackQueue('playlist', tracks, queueStart);
+
+    const track = tracks[idx];
+    if (!track || !track.url) {
+      safeShowStatus("Track URL isn't available", 'error', 3000);
+      return;
+    }
+
+    safeShowStatus(`Playing: ${playlist.name}`, 'info', 2000);
+
+    try { if (typeof hideSearchResults === 'function') hideSearchResults(); } catch {}
+    try { if (typeof hideFavoritesList === 'function') hideFavoritesList(); } catch {}
+    try { if (typeof window.hidePlaylistsPanel === 'function') window.hidePlaylistsPanel(); } catch {}
+
+    enhancedPlaybackController.setContext('playlist');
+    await playAudioTrackOptimized(track, track.albumId || track.id, track.trackIndex, track.totalTracks);
+  } catch (error) {
+    logPlayback('error', 'Error in playFromPlaylist', error);
+    safeShowStatus('Playback error. Please try again.', 'error', 3000);
+  }
+}
+try { window.playFromPlaylist = playFromPlaylist; } catch {}
 
 // Configure preloaded playback list
 function setupPreloadedPlayback(tracks, startIndex = 0) {
@@ -3448,6 +3586,9 @@ async function playNextInContext(maxRetries = 3) {
       } else if (context === 'searchPlaylist') {
         // Loop through the preloaded playlist context.
         await playAudioTrackOptimized(nextItem, nextItem.id, 0, 1, true);
+      } else if (context === 'playlist') {
+        // User-created playlist context.
+        await playAudioTrackOptimized(nextItem, nextItem.albumId || nextItem.id, 0, 1, true);
       }
 
     } catch (error) {

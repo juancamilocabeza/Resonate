@@ -1,0 +1,359 @@
+/* ============================================================
+   Playlists panel & picker popup
+   ============================================================ */
+
+/* ── Playlists panel (mirrors .resontes-list layout) ─────── */
+.playlists-list {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--bg, #0d0d0d);
+  z-index: 300;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  flex-direction: column;
+}
+
+.playlists-list.active {
+  display: flex;
+}
+
+.playlists-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 10px;
+  gap: 10px;
+  border-bottom: 1px solid var(--surface-border, rgba(255,255,255,0.08));
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--bg, #0d0d0d);
+}
+
+.playlists-panel-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--fg, #f0f0f0);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.playlists-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.playlists-panel-close-btn,
+.playlists-new-btn,
+.playlists-import-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--fg, #f0f0f0);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  font-size: 13px;
+  gap: 5px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.playlists-panel-close-btn {
+  padding: 4px 8px;
+  font-size: 18px;
+  color: var(--muted, #888);
+}
+
+.playlists-new-btn {
+  background: var(--accent, #6ee7b7);
+  color: #000;
+  font-weight: 600;
+  border-color: transparent;
+}
+
+.playlists-import-btn {
+  border-color: var(--surface-border, rgba(255,255,255,0.15));
+  color: var(--muted, #aaa);
+}
+
+.playlists-new-btn:hover,
+.playlists-new-btn:focus-visible {
+  filter: brightness(1.1);
+}
+
+.playlists-import-btn:hover,
+.playlists-import-btn:focus-visible {
+  background: var(--surface-2, rgba(255,255,255,0.06));
+}
+
+/* ── Playlist list body ─────────────────────────────────── */
+.playlists-panel-body {
+  flex: 1;
+  padding: 12px 16px 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.playlists-empty-msg {
+  text-align: center;
+  color: var(--muted, #888);
+  font-size: 14px;
+  margin: 40px auto;
+  line-height: 1.6;
+}
+
+/* ── Single playlist card ───────────────────────────────── */
+.pl-card {
+  background: var(--surface-2, rgba(255,255,255,0.04));
+  border: 1px solid var(--surface-border, rgba(255,255,255,0.08));
+  border-radius: 12px;
+  overflow: hidden;
+  transition: box-shadow 0.18s;
+}
+
+.pl-card:hover {
+  box-shadow: 0 4px 18px rgba(0,0,0,0.2);
+}
+
+.pl-card-header {
+  display: flex;
+  align-items: center;
+  padding: 12px 14px;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.pl-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.pl-card-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--fg, #f0f0f0);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pl-card-meta {
+  font-size: 12px;
+  color: var(--muted, #888);
+  margin-top: 2px;
+}
+
+.pl-card-btns {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.pl-card-btn {
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: var(--muted, #aaa);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 6px 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: background 0.12s, color 0.12s;
+}
+
+.pl-card-btn:hover,
+.pl-card-btn:focus-visible {
+  background: var(--surface-3, rgba(255,255,255,0.08));
+  color: var(--fg, #f0f0f0);
+}
+
+.pl-card-btn--play {
+  color: var(--accent, #6ee7b7);
+}
+
+.pl-card-btn--danger:hover,
+.pl-card-btn--danger:focus-visible {
+  color: #f88;
+  background: rgba(255,80,80,0.1);
+}
+
+/* ── Playlist tracks (expandable) ──────────────────────── */
+.pl-tracks-list {
+  border-top: 1px solid var(--surface-border, rgba(255,255,255,0.06));
+  padding: 4px 0 8px;
+  display: none;
+}
+
+.pl-tracks-list.open {
+  display: block;
+}
+
+.pl-track-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  padding: 8px 14px;
+  gap: 8px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.pl-track-row:hover {
+  background: var(--surface-3, rgba(255,255,255,0.05));
+}
+
+.pl-track-row--playing {
+  background: var(--accent-subtle, rgba(110,231,183,0.08));
+}
+
+.pl-track-title {
+  font-size: 13px;
+  color: var(--fg, #f0f0f0);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pl-track-creator {
+  font-size: 11px;
+  color: var(--muted, #888);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pl-track-remove-btn {
+  background: transparent;
+  border: none;
+  color: var(--muted, #888);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  transition: color 0.12s, background 0.12s;
+  line-height: 1;
+}
+
+.pl-track-remove-btn:hover,
+.pl-track-remove-btn:focus-visible {
+  color: #f88;
+  background: rgba(255,80,80,0.1);
+}
+
+/* ── Add-to-playlist picker popup ─────────────────────── */
+.pl-picker-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  background: transparent;
+}
+
+.pl-picker {
+  position: fixed;
+  z-index: 501;
+  background: var(--surface-1, #1a1a1a);
+  border: 1px solid var(--surface-border, rgba(255,255,255,0.12));
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  min-width: 220px;
+  max-width: 300px;
+  overflow: hidden;
+  animation: pl-picker-in 0.15s ease;
+}
+
+@keyframes pl-picker-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.97); }
+  to   { opacity: 1; transform: none; }
+}
+
+.pl-picker-header {
+  padding: 10px 14px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted, #aaa);
+  border-bottom: 1px solid var(--surface-border, rgba(255,255,255,0.08));
+}
+
+.pl-picker-list {
+  max-height: 220px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.pl-picker-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--fg, #f0f0f0);
+  transition: background 0.1s;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+}
+
+.pl-picker-item:hover,
+.pl-picker-item:focus-visible {
+  background: var(--surface-3, rgba(255,255,255,0.08));
+  outline: none;
+}
+
+.pl-picker-item--new {
+  border-top: 1px solid var(--surface-border, rgba(255,255,255,0.08));
+  color: var(--accent, #6ee7b7);
+  font-weight: 600;
+}
+
+/* ── "Add to playlist" button in track rows ────────────── */
+
+.pl-tracks-empty-msg {
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--muted, #888);
+}
+.tlv2-playlist-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  background: transparent;
+  border: none;
+  color: var(--muted, #888);
+  cursor: pointer;
+  padding: 0 6px;
+  font-size: 18px;
+  line-height: 1;
+  border-radius: 6px;
+  transition: color 0.12s, background 0.12s;
+}
+
+.tlv2-playlist-add:hover,
+.tlv2-playlist-add:focus-visible {
+  color: var(--accent, #6ee7b7);
+  background: var(--surface-3, rgba(255,255,255,0.06));
+}
+
+.tlv2-playlist-add svg {
+  width: 18px;
+  height: 18px;
+  pointer-events: none;
+}

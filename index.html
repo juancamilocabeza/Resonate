@@ -39,6 +39,7 @@
   <link rel="stylesheet" href="css/player-controls.css" />
   <link rel="stylesheet" href="css/player-bottom-sheet.css" />
   <link rel="stylesheet" href="css/onboarding.css" />
+  <link rel="stylesheet" href="css/playlists.css" />
   <script src="js/cast.js"></script>
   <script>
     (function () {
@@ -258,6 +259,34 @@
           <div id="resontes-list-content" class="resontes-list-content" role="list" aria-label="Resonates list"></div>
         </div>
       </div>
+
+      <!-- ============================================================
+           PLAYLISTS PANEL
+           ============================================================ -->
+      <div id="playlists-list" class="playlists-list" role="region" aria-label="Playlists">
+        <div class="playlists-panel-header">
+          <span class="playlists-panel-title">Playlists</span>
+          <div class="playlists-panel-actions">
+            <button id="playlists-import-btn" class="playlists-import-btn" type="button"
+                    aria-label="Import playlist from Grayjay JSON">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" width="16" height="16">
+                <path d="M12 3v13"/><path d="M8 13l4 4 4-4"/><path d="M5 19h14"/>
+              </svg>
+              Import
+            </button>
+            <button id="playlists-new-btn" class="playlists-new-btn" type="button"
+                    aria-label="Create new playlist">
+              + New
+            </button>
+            <button id="playlists-close-btn" class="playlists-panel-close-btn" type="button"
+                    aria-label="Close playlists panel">&#x2715;</button>
+          </div>
+        </div>
+        <div id="playlists-panel-body" class="playlists-panel-body" role="list" aria-label="Playlists list"></div>
+      </div>
+      <!-- Hidden file input for Grayjay import -->
+      <input type="file" id="playlist-import-input" accept=".json" hidden aria-hidden="true">
+
       <div class="main-player-section">
       <div class="player-container">
         <div class="player-content" id="player-content">
@@ -417,6 +446,24 @@
             </span>
             <span class="resontes-label">Resonates</span>
             <span class="resontes-count" id="resontes-count">0</span>
+          </button>
+
+          <button id="playlists-toggle" class="theme-selector playlists-toggle sheet-action-item"
+                  type="button" aria-label="View playlists"
+              aria-expanded="false" aria-controls="playlists-list"
+              data-close-sheet-on-activate="true">
+            <span class="sheet-item-icon" aria-hidden="true">
+              <svg class="sheet-item-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <line x1="8" y1="6" x2="21" y2="6"/>
+                <line x1="8" y1="12" x2="21" y2="12"/>
+                <line x1="8" y1="18" x2="21" y2="18"/>
+                <polyline points="3 6 4 7 6 4"/>
+                <polyline points="3 12 4 13 6 10"/>
+                <polyline points="3 18 4 19 6 16"/>
+              </svg>
+            </span>
+            <span class="sheet-item-label">Playlists</span>
+            <span class="playlists-count" id="playlists-count"></span>
           </button>
 
           <button id="theme-toggle" class="theme-selector sheet-action-item" type="button"
@@ -616,6 +663,7 @@
   <script src="js/search.js"></script>
   <script src="js/search-history.js"></script>
   <script src="js/tracklist.js"></script>
+  <script src="js/playlist-manager.js"></script>
   <script src="js/ui.js" defer></script>
   <script src="js/player-title.js" defer></script>
   <script src="js/offline.js"></script>
