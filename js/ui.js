@@ -9326,11 +9326,11 @@ async function updateServiceWorker() {
       row.className = 'pl-track-row' + (currentUrl && track.url === currentUrl ? ' pl-track-row--playing' : '');
       row.setAttribute('role', 'listitem');
 
-      const dur = track.duration ? formatDuration(track.duration) : '';
+      const trackDuration = track.duration ? formatDuration(track.duration) : '';
       row.innerHTML = `
         <div style="min-width:0">
           <div class="pl-track-title">${escHtml(track.title || 'Untitled')}</div>
-          <div class="pl-track-creator">${escHtml(track.creator || '')}${dur ? ' · ' + escHtml(dur) : ''}</div>
+          <div class="pl-track-creator">${escHtml(track.creator || '')}${trackDuration ? ' · ' + escHtml(trackDuration) : ''}</div>
         </div>
         <button class="pl-track-remove-btn" type="button" title="Remove from playlist" aria-label="Remove ${escHtml(track.title || 'Untitled')} from playlist">&#x2715;</button>
       `;
