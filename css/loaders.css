@@ -38,15 +38,88 @@
 }
 
 /* ===== OVERLAY LOADER ===== */
-.loader-overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.5); z-index: 10000; backdrop-filter: blur(4px); animation: fadeIn 0.15s ease-in; }
-.loader-overlay--hiding { animation: fadeOut 0.2s ease-out forwards; pointer-events: none; }
-.loader-container { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 16px 20px; min-width: 140px; background: var(--card); border: 1px solid rgba(var(--primary-rgb), 0.2); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
-.loader-spinner { width: var(--loader-size, 40px); height: var(--loader-size, 40px); border-radius: 50%; border: var(--loader-border-width, 4px) solid rgba(var(--primary-rgb), 0.2); border-top: var(--loader-border-width, 4px) solid var(--primary); animation: spin var(--loader-duration, 2s) linear infinite; }
-.loader-progress { font-size: 14px; font-weight: 700; letter-spacing: 0.6px; color: var(--fg); text-shadow: 0 2px 8px rgba(0,0,0,0.4); text-align: center; min-width: 48px; }
-.loader-message { font-size: 12px; font-weight: 400; text-align: center; line-height: 1.4; max-width: 280px; margin-top: 4px; opacity: 0.85; color: var(--muted); }
-.loader { width: var(--loader-size, 24px); height: var(--loader-size, 24px); border-radius: 50%; border: var(--loader-border-width, 2px) solid rgba(var(--primary-rgb), 0.2); border-top: var(--loader-border-width, 2px) solid var(--primary); animation: spin var(--loader-duration, 2s) linear infinite; }
-.search-loading { display: inline-flex; align-items: center; gap: 10px; padding: 10px 12px; color: var(--muted); }
-.loader-text { color: var(--muted); font-size: 13px; }
+.loader-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 10000;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  animation: fadeIn 0.15s ease-in;
+}
+
+.loader-overlay--hiding {
+  animation: fadeOut 0.2s ease-out forwards;
+  pointer-events: none;
+}
+
+.loader-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  min-width: 140px;
+  background: var(--card);
+  border: 1px solid rgba(var(--primary-rgb), 0.2);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.loader-spinner {
+  width: var(--loader-size, 40px);
+  height: var(--loader-size, 40px);
+  border-radius: 50%;
+  border: var(--loader-border-width, 4px) solid rgba(var(--primary-rgb), 0.2);
+  border-top: var(--loader-border-width, 4px) solid var(--primary);
+  animation: spin var(--loader-duration, 2s) linear infinite;
+}
+
+.loader-progress {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  color: var(--fg);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  text-align: center;
+  min-width: 48px;
+}
+
+.loader-message {
+  font-size: 12px;
+  font-weight: 400;
+  text-align: center;
+  line-height: 1.4;
+  max-width: 280px;
+  margin-top: 4px;
+  opacity: 0.85;
+  color: var(--muted);
+}
+
+.loader {
+  width: var(--loader-size, 24px);
+  height: var(--loader-size, 24px);
+  border-radius: 50%;
+  border: var(--loader-border-width, 2px) solid rgba(var(--primary-rgb), 0.2);
+  border-top: var(--loader-border-width, 2px) solid var(--primary);
+  animation: spin var(--loader-duration, 2s) linear infinite;
+}
+
+.search-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  color: var(--muted);
+}
+
+.loader-text {
+  color: var(--muted);
+  font-size: 13px;
+}
 
 /* ===== SKELETON LOADER FOR TRACKS ===== */
 .tracks-loading-skeleton {
@@ -64,26 +137,16 @@
   height: 48px;
   background: linear-gradient(
     90deg,
-    var(--surface-1, #f5f5f5) 0%,
-    var(--surface-2, #ebebeb) 50%,
-    var(--surface-1, #f5f5f5) 100%
+    var(--surface-1) 0%,
+    var(--surface-2) 50%,
+    var(--surface-1) 100%
   );
   background-size: 200% 100%;
   border-radius: 8px;
   animation: shimmer 1.5s ease-in-out infinite;
 }
 
-/* Dark mode adjustments for skeleton */
-@media (prefers-color-scheme: dark) {
-  .skeleton-track {
-    background: linear-gradient(
-      90deg,
-      var(--surface-1, #2a2a2a) 0%,
-      var(--surface-2, #353535) 50%,
-      var(--surface-1, #2a2a2a) 100%
-    );
-  }
-}
+/* (No separate dark-mode override needed: --surface-1/--surface-2 are theme-aware) */
 
 /* ===== SEARCH RESULT SKELETON CARDS ===== */
 .search-skeleton-container {
@@ -158,9 +221,9 @@
   aspect-ratio: 1 / 1;
   background: linear-gradient(
     90deg,
-    var(--surface-1, #f5f5f5) 0%,
-    var(--surface-2, #ebebeb) 50%,
-    var(--surface-1, #f5f5f5) 100%
+    var(--surface-1) 0%,
+    var(--surface-2) 50%,
+    var(--surface-1) 100%
   );
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
@@ -186,9 +249,9 @@
   width: 80%;
   background: linear-gradient(
     90deg,
-    var(--surface-1, #f5f5f5) 0%,
-    var(--surface-2, #ebebeb) 50%,
-    var(--surface-1, #f5f5f5) 100%
+    var(--surface-1) 0%,
+    var(--surface-2) 50%,
+    var(--surface-1) 100%
   );
   background-size: 200% 100%;
   border-radius: 4px;
@@ -200,9 +263,9 @@
   width: 60%;
   background: linear-gradient(
     90deg,
-    var(--surface-1, #f5f5f5) 0%,
-    var(--surface-2, #ebebeb) 50%,
-    var(--surface-1, #f5f5f5) 100%
+    var(--surface-1) 0%,
+    var(--surface-2) 50%,
+    var(--surface-1) 100%
   );
   background-size: 200% 100%;
   border-radius: 4px;
@@ -210,19 +273,7 @@
   animation-delay: 0.1s;
 }
 
-/* Dark mode adjustments for search skeleton */
-@media (prefers-color-scheme: dark) {
-  .search-skeleton-cover,
-  .search-skeleton-title,
-  .search-skeleton-subtitle {
-    background: linear-gradient(
-      90deg,
-      var(--surface-1, #2a2a2a) 0%,
-      var(--surface-2, #353535) 50%,
-      var(--surface-1, #2a2a2a) 100%
-    );
-  }
-}
+/* (No separate dark-mode override needed: --surface-1/--surface-2 are theme-aware) */
 
 /* ===== SEARCH STATUS MESSAGE ===== */
 .search-status-message {

@@ -32,6 +32,7 @@
   box-shadow: var(--search-sticky-shadow);
   padding-top: 4px;
   padding-bottom: 4px;
+  -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   z-index: 100;
   transition: box-shadow 0.2s ease, background 0.2s ease;
@@ -86,6 +87,7 @@
 /* ===== UNIFIED SEARCH INPUT ===== */
 .search-input {
   height: var(--search-height-mobile);
+  min-height: var(--search-height-mobile);
   background: var(--btn);
   border: 2px solid var(--surface-border);
   border-radius: var(--search-border-radius);
@@ -179,6 +181,7 @@
   
   .search-input {
     height: var(--search-height-tablet);
+    min-height: var(--search-height-tablet);
     font-size: 16px;
   }
   
@@ -191,6 +194,7 @@
 @media (min-width: 1024px) {
   .search-input {
     height: var(--search-height-desktop);
+    min-height: var(--search-height-desktop);
     font-size: 16px;
     background: var(--search-input-bg, var(--btn));
     border: 2px solid transparent;
@@ -229,6 +233,7 @@
 
 .resontes-filter-bar .search-input {
   height: var(--search-height-mobile);
+  min-height: var(--search-height-mobile);
   font-size: 14px;
   border-radius: 10px;
 }
@@ -236,6 +241,7 @@
 @media (min-width: 600px) {
   .resontes-filter-bar .search-input {
     height: var(--search-height-tablet);
+    min-height: var(--search-height-tablet);
   }
 
   .resontes-filter-bar .search-clear-btn {
@@ -249,6 +255,7 @@
 @media (min-width: 1024px) {
   .resontes-filter-bar .search-input {
     height: var(--search-height-desktop);
+    min-height: var(--search-height-desktop);
   }
 
   .resontes-filter-bar .search-clear-btn {

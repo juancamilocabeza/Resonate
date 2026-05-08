@@ -75,7 +75,7 @@
 }
 
 .playlists-new-btn {
-  background: var(--accent, #6ee7b7);
+  background: var(--primary);
   color: #000;
   font-weight: 600;
   border-color: transparent;
@@ -159,7 +159,7 @@
 }
 
 .playlists-empty-cta {
-  background: var(--accent, #6ee7b7);
+  background: var(--primary);
   color: #000;
   border: none;
   border-radius: 10px;
@@ -207,7 +207,7 @@
 }
 
 .pl-card--expanded {
-  border-color: var(--accent, #6ee7b7);
+  border-color: var(--primary);
   box-shadow: 0 4px 20px rgba(110, 231, 183, 0.1);
 }
 
@@ -232,7 +232,7 @@
 
 .pl-card--expanded .pl-card-expand-indicator {
   transform: rotate(180deg);
-  color: var(--accent, #6ee7b7);
+  color: var(--primary);
 }
 
 .pl-card-info {
@@ -263,7 +263,7 @@
   font-weight: 600;
   color: var(--fg, #f0f0f0);
   background: var(--surface-1, #1a1a1a);
-  border: 1px solid var(--accent, #6ee7b7);
+  border: 1px solid var(--primary);
   border-radius: 6px;
   padding: 4px 6px;
   opacity: 0;
@@ -326,7 +326,7 @@
 }
 
 .pl-card-btn--play {
-  color: var(--accent, #6ee7b7);
+  color: var(--primary);
 }
 
 .pl-card-btn--shuffle {
@@ -335,7 +335,7 @@
 
 .pl-card-btn--shuffle:hover,
 .pl-card-btn--shuffle:focus-visible {
-  color: var(--accent, #6ee7b7);
+  color: var(--primary);
 }
 
 .pl-card-btn--danger:hover,
@@ -399,11 +399,11 @@
 }
 
 .pl-track-row--playing {
-  background: var(--accent-subtle, rgba(110,231,183,0.08));
+  background: rgba(var(--primary-rgb), 0.08);
 }
 
 .pl-track-row--playing .pl-track-number {
-  color: var(--accent, #6ee7b7);
+  color: var(--primary);
 }
 
 /* Remove animation */
@@ -555,7 +555,7 @@
 }
 
 .pl-picker-search:focus {
-  border-color: var(--accent, #6ee7b7);
+  border-color: var(--primary);
   background: var(--surface-3, rgba(255,255,255,0.08));
 }
 
@@ -606,7 +606,7 @@
 .pl-picker-item--new {
   flex-direction: row;
   border-top: 1px solid var(--surface-border, rgba(255,255,255,0.08));
-  color: var(--accent, #6ee7b7);
+  color: var(--primary);
   font-weight: 600;
   padding: 12px 14px;
 }
@@ -703,7 +703,7 @@
 }
 
 .pl-modal-input:focus {
-  border-color: var(--accent, #6ee7b7);
+  border-color: var(--primary);
   background: var(--surface-3, rgba(255,255,255,0.08));
 }
 
@@ -736,7 +736,7 @@
 }
 
 .pl-modal-btn--primary {
-  background: var(--accent, #6ee7b7);
+  background: var(--primary);
   border-color: transparent;
   color: #000;
   font-weight: 600;
@@ -745,7 +745,7 @@
 .pl-modal-btn--primary:hover,
 .pl-modal-btn--primary:focus-visible {
   filter: brightness(1.1);
-  background: var(--accent, #6ee7b7);
+  background: var(--primary);
 }
 
 .pl-modal-btn--danger {
@@ -784,7 +784,7 @@
 
 .tlv2-playlist-add:hover,
 .tlv2-playlist-add:focus-visible {
-  color: var(--accent, #6ee7b7);
+  color: var(--primary);
   background: var(--surface-3, rgba(255,255,255,0.06));
 }
 
@@ -820,5 +820,45 @@
   .pl-modal-btn {
     width: 100%;
     justify-content: center;
+  }
+}
+
+/* ── Tablet — constrain panel width and add side padding ── */
+@media (min-width: 600px) {
+  .playlists-panel-body {
+    padding: 16px 24px 80px;
+  }
+
+  .pl-card {
+    border-radius: 14px;
+  }
+}
+
+/* ── Desktop — centre the panel as a floating drawer ──── */
+@media (min-width: 1024px) {
+  .playlists-list {
+    /* On desktop show as a centred panel rather than full-screen */
+    left: 50%;
+    right: auto;
+    width: min(680px, calc(100vw - 48px));
+    transform: translateX(-50%);
+    border-radius: 16px;
+    border: 1px solid var(--surface-border);
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+    top: 48px;
+    bottom: auto;
+    max-height: calc(100vh - 80px);
+  }
+
+  .playlists-panel-header {
+    border-radius: 16px 16px 0 0;
+  }
+
+  .playlists-panel-body {
+    padding: 16px 32px 32px;
+  }
+
+  .pl-modal {
+    max-width: 480px;
   }
 }

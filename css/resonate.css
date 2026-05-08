@@ -255,21 +255,6 @@ body.tracks-open #tracks-list-container .track-row-title,
   white-space: nowrap;
   text-overflow: clip;
   overflow: hidden;
-    .title-share-container {
-      display: block;
-      width: 100vw;
-      max-width: 100vw;
-      overflow: visible;
-      padding: 0;
-      margin: 0 auto;
-    }
-    .current-track-info {
-      width: 100vw;
-      max-width: 100vw;
-      overflow-x: visible;
-      padding: 0;
-      margin: 0 auto;
-    }
   min-width: 0;
 }
 
@@ -676,6 +661,13 @@ body.tracks-open #tracks-list-container .tlv2-list {
   --search-input-fg: var(--fg);
   --search-input-placeholder: var(--muted);
   --search-input-caret: var(--fg);
+
+  /* Skeleton / surface fill tokens (used by loaders.css shimmer) */
+  --surface-1: #2a2a2a;
+  --surface-2: #353535;
+
+  /* Browser chrome color scheme: dark by default */
+  color-scheme: dark;
 }
 
 /* ===== TEMA NOCHE - Colores más profundos para OLED ===== */
@@ -740,6 +732,13 @@ body.tracks-open #tracks-list-container .tlv2-list {
   --on-primary: #fff;
 
   --list-ticker-duration: 14s;
+
+  /* Surface tokens */
+  --surface-1: #2a2a2a;
+  --surface-2: #353535;
+
+  /* Browser chrome */
+  color-scheme: dark;
 }
 [data-theme="day"] {
   --bg: #f5f5f5;
@@ -821,6 +820,13 @@ body.tracks-open #tracks-list-container .tlv2-list {
   --onboarding-cta-fg: #042115;
 
   --list-ticker-duration: 12s;
+
+  /* Surface tokens (light backgrounds for skeleton shimmer) */
+  --surface-1: #f0f0f0;
+  --surface-2: #e4e4e4;
+
+  /* Browser chrome */
+  color-scheme: light;
 }
 [data-theme="day"] header {
   border-bottom: 1px solid rgba(var(--primary-rgb), 0.12);
@@ -842,46 +848,49 @@ body.tracks-open #tracks-list-container .tlv2-list {
 }
 
 [data-theme="day"] .progress-buffered {
-  background: rgba(16, 185, 129, 0.15);
+  background: rgba(var(--primary-rgb), 0.15);
 }
 
 [data-theme="day"] .progress {
-  background: linear-gradient(90deg, #10b981, #059669);
-  box-shadow: 0 0 12px rgba(16, 185, 129, 0.5);
+  /* Fallback for browsers without color-mix() support (Safari < 16.2, Chrome < 111) */
+  background: linear-gradient(90deg, var(--primary), #059669);
+  /* color-mix() gives a theme-aware darker shade of --primary */
+  background: linear-gradient(90deg, var(--primary), color-mix(in srgb, var(--primary) 80%, #000));
+  box-shadow: 0 0 12px rgba(var(--primary-rgb), 0.5);
 }
 
 [data-theme="day"] .progress::after {
-  background: #059669;
-  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.5), 0 0 0 2px rgba(255, 255, 255, 1);
+  background: var(--primary);
+  box-shadow: 0 2px 8px rgba(var(--primary-rgb), 0.5), 0 0 0 2px rgba(255, 255, 255, 1);
 }
 
 [data-theme="day"] .progress-tooltip {
-  background: rgba(5, 150, 105, 0.95);
+  background: rgba(var(--primary-rgb), 0.95);
 }
 
 [data-theme="day"] .progress-tooltip::after {
-  border-top-color: rgba(5, 150, 105, 0.95);
+  border-top-color: rgba(var(--primary-rgb), 0.95);
 }
 
 [data-theme="day"] .current-time,
 [data-theme="day"] .total-time {
-  color: #059669;
+  color: var(--primary);
 }
 
 [data-theme="day"] .progress-bar:focus,
 [data-theme="day"] .progress-bar.focused {
-  outline-color: #059669;
+  outline-color: var(--primary);
 }
 
 [data-theme="day"] .progress-section:hover {
-  background: rgba(16, 185, 129, 0.06);
-  box-shadow: 0 0 16px rgba(16, 185, 129, 0.1);
+  background: rgba(var(--primary-rgb), 0.06);
+  box-shadow: 0 0 16px rgba(var(--primary-rgb), 0.1);
 }
 
 [data-theme="day"] .progress-section:active,
 [data-theme="day"] .progress-section.dragging {
-  background: rgba(16, 185, 129, 0.08);
-  box-shadow: 0 0 24px rgba(16, 185, 129, 0.16);
+  background: rgba(var(--primary-rgb), 0.08);
+  box-shadow: 0 0 24px rgba(var(--primary-rgb), 0.16);
 }
 
 /* ===== MODO AHORRO DE ENERGÍA - Máximo ahorro con OLED puro ===== */
@@ -933,6 +942,13 @@ body.tracks-open #tracks-list-container .tlv2-list {
   /* Energy-saver primary (#7aa7b8 light teal) is too light for white text */
   --on-primary: #0a0a0a;
   --onboarding-cta-fg: #071015;
+
+  /* Surface tokens (OLED-safe near-black) */
+  --surface-1: #141414;
+  --surface-2: #1e1e1e;
+
+  /* Browser chrome */
+  color-scheme: dark;
 }
 [data-theme="energy-saver"] * {
   animation-duration: 0.05s !important;
@@ -1354,7 +1370,7 @@ h1 {
 h2 {
   font-size: 18px;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--fg);
   margin: 0 0 var(--spacing-md) 0;
   text-align: center;
 }
@@ -1362,7 +1378,7 @@ h2 {
 h3 {
   font-size: 16px;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--fg);
   text-align: center;
   margin: 0 0 var(--spacing-md) 0;
 }
@@ -1542,11 +1558,11 @@ h3 {
 .description {
   font-size: 15px;
   font-weight: 400;
-  color: #e6e6e6;
+  color: var(--fg);
   line-height: 1.6;
   margin: 12px 0 20px 0;
   text-align: left;
-  background: rgba(30,30,30,0.85);
+  background: var(--card);
   border-radius: 8px;
   padding: 12px 16px;
   white-space: pre-line;
@@ -1554,7 +1570,7 @@ h3 {
   overflow-wrap: break-word;
   max-width: 100%;
   /* Sin altura fija ni scroll, crece dinámicamente */
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 /* ===== PROGRESS BAR ===== */
@@ -1921,9 +1937,9 @@ button:active:not(:disabled) {
   outline-offset: -2px;
   
   /* Background & Color */
-  background: var(--btn) !important;
+  background: var(--btn);
   color: var(--control-fg);
-  box-shadow: none !important;
+  box-shadow: none;
   
   /* Typography */
   font-size: 22px;
@@ -1955,16 +1971,16 @@ button:active:not(:disabled) {
 .play-btn:hover,
 .play-btn-favorite:hover {
   transform: scale(1.12);
-  background: var(--btn) !important;
-  box-shadow: 0 8px 20px rgba(var(--primary-rgb), 0.16) !important;
+  background: var(--btn);
+  box-shadow: 0 8px 20px rgba(var(--primary-rgb), 0.16);
   transition: var(--transition-bounce);
 }
 
 .play-btn:active,
 .play-btn-favorite:active {
   transform: scale(0.95);
-  background: var(--btn) !important;
-  box-shadow: inset 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+  background: var(--btn);
+  box-shadow: inset 0 4px 12px rgba(0, 0, 0, 0.3);
   transition: transform 0.08s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
@@ -2065,6 +2081,11 @@ button:active:not(:disabled) {
   .play-btn:hover,
   .play-btn-favorite:hover {
     transform: none;
+  }
+
+  /* Reset art hover shadow to base value on touch */
+  .art:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
   }
 
   .progress-bar:hover {
@@ -6520,5 +6541,121 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
 
   .archive-banner-play-btn:hover:not(:disabled) {
     transform: none;
+  }
+}
+
+/* ===== PREFERS-COLOR-SCHEME: AUTO DAY THEME =====
+   When the user's OS is in light mode and no explicit data-theme has been
+   chosen, activate the Day palette automatically. The body[data-theme]
+   selector has higher specificity and takes precedence once the user picks
+   a theme via the UI.
+   ===================================================================== */
+@media (prefers-color-scheme: light) {
+  :root:not(body[data-theme]) {
+    --bg: #f5f5f5;
+    --bg-rgb: 245, 245, 245;
+    --fg: #1a1a1a;
+    --muted: #4a4a4a;
+    --accent: #1a1a2e;
+    --accent-alt: #1e6ba8;
+    --accent-alt-rgb: 30, 107, 168;
+    --primary: #10b981;
+    --primary-rgb: 16, 185, 129;
+    --highlight: #d63384;
+    --secondary: #d97706;
+    --error: #b91c1c;
+    --success: #15803d;
+    --warning: #ea580c;
+    --card: #ffffff;
+    --sheet-bg: #ffffff;
+    --sheet-border: rgba(15, 23, 42, 0.1);
+    --sheet-border-subtle: rgba(15, 23, 42, 0.08);
+    --sheet-handle-bg: rgba(15, 23, 42, 0.18);
+    --sheet-shadow: 0 -18px 42px rgba(15, 23, 42, 0.16), 0 0 0 1px rgba(var(--primary-rgb), 0.08);
+    --sheet-item-hover-bg: rgba(var(--primary-rgb), 0.1);
+    --sheet-item-active-bg: rgba(var(--primary-rgb), 0.16);
+    --sheet-icon-bg: rgba(var(--primary-rgb), 0.12);
+    --collection-panel-bg: #ffffff;
+    --collection-panel-header-bg: #f5f8f7;
+    --collection-card-bg: #ffffff;
+    --collection-card-hover-bg: #f3f8f6;
+    --collection-subpanel-bg: #f6faf8;
+    --collection-row-bg: #f8fbfa;
+    --collection-row-hover-bg: rgba(var(--primary-rgb), 0.12);
+    --collection-shadow: 0 10px 24px rgba(15, 23, 42, 0.1), 0 0 0 1px rgba(var(--primary-rgb), 0.04);
+    --btn: #e5e5e5;
+    --btn-hover: rgba(var(--primary-rgb), 0.12);
+    --btn-active: #d0d0d0;
+    --result-hover: rgba(var(--primary-rgb), 0.1);
+    --item-hover: rgba(0, 0, 0, 0.08);
+    --neutral: #374151;
+    --control-fg: #333333;
+    --surface-border: rgba(0, 0, 0, 0.12);
+    --surface-border-subtle: rgba(0, 0, 0, 0.08);
+    --surface-hover: rgba(0, 0, 0, 0.04);
+    --surface-subtle: rgba(0, 0, 0, 0.03);
+    --shadow-light: 0 2px 8px rgba(0, 0, 0, 0.1);
+    --shadow-subtle: 0 2px 4px rgba(0, 0, 0, 0.08);
+    --shadow-card-hover: 0 10px 24px rgba(0, 0, 0, 0.14);
+    --focus-ring-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.28);
+    --chip-bg: rgba(var(--primary-rgb), 0.14);
+    --chip-fg: var(--fg);
+    --chip-bg-quiet: rgba(var(--primary-rgb), 0.10);
+    --favorite: var(--primary);
+    --favorite-bg: rgba(var(--primary-rgb), 0.14);
+    --header-btn-bg: rgba(0, 0, 0, 0.06);
+    --header-btn-border: rgba(0, 0, 0, 0.1);
+    --on-accent: #fff;
+    --on-primary: #000;
+    --onboarding-cta-fg: #042115;
+    --search-input-bg: #ffffff;
+    --search-input-bg-focus: #ffffff;
+    --search-input-fg: var(--fg);
+    --search-input-placeholder: var(--muted);
+    --surface-1: #f0f0f0;
+    --surface-2: #e4e4e4;
+    color-scheme: light;
+  }
+}
+
+/* ===== PREFERS-REDUCED-MOTION — Global =====
+   Honour the user's OS accessibility preference.
+   Ticker animations are excluded so track titles remain readable.
+   Loader spinners are excluded so loading state is still clear.
+   ===================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0s !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* Keep ticker animations so long titles are still legible */
+  .title.ticker .title-text,
+  .ticker-text.ticker {
+    animation-duration: var(--list-ticker-duration, 14s) !important;
+    animation-iteration-count: infinite !important;
+  }
+
+  /* Keep loader spinners so loading state is communicated */
+  .loader-spinner,
+  .loader,
+  .search-status-spinner {
+    animation-duration: 2s !important;
+    animation-iteration-count: infinite !important;
+  }
+
+  /* Remove hover transforms entirely */
+  button:hover:not(:disabled),
+  .play-btn:hover,
+  .play-btn-favorite:hover,
+  .art:hover,
+  .content-card:hover,
+  .pl-card:hover,
+  .playlists-new-btn:hover {
+    transform: none !important;
   }
 }

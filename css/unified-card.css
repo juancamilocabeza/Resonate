@@ -27,15 +27,18 @@
   cursor: pointer;
 }
 
-.content-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-card-hover, 0 8px 20px rgba(0, 0, 0, 0.18));
+@media (hover: hover) {
+  .content-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-card-hover, 0 8px 20px rgba(0, 0, 0, 0.18));
+  }
 }
 
 .content-card:focus-visible {
-  outline: none;
+  outline: 3px solid var(--primary);
+  outline-offset: 2px;
   border-color: rgba(var(--primary-rgb), 0.50);
-  box-shadow: var(--shadow-subtle), 0 0 0 3px rgba(var(--primary-rgb), 0.20);
+  box-shadow: var(--shadow-subtle), 0 0 0 4px rgba(var(--primary-rgb), 0.25);
 }
 
 /* Now playing state */
@@ -92,31 +95,49 @@
   z-index: 15;
 }
 
+/* CSS triangle — more reliable than a unicode character across fonts/platforms */
 .card-play-overlay::after {
-  content: '▶';
-  font-size: 26px;
-  color: transparent;
-  transition: color 0.18s ease, transform 0.18s ease;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  content: '';
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 13px 0 13px 22px;
+  border-color: transparent;
+  margin-left: 4px; /* optical centering */
+  transition: border-left-color 0.18s ease, transform 0.18s ease;
   transform: scale(0.75);
-  line-height: 1;
 }
 
-.content-card:hover .card-play-overlay,
+@media (hover: hover) {
+  .content-card:hover .card-play-overlay {
+    background: rgba(0, 0, 0, 0.25);
+  }
+
+  .content-card:hover .card-play-overlay::after {
+    border-left-color: rgba(255, 255, 255, 0.95);
+    transform: scale(1);
+  }
+}
+
 .content-card:focus-visible .card-play-overlay {
   background: rgba(0, 0, 0, 0.25);
 }
 
-.content-card:hover .card-play-overlay::after,
 .content-card:focus-visible .card-play-overlay::after {
-  color: rgba(255, 255, 255, 0.95);
+  border-left-color: rgba(255, 255, 255, 0.95);
   transform: scale(1);
 }
 
 .content-card.is-playing .card-play-overlay::after {
-  content: '♪';
-  color: rgba(255, 255, 255, 0.80);
+  /* Pause bars via two thin rectangles using box-shadow trick */
+  border: none;
+  width: 5px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.80);
+  border-radius: 2px;
+  box-shadow: 10px 0 0 rgba(255, 255, 255, 0.80);
   transform: scale(1);
+  margin-left: 0;
 }
 
 /* ===== CARD BADGES/CHIPS ===== */
