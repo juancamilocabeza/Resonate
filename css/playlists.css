@@ -248,10 +248,16 @@
 .pl-card-name {
   font-size: 15px;
   font-weight: 600;
+  line-height: 1.3;
   color: var(--fg, #f0f0f0);
-  white-space: nowrap;
+  /* Allow 2 lines with ellipsis */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
+  word-break: break-word;
 }
 
 .pl-card-name-input {
@@ -283,8 +289,9 @@
 
 .pl-card-meta {
   font-size: 12px;
+  line-height: 1.35;
   color: var(--muted, #888);
-  margin-top: 2px;
+  margin-top: 3px;
 }
 
 .pl-card-btns {
@@ -419,6 +426,7 @@
   transition: background 0.1s, opacity 0.2s, transform 0.2s;
   border-radius: 10px;
   margin: 0 8px 4px;
+  min-height: 52px;
 }
 
 .pl-track-row:hover {
@@ -501,20 +509,29 @@
 
 .pl-track-info {
   min-width: 0;
+  flex: 1;
 }
 
 .pl-track-title {
   font-size: 13px;
+  line-height: 1.35;
   color: var(--fg, #f0f0f0);
-  white-space: nowrap;
+  /* Allow 2 lines with ellipsis for better readability */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
+  word-break: break-word;
 }
 
 .pl-track-meta {
   font-size: 11px;
+  line-height: 1.3;
   color: var(--muted, #888);
-  margin-top: 1px;
+  margin-top: 2px;
+  /* Single line with ellipsis for artist/album info */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

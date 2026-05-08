@@ -279,19 +279,35 @@
   overflow: hidden;
 }
 
+/* Track titles - base styles for overflow handling */
+/* Multi-line titles with proper ellipsis when not using ticker animation */
 body.tracks-open #tracks-list-container .track-title,
 .tracklist .track-title,
-.search-results .favorite-title,
-.search-results .result-title,
-.card-grid .card-title,
 body.tracks-open #tracks-list-container .tlv2-title,
 .tracklist .tlv2-title,
 body.tracks-open #tracks-list-container .track-row-title,
 .tracklist .track-row-title {
-  display: block;
-  white-space: nowrap;
-  text-overflow: clip;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-word;
+  min-width: 0;
+}
+
+/* Search results and card titles - keep ellipsis behavior */
+.search-results .favorite-title,
+.search-results .result-title,
+.card-grid .card-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-word;
   min-width: 0;
 }
 
@@ -2745,11 +2761,17 @@ select:focus {
 .favorite-title {
   font-weight: 600;
   font-size: 15px;
-  word-wrap: break-word;
-  word-break: break-word;
-  line-height: 1.3;
+  line-height: 1.35;
   color: var(--primary);
   grid-row: 1;
+  /* Allow multi-line with ellipsis */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-word;
 }
 
 .favorite-creator {
@@ -3267,15 +3289,14 @@ select:focus {
   font-weight: 600;
   font-size: 15px;
   margin-bottom: 6px;
-  white-space: normal;
-  overflow-wrap: break-word;
-  word-wrap: break-word;
-  word-break: normal;
-  line-height: 1.3;
+  line-height: 1.35;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
   line-clamp: 3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-word;
 }
 @media (min-width: 1024px) { .result-title { -webkit-line-clamp: 6; line-clamp: 6; } }
 
@@ -5693,16 +5714,16 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
 /* Tracklist V2: estilos globales para todos los contextos */
 .tracklist .tlv2-row {
   display: grid;
-  grid-template-columns: 36px 36px 36px minmax(0, 1fr) 52px;
+  grid-template-columns: 32px 32px 32px minmax(0, 1fr) 48px;
   align-items: center;
-  gap: 8px;
-   padding: 10px 8px;
-   border-radius: 8px;
-   background: var(--collection-row-bg, transparent);
-   transition: background 0.15s;
-   min-height: 56px;
-   cursor: pointer;
-   user-select: none;
+  gap: 6px;
+  padding: 10px 8px;
+  border-radius: 8px;
+  background: var(--collection-row-bg, transparent);
+  transition: background 0.15s;
+  min-height: 60px;
+  cursor: pointer;
+  user-select: none;
   /* Garantizar que sea clickeable incluso dentro de overflow */
   touch-action: manipulation;
   box-shadow: inset 0 0 0 1px var(--surface-border-subtle);
@@ -5710,9 +5731,10 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
 
 @media (max-width: 480px) {
   .tracklist .tlv2-row {
-    grid-template-columns: 32px 32px 32px minmax(0, 1fr) 48px;
-    gap: 6px;
-    padding: 9px 6px;
+    grid-template-columns: 32px 32px 32px minmax(0, 1fr) 44px;
+    gap: 2px;
+    padding: 8px 6px;
+    min-height: 56px;
   }
 }
 .tracklist .tlv2-row:hover,
@@ -5753,39 +5775,39 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  gap: 3px;
+  gap: 2px;
+  justify-content: center;
 }
 .tracklist .tlv2-title {
   font-size: 14px;
-  line-height: 1.2;
+  line-height: 1.35;
   color: var(--fg);
-  white-space: nowrap;
+  /* Allow 2 lines with ellipsis for better readability */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
+  word-break: break-word;
   min-width: 0;
 }
 
 /* Tracklist V2: fallback global (cuando el contenedor no usa .tracklist) */
 .tlv2-title {
-  white-space: nowrap;
+  /* Allow 2 lines with ellipsis for better readability */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
+  word-break: break-word;
   min-width: 0;
 }
-
-/* En pantallas grandes, permitir 2 líneas con ellipsis (mejor legibilidad) */
-@media (min-width: 768px) {
-  .tlv2-title {
-    white-space: normal;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-}
 .tracklist .tlv2-creator {
-  font-size: 12px;
+  font-size: 11px;
+  line-height: 1.3;
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
@@ -5793,8 +5815,8 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
 }
 
 .tracklist .tlv2-meta {
-  font-size: 12px;
-  line-height: 1.25;
+  font-size: 11px;
+  line-height: 1.3;
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
@@ -5829,11 +5851,39 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
   border: none;
   color: var(--control-fg);
   cursor: pointer;
-  padding: 4px 6px;
+  padding: 4px;
   border-radius: 6px;
   transition: background var(--transition-fast), color var(--transition-fast), transform var(--transition-bounce);
-  font-size: 15px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 32px;
+  /* Ensure adequate touch target while keeping visual appearance compact */
+  position: relative;
 }
+
+/* Extend touch target to 44x44px for accessibility */
+.tracklist .tlv2-action::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 44px;
+  height: 44px;
+}
+
+@media (max-width: 480px) {
+  .tracklist .tlv2-action {
+    font-size: 13px;
+    min-width: 28px;
+    min-height: 28px;
+    padding: 3px;
+  }
+}
+
 .tracklist .tlv2-action:hover,
 .tracklist .tlv2-action:focus-visible {
   background: var(--btn-hover);
