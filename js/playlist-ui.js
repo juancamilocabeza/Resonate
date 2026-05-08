@@ -285,13 +285,12 @@
     // Remove track button
     row.querySelector('.pl-track-remove-btn').addEventListener('click', (e) => {
       e.stopPropagation();
+      const mgr = getPlaylistManager();
       try {
-        const mgr = getPlaylistManager();
         if (mgr) mgr.removeTrack(pl.id, track.url);
       } catch { /* ignore errors */ }
 
       // Re-fetch the updated playlist and re-render
-      const mgr = getPlaylistManager();
       const updated = mgr ? mgr.getById(pl.id) : null;
       if (updated) {
         pl.tracks = updated.tracks;
