@@ -43,6 +43,89 @@
     return parseDurationSeconds(rawDuration);
   }
 
+  function getTrackCreator(track) {
+    if (!track || typeof track !== 'object') return '';
+    const rawCreator = track.creator ?? track.artist ?? track.by;
+    return typeof rawCreator === 'string' ? rawCreator.trim() : '';
+  }
+
+  function getTrackAlbum(track) {
+    if (!track || typeof track !== 'object') return '';
+    const rawAlbum = track.album ?? track.collection ?? track.albumTitle;
+    return typeof rawAlbum === 'string' ? rawAlbum.trim() : '';
+  }
+
+  function buildTrackMeta(track, { hideAlbum = false } = {}) {
+    const parts = [];
+    const creator = getTrackCreator(track);
+    const album = getTrackAlbum(track);
+
+    if (creator) parts.push(creator);
+    if (album && !hideAlbum && (!creator || album.toLowerCase() !== creator.toLowerCase())) {
+      parts.push(album);
+    }
+
+    return parts.join(' • ');
+  }
+
+  function summarizeTracks(tracks) {
+    const totalTracks = Array.isArray(tracks) ? tracks.length : 0;
+    const totalDuration = (Array.isArray(tracks) ? tracks : []).reduce((sum, track) => {
+      const value = resolveTrackDurationSeconds(track);
+      return sum + (value && isFinite(value) ? value : 0);
+    }, 0);
+
+    return { totalTracks, totalDuration };
+  }
+
+  function createTracklistSummary(tracks, { isPlaybackPanel = false, resonatesContext = false } = {}) {
+    const { totalTracks, totalDuration } = summarizeTracks(tracks);
+    const summary = document.createElement('div');
+    summary.className = 'tracklist__summary';
+
+    const primary = document.createElement('div');
+    primary.className = 'tracklist__summary-primary';
+
+    const count = document.createElement('span');
+    count.className = 'tracklist__summary-count';
+    count.textContent = `${totalTracks} track${totalTracks === 1 ? '' : 's'}`;
+    primary.appendChild(count);
+
+    if (totalDuration > 0) {
+      const duration = document.createElement('span');
+      duration.className = 'tracklist__summary-duration';
+      duration.textContent = formatTime(totalDuration);
+      primary.appendChild(duration);
+    }
+
+    const hint = document.createElement('p');
+    hint.className = 'tracklist__summary-hint';
+    if (isPlaybackPanel) {
+      hint.textContent = 'Tap a track to jump playback instantly.';
+    } else if (resonatesContext) {
+      hint.textContent = 'Tap a track to play it from your resonates queue.';
+    } else {
+      hint.textContent = 'Tap any track to start playback from this release.';
+    }
+
+    summary.appendChild(primary);
+    summary.appendChild(hint);
+    return summary;
+  }
+
+  function syncRowPlayingState(row, isPlaying) {
+    if (!row) return;
+    row.classList.toggle('tlv2-row--playing', !!isPlaying);
+    row.setAttribute('aria-current', isPlaying ? 'true' : 'false');
+    const baseLabel = row.dataset.baseAriaLabel || row.getAttribute('aria-label') || '';
+    const isOffline = row.dataset.offlineAvailable === 'true';
+    const labelParts = [];
+    if (baseLabel) labelParts.push(baseLabel);
+    if (isPlaying) labelParts.push('currently playing');
+    if (isOffline) labelParts.push('available offline');
+    row.setAttribute('aria-label', labelParts.join(', ') || baseLabel || '');
+  }
+
   function isResontesContext(container) {
     return !!container.closest('#resontes-list');
   }
@@ -53,7 +136,7 @@
       tracksContainer.innerHTML = `<div class="search-loading"><div class="loader"></div><span class="loader-text">${message}</span></div>`;
 
       const isPlaybackPanel = !!(tracksContainer && tracksContainer.closest && tracksContainer.closest('#tracks-list-container'));
-      const resonteContext = isResontesContext(tracksContainer);
+      const resonatesContext = isResontesContext(tracksContainer);
 
       const seedTracks = tracksContainer && Array.isArray(tracksContainer.__albumTracks)
         ? tracksContainer.__albumTracks
@@ -65,7 +148,7 @@
           sourceTracks: seedTracks,
           preferCache: true,
           allowFetch: true,
-          preferFullAlbum: !resonteContext
+          preferFullAlbum: !resonatesContext
         });
       } else {
         if (typeof window.fetchOptimizedPlayableFiles === 'function') {
@@ -112,12 +195,17 @@
       const root = document.createElement('div');
       root.className = 'tlv2 tracklist__body';
 
+      root.appendChild(createTracklistSummary(files, {
+        isPlaybackPanel,
+        resonatesContext
+      }));
+
       const list = document.createElement('div');
       list.className = 'tlv2-list tracklist__list';
 
       // INTEGRACIÓN: Precachear favoritas o resultados según contexto
       if (typeof window.audioCache === 'object' && window.audioCache) {
-        if (resonteContext) {
+        if (resonatesContext) {
           // Precarga resontes (mínimo 10)
           window.audioCache.preloadResontes(files);
         } else if (tracksContainer.closest('.search-result')) {
@@ -151,21 +239,25 @@
       files.forEach((track, index) => {
         // Asignar la descripción del álbum al track para que el reproductor la use al reproducir
         track._albumDescription = albumDescription;
+        const trackMeta = buildTrackMeta(track, { hideAlbum: resonatesContext });
+        const durationSeconds = resolveTrackDurationSeconds(track);
+        const durationText = formatTime(durationSeconds);
+        const isPlaying = !!(currentTrackUrl && track.url && track.url === currentTrackUrl);
 
         // New layout: <share><resonte><#><title><duration>
         const row = document.createElement('div');
         row.className = 'tlv2-row track-row';
+        row.dataset.trackIndex = String(index);
 
         // Staggered entrance animation index (capped to keep delays reasonable)
         row.style.setProperty('--row-i', String(Math.min(index, 19)));
 
         // Mark the row that is currently playing
-        if (currentTrackUrl && track.url && track.url === currentTrackUrl) {
-          row.classList.add('tlv2-row--playing');
-        }
+        syncRowPlayingState(row, isPlaying);
 
         // Share
         const shareBtn = document.createElement('button');
+        shareBtn.type = 'button';
         shareBtn.className = 'tlv2-action tlv2-share';
         shareBtn.title = 'Share';
         if (typeof window.applyShareButtonState === 'function') {
@@ -181,6 +273,7 @@
 
         // Resonte
         const resonteBtn = document.createElement('button');
+        resonteBtn.type = 'button';
         resonteBtn.className = 'tlv2-action tlv2-resonte track-resonte';
         try {
           resonteBtn.dataset.albumId = String(albumId);
@@ -200,6 +293,7 @@
 
         // Add to playlist
         const playlistAddBtn = document.createElement('button');
+        playlistAddBtn.type = 'button';
         playlistAddBtn.className = 'tlv2-action tlv2-playlist-add';
         playlistAddBtn.title = 'Add to playlist';
         playlistAddBtn.setAttribute('aria-label', 'Add to playlist');
@@ -216,21 +310,37 @@
         if (track.url) row.dataset.trackUrl = track.url;
         row.appendChild(num);
 
-        // Left-aligned title
+        const main = document.createElement('div');
+        main.className = 'tlv2-main';
+
         const title = document.createElement('div');
         title.className = 'tlv2-title track-row-title';
         title.textContent = track.title || 'Untitled';
         title.style.textAlign = 'left';
-        row.appendChild(title);
+        main.appendChild(title);
 
+        if (trackMeta) {
+          const meta = document.createElement('div');
+          meta.className = 'tlv2-meta';
+          meta.textContent = trackMeta;
+          meta.title = trackMeta;
+          main.appendChild(meta);
+        }
+
+        row.appendChild(main);
 
         // Duración
-  const durationSeconds = resolveTrackDurationSeconds(track);
         const duration = document.createElement('span');
         duration.className = 'tlv2-duration';
-  duration.textContent = formatTime(durationSeconds);
+        duration.textContent = durationText;
         duration.style.textAlign = 'center';
         row.appendChild(duration);
+
+        const rowLabelParts = [`${tn != null ? tn : index + 1}. ${track.title || 'Untitled'}`];
+        if (trackMeta) rowLabelParts.push(trackMeta);
+        if (durationText !== '0:00') rowLabelParts.push(durationText);
+        row.dataset.baseAriaLabel = rowLabelParts.join(', ');
+        syncRowPlayingState(row, isPlaying);
         // Eliminado: left, info, right (layout simplificado)
 
         // Async: mark cached rows so users know which tracks are preloaded/available offline
@@ -238,16 +348,18 @@
           window.audioCache.isCached(track.url).then(cached => {
             if (cached) {
               row.classList.add('tlv2-row--cached');
+              row.dataset.offlineAvailable = 'true';
               // Best-effort DOM attribute updates; failure doesn't affect playback
               duration.title = 'Available offline';
-              duration.setAttribute('aria-label', `${formatTime(durationSeconds)}, available offline`);
+              duration.setAttribute('aria-label', `${durationText}, available offline`);
+              syncRowPlayingState(row, row.classList.contains('tlv2-row--playing'));
             }
           }).catch(() => {});
         }
 
         const playFromRow = () => {
           try {
-            if (resonteContext) {
+            if (resonatesContext) {
               const fn = (typeof window.playFromResontesQueue === 'function')
                 ? window.playFromResontesQueue
                 : ((typeof window.playFromFavoritesQueue === 'function')
@@ -370,7 +482,7 @@
             try {
               const url = window.state?.currentTrack?.url ?? null;
               list.querySelectorAll('.tlv2-row').forEach(r => {
-                r.classList.toggle('tlv2-row--playing', !!(url && r.dataset.trackUrl && r.dataset.trackUrl === url));
+                syncRowPlayingState(r, !!(url && r.dataset.trackUrl && r.dataset.trackUrl === url));
               });
             } catch {}
           };

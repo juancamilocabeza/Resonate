@@ -60,6 +60,45 @@
     }, 0);
   }
 
+  function syncPlaylistRowPlayingState(row, isPlaying) {
+    if (!row) return;
+    row.classList.toggle('pl-track-row--playing', !!isPlaying);
+    row.setAttribute('aria-current', isPlaying ? 'true' : 'false');
+    const baseLabel = row.dataset.baseAriaLabel || row.getAttribute('aria-label') || '';
+    if (!baseLabel) return;
+    row.setAttribute('aria-label', isPlaying ? `${baseLabel}, currently playing` : baseLabel);
+  }
+
+  function createPlaylistTrackSummary(pl) {
+    const summary = document.createElement('div');
+    summary.className = 'pl-tracks-summary';
+
+    const primary = document.createElement('div');
+    primary.className = 'pl-tracks-summary-primary';
+
+    const totalTracks = Array.isArray(pl && pl.tracks) ? pl.tracks.length : 0;
+    const count = document.createElement('span');
+    count.className = 'pl-tracks-summary-count';
+    count.textContent = `${totalTracks} track${totalTracks === 1 ? '' : 's'}`;
+    primary.appendChild(count);
+
+    const totalDuration = calculatePlaylistDuration(pl);
+    if (totalDuration > 0) {
+      const duration = document.createElement('span');
+      duration.className = 'pl-tracks-summary-duration';
+      duration.textContent = formatTotalDuration(totalDuration);
+      primary.appendChild(duration);
+    }
+
+    const hint = document.createElement('p');
+    hint.className = 'pl-tracks-summary-hint';
+    hint.textContent = 'Tap a track to play it in order from this playlist.';
+
+    summary.appendChild(primary);
+    summary.appendChild(hint);
+    return summary;
+  }
+
   // ── SVG Icons ──────────────────────────────────────────────────────────────
 
   const CHEVRON_DOWN_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"/></svg>';
@@ -393,11 +432,39 @@
     }
 
     const currentUrl = window.state && window.state.currentTrack ? window.state.currentTrack.url : null;
+    container.appendChild(createPlaylistTrackSummary(pl));
 
     tracks.forEach((track, idx) => {
       const row = createTrackRow(track, idx, pl, container, currentUrl);
       container.appendChild(row);
     });
+
+    try {
+      const audioEl = document.getElementById('audio') || (window.elements && window.elements.audio);
+      if (audioEl) {
+        if (typeof container.__playlistPlayingStateHandler === 'function') {
+          audioEl.removeEventListener('play', container.__playlistPlayingStateHandler);
+        }
+
+        const updatePlayingRows = () => {
+          if (!container.isConnected) {
+            audioEl.removeEventListener('play', updatePlayingRows);
+            if (container.__playlistPlayingStateHandler === updatePlayingRows) {
+              delete container.__playlistPlayingStateHandler;
+            }
+            return;
+          }
+
+          const playingUrl = window.state && window.state.currentTrack ? window.state.currentTrack.url : null;
+          container.querySelectorAll('.pl-track-row').forEach((rowEl) => {
+            syncPlaylistRowPlayingState(rowEl, !!(playingUrl && rowEl.dataset.trackUrl === playingUrl));
+          });
+        };
+
+        container.__playlistPlayingStateHandler = updatePlayingRows;
+        audioEl.addEventListener('play', updatePlayingRows);
+      }
+    } catch { /* ignore errors */ }
   }
 
   /**
@@ -411,22 +478,64 @@
    */
   function createTrackRow(track, idx, pl, container, currentUrl) {
     const row = document.createElement('div');
-    row.className = 'pl-track-row' + (currentUrl && track.url === currentUrl ? ' pl-track-row--playing' : '');
+    row.className = 'pl-track-row';
     row.setAttribute('role', 'listitem');
     row.setAttribute('tabindex', '0');
+    const isPlaying = !!(currentUrl && track.url === currentUrl);
+    syncPlaylistRowPlayingState(row, isPlaying);
 
     const trackDuration = track.duration ? formatDuration(track.duration) : '';
+    const trackTitle = track && track.title ? String(track.title) : 'Untitled';
+    const creator = track && track.creator ? String(track.creator) : '';
 
-    row.innerHTML = `
-      <span class="pl-track-number">${idx + 1}</span>
-      <div class="pl-track-info">
-        <div class="pl-track-title">${escHtml(track.title || 'Untitled')}</div>
-        <div class="pl-track-creator">${escHtml(track.creator || '')}${trackDuration ? ' · ' + escHtml(trackDuration) : ''}</div>
-      </div>
-      <button class="pl-track-remove-btn" type="button" title="Remove from playlist" aria-label="Remove ${escHtml(track.title || 'Untitled')} from playlist">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true" focusable="false"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
-    `;
+    const rowLabelParts = [`${idx + 1}. ${trackTitle}`];
+    if (creator) rowLabelParts.push(creator);
+    if (trackDuration) rowLabelParts.push(trackDuration);
+    row.dataset.baseAriaLabel = rowLabelParts.join(', ');
+    row.setAttribute('aria-label', row.dataset.baseAriaLabel);
+
+    const number = document.createElement('span');
+    number.className = 'pl-track-number';
+    number.textContent = String(idx + 1);
+    row.appendChild(number);
+    if (track && track.url) row.dataset.trackUrl = String(track.url);
+
+    const main = document.createElement('div');
+    main.className = 'pl-track-main';
+
+    const info = document.createElement('div');
+    info.className = 'pl-track-info';
+
+    const title = document.createElement('div');
+    title.className = 'pl-track-title';
+    title.textContent = trackTitle;
+    info.appendChild(title);
+
+    if (creator) {
+      const meta = document.createElement('div');
+      meta.className = 'pl-track-meta';
+      meta.textContent = creator;
+      meta.title = creator;
+      info.appendChild(meta);
+    }
+
+    main.appendChild(info);
+
+    const duration = document.createElement('span');
+    duration.className = 'pl-track-duration';
+    duration.textContent = trackDuration;
+    if (!trackDuration) duration.setAttribute('aria-hidden', 'true');
+    main.appendChild(duration);
+
+    row.appendChild(main);
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'pl-track-remove-btn';
+    removeBtn.type = 'button';
+    removeBtn.title = 'Remove from playlist';
+    removeBtn.setAttribute('aria-label', `Remove ${trackTitle} from playlist`);
+    removeBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true" focusable="false"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+    row.appendChild(removeBtn);
 
     // Play track on row click
     row.addEventListener('click', (e) => {
@@ -448,7 +557,7 @@
     });
 
     // Remove track button with animation
-    row.querySelector('.pl-track-remove-btn').addEventListener('click', (e) => {
+    removeBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       
       // Add remove animation

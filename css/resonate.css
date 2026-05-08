@@ -187,6 +187,43 @@
   padding-bottom: calc(10px + env(safe-area-inset-bottom, 0) + var(--vv-bottom-inset, 0px));
 }
 
+.tracklist__body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tracklist__summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 10px 0;
+  flex-wrap: wrap;
+}
+
+.tracklist__summary-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.tracklist__summary-duration {
+  color: var(--muted);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.tracklist__summary-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
 /* Unified track row styling across contexts */
 .track-row {
   background: var(--collection-row-bg, transparent);
@@ -5659,13 +5696,13 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
   grid-template-columns: 36px 36px 36px minmax(0, 1fr) 52px;
   align-items: center;
   gap: 8px;
-  padding: 8px 6px;
-  border-radius: 8px;
-  background: var(--collection-row-bg, transparent);
-  transition: background 0.15s;
-  min-height: 44px;
-  cursor: pointer;
-  user-select: none;
+   padding: 10px 8px;
+   border-radius: 8px;
+   background: var(--collection-row-bg, transparent);
+   transition: background 0.15s;
+   min-height: 56px;
+   cursor: pointer;
+   user-select: none;
   /* Garantizar que sea clickeable incluso dentro de overflow */
   touch-action: manipulation;
   box-shadow: inset 0 0 0 1px var(--surface-border-subtle);
@@ -5675,7 +5712,7 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
   .tracklist .tlv2-row {
     grid-template-columns: 32px 32px 32px minmax(0, 1fr) 48px;
     gap: 6px;
-    padding: 8px 6px;
+    padding: 9px 6px;
   }
 }
 .tracklist .tlv2-row:hover,
@@ -5710,6 +5747,13 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
   display: flex;
   flex-direction: column;
   min-width: 0;
+}
+
+.tracklist .tlv2-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 3px;
 }
 .tracklist .tlv2-title {
   font-size: 14px;
@@ -5747,6 +5791,15 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.tracklist .tlv2-meta {
+  font-size: 12px;
+  line-height: 1.25;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .tracklist .tlv2-description {
   font-size: 12px;
   color: var(--muted);
@@ -5764,12 +5817,12 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
   align-items: center;
   justify-content: flex-end;
   justify-self: end;
-  min-width: 44px;
-  font-size: 12px;
-  color: var(--fg);
-  opacity: 0.82;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+   min-width: 48px;
+   font-size: 12px;
+   color: var(--fg);
+   opacity: 0.82;
+   font-variant-numeric: tabular-nums;
+   white-space: nowrap;
 }
 .tracklist .tlv2-action {
   background: transparent;

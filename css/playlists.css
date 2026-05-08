@@ -361,6 +361,36 @@
   display: block;
 }
 
+.pl-tracks-summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px 6px;
+  flex-wrap: wrap;
+}
+
+.pl-tracks-summary-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg, #f0f0f0);
+}
+
+.pl-tracks-summary-duration {
+  color: var(--muted, #888);
+  font-variant-numeric: tabular-nums;
+}
+
+.pl-tracks-summary-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted, #888);
+}
+
 /* Empty tracks state */
 .pl-tracks-empty {
   padding: 20px 14px;
@@ -381,12 +411,14 @@
 
 .pl-track-row {
   display: grid;
-  grid-template-columns: 28px 1fr auto;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
   align-items: center;
-  padding: 8px 14px;
+  padding: 10px 14px;
   gap: 10px;
   cursor: pointer;
   transition: background 0.1s, opacity 0.2s, transform 0.2s;
+  border-radius: 10px;
+  margin: 0 8px 4px;
 }
 
 .pl-track-row:hover {
@@ -400,6 +432,7 @@
 
 .pl-track-row--playing {
   background: rgba(var(--primary-rgb), 0.08);
+  box-shadow: inset 3px 0 0 var(--primary);
 }
 
 .pl-track-row--playing .pl-track-number {
@@ -417,6 +450,53 @@
   color: var(--muted, #888);
   text-align: center;
   font-variant-numeric: tabular-nums;
+  position: relative;
+  transition: color 0.15s ease;
+}
+
+.pl-track-row:hover:not(.pl-track-row--playing) .pl-track-number {
+  color: transparent;
+}
+
+.pl-track-row:hover:not(.pl-track-row--playing) .pl-track-number::before {
+  content: '▶';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg, #f0f0f0);
+  font-size: 10px;
+}
+
+.pl-track-row--playing .pl-track-number {
+  color: transparent;
+}
+
+.pl-track-row--playing .pl-track-number::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-8px, -50%);
+  width: 16px;
+  height: 14px;
+  background-image:
+    linear-gradient(var(--primary), var(--primary)),
+    linear-gradient(var(--primary), var(--primary)),
+    linear-gradient(var(--primary), var(--primary));
+  background-size: 3px 8px, 3px 4px, 3px 10px;
+  background-position: 0 bottom, 6px bottom, 12px bottom;
+  background-repeat: no-repeat;
+  animation: eq-bars 0.9s ease-in-out infinite;
+}
+
+.pl-track-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  gap: 10px;
 }
 
 .pl-track-info {
@@ -431,13 +511,22 @@
   text-overflow: ellipsis;
 }
 
-.pl-track-creator {
+.pl-track-meta {
   font-size: 11px;
   color: var(--muted, #888);
   margin-top: 1px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.pl-track-duration {
+  min-width: 40px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--muted, #aaa);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .pl-track-remove-btn {
@@ -452,7 +541,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0.6;
+  opacity: 0.78;
 }
 
 .pl-track-row:hover .pl-track-remove-btn {
@@ -469,6 +558,23 @@
 .pl-track-remove-btn svg {
   width: 14px;
   height: 14px;
+}
+
+@media (max-width: 480px) {
+  .pl-tracks-summary {
+    padding: 8px 12px 4px;
+  }
+
+  .pl-track-row {
+    padding: 9px 12px;
+    gap: 8px;
+    margin: 0 6px 4px;
+  }
+
+  .pl-track-duration {
+    min-width: 34px;
+    font-size: 11px;
+  }
 }
 
 /* ── Add-to-playlist picker popup ─────────────────────── */
