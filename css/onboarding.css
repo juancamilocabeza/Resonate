@@ -11,7 +11,7 @@
    ===================================================================== */
 .ob-tip {
   position: fixed;
-  z-index: 10000;
+  z-index: 10001;
   width: min(280px, calc(100vw - 32px));
   background: var(--card, #1e2530);
   border: 1px solid var(--surface-border, rgba(255, 255, 255, 0.08));
