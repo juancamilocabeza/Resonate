@@ -21,8 +21,8 @@
     STORAGE_KEY: 'resonate-theme',
     DEFAULT_THEME: 'night',
     SPRITE_URL: '/icons/sprite.svg?v=2',
-    DAY_START_HOUR: 6,      // 6:00 AM – day theme begins
-    NIGHT_START_HOUR: 20,   // 8:00 PM – night theme begins
+    DAY_START_HOUR: 6,      // 6:00 AM - day theme begins
+    NIGHT_START_HOUR: 20,   // 8:00 PM - night theme begins
     AUTO_CHECK_INTERVAL: 60 * 1000  // Check time-based theme every minute
   });
 
@@ -451,7 +451,8 @@
    */
   window.resonateTheme = {
     applyTheme,
-    getSavedTheme: getCurrentTheme,
+    getSavedTheme,
+    getCurrentTheme,
     saveTheme
   };
 
@@ -460,7 +461,8 @@
    */
   window.ThemeManager = {
     applyTheme,
-    getSavedTheme: getCurrentTheme,
+    getSavedTheme,
+    getCurrentTheme,
     saveTheme,
     applyTimeBasedTheme,
     getThemeByTime,
