@@ -5731,8 +5731,8 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
 
 @media (max-width: 480px) {
   .tracklist .tlv2-row {
-    grid-template-columns: 28px 28px 28px minmax(0, 1fr) 44px;
-    gap: 4px;
+    grid-template-columns: 32px 32px 32px minmax(0, 1fr) 44px;
+    gap: 2px;
     padding: 8px 6px;
     min-height: 56px;
   }
@@ -5858,15 +5858,28 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 28px;
-  min-height: 28px;
+  min-width: 32px;
+  min-height: 32px;
+  /* Ensure adequate touch target while keeping visual appearance compact */
+  position: relative;
+}
+
+/* Extend touch target to 44x44px for accessibility */
+.tracklist .tlv2-action::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 44px;
+  height: 44px;
 }
 
 @media (max-width: 480px) {
   .tracklist .tlv2-action {
     font-size: 13px;
-    min-width: 24px;
-    min-height: 24px;
+    min-width: 28px;
+    min-height: 28px;
     padding: 3px;
   }
 }
