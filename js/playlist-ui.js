@@ -524,7 +524,7 @@
     const duration = document.createElement('span');
     duration.className = 'pl-track-duration';
     duration.textContent = trackDuration;
-    duration.setAttribute('aria-hidden', trackDuration ? 'false' : 'true');
+    if (!trackDuration) duration.setAttribute('aria-hidden', 'true');
     main.appendChild(duration);
 
     row.appendChild(main);

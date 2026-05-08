@@ -123,7 +123,7 @@
     if (baseLabel) labelParts.push(baseLabel);
     if (isPlaying) labelParts.push('currently playing');
     if (isOffline) labelParts.push('available offline');
-    if (labelParts.length) row.setAttribute('aria-label', labelParts.join(', '));
+    row.setAttribute('aria-label', labelParts.join(', ') || baseLabel || '');
   }
 
   function isResontesContext(container) {
@@ -340,7 +340,7 @@
         if (trackMeta) rowLabelParts.push(trackMeta);
         if (durationText !== '0:00') rowLabelParts.push(durationText);
         row.dataset.baseAriaLabel = rowLabelParts.join(', ');
-        row.setAttribute('aria-label', row.dataset.baseAriaLabel);
+        syncRowPlayingState(row, isPlaying);
         // Eliminado: left, info, right (layout simplificado)
 
         // Async: mark cached rows so users know which tracks are preloaded/available offline
