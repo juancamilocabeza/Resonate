@@ -343,7 +343,9 @@
     // Respect eco battery override
     try {
       if (localStorage.getItem('resonate-eco-battery-active') === '1') return;
-    } catch { /* ignore */ }
+    } catch {
+      // localStorage access may fail in private browsing - proceed with time-based theme
+    }
     
     // Respect explicit user theme preference
     if (hasUserThemePreference()) return;
