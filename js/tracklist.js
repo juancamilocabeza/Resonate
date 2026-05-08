@@ -78,7 +78,7 @@
     return { totalTracks, totalDuration };
   }
 
-  function createTracklistSummary(tracks, { isPlaybackPanel = false, resonteContext = false } = {}) {
+  function createTracklistSummary(tracks, { isPlaybackPanel = false, resonatesContext = false } = {}) {
     const { totalTracks, totalDuration } = summarizeTracks(tracks);
     const summary = document.createElement('div');
     summary.className = 'tracklist__summary';
@@ -102,7 +102,7 @@
     hint.className = 'tracklist__summary-hint';
     if (isPlaybackPanel) {
       hint.textContent = 'Tap a track to jump playback instantly.';
-    } else if (resonteContext) {
+    } else if (resonatesContext) {
       hint.textContent = 'Tap a track to play it from your resonates queue.';
     } else {
       hint.textContent = 'Tap any track to start playback from this release.';
@@ -136,7 +136,7 @@
       tracksContainer.innerHTML = `<div class="search-loading"><div class="loader"></div><span class="loader-text">${message}</span></div>`;
 
       const isPlaybackPanel = !!(tracksContainer && tracksContainer.closest && tracksContainer.closest('#tracks-list-container'));
-      const resonteContext = isResontesContext(tracksContainer);
+      const resonatesContext = isResontesContext(tracksContainer);
 
       const seedTracks = tracksContainer && Array.isArray(tracksContainer.__albumTracks)
         ? tracksContainer.__albumTracks
@@ -148,7 +148,7 @@
           sourceTracks: seedTracks,
           preferCache: true,
           allowFetch: true,
-          preferFullAlbum: !resonteContext
+          preferFullAlbum: !resonatesContext
         });
       } else {
         if (typeof window.fetchOptimizedPlayableFiles === 'function') {
@@ -197,7 +197,7 @@
 
       root.appendChild(createTracklistSummary(files, {
         isPlaybackPanel,
-        resonteContext
+        resonatesContext
       }));
 
       const list = document.createElement('div');
@@ -205,7 +205,7 @@
 
       // INTEGRACIÓN: Precachear favoritas o resultados según contexto
       if (typeof window.audioCache === 'object' && window.audioCache) {
-        if (resonteContext) {
+        if (resonatesContext) {
           // Precarga resontes (mínimo 10)
           window.audioCache.preloadResontes(files);
         } else if (tracksContainer.closest('.search-result')) {
@@ -239,7 +239,7 @@
       files.forEach((track, index) => {
         // Asignar la descripción del álbum al track para que el reproductor la use al reproducir
         track._albumDescription = albumDescription;
-        const trackMeta = buildTrackMeta(track, { hideAlbum: resonteContext });
+        const trackMeta = buildTrackMeta(track, { hideAlbum: resonatesContext });
         const durationSeconds = resolveTrackDurationSeconds(track);
         const durationText = formatTime(durationSeconds);
         const isPlaying = !!(currentTrackUrl && track.url && track.url === currentTrackUrl);
@@ -359,7 +359,7 @@
 
         const playFromRow = () => {
           try {
-            if (resonteContext) {
+            if (resonatesContext) {
               const fn = (typeof window.playFromResontesQueue === 'function')
                 ? window.playFromResontesQueue
                 : ((typeof window.playFromFavoritesQueue === 'function')
