@@ -852,6 +852,9 @@ body.tracks-open #tracks-list-container .tlv2-list {
 }
 
 [data-theme="day"] .progress {
+  /* Fallback for browsers without color-mix() support (Safari < 16.2, Chrome < 111) */
+  background: linear-gradient(90deg, var(--primary), #059669);
+  /* color-mix() gives a theme-aware darker shade of --primary */
   background: linear-gradient(90deg, var(--primary), color-mix(in srgb, var(--primary) 80%, #000));
   box-shadow: 0 0 12px rgba(var(--primary-rgb), 0.5);
 }
@@ -6624,9 +6627,9 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
   *,
   *::before,
   *::after {
-    animation-duration: 0.01ms !important;
+    animation-duration: 0s !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    transition-duration: 0s !important;
     scroll-behavior: auto !important;
   }
 
