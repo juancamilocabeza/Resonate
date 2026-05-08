@@ -77,6 +77,7 @@ const STATIC_FILES = [
   '/js/wake-lock-manager.js',
   '/js/subtitle-manager.js',
   '/js/playlist-manager.js',
+  '/js/playlist-ui.js',
   '/icons/favicon.svg',
   '/icons/sprite.svg',
   '/icons/maskable_icon_x192.png',
