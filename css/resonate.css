@@ -760,7 +760,13 @@ body.tracks-open #tracks-list-container .tlv2-list {
   --btn-active: #0a0a0a;
   --result-hover: rgba(var(--primary-rgb), 0.08);
   --item-hover: rgba(255, 255, 255, 0.08);
+  --neutral: #e2e8f0;
   --control-fg: var(--fg);
+
+  /* Status colors for night theme */
+  --error: #ff6b6b;
+  --success: #4ade80;
+  --warning: #fbbf24;
 
   --surface-border: rgba(255, 255, 255, 0.10);
   --surface-border-subtle: rgba(255, 255, 255, 0.08);
