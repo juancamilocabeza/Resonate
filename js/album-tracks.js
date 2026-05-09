@@ -4,9 +4,72 @@
   const TRACKS_CACHE = new Map();
   const IN_FLIGHT = new Map();
   const DEFAULT_TTL_MS = 10 * 60 * 1000;
+  const UNAVAILABLE_METADATA_KEY = 'resonate_archive_metadata_unavailable_v1';
+  const UNAVAILABLE_METADATA_TTL_MS = 24 * 60 * 60 * 1000;
 
   function nowMs() {
     return Date.now();
+  }
+
+  function loadUnavailableMetadataMap() {
+    try {
+      const raw = localStorage.getItem(UNAVAILABLE_METADATA_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return {};
+
+      const next = {};
+      const cutoff = nowMs() - UNAVAILABLE_METADATA_TTL_MS;
+      for (const [albumId, ts] of Object.entries(parsed)) {
+        const numericTs = Number(ts);
+        if (Number.isFinite(numericTs) && numericTs >= cutoff) {
+          next[String(albumId)] = numericTs;
+        }
+      }
+
+      if (Object.keys(next).length !== Object.keys(parsed).length) {
+        try {
+          localStorage.setItem(UNAVAILABLE_METADATA_KEY, JSON.stringify(next));
+        } catch {}
+      }
+
+      return next;
+    } catch {
+      return {};
+    }
+  }
+
+  function saveUnavailableMetadataMap(map) {
+    try {
+      const entries = Object.entries(map || {});
+      if (!entries.length) {
+        localStorage.removeItem(UNAVAILABLE_METADATA_KEY);
+        return;
+      }
+      localStorage.setItem(UNAVAILABLE_METADATA_KEY, JSON.stringify(map));
+    } catch {}
+  }
+
+  function isMetadataUnavailable(albumId) {
+    if (!albumId) return false;
+    const map = loadUnavailableMetadataMap();
+    const ts = Number(map[String(albumId)]);
+    return Number.isFinite(ts) && (nowMs() - ts) < UNAVAILABLE_METADATA_TTL_MS;
+  }
+
+  function markMetadataUnavailable(albumId) {
+    if (!albumId) return;
+    const map = loadUnavailableMetadataMap();
+    map[String(albumId)] = nowMs();
+    saveUnavailableMetadataMap(map);
+  }
+
+  function clearMetadataUnavailable(albumId) {
+    if (!albumId) return;
+    const map = loadUnavailableMetadataMap();
+    if (!(String(albumId) in map)) return;
+    delete map[String(albumId)];
+    saveUnavailableMetadataMap(map);
   }
 
   function getTrackKey(track) {
@@ -79,18 +142,31 @@
     if (!albumId) return [];
 
     const albumKey = String(albumId);
+    if (isMetadataUnavailable(albumKey)) {
+      return [];
+    }
     if (IN_FLIGHT.has(albumKey)) {
       return IN_FLIGHT.get(albumKey);
     }
 
     const promise = (async () => {
       if (typeof window.fetchOptimizedPlayableFiles !== 'function') return [];
-      const files = await window.fetchOptimizedPlayableFiles(albumId, options);
-      const normalized = normalizeAlbumTracks(albumId, files, {
-        albumTitle: options.albumTitle || (files && files[0] && files[0].album) || ''
-      });
-      setCache(albumId, normalized, { source: 'fetch' });
-      return normalized;
+      try {
+        const files = await window.fetchOptimizedPlayableFiles(albumId, options);
+        clearMetadataUnavailable(albumKey);
+        const normalized = normalizeAlbumTracks(albumId, files, {
+          albumTitle: options.albumTitle || (files && files[0] && files[0].album) || ''
+        });
+        setCache(albumId, normalized, { source: 'fetch' });
+        return normalized;
+      } catch (error) {
+        const status = Number(error && (error.status || error.httpStatus));
+        if (status === 404) {
+          markMetadataUnavailable(albumKey);
+          return [];
+        }
+        throw error;
+      }
     })();
 
     IN_FLIGHT.set(albumKey, promise);

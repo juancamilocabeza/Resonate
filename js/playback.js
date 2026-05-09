@@ -1114,8 +1114,29 @@ async function restorePlaybackQueueFromSnapshot(snapshot) {
       const albumId = snap.albumId != null ? String(snap.albumId) : (state && state.currentTrack ? String(state.currentTrack.albumId || state.currentTrack.id || '') : '');
       if (!albumId) return false;
 
-      if (typeof fetchOptimizedPlayableFiles !== 'function') return false;
-      const tracks = await fetchOptimizedPlayableFiles(albumId);
+      const savedTracklist = (state && state.savedPlaybackTracklist && String(state.savedPlaybackTracklist.albumId || '') === albumId && Array.isArray(state.savedPlaybackTracklist.items))
+        ? state.savedPlaybackTracklist.items
+        : [];
+      const currentTracklist = (state && Array.isArray(state.currentTracklist))
+        ? state.currentTracklist.filter(track => String((track && (track.albumId || track.album || track.id)) || '') === albumId)
+        : [];
+
+      let tracks = [];
+      if (window.AlbumTracks && typeof window.AlbumTracks.getTracks === 'function') {
+        tracks = await window.AlbumTracks.getTracks(albumId, {
+          sourceTracks: savedTracklist.length ? savedTracklist : currentTracklist,
+          source: 'playback-state',
+          preferCache: true,
+          allowFetch: true,
+          preferFullAlbum: false
+        });
+      } else if (savedTracklist.length) {
+        tracks = savedTracklist.slice();
+      } else {
+        if (typeof fetchOptimizedPlayableFiles !== 'function') return false;
+        tracks = await fetchOptimizedPlayableFiles(albumId);
+      }
+
       if (!Array.isArray(tracks) || tracks.length === 0) return false;
       playbackManager.setAlbumPlaylist(albumId, tracks, clampIndex(snap.currentIndex, tracks.length));
       return true;
