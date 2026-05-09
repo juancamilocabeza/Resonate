@@ -2234,7 +2234,7 @@ function createPlayableFiles(audioFiles, identifier, metadata, { qualityTier, al
     if (merged.duration === null || merged.duration === undefined) {
       merged.duration = alternate.duration;
     }
-    if ((!merged.trackNumber && merged.trackNumber !== 0) && (alternate.trackNumber || alternate.trackNumber === 0)) {
+    if (merged.trackNumber == null && alternate.trackNumber != null) {
       merged.trackNumber = alternate.trackNumber;
     }
     if (!merged.title && alternate.title) merged.title = alternate.title;
