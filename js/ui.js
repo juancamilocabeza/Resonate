@@ -1387,6 +1387,13 @@ function ensureSearchInputControllerBound() {
   input.addEventListener('focus', () => {
     if (isCleaning) return;
 
+    if (input.hasAttribute('data-suppress-search-panel-on-focus')) {
+      input.removeAttribute('data-suppress-search-panel-on-focus');
+      setKeyboardOpenState(true);
+      updateSearchClearButton();
+      return;
+    }
+
     // If we intentionally opened history without focus (mobile UX), immediately blur.
     if (suppressNextFocus) {
       suppressNextFocus = false;
@@ -3468,6 +3475,9 @@ function hideSearchResults({ restoreFocus = false } = {}) {
   hideFavoritesList();
 
   if (restoreFocus) {
+    if (elements.searchInput) {
+      elements.searchInput.setAttribute('data-suppress-search-panel-on-focus', '');
+    }
     focusSearchInputFromShortcut();
   }
 }
