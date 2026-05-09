@@ -1387,7 +1387,7 @@ function ensureSearchInputControllerBound() {
   input.addEventListener('focus', () => {
     if (isCleaning) return;
 
-    if (input.dataset.suppressSearchPanelOnFocus === 'true') {
+    if (input.hasAttribute('data-suppress-search-panel-on-focus')) {
       input.removeAttribute('data-suppress-search-panel-on-focus');
       setKeyboardOpenState(true);
       updateSearchClearButton();
@@ -3476,7 +3476,7 @@ function hideSearchResults({ restoreFocus = false } = {}) {
 
   if (restoreFocus) {
     if (elements.searchInput) {
-      elements.searchInput.dataset.suppressSearchPanelOnFocus = 'true';
+      elements.searchInput.setAttribute('data-suppress-search-panel-on-focus', '');
     }
     focusSearchInputFromShortcut();
   }
