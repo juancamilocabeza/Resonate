@@ -2227,6 +2227,23 @@ function createPlayableFiles(audioFiles, identifier, metadata, { qualityTier, al
 
     return existing;
   };
+  const mergeTrackMetadata = (preferred, alternate) => {
+    if (!preferred || !alternate || preferred === alternate) return preferred;
+    const merged = { ...preferred };
+
+    if (merged.duration === null || merged.duration === undefined) {
+      merged.duration = alternate.duration;
+    }
+    if ((merged.trackNumber === null || merged.trackNumber === undefined)
+      && (alternate.trackNumber !== null && alternate.trackNumber !== undefined)) {
+      merged.trackNumber = alternate.trackNumber;
+    }
+    if (!merged.title && alternate.title) merged.title = alternate.title;
+    if (!merged.creator && alternate.creator) merged.creator = alternate.creator;
+    if (!merged.description && alternate.description) merged.description = alternate.description;
+
+    return merged;
+  };
   if (audioFiles.length > 1) {
     // First create all playable files
     let allFiles = audioFiles.map((file, index) => {
@@ -2293,7 +2310,8 @@ function createPlayableFiles(audioFiles, identifier, metadata, { qualityTier, al
       } else {
         // Choose best format/size for current quality tier
         const preferred = pickPreferred(existing, file);
-        seenTracks.set(trackKey, preferred);
+        const alternate = preferred === existing ? file : existing;
+        seenTracks.set(trackKey, mergeTrackMetadata(preferred, alternate));
       }
     }
     playableFiles = Array.from(seenTracks.values());

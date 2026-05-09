@@ -275,7 +275,9 @@
               ? normalized.runtime
               : (normalized.time !== undefined && normalized.time !== null)
                 ? normalized.time
-                : null;
+                : (normalized.playtime !== undefined && normalized.playtime !== null)
+                  ? normalized.playtime
+                  : null;
     const durationSeconds = parseDurationSeconds(durationRaw);
     if (durationSeconds !== null) {
       normalized.duration = durationSeconds;
