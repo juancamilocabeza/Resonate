@@ -153,10 +153,10 @@
       if (typeof window.fetchOptimizedPlayableFiles !== 'function') return [];
       try {
         const files = await window.fetchOptimizedPlayableFiles(albumId, options);
-        clearMetadataUnavailable(albumKey);
         const normalized = normalizeAlbumTracks(albumId, files, {
           albumTitle: options.albumTitle || (files && files[0] && files[0].album) || ''
         });
+        clearMetadataUnavailable(albumKey);
         setCache(albumId, normalized, { source: 'fetch' });
         return normalized;
       } catch (error) {

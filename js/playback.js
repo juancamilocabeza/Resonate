@@ -1113,12 +1113,18 @@ async function restorePlaybackQueueFromSnapshot(snapshot) {
     if (context === 'album') {
       const albumId = snap.albumId != null ? String(snap.albumId) : (state && state.currentTrack ? String(state.currentTrack.albumId || state.currentTrack.id || '') : '');
       if (!albumId) return false;
+      const getTrackAlbumIdentifier = (track) => {
+        if (!track || typeof track !== 'object') return '';
+        if (track.albumId != null && String(track.albumId).trim()) return String(track.albumId);
+        if (track.isAlbumTrack && track.id != null && String(track.id).trim()) return String(track.id);
+        return '';
+      };
 
       const savedTracklist = (state && state.savedPlaybackTracklist && String(state.savedPlaybackTracklist.albumId || '') === albumId && Array.isArray(state.savedPlaybackTracklist.items))
         ? state.savedPlaybackTracklist.items
         : [];
       const currentTracklist = (state && Array.isArray(state.currentTracklist))
-        ? state.currentTracklist.filter(track => String((track && (track.albumId || track.album || track.id)) || '') === albumId)
+        ? state.currentTracklist.filter(track => getTrackAlbumIdentifier(track) === albumId)
         : [];
 
       let tracks = [];
