@@ -1932,7 +1932,14 @@ async function fetchOptimizedPlayableFiles(identifier, options = {}) {
         timeout: metadataTimeout,
         headers: { 'Accept': 'application/json' }
       });
-      if (!(response && response.ok)) throw new Error('Error fetching metadata');
+      if (!(response && response.ok)) {
+        const error = new Error(`Error fetching metadata (${response && typeof response.status === 'number' ? response.status : 'unknown'})`);
+        error.status = response && typeof response.status === 'number' ? response.status : 0;
+        error.httpStatus = error.status;
+        error.identifier = identifier;
+        error.usedProxy = Boolean(usedProxy);
+        throw error;
+      }
       const metadata = await response.json();
       if (!(metadata && metadata.files)) {
         throw new Error('Invalid metadata');

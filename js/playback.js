@@ -1113,9 +1113,36 @@ async function restorePlaybackQueueFromSnapshot(snapshot) {
     if (context === 'album') {
       const albumId = snap.albumId != null ? String(snap.albumId) : (state && state.currentTrack ? String(state.currentTrack.albumId || state.currentTrack.id || '') : '');
       if (!albumId) return false;
+      const getTrackAlbumIdentifier = (track) => {
+        if (!track || typeof track !== 'object') return '';
+        if (track.albumId != null && String(track.albumId).trim()) return String(track.albumId);
+        if (track.isAlbumTrack && track.id != null && String(track.id).trim()) return String(track.id);
+        return '';
+      };
 
-      if (typeof fetchOptimizedPlayableFiles !== 'function') return false;
-      const tracks = await fetchOptimizedPlayableFiles(albumId);
+      const savedTracklist = (state && state.savedPlaybackTracklist && String(state.savedPlaybackTracklist.albumId || '') === albumId && Array.isArray(state.savedPlaybackTracklist.items))
+        ? state.savedPlaybackTracklist.items
+        : [];
+      const currentTracklist = (state && Array.isArray(state.currentTracklist))
+        ? state.currentTracklist.filter(track => getTrackAlbumIdentifier(track) === albumId)
+        : [];
+
+      let tracks = [];
+      if (window.AlbumTracks && typeof window.AlbumTracks.getTracks === 'function') {
+        tracks = await window.AlbumTracks.getTracks(albumId, {
+          sourceTracks: savedTracklist.length ? savedTracklist : currentTracklist,
+          source: 'playback-state',
+          preferCache: true,
+          allowFetch: true,
+          preferFullAlbum: false
+        });
+      } else if (savedTracklist.length) {
+        tracks = savedTracklist.slice();
+      } else {
+        if (typeof fetchOptimizedPlayableFiles !== 'function') return false;
+        tracks = await fetchOptimizedPlayableFiles(albumId);
+      }
+
       if (!Array.isArray(tracks) || tracks.length === 0) return false;
       playbackManager.setAlbumPlaylist(albumId, tracks, clampIndex(snap.currentIndex, tracks.length));
       return true;
