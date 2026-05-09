@@ -5722,7 +5722,7 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
 /* Tracklist V2: estilos globales para todos los contextos */
 .tracklist .tlv2-row {
   display: grid;
-  grid-template-columns: 32px 32px 32px minmax(0, 1fr) 48px;
+  grid-template-columns: 32px 32px 32px 32px minmax(0, 1fr) 48px;
   align-items: center;
   gap: 6px;
   padding: 10px 8px;
@@ -5739,7 +5739,7 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
 
 @media (max-width: 480px) {
   .tracklist .tlv2-row {
-    grid-template-columns: 32px 32px 32px minmax(0, 1fr) 44px;
+    grid-template-columns: 32px 32px 32px 32px minmax(0, 1fr) 44px;
     gap: 2px;
     padding: 8px 6px;
     min-height: 56px;
