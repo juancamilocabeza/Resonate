@@ -361,6 +361,63 @@ try {
 // Cleanup: remove legacy density preference (desktop is now always compact by default).
 try { localStorage.removeItem('resonate_ui_density'); } catch {}
 
+const DESKTOP_MEDIA_QUERY = '(min-width: 1024px) and (hover: hover) and (pointer: fine)';
+
+function matchesMediaQuery(query) {
+  try {
+    return Boolean(window.matchMedia && window.matchMedia(query).matches);
+  } catch {
+    return false;
+  }
+}
+
+function isDesktopExperience() {
+  return matchesMediaQuery(DESKTOP_MEDIA_QUERY);
+}
+
+function focusSearchInputFromShortcut() {
+  try {
+    const input = elements.searchInput;
+    if (!input) return;
+    try { input.focus({ preventScroll: true }); } catch { try { input.focus(); } catch {} }
+    if ((input.value || '').trim()) {
+      try { input.select(); } catch {}
+    }
+    try { scheduleSearchInsetsBurst(); } catch {}
+  } catch {
+    // ignore
+  }
+}
+
+function applyDesktopShortcutHints() {
+  if (!isDesktopExperience()) return;
+  try {
+    if (elements.searchInput) {
+      elements.searchInput.setAttribute('title', 'Search (/, Ctrl+K)');
+      elements.searchInput.setAttribute('aria-keyshortcuts', '/ Control+K Meta+K');
+    }
+  } catch {}
+  try {
+    if (elements.headerResontesBtn) {
+      elements.headerResontesBtn.setAttribute('title', 'My Resonates (F)');
+      elements.headerResontesBtn.setAttribute('aria-keyshortcuts', 'F');
+    }
+  } catch {}
+  try {
+    if (elements.searchResultsClose) {
+      elements.searchResultsClose.setAttribute('title', 'Close (Esc)');
+      elements.searchResultsClose.setAttribute('aria-keyshortcuts', 'Escape');
+    }
+  } catch {}
+  try {
+    if (elements.resontesClose) {
+      elements.resontesClose.setAttribute('title', 'Close (Esc)');
+      elements.resontesClose.setAttribute('aria-keyshortcuts', 'Escape');
+    }
+  } catch {}
+}
+try { applyDesktopShortcutHints(); } catch {}
+
 // ===== Offline index (real cache) =====
 // Build an in-memory index so "offline only" filters are synchronous during render.
 let offlineIndex = {
@@ -493,12 +550,13 @@ function getTextForSearchItem(item) {
 function initializePanelToolbarsOnce() {
   if (window.__resonatePanelToolbarsBound) return;
   window.__resonatePanelToolbarsBound = true;
+  try { applyDesktopShortcutHints(); } catch {}
 
   // Search toolbar
   try {
     if (elements.searchResultsClose) {
       elements.searchResultsClose.addEventListener('click', () => {
-        try { hideSearchResults(); } catch {}
+        try { hideSearchResults({ restoreFocus: true }); } catch {}
       });
     }
   } catch {}
@@ -512,7 +570,7 @@ function initializePanelToolbarsOnce() {
   try {
     if (elements.resontesClose) {
       elements.resontesClose.addEventListener('click', () => {
-        try { hideResontesList(); } catch {}
+        try { hideResontesList({ restoreFocus: true }); } catch {}
       });
     }
 
@@ -842,18 +900,31 @@ function initializeDesktopShortcutsOnce() {
   document.addEventListener('keydown', (e) => {
     try {
       if (!e || e.defaultPrevented) return;
+      const key = String(e.key || '');
+      const lowerKey = key.toLowerCase();
+      const hasPrimaryMod = !!(e.ctrlKey || e.metaKey);
+
+      // Common desktop shortcut
+      if (hasPrimaryMod && !e.altKey && lowerKey === 'k') {
+        if (!isDesktopExperience()) return;
+        e.preventDefault();
+        focusSearchInputFromShortcut();
+        return;
+      }
+
+      if (!isDesktopExperience()) return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
       // ESC closes the active overlay panel
-      if (e.key === 'Escape') {
+      if (key === 'Escape') {
         if (state.searchActive) {
           e.preventDefault();
-          hideSearchResults();
+          hideSearchResults({ restoreFocus: true });
           return;
         }
         if (elements.resontesList && elements.resontesList.classList.contains('active')) {
           e.preventDefault();
-          hideResontesList();
+          hideResontesList({ restoreFocus: true });
           return;
         }
         return;
@@ -863,15 +934,14 @@ function initializeDesktopShortcutsOnce() {
       if (isTypingContext()) return;
 
       // '/' focuses search
-      if (e.key === '/') {
+      if (key === '/') {
         e.preventDefault();
-        elements.searchInput?.focus?.();
-        try { scheduleSearchInsetsBurst(); } catch {}
+        focusSearchInputFromShortcut();
         return;
       }
 
       // 'f' toggles favorites drawer
-      if (e.key === 'f' || e.key === 'F') {
+      if (lowerKey === 'f') {
         e.preventDefault();
         try {
           const inst = (typeof window.ensureFavoritesToggleInitialized === 'function')
@@ -1469,13 +1539,7 @@ function ensureSearchInputControllerBound() {
     document.addEventListener('pointerdown', (e) => {
       try {
         // Desktop inline: don't auto-close on outside clicks.
-        const isDesktopInline = (() => {
-          try {
-            return window.matchMedia('(min-width: 1024px) and (hover: hover) and (pointer: fine)').matches;
-          } catch {
-            return false;
-          }
-        })();
+        const isDesktopInline = isDesktopExperience();
         if (isDesktopInline) return;
 
         if (!elements.searchResults || !elements.searchResults.classList.contains('active')) return;
@@ -3389,7 +3453,7 @@ function preparePlaybackTransitionFromList({
   }
 }
 
-function hideSearchResults() {
+function hideSearchResults({ restoreFocus = false } = {}) {
   // Abort any ongoing search operations
   if (typeof window.abortAllSearchOperations === 'function') {
     window.abortAllSearchOperations();
@@ -3402,6 +3466,10 @@ function hideSearchResults() {
   state.searchActive = false;
   setSearchOpenState(false);
   hideFavoritesList();
+
+  if (restoreFocus) {
+    focusSearchInputFromShortcut();
+  }
 }
 
 function updateMediaPositionState() {
@@ -7710,7 +7778,7 @@ class FavoritesToggle {
       // - Mobile/tablet: scroll favorites into view (avoid forcing the keyboard open).
       // - Desktop: focus the filter for fast typing.
       try {
-        const isDesktop = !!(window.matchMedia && window.matchMedia('(min-width: 1024px)').matches);
+        const isDesktop = isDesktopExperience();
 
         if (isDesktop && elements.favoritesFilter) {
           try { elements.favoritesFilter.focus({ preventScroll: true }); } catch { try { elements.favoritesFilter.focus(); } catch {} }
@@ -7869,7 +7937,7 @@ function updateFavoritesCount() {
   }
 }
 
-function hideResontesList() {
+function hideResontesList({ restoreFocus = false } = {}) {
   window.logger?.debug({ message: 'hideResontesList called', hasToggle: !!resontesToggleInstance }, 'UI');
   // Siempre ejecutar el ocultamiento, sin importar el estado previo
   if (resontesToggleInstance) {
@@ -7897,6 +7965,15 @@ function hideResontesList() {
     const hb = elements.headerResontesBtn || document.getElementById('header-resontes-btn');
     if (hb) { hb.classList.remove('active'); hb.setAttribute('aria-expanded', 'false'); }
   } catch {}
+
+  if (restoreFocus) {
+    try {
+      const hb = elements.headerResontesBtn || document.getElementById('header-resontes-btn');
+      if (hb) {
+        try { hb.focus({ preventScroll: true }); } catch { try { hb.focus(); } catch {} }
+      }
+    } catch {}
+  }
 }
 
 // Backward-compatible alias (favorites -> resontes)
