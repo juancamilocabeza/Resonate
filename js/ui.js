@@ -101,6 +101,12 @@ if (document.readyState === 'complete' || document.readyState === 'interactive')
 
 // Refresca todos los iconos de resonte en todos los listados
 window.resonateLogoSVG = `<svg class="resonate-icon" width="24" height="24" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false"><circle cx="256" cy="256" r="200" stroke="currentColor" stroke-width="32" fill="none"></circle><path d="M96 256 C140 256, 180 180, 220 180 C260 180, 300 332, 340 332 C380 332, 416 256, 416 256" stroke="currentColor" stroke-width="32" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>`;
+window.cardMoreIconSVG = window.cardMoreIconSVG || `
+  <svg class="card-more-icon" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+    <circle cx="6" cy="12" r="1.75" fill="currentColor" stroke="none"></circle>
+    <circle cx="12" cy="12" r="1.75" fill="currentColor" stroke="none"></circle>
+    <circle cx="18" cy="12" r="1.75" fill="currentColor" stroke="none"></circle>
+  </svg>`;
 
 /**
  * Shared helper: update a resonate button's visual state.
@@ -5035,7 +5041,7 @@ function openCardContextMenu(item, context, options = {}) {
   }
 
   const playLabelEl = document.getElementById('card-ctx-play-label');
-  if (playLabelEl) playLabelEl.textContent = isAlbum ? 'Play album' : 'Play track';
+  if (playLabelEl) playLabelEl.textContent = isAlbum ? 'Play album' : 'Play';
 
   const resonateLabelEl = document.getElementById('card-ctx-resonate-label');
   if (resonateLabelEl) {
@@ -5357,12 +5363,7 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
   // More button (⋯) that opens context menu on mobile
   const moreBtn = document.createElement('button');
   moreBtn.className = 'card-btn more';
-  moreBtn.innerHTML = `
-    <svg class="card-more-icon" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-      <circle cx="6" cy="12" r="1.75" fill="currentColor" stroke="none"></circle>
-      <circle cx="12" cy="12" r="1.75" fill="currentColor" stroke="none"></circle>
-      <circle cx="18" cy="12" r="1.75" fill="currentColor" stroke="none"></circle>
-    </svg>`;
+  moreBtn.innerHTML = window.cardMoreIconSVG || '';
   moreBtn.title = 'More options';
   moreBtn.setAttribute('aria-label', 'More options');
   moreBtn.setAttribute('aria-haspopup', 'true');
