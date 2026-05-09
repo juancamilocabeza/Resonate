@@ -101,6 +101,12 @@ if (document.readyState === 'complete' || document.readyState === 'interactive')
 
 // Refresca todos los iconos de resonte en todos los listados
 window.resonateLogoSVG = `<svg class="resonate-icon" width="24" height="24" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false"><circle cx="256" cy="256" r="200" stroke="currentColor" stroke-width="32" fill="none"></circle><path d="M96 256 C140 256, 180 180, 220 180 C260 180, 300 332, 340 332 C380 332, 416 256, 416 256" stroke="currentColor" stroke-width="32" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>`;
+window.cardMoreIconSVG = window.cardMoreIconSVG || `
+  <svg class="card-more-icon" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+    <circle cx="6" cy="12" r="1.75" fill="currentColor" stroke="none"></circle>
+    <circle cx="12" cy="12" r="1.75" fill="currentColor" stroke="none"></circle>
+    <circle cx="18" cy="12" r="1.75" fill="currentColor" stroke="none"></circle>
+  </svg>`;
 
 /**
  * Shared helper: update a resonate button's visual state.
@@ -4915,6 +4921,99 @@ function createSearchResultElement(result, globalIndex) {
 // Holds the last item/context state for the shared card-context-sheet.
 let __cardContextState = null;
 
+function resolveCardTrackCount(item, isAlbum) {
+  if (item && Array.isArray(item.tracks) && item.tracks.length > 0) {
+    return item.tracks.length;
+  }
+  const parsedTrackCount = Number(item && item.trackCount);
+  if (Number.isFinite(parsedTrackCount) && parsedTrackCount > 0) {
+    return parsedTrackCount;
+  }
+  return isAlbum ? null : 1;
+}
+
+function getCardContextResonateState({ identifier, isAlbum, trackCount }) {
+  if (isAlbum && Number.isFinite(trackCount) && trackCount > 1) {
+    const buttonState = getAlbumButtonState(identifier, trackCount);
+    if (buttonState.action === 'complete') {
+      return { label: 'Complete album', action: 'complete', isActive: false };
+    }
+    if (buttonState.action === 'remove') {
+      return { label: 'Remove from Resonates', action: 'remove', isActive: true };
+    }
+    return { label: 'Add album to Resonates', action: 'add', isActive: false };
+  }
+
+  const isActive = isAlbumInFavorites(identifier);
+  return {
+    label: isActive ? 'Remove from Resonates' : 'Add to Resonates',
+    action: isActive ? 'remove' : 'add',
+    isActive
+  };
+}
+
+function getCardContextTracksLabel(expandBtn) {
+  if (!expandBtn) return 'Show Tracks';
+  return expandBtn.getAttribute('aria-expanded') === 'true' ? 'Hide Tracks' : 'Show Tracks';
+}
+
+function getCardContextShareLabel() {
+  const { canShare, canCopy } = getShareCapabilities();
+  if (canShare) return 'Share';
+  if (canCopy) return 'Copy link';
+  return 'Sharing not available';
+}
+
+async function handleCardResonateAction({ identifier, favBtn, animate = false }) {
+  if (!identifier) return null;
+
+  const files = (window.AlbumTracks && typeof window.AlbumTracks.getTracks === 'function')
+    ? await window.AlbumTracks.getTracks(identifier, { preferCache: true, allowFetch: true })
+    : await fetchOptimizedPlayableFiles(identifier);
+
+  if (!Array.isArray(files) || files.length === 0) return null;
+
+  let nextActive = false;
+  let contextState = null;
+
+  if (files.length > 1) {
+    const buttonState = getAlbumButtonState(identifier, files.length);
+    if (buttonState.action === 'remove') {
+      removeAlbumFromFavorites(identifier);
+      nextActive = false;
+    } else {
+      addAlbumToFavorites(identifier, files);
+      nextActive = true;
+    }
+    contextState = getCardContextResonateState({
+      identifier,
+      isAlbum: true,
+      trackCount: files.length
+    });
+  } else {
+    const track = files[0];
+    toggleFavorite(track);
+    nextActive = isTrackFavorite(track);
+    contextState = getCardContextResonateState({
+      identifier,
+      isAlbum: false,
+      trackCount: 1
+    });
+  }
+
+  if (favBtn) {
+    applyResonteButtonState(favBtn, nextActive, { animate });
+  }
+
+  try { updateSearchResultFavoriteState(identifier, nextActive); } catch {}
+
+  return {
+    nextActive,
+    trackCount: files.length,
+    contextState
+  };
+}
+
 /**
  * Populate and open the shared card context bottom sheet.
  * @param {object} item      - The card data object (search result or resonates item)
@@ -4922,30 +5021,52 @@ let __cardContextState = null;
  * @param {object} options   - { identifier, title, creator, isAlbum, expandBtn, favBtn, globalIndex }
  */
 function openCardContextMenu(item, context, options = {}) {
-  const { identifier, title, creator, isAlbum, expandBtn, favBtn, globalIndex } = options;
+  const { identifier, title, creator, isAlbum, expandBtn, favBtn, globalIndex, triggerBtn } = options;
+  const trackCount = resolveCardTrackCount(item, isAlbum);
 
   const titleEl = document.getElementById('card-context-title');
   if (titleEl) titleEl.textContent = title || 'Options';
 
   const subtitleEl = document.getElementById('card-context-subtitle');
-  if (subtitleEl) subtitleEl.textContent = (creator && creator !== 'Unknown') ? `by ${creator}` : '';
+  if (subtitleEl) {
+    const subtitleParts = [];
+    if (creator && creator !== 'Unknown') subtitleParts.push(`by ${creator}`);
+    if (Number.isFinite(trackCount) && trackCount > 1) subtitleParts.push(`${trackCount} tracks`);
+    subtitleEl.textContent = subtitleParts.join(' · ');
+  }
+
+  const sheetEl = document.getElementById('card-context-sheet');
+  if (sheetEl) {
+    sheetEl.setAttribute('aria-label', `${title || 'Track'} options`);
+  }
 
   const playLabelEl = document.getElementById('card-ctx-play-label');
-  if (playLabelEl) playLabelEl.textContent = isAlbum ? 'Play Album' : 'Play';
+  if (playLabelEl) playLabelEl.textContent = isAlbum ? 'Play album' : 'Play';
 
   const resonateLabelEl = document.getElementById('card-ctx-resonate-label');
   if (resonateLabelEl) {
-    const isFav = isAlbumInFavorites(identifier);
-    resonateLabelEl.textContent = isFav ? 'Remove from Resonates' : 'Add to Resonates';
+    const resonateState = getCardContextResonateState({ identifier, isAlbum, trackCount });
+    resonateLabelEl.textContent = resonateState.label;
   }
 
   const tracksBtn = document.getElementById('card-ctx-tracks');
-  if (tracksBtn) tracksBtn.hidden = !isAlbum;
+  if (tracksBtn) {
+    tracksBtn.hidden = !isAlbum;
+    const tracksLabelEl = tracksBtn.querySelector('.sheet-item-label');
+    if (tracksLabelEl) tracksLabelEl.textContent = getCardContextTracksLabel(expandBtn);
+  }
 
-  __cardContextState = { item, context, identifier, title, creator, isAlbum, expandBtn, favBtn, globalIndex };
+  const shareBtn = document.getElementById('card-ctx-share');
+  if (shareBtn) {
+    applyShareButtonState(shareBtn);
+    const shareLabelEl = shareBtn.querySelector('.sheet-item-label');
+    if (shareLabelEl) shareLabelEl.textContent = getCardContextShareLabel();
+  }
+
+  __cardContextState = { item, context, identifier, title, creator, isAlbum, expandBtn, favBtn, globalIndex, triggerBtn, trackCount };
 
   if (window.BottomSheetAPI) {
-    window.BottomSheetAPI.openById('card-context-sheet');
+    window.BottomSheetAPI.openById('card-context-sheet', triggerBtn || favBtn || document.body);
   }
 }
 
@@ -4995,28 +5116,14 @@ function initCardContextSheetHandlers() {
       const st = __cardContextState;
       __cardContextState = null;
       if (!st) return;
-      const { identifier, isAlbum } = st;
+      const { identifier, favBtn } = st;
       resonateBtn.disabled = true;
       try {
-        const isFav = isAlbumInFavorites(identifier);
-        if (isFav) {
-          removeAlbumFromFavorites(identifier);
-          updateFavoritesList();
-          updateFavoriteButton();
-          showStatus('Removed from resonates', 'info');
-        } else {
-          const files = (window.AlbumTracks && typeof window.AlbumTracks.getTracks === 'function')
-            ? await window.AlbumTracks.getTracks(identifier, { preferCache: true, allowFetch: true })
-            : await fetchOptimizedPlayableFiles(identifier);
-          if (files.length > 1) {
-            addAlbumToFavorites(identifier, files);
-          } else if (files.length === 1) {
-            toggleFavorite(files[0]);
-          }
-          showStatus('Added to resonates', 'success');
+        const result = await handleCardResonateAction({ identifier, favBtn });
+        if (result && result.contextState) {
+          const resonateLabelEl = document.getElementById('card-ctx-resonate-label');
+          if (resonateLabelEl) resonateLabelEl.textContent = result.contextState.label;
         }
-        try { if (typeof window.refreshAllResonteButtons === 'function') window.refreshAllResonteButtons(); } catch {}
-        try { updateFavoriteButton(); } catch {}
       } catch {
         showStatus("Couldn't update resonates", 'error');
       } finally {
@@ -5256,10 +5363,12 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
   // More button (⋯) that opens context menu on mobile
   const moreBtn = document.createElement('button');
   moreBtn.className = 'card-btn more';
-  moreBtn.textContent = '⋯';
+  moreBtn.innerHTML = window.cardMoreIconSVG || '';
   moreBtn.title = 'More options';
   moreBtn.setAttribute('aria-label', 'More options');
   moreBtn.setAttribute('aria-haspopup', 'true');
+  moreBtn.setAttribute('aria-controls', 'card-context-sheet');
+  moreBtn.setAttribute('aria-expanded', 'false');
   
   // Secondary actions (hidden by default on mobile, shown on desktop)
   const shareBtn = document.createElement('button');
@@ -5350,28 +5459,7 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
       e.stopPropagation();
       favBtn.classList.add('resonate-btn-loading');
       try {
-        const files = (window.AlbumTracks && typeof window.AlbumTracks.getTracks === 'function')
-          ? await window.AlbumTracks.getTracks(identifier, { preferCache: true, allowFetch: true })
-          : await fetchOptimizedPlayableFiles(identifier);
-        let newActive = false;
-        if (files.length > 1) {
-          const buttonState = getAlbumButtonState(identifier, files.length);
-          if (buttonState.action === 'remove') {
-            removeAlbumFromFavorites(identifier);
-            newActive = false;
-            try { updateSearchResultFavoriteState(identifier, false); } catch {}
-          } else {
-            addAlbumToFavorites(identifier, files);
-            newActive = true;
-            try { updateSearchResultFavoriteState(identifier, true); } catch {}
-          }
-        } else if (files.length === 1) {
-          const track = files[0];
-          toggleFavorite(track);
-          newActive = isTrackFavorite(track);
-          try { updateSearchResultFavoriteState(identifier, newActive); } catch {}
-        }
-        applyResonteButtonState(favBtn, newActive, { animate: true });
+        await handleCardResonateAction({ identifier, favBtn, animate: true });
       } catch (err) {
         showStatus('Couldn\'t update resonates', 'error');
       } finally {
@@ -5418,7 +5506,7 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
     // More button - opens context menu with clear actions
     moreBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      openCardContextMenu(item, 'search', { identifier, title, creator, isAlbum, expandBtn, favBtn, globalIndex });
+      openCardContextMenu(item, 'search', { identifier, title, creator, isAlbum, expandBtn, favBtn, globalIndex, triggerBtn: moreBtn });
     });
   } else {
     // favorites / resonates context
@@ -5516,7 +5604,7 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
     // More button - opens context menu with clear actions
     moreBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      openCardContextMenu(item, context, { identifier, title, creator, isAlbum: isAlbumFavorite, expandBtn, favBtn, globalIndex });
+      openCardContextMenu(item, context, { identifier, title, creator, isAlbum: isAlbumFavorite, expandBtn, favBtn, globalIndex, triggerBtn: moreBtn });
     });
   }
 
