@@ -38,7 +38,13 @@
         ? track.length
         : (track.trackDuration !== undefined && track.trackDuration !== null)
           ? track.trackDuration
-          : track.track_duration;
+          : (track.track_duration !== undefined && track.track_duration !== null)
+            ? track.track_duration
+            : (track.runtime !== undefined && track.runtime !== null)
+              ? track.runtime
+              : (track.time !== undefined && track.time !== null)
+                ? track.time
+                : track.playtime;
 
     return parseDurationSeconds(rawDuration);
   }
