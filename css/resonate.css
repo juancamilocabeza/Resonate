@@ -2055,8 +2055,16 @@ button:active:not(:disabled) {
 .prev-btn,
 .next-btn {
   min-width: var(--btn-size-mobile);
-  font-size: 20px;
   color: var(--control-fg);
+}
+
+.prev-btn .control-icon,
+.next-btn .control-icon {
+  width: 22px;
+  height: 22px;
+  display: block;
+  flex-shrink: 0;
+  pointer-events: none;
 }
 
 .prev-btn:hover:not(:disabled),
@@ -2082,7 +2090,6 @@ button:active:not(:disabled) {
 .favorite-btn,
 .additional-btn {
   width: var(--btn-size-mobile);
-  font-size: 20px;
   color: var(--control-fg);
 }
 
@@ -2129,7 +2136,6 @@ button:active:not(:disabled) {
 /* Shuffle button */
 .shuffle-favorites-btn {
   width: var(--btn-size-mobile);
-  font-size: 20px;
   outline: none !important;
   color: var(--control-fg);
 }
