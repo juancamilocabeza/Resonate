@@ -116,6 +116,36 @@
     return window.PlaylistManager || null;
   }
 
+  function showStatusMessage(message, type = 'info', timeout = 2000) {
+    try {
+      if (typeof window.showStatus === 'function') {
+        window.showStatus(message, type, timeout);
+      }
+    } catch { /* ignore errors */ }
+  }
+
+  function playPlaylistFromIndex(playlist, index) {
+    try {
+      if (typeof window.playFromPlaylist === 'function') {
+        window.playFromPlaylist(playlist, index);
+      }
+    } catch { /* ignore errors */ }
+  }
+
+  function getCurrentTrackUrl() {
+    try {
+      return window.state && window.state.currentTrack ? window.state.currentTrack.url : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function updatePlaylistsCountBadge(count) {
+    const countBadge = document.getElementById('playlists-count');
+    if (!countBadge) return;
+    countBadge.textContent = count > 0 ? String(count) : '';
+  }
+
   // ── Panel Visibility ────────────────────────────────────────────────────────
 
   /**
@@ -190,10 +220,7 @@
     const playlists = mgr ? mgr.getAll() : [];
 
     // Update header count badge
-    const countBadge = document.getElementById('playlists-count');
-    if (countBadge) {
-      countBadge.textContent = playlists.length > 0 ? String(playlists.length) : '';
-    }
+    updatePlaylistsCountBadge(playlists.length);
 
     // Show empty state message if no playlists
     if (playlists.length === 0) {
@@ -238,6 +265,30 @@
     });
   }
 
+  function getPlaylistHeaderAriaLabel(playlist) {
+    const count = Array.isArray(playlist && playlist.tracks) ? playlist.tracks.length : 0;
+    const name = playlist && playlist.name ? String(playlist.name) : 'Playlist';
+    return `${name}, ${count} track${count !== 1 ? 's' : ''}`;
+  }
+
+  function refreshPlaylistCardLabels(card, playlist) {
+    if (!card || !playlist) return;
+    const header = card.querySelector('.pl-card-header');
+    if (header) header.setAttribute('aria-label', getPlaylistHeaderAriaLabel(playlist));
+    const tracksList = card.querySelector('.pl-tracks-list');
+    if (tracksList) tracksList.setAttribute('aria-label', `Tracks in ${playlist.name}`);
+    const playBtn = card.querySelector('.pl-card-btn--play');
+    if (playBtn) playBtn.setAttribute('aria-label', `Play ${playlist.name}`);
+    const shuffleBtn = card.querySelector('.pl-card-btn--shuffle');
+    if (shuffleBtn) shuffleBtn.setAttribute('aria-label', `Shuffle play ${playlist.name}`);
+    const renameBtn = card.querySelector('.pl-card-btn--rename');
+    if (renameBtn) renameBtn.setAttribute('aria-label', `Rename ${playlist.name}`);
+    const exportBtn = card.querySelector('.pl-card-btn--export');
+    if (exportBtn) exportBtn.setAttribute('aria-label', `Export ${playlist.name}`);
+    const deleteBtn = card.querySelector('.pl-card-btn--delete');
+    if (deleteBtn) deleteBtn.setAttribute('aria-label', `Delete ${playlist.name}`);
+  }
+
   /**
    * Create a playlist card element
    * @param {Object} pl - Playlist object
@@ -255,7 +306,7 @@
     const metaStr = `${trackCount} track${trackCount !== 1 ? 's' : ''}${durationStr ? ' · ' + durationStr : ''}`;
 
     card.innerHTML = `
-      <div class="pl-card-header" tabindex="0" role="button" aria-expanded="false" aria-label="${escHtml(pl.name)}, ${trackCount} tracks">
+      <div class="pl-card-header" tabindex="0" role="button" aria-expanded="false" aria-label="${escHtml(getPlaylistHeaderAriaLabel(pl))}">
         <div class="pl-card-expand-indicator">${CHEVRON_DOWN_SVG}</div>
         <div class="pl-card-info">
           <div class="pl-card-name-container">
@@ -287,9 +338,9 @@
 
     const header = card.querySelector('.pl-card-header');
     const tracksList = card.querySelector('.pl-tracks-list');
-    const expandIndicator = card.querySelector('.pl-card-expand-indicator');
     const nameSpan = card.querySelector('.pl-card-name');
     const nameInput = card.querySelector('.pl-card-name-input');
+    refreshPlaylistCardLabels(card, pl);
 
     // Toggle track list on header click
     header.addEventListener('click', (e) => {
@@ -312,24 +363,18 @@
     // Play button
     card.querySelector('.pl-card-btn--play').addEventListener('click', (e) => {
       e.stopPropagation();
-      try {
-        if (typeof window.playFromPlaylist === 'function') {
-          window.playFromPlaylist(pl, 0);
-        }
-      } catch { /* ignore errors */ }
+      playPlaylistFromIndex(pl, 0);
     });
 
     // Shuffle play button
     card.querySelector('.pl-card-btn--shuffle').addEventListener('click', (e) => {
       e.stopPropagation();
       try {
-        if (typeof window.playFromPlaylist === 'function' && Array.isArray(pl.tracks) && pl.tracks.length > 0) {
+        if (Array.isArray(pl.tracks) && pl.tracks.length > 0) {
           // Pick a random starting track
           const randomIdx = Math.floor(Math.random() * pl.tracks.length);
-          window.playFromPlaylist(pl, randomIdx);
-          if (typeof window.showStatus === 'function') {
-            window.showStatus(`Shuffling: ${pl.name}`, 'info', 2000);
-          }
+          playPlaylistFromIndex(pl, randomIdx);
+          showStatusMessage(`Shuffling: ${pl.name}`, 'info', 2000);
         }
       } catch { /* ignore errors */ }
     });
@@ -353,9 +398,8 @@
               mgr.renamePlaylist(pl.id, newName);
               nameSpan.textContent = newName;
               pl.name = newName;
-              if (typeof window.showStatus === 'function') {
-                window.showStatus(`Renamed to "${newName}"`, 'info', 2000);
-              }
+              refreshPlaylistCardLabels(card, pl);
+              showStatusMessage(`Renamed to "${newName}"`, 'info', 2000);
             }
           } catch { /* ignore errors */ }
         }
@@ -387,9 +431,7 @@
         const mgr = getPlaylistManager();
         if (mgr) {
           mgr.exportToGrayjay(pl.id);
-          if (typeof window.showStatus === 'function') {
-            window.showStatus(`Exported "${pl.name}"`, 'info', 2000);
-          }
+          showStatusMessage(`Exported "${pl.name}"`, 'info', 2000);
         }
       } catch { /* ignore errors */ }
     });
@@ -402,10 +444,12 @@
           const mgr = getPlaylistManager();
           if (mgr) mgr.deletePlaylist(pl.id);
         } catch { /* ignore errors */ }
-        renderPlaylistsPanel();
-        if (typeof window.showStatus === 'function') {
-          window.showStatus(`Deleted "${pl.name}"`, 'info', 2000);
-        }
+        const body = document.getElementById('playlists-panel-body');
+        card.remove();
+        const remaining = body ? body.querySelectorAll('.pl-card').length : 0;
+        updatePlaylistsCountBadge(remaining);
+        if (remaining === 0) renderPlaylistsPanel();
+        showStatusMessage(`Deleted "${pl.name}"`, 'info', 2000);
       });
     });
 
@@ -431,7 +475,7 @@
       return;
     }
 
-    const currentUrl = window.state && window.state.currentTrack ? window.state.currentTrack.url : null;
+    const currentUrl = getCurrentTrackUrl();
     container.appendChild(createPlaylistTrackSummary(pl));
 
     tracks.forEach((track, idx) => {
@@ -455,7 +499,7 @@
             return;
           }
 
-          const playingUrl = window.state && window.state.currentTrack ? window.state.currentTrack.url : null;
+          const playingUrl = getCurrentTrackUrl();
           container.querySelectorAll('.pl-track-row').forEach((rowEl) => {
             syncPlaylistRowPlayingState(rowEl, !!(playingUrl && rowEl.dataset.trackUrl === playingUrl));
           });
@@ -479,7 +523,7 @@
   function createTrackRow(track, idx, pl, container, currentUrl) {
     const row = document.createElement('div');
     row.className = 'pl-track-row';
-    row.setAttribute('role', 'listitem');
+    row.setAttribute('role', 'button');
     row.setAttribute('tabindex', '0');
     const isPlaying = !!(currentUrl && track.url === currentUrl);
     syncPlaylistRowPlayingState(row, isPlaying);
@@ -540,11 +584,7 @@
     // Play track on row click
     row.addEventListener('click', (e) => {
       if (e.target.closest('.pl-track-remove-btn')) return;
-      try {
-        if (typeof window.playFromPlaylist === 'function') {
-          window.playFromPlaylist(pl, idx);
-        }
-      } catch { /* ignore errors */ }
+      playPlaylistFromIndex(pl, idx);
     });
 
     // Keyboard support for accessibility
@@ -584,6 +624,7 @@
               const durationStr = newDuration > 0 ? formatTotalDuration(newDuration) : '';
               meta.textContent = `${newCount} track${newCount !== 1 ? 's' : ''}${durationStr ? ' · ' + durationStr : ''}`;
             }
+            refreshPlaylistCardLabels(card, pl);
           }
         } else {
           renderPlaylistsPanel();
@@ -600,6 +641,7 @@
   // ── Add-to-Playlist Picker Popup ────────────────────────────────────────────
 
   let _pickerBackdrop = null;
+  let _pickerKeydownHandler = null;
 
   /**
    * Close the playlist picker popup
@@ -614,6 +656,10 @@
         existingPicker.parentNode.removeChild(existingPicker);
       }
     } catch { /* ignore errors */ }
+    if (_pickerKeydownHandler) {
+      document.removeEventListener('keydown', _pickerKeydownHandler);
+      _pickerKeydownHandler = null;
+    }
     _pickerBackdrop = null;
   }
 
@@ -679,9 +725,7 @@
           const btn = createPickerItem(pl.name, `${trackCount} track${trackCount !== 1 ? 's' : ''}`, () => {
             try {
               const added = mgr.addTrack(pl.id, track);
-              if (typeof window.showStatus === 'function') {
-                window.showStatus(added ? `Added to "${pl.name}"` : `Already in "${pl.name}"`, 'info', 2000);
-              }
+              showStatusMessage(added ? `Added to "${pl.name}"` : `Already in "${pl.name}"`, 'info', 2000);
             } catch { /* ignore errors */ }
             closePlaylistPicker();
           });
@@ -695,9 +739,7 @@
         showCreatePlaylistModal((newPlaylist) => {
           if (newPlaylist && mgr) {
             mgr.addTrack(newPlaylist.id, track);
-            if (typeof window.showStatus === 'function') {
-              window.showStatus(`Added to "${newPlaylist.name}"`, 'info', 2000);
-            }
+            showStatusMessage(`Added to "${newPlaylist.name}"`, 'info', 2000);
           }
         });
       }, true);
@@ -717,13 +759,12 @@
     }
 
     // Close on Escape key
-    const handleKeydown = (e) => {
+    _pickerKeydownHandler = (e) => {
       if (e.key === 'Escape') {
         closePlaylistPicker();
-        document.removeEventListener('keydown', handleKeydown);
       }
     };
-    document.addEventListener('keydown', handleKeydown);
+    document.addEventListener('keydown', _pickerKeydownHandler);
 
     document.body.appendChild(picker);
 
@@ -797,6 +838,7 @@
   // ── Custom Modal Components ─────────────────────────────────────────────────
 
   let _modalBackdrop = null;
+  let _modalKeydownHandler = null;
 
   /**
    * Close any open modal
@@ -811,6 +853,10 @@
         existingModal.parentNode.removeChild(existingModal);
       }
     } catch { /* ignore errors */ }
+    if (_modalKeydownHandler) {
+      document.removeEventListener('keydown', _modalKeydownHandler);
+      _modalKeydownHandler = null;
+    }
     _modalBackdrop = null;
   }
 
@@ -864,13 +910,12 @@
     });
 
     // Close on Escape key
-    const handleKeydown = (e) => {
+    _modalKeydownHandler = (e) => {
       if (e.key === 'Escape') {
         closeModal();
-        document.removeEventListener('keydown', handleKeydown);
       }
     };
-    document.addEventListener('keydown', handleKeydown);
+    document.addEventListener('keydown', _modalKeydownHandler);
 
     document.body.appendChild(modal);
 
@@ -926,10 +971,15 @@
         if (mgr) {
           const newPlaylist = mgr.createPlaylist(name);
           closeModal();
-          renderPlaylistsPanel();
-          if (typeof window.showStatus === 'function') {
-            window.showStatus(`Created "${name}"`, 'info', 2000);
+          const body = document.getElementById('playlists-panel-body');
+          const hadCards = !!(body && body.querySelector('.pl-card'));
+          if (hadCards && body) {
+            body.appendChild(createPlaylistCard(newPlaylist));
+            updatePlaylistsCountBadge(body.querySelectorAll('.pl-card').length);
+          } else {
+            renderPlaylistsPanel();
           }
+          showStatusMessage(`Created "${name}"`, 'info', 2000);
           if (typeof onSuccess === 'function') {
             onSuccess(newPlaylist);
           }
@@ -949,13 +999,12 @@
     });
 
     // Close on Escape key
-    const handleKeydown = (e) => {
+    _modalKeydownHandler = (e) => {
       if (e.key === 'Escape') {
         closeModal();
-        document.removeEventListener('keydown', handleKeydown);
       }
     };
-    document.addEventListener('keydown', handleKeydown);
+    document.addEventListener('keydown', _modalKeydownHandler);
 
     document.body.appendChild(modal);
 
@@ -1017,14 +1066,10 @@
           const mgr = getPlaylistManager();
           if (!mgr) return;
           const pl = await mgr.importFromGrayjay(file);
-          if (typeof window.showStatus === 'function') {
-            window.showStatus(`Imported "${pl.name}" (${pl.tracks.length} tracks)`, 'info', 3000);
-          }
+          showStatusMessage(`Imported "${pl.name}" (${pl.tracks.length} tracks)`, 'info', 3000);
           renderPlaylistsPanel();
         } catch (err) {
-          if (typeof window.showStatus === 'function') {
-            window.showStatus('Could not import playlist. Check the file format.', 'error', 4000);
-          }
+          showStatusMessage('Could not import playlist. Check the file format.', 'error', 4000);
         }
       });
     }
