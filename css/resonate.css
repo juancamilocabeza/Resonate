@@ -2067,6 +2067,14 @@ button:active:not(:disabled) {
   pointer-events: none;
 }
 
+.shuffle-favorites-btn .control-icon {
+  width: 20px;
+  height: 20px;
+  display: block;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
 .prev-btn:hover:not(:disabled),
 .next-btn:hover:not(:disabled) {
   transform: translateY(-3px);
