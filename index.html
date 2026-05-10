@@ -331,12 +331,29 @@
             </div>
           </div>
           <div class="controls">
-            <button id="shuffle-favorites-btn" class="shuffle-favorites-btn" aria-label="Shuffle" title="Shuffle">⇄</button>
-            <button id="prev-btn" class="prev-btn" aria-label="Previous">⏮</button>
+            <button id="shuffle-favorites-btn" class="shuffle-favorites-btn" aria-label="Shuffle" title="Shuffle">
+              <svg class="control-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <path d="M16 3h5v5"/>
+                <path d="M4 20L21 3"/>
+                <path d="M21 16v5h-5"/>
+                <path d="M15 15l6 6"/>
+              </svg>
+            </button>
+            <button id="prev-btn" class="prev-btn" aria-label="Previous">
+              <svg class="control-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true" focusable="false">
+                <polygon points="19,20 9,12 19,4"/>
+                <rect x="5" y="4" width="2.5" height="16" rx="1"/>
+              </svg>
+            </button>
             <button id="play-btn" class="play-btn" aria-label="Play" data-state="play">
               <span class="transport-icon" aria-hidden="true"></span>
             </button>
-            <button id="next-btn" class="next-btn" aria-label="Next">⏭</button>
+            <button id="next-btn" class="next-btn" aria-label="Next">
+              <svg class="control-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true" focusable="false">
+                <polygon points="5,4 15,12 5,20"/>
+                <rect x="16.5" y="4" width="2.5" height="16" rx="1"/>
+              </svg>
+            </button>
             <button id="favorite-btn" class="additional-btn" aria-label="Add to resonates" title="Add to resonates"></button>
           </div>
         </div>

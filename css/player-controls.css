@@ -129,6 +129,13 @@
     height: 48px;
   }
 
+  /* Prev/Next SVG icons scale up slightly for larger touch targets */
+  .main-player-section .controls .prev-btn .control-icon,
+  .main-player-section .controls .next-btn .control-icon {
+    width: 24px;
+    height: 24px;
+  }
+
   /* Play button stays larger at 72px */
   .main-player-section .controls .play-btn,
   .main-player-section .controls .play-btn-favorite {
