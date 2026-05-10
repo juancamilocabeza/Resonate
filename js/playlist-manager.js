@@ -4,7 +4,8 @@
 
   var STORAGE_KEY = 'resonate_playlists';
   var STORAGE_WARN_BYTES = 4.5 * 1024 * 1024;
-  var SAVE_DEBOUNCE_MS = 120;
+  // Keep writes responsive for UI actions while still batching rapid updates.
+  var SAVE_DEBOUNCE_MS = 300;
   var _cache = null;
   var _saveTimer = null;
 
@@ -179,7 +180,7 @@
   function generateId() {
     try {
       if (window.crypto && typeof window.crypto.randomUUID === 'function') {
-        return 'pl_' + window.crypto.randomUUID();
+        return window.crypto.randomUUID();
       }
     } catch {}
     return 'pl_' + Date.now() + '_' + Math.floor(Math.random() * 9999);
@@ -235,7 +236,7 @@
     if (!sanitized) return false;
     var normalizedUrl = sanitized.url;
     // Avoid duplicates by normalized URL.
-    if (pl.tracks.some(function (t) { return normalizeUrl(t && t.url) === normalizedUrl; })) return false;
+    if (pl.tracks.some(function (t) { return t && t.url === normalizedUrl; })) return false;
     pl.tracks.push(sanitized);
     pl.updatedAt = Date.now();
     return true;
@@ -258,7 +259,7 @@
     var pl = findPlaylist(playlists, playlistId);
     if (!pl) return false;
     var before = pl.tracks.length;
-    pl.tracks = pl.tracks.filter(function (t) { return normalizeUrl(t && t.url) !== normalizedTarget; });
+    pl.tracks = pl.tracks.filter(function (t) { return !(t && t.url === normalizedTarget); });
     if (pl.tracks.length === before) return false;
     pl.updatedAt = Date.now();
     scheduleSave(false);

@@ -64,6 +64,7 @@
     if (!row) return;
     row.classList.toggle('pl-track-row--playing', !!isPlaying);
     row.setAttribute('aria-current', isPlaying ? 'true' : 'false');
+    row.setAttribute('aria-selected', isPlaying ? 'true' : 'false');
     const baseLabel = row.dataset.baseAriaLabel || row.getAttribute('aria-label') || '';
     if (!baseLabel) return;
     row.setAttribute('aria-label', isPlaying ? `${baseLabel}, currently playing` : baseLabel);
@@ -463,6 +464,7 @@
    */
   function renderPlaylistTracks(container, pl) {
     container.innerHTML = '';
+    container.setAttribute('role', 'listbox');
     const tracks = Array.isArray(pl.tracks) ? pl.tracks : [];
 
     if (tracks.length === 0) {
@@ -523,7 +525,7 @@
   function createTrackRow(track, idx, pl, container, currentUrl) {
     const row = document.createElement('div');
     row.className = 'pl-track-row';
-    row.setAttribute('role', 'button');
+    row.setAttribute('role', 'option');
     row.setAttribute('tabindex', '0');
     const isPlaying = !!(currentUrl && track.url === currentUrl);
     syncPlaylistRowPlayingState(row, isPlaying);
