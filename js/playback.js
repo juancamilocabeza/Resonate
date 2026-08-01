@@ -7,7 +7,23 @@
   let lastManualPause = false;
   let lastTrackId = null;
   let lastCheck = 0;
+  let currentAudioElement = null;
   const CHECK_INTERVAL = 4000;
+
+  function onAudioPause() {
+    const audio = getAudioEl();
+    if (audio && !audio.ended && !audio.seeking && !audio.error) {
+      lastUserPaused = true;
+    }
+  }
+
+  function onAudioPlay() {
+    lastUserPaused = false;
+  }
+
+  function onAudioEnded() {
+    lastUserPaused = false;
+  }
 
   function shouldBePlaying() {
     try {
@@ -45,19 +61,22 @@
   // Detectar pausas manuales del usuario
   function setupManualPauseTracking() {
     const audio = getAudioEl();
+    if (currentAudioElement && currentAudioElement !== audio) {
+      try {
+        currentAudioElement.removeEventListener('pause', onAudioPause);
+        currentAudioElement.removeEventListener('play', onAudioPlay);
+        currentAudioElement.removeEventListener('ended', onAudioEnded);
+      } catch {}
+      currentAudioElement = null;
+    }
+
     if (!audio) return;
-    audio.addEventListener('pause', () => {
-      // Si el usuario pausó manualmente (no por fin de pista ni error)
-      if (!audio.ended && !audio.seeking && !audio.error) {
-        lastUserPaused = true;
-      }
-    });
-    audio.addEventListener('play', () => {
-      lastUserPaused = false;
-    });
-    audio.addEventListener('ended', () => {
-      lastUserPaused = false;
-    });
+    if (currentAudioElement === audio) return;
+
+    audio.addEventListener('pause', onAudioPause);
+    audio.addEventListener('play', onAudioPlay);
+    audio.addEventListener('ended', onAudioEnded);
+    currentAudioElement = audio;
   }
 
   function periodicCheck() {
@@ -695,7 +714,7 @@ function shuffleDeckConsumeKey(contextKey, playedKey) {
     nextIndex = idx + 1;
   } else {
     const pos = deck.order.indexOf(key);
-    if (pos >= 0 && pos >= idx) {
+    if (pos >= 0) {
       nextIndex = pos + 1;
     }
   }
@@ -737,6 +756,15 @@ function shuffleDeckConsumeKey(contextKey, playedKey) {
   saveShuffleDeckMap(pruneShuffleDeckMap(map));
 
   return { wrapped: Boolean(wrapped), cycle: Number(deck.cycle) || 0 };
+}
+
+function syncShuffleDeckToCurrentTrack(contextType, items, currentKey, contextId = null) {
+  if (!contextType || !Array.isArray(items) || !currentKey) return;
+  ensureShuffleDeck(contextType, items, {
+    currentKey: String(currentKey),
+    anchorCurrent: true,
+    contextId: contextId != null ? contextId : null
+  });
 }
 
 function shuffleDeckGetRemainingItems(contextType, items, options = {}) {
@@ -890,6 +918,14 @@ class BaseContextHandler {
   constructor(playbackStateManager) {
     this.stateManager = playbackStateManager;
     this.retryManager = new RetryManager();
+  }
+
+  cleanup() {
+    if (this.retryManager && typeof this.retryManager.attempts === 'object') {
+      try {
+        this.retryManager.attempts.clear();
+      } catch {}
+    }
   }
 
   async handleTrackEnd() {
@@ -1683,6 +1719,9 @@ class EnhancedPlaybackController {
   }
 
   setContext(contextType, contextId = null) {
+    if (this.currentHandler && typeof this.currentHandler.cleanup === 'function') {
+      try { this.currentHandler.cleanup(); } catch {}
+    }
     this.stateManager.setCurrentTrack(null, contextType, contextId);
     this.currentHandler = ContextHandlerFactory.createHandler(contextType, this.stateManager);
   }
@@ -2465,6 +2504,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
                   state.playbackQueue = [];
                   if (info.contextType === 'favorites' || info.contextType === 'album' || info.contextType === 'searchPlaylist') {
                     regenerateQueueFromCurrentContext(state && state.currentTrack ? state.currentTrack.url : undefined);
+                    syncShuffleDeckToCurrentTrack(info.contextType, info.items, playedKey, info.contextId);
                   }
                 } catch {}
               }
@@ -2536,6 +2576,10 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
         // until the page becomes visible again (user unlocks the screen).
         if (isAutoplayBlockedError(error) && document.hidden) {
           state.isLoading = false;
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
+          }
           cleanup();
           const onVisibleRetry = () => {
             if (!document.hidden) {
@@ -2578,6 +2622,10 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
 
     const onError = (e) => {
       cleanup();
+      if (state.currentBlobUrl && typeof state.currentBlobUrl === 'string' && state.currentBlobUrl.startsWith('blob:')) {
+        try { URL.revokeObjectURL(state.currentBlobUrl); } catch {}
+        state.currentBlobUrl = null;
+      }
       if (window.Loaders && typeof window.Loaders.hideLoader === 'function') window.Loaders.hideLoader();
       const errMsg = (e && e.target && e.target.error && e.target.error.message) ? e.target.error.message : 'Source not supported';
       state.isLoading = false;
@@ -2604,8 +2652,15 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
     const cleanup = () => {
       audio.removeEventListener('canplay', onCanPlay);
       audio.removeEventListener('error', onError);
-      clearTimeout(timeoutId);
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
       stopInitialRamp();
+      if (state.currentBlobUrl && typeof state.currentBlobUrl === 'string' && state.currentBlobUrl.startsWith('blob:')) {
+        try { URL.revokeObjectURL(state.currentBlobUrl); } catch {}
+        state.currentBlobUrl = null;
+      }
     };
 
     // Cargar audio con caché
@@ -3393,9 +3448,12 @@ function setupPreloadedPlayback(tracks, startIndex = 0) {
   logPlayback('debug', `Preloaded list configured with ${preloadedPlaylist.length} tracks`);
 }
 
+const activePlayNextInContextTokens = new Set();
+
 async function playNextInContext(maxRetries = 3) {
-  // PREVENT MULTIPLE EXECUTION
-  if (state.isLoading) return;
+  const token = Symbol('playNextInContext');
+  if (state.isLoading || activePlayNextInContextTokens.size > 0) return;
+  activePlayNextInContextTokens.add(token);
   state.isLoading = true;
 
   // Only replace in FIFO queue if song played completely, not on manual next button
@@ -3629,6 +3687,7 @@ async function playNextInContext(maxRetries = 3) {
   } catch (error) {
     logPlayback('error', 'Critical error in playNextInContext', error);
   } finally {
+    activePlayNextInContextTokens.delete(token);
     state.isLoading = false;
   }
 }
