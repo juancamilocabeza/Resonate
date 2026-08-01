@@ -31,15 +31,14 @@
       if (!audio) return false;
       // Don't interfere while a track load is already in progress.
       if (window.state && window.state.isLoading) return false;
-      // Only attempt to resume if the audio element actually has a source loaded.
-      // Without a src there is nothing to resume (saved-state currentTrack alone
-      // is not enough – the user must explicitly press Play to start fresh).
-      if (!audio.src) return false;
-      // Si hay una pista cargada y no está pausado manualmente
-      if (window.state && window.state.currentTrack && window.state.currentTrack.url) {
-        if (audio.paused && !audio.ended && !lastUserPaused) {
-          return true;
-        }
+      // Only attempt to resume when there is a real source and some playback progress.
+      // This avoids re-starting playback on transient browser pauses or buffer stalls.
+      if (!audio.src || !audio.currentSrc) return false;
+      if (!window.state || !window.state.currentTrack || !window.state.currentTrack.url) return false;
+      if (audio.ended || lastUserPaused || audio.seeking || audio.error) return false;
+      if (audio.paused) {
+        const hasPlaybackProgress = audio.currentTime > 0 || audio.readyState >= 2 || audio.buffered.length > 0;
+        return hasPlaybackProgress && document.visibilityState === 'visible';
       }
     } catch {}
     return false;
@@ -3859,11 +3858,11 @@ function setupBufferingMonitoring() {
 
   const audio = window.elements.audio;
   const BUFFERING_SHOW_DELAY_MS = 350;
-  const BUFFERING_STALL_TIMEOUT_MS = 8000; // Más rápido para detectar stalls
-  const BUFFERING_RECOVERY_COOLDOWN_MS = 6000;
+  const BUFFERING_STALL_TIMEOUT_MS = 12000; // Esperar más para no interrumpir la reproducción por stalls breves
+  const BUFFERING_RECOVERY_COOLDOWN_MS = 10000;
 
   let stallRecoveryAttempts = 0;
-  const MAX_STALL_RECOVERY_ATTEMPTS = 2;
+  const MAX_STALL_RECOVERY_ATTEMPTS = 1;
 
   let isBuffering = false;
   let showTimer = null;
@@ -3914,6 +3913,10 @@ function setupBufferingMonitoring() {
     lastRecoveryAt = now;
     stallRecoveryAttempts++;
     logPlayback('warn', `Buffering stall detected; attempt #${stallRecoveryAttempts} [readyState=${audio.readyState}, networkState=${audio.networkState}, currentTime=${audio.currentTime}]`);
+
+    // Recovery is intentionally conservative: a second play() call is enough to
+    // resume after a temporary browser pause. Reloading the source is too aggressive
+    // and can cause visible gaps in continuous playback.
     try {
       const maybePromise = audio.play();
       if (maybePromise && typeof maybePromise.catch === 'function') {
@@ -3921,22 +3924,8 @@ function setupBufferingMonitoring() {
       }
     } catch {}
 
-    // Si ya se intentó varias veces, forzar recarga de la fuente
     if (stallRecoveryAttempts >= MAX_STALL_RECOVERY_ATTEMPTS) {
-      logPlayback('warn', `Forzando recarga de la fuente tras ${stallRecoveryAttempts} intentos fallidos`);
-      // Guardar el tiempo y la pista actual
-      const src = audio.currentSrc;
-      const pos = audio.currentTime;
-      audio.pause();
-      audio.src = '';
-      audio.load();
-      setTimeout(() => {
-        audio.src = src;
-        audio.load();
-        audio.currentTime = pos;
-        audio.play().catch(()=>{});
-        stallRecoveryAttempts = 0;
-      }, 500);
+      stallRecoveryAttempts = 0;
     }
   };
 
