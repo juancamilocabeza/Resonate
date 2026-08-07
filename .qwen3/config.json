@@ -1,0 +1,46 @@
+{
+  "name": "Main Config",
+  "version": "1.0.0",
+  "schema": "v1",
+  "embeddingsProvider": {
+    "provider": "free-trial",
+    "model": "nomic-embed-text"
+  },
+  "models": [
+    {
+      "name": "Qwen3 Coder 30B (Lemonade)",
+      "provider": "lemonade",
+      "model": "Qwen3-Coder-30B-A3B-Instruct-GGUF",
+      "apiBase": "http://127.0.0.1:13305/api/v1/",
+      "contextLength": 16384,
+      "requestOptions": {
+        "extraBody": {
+          "cache_prompt": true,
+          "temperature": 0.1,
+          "top_p": 0.85
+        }
+      }
+    }
+  ],
+  "tabAutocompleteModel": {
+    "name": "Qwen3 Coder 30B (Lemonade)",
+    "provider": "lemonade",
+    "model": "Qwen3-Coder-30B-A3B-Instruct-GGUF",
+    "apiBase": "http://127.0.0.1:13305/api/v1/"
+  },
+  "agentModel": {
+    "name": "Qwen3 Coder 30B (Agent)",
+    "provider": "lemonade",
+    "model": "Qwen3-Coder-30B-A3B-Instruct-GGUF",
+    "apiBase": "http://127.0.0.1:13305/api/v1/",
+    "contextLength": 65536,
+    "completionOptions": {
+      "maxTokens": 4096
+    }
+  },
+  "base_url": "http://127.0.0.1:13305/api/v1",
+  "default_model": "Qwen3-Coder-30B-A3B-Instruct-GGUF",
+  "api_type": "openai-compatible",
+  "authorization": null,
+  "timeout_seconds": 30
+}
