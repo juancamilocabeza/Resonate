@@ -42,6 +42,19 @@
   transition: opacity 0.18s ease, transform 0.15s ease;
 }
 
+/* Search cards now render actions as a normal-flow row below the card body. */
+.search-results-list .content-card .card-actions-overlay {
+  position: static;
+  transform: none;
+  width: 100%;
+  justify-content: flex-end;
+  padding: 6px 8px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  backdrop-filter: none;
+}
+
 /* Always visible on mobile for better UX */
 @media (hover: none), (max-width: 1023px) {
   .card-actions-overlay {

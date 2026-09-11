@@ -1091,6 +1091,26 @@ body {
   overflow: hidden;
 }
 
+@media (max-width: 767px) {
+  #main-content {
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-bottom: calc(var(--mini-player-height, 76px) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .content-layout {
+    overflow: visible;
+  }
+
+  .search-results.active {
+    bottom: calc(var(--mini-player-height, 76px) + env(safe-area-inset-bottom, 0px) + 10px);
+  }
+
+  #tracks-list-container.tracks-inline {
+    bottom: calc(var(--mini-player-height, 76px) + env(safe-area-inset-bottom, 0px) + 10px);
+  }
+}
+
 /* Mobile/tablet: when favorites is open, make it full-height */
 @media (max-width: 1023px) {
   /* Favorites becomes the primary view; hide other sections to let it span the screen */

@@ -5413,14 +5413,10 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
 
   card.appendChild(body);
 
-  // Compact overlay action bar over the cover (search cards only)
-  // Favorites/resonates show buttons in a horizontal row below the card
+  // Keep actions outside the media box so mobile cards cannot overlap the cover.
+  // Favorites/resonates already render the same row below the card body.
   if (context === 'search') {
-    actions.classList.add('card-actions-overlay');
-    card.classList.add('actions-overlay');
-    media.appendChild(actions);
-    // Prevent clicks on the bar background from bubbling to the media click handler
-    actions.addEventListener('click', (e) => { e.stopPropagation(); });
+    card.appendChild(actions);
   } else {
     card.appendChild(actions);
   }
