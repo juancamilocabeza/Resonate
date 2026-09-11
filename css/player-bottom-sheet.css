@@ -152,6 +152,110 @@ dialog.bottom-sheet::backdrop {
   min-height: 44px;
 }
 
+/* Final mobile override: this file loads after the player control rules. */
+@media (max-width: 767px) {
+  #player-footer {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 76px;
+    max-height: 76px;
+    padding: 8px 12px env(safe-area-inset-bottom, 0px);
+    overflow: hidden;
+    z-index: 50;
+    box-sizing: border-box;
+  }
+
+  #player-footer .player-container,
+  #player-footer .player-content {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    max-width: none;
+    overflow: hidden;
+  }
+
+  #player-footer .player-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0;
+  }
+
+  #player-footer .art {
+    flex: 0 0 48px;
+    width: 48px;
+    height: 48px;
+    min-width: 48px;
+    min-height: 48px;
+    margin: 0;
+    border-radius: 8px;
+    box-shadow: none;
+  }
+
+  #player-footer .current-track-info {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    padding: 0;
+    gap: 2px;
+  }
+
+  #player-footer .title,
+  #player-footer .creator {
+    display: block;
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #player-footer .title {
+    font-size: 14px;
+    line-height: 1.25;
+  }
+
+  #player-footer .creator {
+    font-size: 12px;
+    line-height: 1.25;
+  }
+
+  #player-footer #description-container,
+  #player-footer .progress-section,
+  #player-footer #shuffle-favorites-btn,
+  #player-footer #prev-btn,
+  #player-footer #next-btn,
+  #player-footer #favorite-btn {
+    display: none !important;
+  }
+
+  #player-footer .controls {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 0;
+    width: auto;
+    margin: 0;
+    padding: 0;
+  }
+
+  #player-footer #play-btn {
+    flex: 0 0 48px;
+    width: 48px !important;
+    height: 48px !important;
+    min-width: 48px !important;
+    min-height: 48px !important;
+    margin: 0;
+  }
+
+  /* The legal footer must not compete with the fixed mini-player. */
+  body > .app > .footer {
+    display: none !important;
+  }
+}
+
 .bottom-sheet.open {
   transform: translateY(0);
 }
