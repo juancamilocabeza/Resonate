@@ -73,6 +73,9 @@
   position: sticky;
   bottom: 0;
   z-index: 160;
+  flex: 0 0 auto;
+  max-height: min(42vh, 520px);
+  overflow-y: auto;
   background: var(--bg, #0d0d0d);
   border-top: 1px solid var(--surface-border, rgba(255, 255, 255, 0.08));
   padding-bottom: calc(var(--spacing-md, 12px) + env(safe-area-inset-bottom, 0px));
