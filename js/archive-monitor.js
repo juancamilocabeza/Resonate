@@ -163,6 +163,9 @@
       updateBannerCacheCount(count);
       banner.hidden = false;
       banner.setAttribute('aria-hidden', 'false');
+      if (typeof banner.showModal === 'function' && !banner.open) {
+        try { banner.showModal(); } catch (e) { banner.setAttribute('open', ''); }
+      }
       document.body.classList.add('archive-down');
     });
   }
@@ -170,6 +173,9 @@
   function hideBanner() {
     var banner = getBanner();
     if (!banner) return;
+    if (typeof banner.close === 'function' && banner.open) {
+      try { banner.close(); } catch (e) {}
+    }
     banner.hidden = true;
     banner.setAttribute('aria-hidden', 'true');
     document.body.classList.remove('archive-down');

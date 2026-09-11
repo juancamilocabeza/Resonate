@@ -129,6 +129,29 @@
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/* Native dialog mode uses the browser top layer and its own backdrop. */
+dialog.bottom-sheet {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  visibility: hidden;
+}
+
+dialog.bottom-sheet[open] {
+  visibility: visible;
+}
+
+dialog.bottom-sheet::backdrop {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+/* Every player/menu action keeps a thumb-friendly hit area. */
+.bottom-sheet button,
+.main-player-section button {
+  min-width: 44px;
+  min-height: 44px;
+}
+
 .bottom-sheet.open {
   transform: translateY(0);
 }

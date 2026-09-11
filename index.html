@@ -133,10 +133,11 @@
       </nav>
     </header>
 
-    <!-- Archive.org maintenance banner — shown by archive-monitor.js when archive.org is unreachable -->
-    <div id="archive-maintenance-banner"
+        <!-- Global alerts / network state. The dialog keeps the interruption explicit and dismissible. -->
+        <dialog id="archive-maintenance-banner"
          class="archive-maintenance-banner"
-         role="alert"
+          role="alertdialog"
+          aria-labelledby="archive-banner-title"
          aria-live="assertive"
          aria-atomic="true"
          hidden>
@@ -149,7 +150,7 @@
           </svg>
         </div>
         <div class="archive-banner-body">
-          <p class="archive-banner-title">archive.org is temporarily unavailable</p>
+          <p class="archive-banner-title" id="archive-banner-title">archive.org is temporarily unavailable</p>
           <p class="archive-banner-subtitle">We're monitoring the service and will notify you when it's back online.</p>
           <p class="archive-banner-notice" hidden aria-live="polite"></p>
         </div>
@@ -168,11 +169,13 @@
                   aria-label="Dismiss this notification">✕</button>
         </div>
       </div>
-    </div>
+    </dialog>
 
-    <main id="main-content" class="app-main" aria-label="Main content">
+    <main id="main-content" class="app-main" aria-labelledby="discovery-title">
       <div class="content-layout" id="content-layout">
-        <div class="discovery-section">
+        <!-- Discovery: search, type filters and primary results. -->
+        <section class="discovery-section" aria-labelledby="discovery-title">
+        <h2 id="discovery-title" class="visually-hidden">Discover music</h2>
         <div id="tracks-list-container" class="tracks-container tracklist"></div>
 
         <div class="search-section">
@@ -221,8 +224,9 @@
             <div id="search-results-list" class="search-results-list" role="listbox" aria-label="Search results"></div>
           </div>
         </div>
-      </div>
-      <div id="resontes-list" class="resontes-list" role="region" aria-label="Resonates">
+      </section>
+      <!-- Saved content: Resonates and playlists remain navigable panels, not modal dialogs. -->
+      <section id="resontes-list" class="resontes-list" role="region" aria-label="Resonates">
         <div class="resontes-filter-bar" aria-label="Resonates filter">
           <div class="search-container">
             <div class="search-input-wrapper">
@@ -259,12 +263,12 @@
           </div>
           <div id="resontes-list-content" class="resontes-list-content" role="listbox" aria-label="Resonates list"></div>
         </div>
-      </div>
+      </section>
 
       <!-- ============================================================
            PLAYLISTS PANEL
            ============================================================ -->
-      <div id="playlists-list" class="playlists-list" role="region" aria-label="Playlists">
+      <section id="playlists-list" class="playlists-list" role="region" aria-label="Playlists">
         <div class="playlists-panel-header">
           <h2 class="playlists-panel-title">Playlists</h2>
           <div class="playlists-panel-actions">
@@ -284,11 +288,12 @@
           </div>
         </div>
         <div id="playlists-panel-body" class="playlists-panel-body" role="listbox" aria-label="Playlists list"></div>
-      </div>
+      </section>
       <!-- Hidden file input for Grayjay import -->
       <input type="file" id="playlist-import-input" accept=".json" hidden aria-hidden="true">
 
-      <div class="main-player-section">
+      <!-- Persistent player: kept near the viewport edge for thumb-friendly access. -->
+      <footer id="player-footer" class="main-player-section" aria-label="Audio player">
       <div class="player-container">
         <div class="player-content" id="player-content">
           <div class="art" id="art">
@@ -311,7 +316,7 @@
                     <circle cx="18" cy="12" r="1.75" fill="currentColor" stroke="none"></circle>
                   </svg>
                 </span>
-              </span>
+              </button>
             </div>
           </div>
           <div class="progress-section">
@@ -334,7 +339,7 @@
             </div>
           </div>
           <div class="controls">
-            <button id="shuffle-favorites-btn" class="shuffle-favorites-btn" aria-label="Shuffle" title="Shuffle">
+            <button id="shuffle-favorites-btn" class="shuffle-favorites-btn" type="button" aria-label="Shuffle" title="Shuffle">
               <svg class="control-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
                 <path d="M16 3h5v5"/>
                 <path d="M4 20L21 3"/>
@@ -342,25 +347,29 @@
                 <path d="M15 15l6 6"/>
               </svg>
             </button>
-            <button id="prev-btn" class="prev-btn" aria-label="Previous">
+            <button id="prev-btn" class="prev-btn" type="button" aria-label="Previous" title="Previous track">
               <svg class="control-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true" focusable="false">
                 <polygon points="19,20 9,12 19,4"/>
                 <rect x="5" y="4" width="2.5" height="16" rx="1"/>
               </svg>
             </button>
-            <button id="play-btn" class="play-btn" aria-label="Play" data-state="play">
+            <button id="play-btn" class="play-btn" type="button" aria-label="Play" data-state="play">
               <span class="transport-icon" aria-hidden="true"></span>
             </button>
-            <button id="next-btn" class="next-btn" aria-label="Next">
+            <button id="next-btn" class="next-btn" type="button" aria-label="Next" title="Next track">
               <svg class="control-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true" focusable="false">
                 <polygon points="5,4 15,12 5,20"/>
                 <rect x="16.5" y="4" width="2.5" height="16" rx="1"/>
               </svg>
             </button>
-            <button id="favorite-btn" class="additional-btn" aria-label="Add to resonates" title="Add to resonates"></button>
+            <button id="favorite-btn" class="additional-btn" type="button" aria-label="Add to resonates" title="Add to resonates"></button>
           </div>
         </div>
       </div>
+
+      </footer>
+      </div><!-- /#content-layout -->
+    </main>
 
       <!-- ============================================================
            BOTTOM SHEET OVERLAY — backdrop for the secondary options menu
@@ -371,7 +380,7 @@
            CARD CONTEXT MENU SHEET — opened programmatically by the More (⋯)
            button on search result and resonates cards.
            ============================================================ -->
-      <div class="bottom-sheet" id="card-context-sheet"
+      <dialog class="bottom-sheet" id="card-context-sheet"
            role="dialog" aria-modal="true" aria-labelledby="card-context-title" aria-hidden="true" tabindex="-1">
 
         <div class="sheet-drag-handle" aria-hidden="true"></div>
@@ -437,14 +446,14 @@
           <button class="sheet-cancel-btn" type="button">Close</button>
         </div>
 
-      </div><!-- /#card-context-sheet -->
+      </dialog><!-- /#card-context-sheet -->
 
       <!-- ============================================================
            APP MENU SHEET — app-level actions triggered from the header
            Existing element IDs are preserved so current JS integrations
            (theme.js, ui.js, initialization.js) continue to work.
            ============================================================ -->
-      <div class="bottom-sheet" id="app-options-sheet"
+      <dialog class="bottom-sheet" id="app-options-sheet"
            role="dialog" aria-modal="true" aria-labelledby="app-options-title" aria-hidden="true" tabindex="-1">
 
         <div class="sheet-drag-handle" aria-hidden="true"></div>
@@ -455,7 +464,7 @@
 
         <div class="sheet-content">
 
-            <button id="resontes-toggle" class="theme-selector resontes-toggle sheet-action-item"
+            <button id="resontes-toggle" class="theme-selector resontes-toggle sheet-action-item" type="button"
                   type="button" aria-label="View resonates"
               aria-expanded="false" aria-controls="resontes-list" aria-live="polite"
               data-close-sheet-on-activate="true">
@@ -468,7 +477,7 @@
             <span class="resontes-count" id="resontes-count">0</span>
           </button>
 
-          <button id="playlists-toggle" class="theme-selector playlists-toggle sheet-action-item"
+          <button id="playlists-toggle" class="theme-selector playlists-toggle sheet-action-item" type="button"
                   type="button" aria-label="View playlists"
               aria-expanded="false" aria-controls="playlists-list"
               data-close-sheet-on-activate="true">
@@ -518,13 +527,13 @@
           <button class="sheet-cancel-btn" type="button">Close</button>
         </div>
 
-      </div><!-- /#app-options-sheet -->
+      </dialog><!-- /#app-options-sheet -->
 
       <!-- ============================================================
            PLAYER MENU SHEET — contextual track actions triggered from the
            track information block.
            ============================================================ -->
-      <div class="bottom-sheet" id="player-options-sheet"
+      <dialog class="bottom-sheet" id="player-options-sheet"
            role="dialog" aria-modal="true" aria-labelledby="player-options-title" aria-hidden="true" tabindex="-1">
 
         <div class="sheet-drag-handle" aria-hidden="true"></div>
@@ -595,19 +604,17 @@
           <button class="sheet-cancel-btn" type="button">Close</button>
         </div>
 
-      </div><!-- /#player-options-sheet -->
-      <div id="description-modal" class="description-modal" role="dialog" aria-modal="true" aria-labelledby="info-modal-title" tabindex="-1">
+      </dialog><!-- /#player-options-sheet -->
+      <dialog id="description-modal" class="description-modal" aria-labelledby="info-modal-title" tabindex="-1">
         <div class="description-modal-content">
           <button id="close-description-modal" class="close-description-modal search-clear-btn" type="button" aria-label="Close description">X</button>
           <h2 id="info-modal-title" style="position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0, 0, 0, 0); white-space:nowrap; border:0;">Track details</h2>
           <div id="modal-description" class="modal-description"></div>
         </div>
-      </div>
-    </div>
-    </main>
-    <footer class="footer">
+      </dialog>
+    <div class="footer" role="contentinfo">
       &copy; Resonate Player - Early Stage - All rights reserved - Last updated: 2026-08-01
-    </footer>
+    </div>
   </div>
   <audio id="audio" preload="metadata"></audio>
   <script>

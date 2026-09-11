@@ -435,6 +435,14 @@ body.tracks-open #tracks-list-container .tlv2-list {
   justify-content: center;
   z-index: 9999;
 }
+
+.description-modal:not([open]) {
+  display: none;
+}
+
+.description-modal::backdrop {
+  background: rgba(0, 0, 0, 0.65);
+}
 .description-modal-content {
   background: var(--card);
   border: 2px solid rgba(128, 128, 128, 0.3);
@@ -6452,6 +6460,20 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
   position: relative;
   animation: archiveBannerSlideDown 0.3s ease-out both;
   overflow: hidden;
+}
+
+dialog.archive-maintenance-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: auto;
+  max-width: none;
+  margin: 0;
+}
+
+dialog.archive-maintenance-banner::backdrop {
+  background: transparent;
 }
 
 .archive-maintenance-banner[hidden] {

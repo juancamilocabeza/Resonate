@@ -44,6 +44,10 @@
     document.body.classList.toggle('sheet-open', isOpen);
   }
 
+  function isNativeDialog(sheet) {
+    return !!(sheet && sheet.tagName === 'DIALOG' && typeof sheet.showModal === 'function');
+  }
+
   function setSheetInteractivity(sheet, isOpen) {
     if (!sheet) return;
     sheet.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
@@ -79,6 +83,11 @@
 
     moveFocusOutsideSheet(controller);
     controller.sheet.classList.remove('open');
+    if (isNativeDialog(controller.sheet) && controller.sheet.open) {
+      try {
+        controller.sheet.close();
+      } catch (e) {}
+    }
     setSheetInteractivity(controller.sheet, false);
     controller.sheet.style.transform = '';
 
@@ -110,7 +119,16 @@
     controller.sheet.classList.add('open');
     setSheetInteractivity(controller.sheet, true);
     controller.trigger.setAttribute('aria-expanded', 'true');
-    setOverlayState(true);
+    if (isNativeDialog(controller.sheet)) {
+      try {
+        if (!controller.sheet.open) controller.sheet.showModal();
+      } catch (e) {
+        controller.sheet.setAttribute('open', '');
+      }
+      setOverlayState(false);
+    } else {
+      setOverlayState(true);
+    }
 
     var firstFocusable = getFocusableElements(controller.sheet)[0];
     if (firstFocusable) {
@@ -262,6 +280,16 @@
       handleTouchEnd(controller);
     }, { passive: true });
 
+    if (isNativeDialog(sheet)) {
+      sheet.addEventListener('cancel', function (event) {
+        event.preventDefault();
+        closeSheet(controller);
+      });
+      sheet.addEventListener('click', function (event) {
+        if (event.target === sheet) closeSheet(controller);
+      });
+    }
+
     Array.prototype.forEach.call(sheet.querySelectorAll('.sheet-cancel-btn'), function (button) {
       button.addEventListener('click', function () {
         closeSheet(controller);
@@ -336,6 +364,16 @@
         sheet.addEventListener('touchstart', function (e) { handleTouchStart(ctrl, e); }, { passive: true });
         sheet.addEventListener('touchmove', function (e) { handleTouchMove(ctrl, e); }, { passive: false });
         sheet.addEventListener('touchend', function () { handleTouchEnd(ctrl); }, { passive: true });
+
+        if (isNativeDialog(sheet)) {
+          sheet.addEventListener('cancel', function (event) {
+            event.preventDefault();
+            closeSheet(ctrl);
+          });
+          sheet.addEventListener('click', function (event) {
+            if (event.target === sheet) closeSheet(ctrl);
+          });
+        }
 
         Array.prototype.forEach.call(sheet.querySelectorAll('.sheet-cancel-btn'), function (btn) {
           btn.addEventListener('click', function () { closeSheet(ctrl); });

@@ -621,6 +621,18 @@
   animation: pl-picker-in 0.15s ease;
 }
 
+dialog.pl-picker {
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--surface-border, rgba(255,255,255,0.12));
+  max-width: min(240px, calc(100vw - 16px));
+  max-height: min(70vh, 360px);
+}
+
+dialog.pl-picker::backdrop {
+  background: rgba(0, 0, 0, 0.28);
+}
+
 @keyframes pl-picker-in {
   from { opacity: 0; transform: translateY(6px) scale(0.97); }
   to   { opacity: 1; transform: none; }
@@ -758,6 +770,15 @@
   width: calc(100% - 40px);
   overflow: hidden;
   animation: pl-modal-in 0.2s ease;
+}
+
+dialog.pl-modal {
+  border: 1px solid var(--surface-border, rgba(255,255,255,0.12));
+  padding: 0;
+}
+
+dialog.pl-modal::backdrop {
+  background: rgba(0, 0, 0, 0.55);
 }
 
 @keyframes pl-modal-in {

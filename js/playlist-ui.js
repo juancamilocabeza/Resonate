@@ -642,7 +642,6 @@
 
   // ── Add-to-Playlist Picker Popup ────────────────────────────────────────────
 
-  let _pickerBackdrop = null;
   let _pickerKeydownHandler = null;
 
   /**
@@ -650,11 +649,9 @@
    */
   function closePlaylistPicker() {
     try {
-      if (_pickerBackdrop && _pickerBackdrop.parentNode) {
-        _pickerBackdrop.parentNode.removeChild(_pickerBackdrop);
-      }
       const existingPicker = document.querySelector('.pl-picker');
       if (existingPicker && existingPicker.parentNode) {
+        if (typeof existingPicker.close === 'function' && existingPicker.open) existingPicker.close();
         existingPicker.parentNode.removeChild(existingPicker);
       }
     } catch { /* ignore errors */ }
@@ -662,7 +659,6 @@
       document.removeEventListener('keydown', _pickerKeydownHandler);
       _pickerKeydownHandler = null;
     }
-    _pickerBackdrop = null;
   }
 
   /**
@@ -676,16 +672,10 @@
     const mgr = getPlaylistManager();
     const playlists = mgr ? mgr.getAll() : [];
 
-    // Create backdrop for click-away dismiss
-    _pickerBackdrop = document.createElement('div');
-    _pickerBackdrop.className = 'pl-picker-backdrop';
-    _pickerBackdrop.addEventListener('click', closePlaylistPicker);
-    document.body.appendChild(_pickerBackdrop);
-
-    // Create popup
-    const picker = document.createElement('div');
+    // Native dialog supplies focus handling and the dismissible backdrop.
+    const picker = document.createElement('dialog');
     picker.className = 'pl-picker';
-    picker.setAttribute('role', 'menu');
+    picker.setAttribute('aria-label', 'Add track to playlist');
     
     // Show search only if there are 5 or more playlists
     const showSearch = playlists.length >= 5;
@@ -707,6 +697,13 @@
 
     // Close button handler
     closeBtn.addEventListener('click', closePlaylistPicker);
+    picker.addEventListener('cancel', (event) => {
+      event.preventDefault();
+      closePlaylistPicker();
+    });
+    picker.addEventListener('click', (event) => {
+      if (event.target === picker) closePlaylistPicker();
+    });
 
     // Function to render playlist items
     const renderPlaylistItems = (filter = '') => {
@@ -760,15 +757,17 @@
       setTimeout(() => searchInput.focus(), 100);
     }
 
-    // Close on Escape key
-    _pickerKeydownHandler = (e) => {
-      if (e.key === 'Escape') {
-        closePlaylistPicker();
-      }
-    };
-    document.addEventListener('keydown', _pickerKeydownHandler);
-
     document.body.appendChild(picker);
+
+    if (typeof picker.showModal === 'function') {
+      picker.showModal();
+    } else {
+      picker.setAttribute('open', '');
+      _pickerKeydownHandler = (e) => {
+        if (e.key === 'Escape') closePlaylistPicker();
+      };
+      document.addEventListener('keydown', _pickerKeydownHandler);
+    }
 
     // Position popup near anchor element
     positionPicker(picker, anchorEl);
@@ -839,7 +838,6 @@
 
   // ── Custom Modal Components ─────────────────────────────────────────────────
 
-  let _modalBackdrop = null;
   let _modalKeydownHandler = null;
 
   /**
@@ -847,11 +845,9 @@
    */
   function closeModal() {
     try {
-      if (_modalBackdrop && _modalBackdrop.parentNode) {
-        _modalBackdrop.parentNode.removeChild(_modalBackdrop);
-      }
       const existingModal = document.querySelector('.pl-modal');
       if (existingModal && existingModal.parentNode) {
+        if (typeof existingModal.close === 'function' && existingModal.open) existingModal.close();
         existingModal.parentNode.removeChild(existingModal);
       }
     } catch { /* ignore errors */ }
@@ -859,7 +855,6 @@
       document.removeEventListener('keydown', _modalKeydownHandler);
       _modalKeydownHandler = null;
     }
-    _modalBackdrop = null;
   }
 
   /**
@@ -872,21 +867,14 @@
 
     const trackCount = Array.isArray(playlist.tracks) ? playlist.tracks.length : 0;
 
-    // Create backdrop
-    _modalBackdrop = document.createElement('div');
-    _modalBackdrop.className = 'pl-modal-backdrop';
-    _modalBackdrop.addEventListener('click', closeModal);
-    document.body.appendChild(_modalBackdrop);
-
-    // Create modal
-    const modal = document.createElement('div');
+    // Native dialog supplies the modal backdrop and focus management.
+    const modal = document.createElement('dialog');
     modal.className = 'pl-modal';
-    modal.setAttribute('role', 'dialog');
-    modal.setAttribute('aria-modal', 'true');
-    modal.setAttribute('aria-labelledby', 'pl-modal-title');
+    const titleId = `pl-modal-title-${Date.now()}`;
+    modal.setAttribute('aria-labelledby', titleId);
     modal.innerHTML = `
       <div class="pl-modal-header">
-        <h2 id="pl-modal-title" class="pl-modal-title">Delete Playlist?</h2>
+        <h2 id="${titleId}" class="pl-modal-title">Delete Playlist?</h2>
       </div>
       <div class="pl-modal-body">
         <p class="pl-modal-message">
@@ -911,15 +899,25 @@
       if (typeof onConfirm === 'function') onConfirm();
     });
 
-    // Close on Escape key
-    _modalKeydownHandler = (e) => {
-      if (e.key === 'Escape') {
-        closeModal();
-      }
-    };
-    document.addEventListener('keydown', _modalKeydownHandler);
+    modal.addEventListener('cancel', (event) => {
+      event.preventDefault();
+      closeModal();
+    });
+    modal.addEventListener('click', (event) => {
+      if (event.target === modal) closeModal();
+    });
 
     document.body.appendChild(modal);
+
+    if (typeof modal.showModal === 'function') {
+      modal.showModal();
+    } else {
+      modal.setAttribute('open', '');
+      _modalKeydownHandler = (e) => {
+        if (e.key === 'Escape') closeModal();
+      };
+      document.addEventListener('keydown', _modalKeydownHandler);
+    }
 
     // Focus the cancel button for better UX
     cancelBtn.focus();
@@ -932,21 +930,14 @@
   function showCreatePlaylistModal(onSuccess = null) {
     closeModal();
 
-    // Create backdrop
-    _modalBackdrop = document.createElement('div');
-    _modalBackdrop.className = 'pl-modal-backdrop';
-    _modalBackdrop.addEventListener('click', closeModal);
-    document.body.appendChild(_modalBackdrop);
-
-    // Create modal
-    const modal = document.createElement('div');
+    // Native dialog supplies the modal backdrop and focus management.
+    const modal = document.createElement('dialog');
     modal.className = 'pl-modal';
-    modal.setAttribute('role', 'dialog');
-    modal.setAttribute('aria-modal', 'true');
-    modal.setAttribute('aria-labelledby', 'pl-modal-title');
+    const titleId = `pl-modal-title-${Date.now()}`;
+    modal.setAttribute('aria-labelledby', titleId);
     modal.innerHTML = `
       <div class="pl-modal-header">
-        <h2 id="pl-modal-title" class="pl-modal-title">New Playlist</h2>
+        <h2 id="${titleId}" class="pl-modal-title">New Playlist</h2>
       </div>
       <div class="pl-modal-body">
         <label class="pl-modal-label" for="pl-new-name">Playlist name</label>
@@ -1000,15 +991,25 @@
       }
     });
 
-    // Close on Escape key
-    _modalKeydownHandler = (e) => {
-      if (e.key === 'Escape') {
-        closeModal();
-      }
-    };
-    document.addEventListener('keydown', _modalKeydownHandler);
+    modal.addEventListener('cancel', (event) => {
+      event.preventDefault();
+      closeModal();
+    });
+    modal.addEventListener('click', (event) => {
+      if (event.target === modal) closeModal();
+    });
 
     document.body.appendChild(modal);
+
+    if (typeof modal.showModal === 'function') {
+      modal.showModal();
+    } else {
+      modal.setAttribute('open', '');
+      _modalKeydownHandler = (e) => {
+        if (e.key === 'Escape') closeModal();
+      };
+      document.addEventListener('keydown', _modalKeydownHandler);
+    }
 
     // Focus the input
     setTimeout(() => nameInput.focus(), 100);

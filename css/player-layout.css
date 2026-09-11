@@ -65,6 +65,17 @@
   .main-player-section {
     padding-top: var(--spacing-xl, 20px);
   }
+
+}
+
+/* Keep the player reachable while discovery panels scroll on touch devices. */
+#player-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 160;
+  background: var(--bg, #0d0d0d);
+  border-top: 1px solid var(--surface-border, rgba(255, 255, 255, 0.08));
+  padding-bottom: calc(var(--spacing-md, 12px) + env(safe-area-inset-bottom, 0px));
 }
 
 /* =====================================================================

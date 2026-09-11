@@ -1720,7 +1720,12 @@ function buildInfoModalHtml({ title, creator, album, descriptionHtml, descriptio
 
 function closeDescriptionModal() {
   try {
-    if (elements.descriptionModal) elements.descriptionModal.style.display = 'none';
+    if (!elements.descriptionModal) return;
+    if (typeof elements.descriptionModal.close === 'function' && elements.descriptionModal.open) {
+      elements.descriptionModal.close();
+    } else {
+      elements.descriptionModal.style.display = 'none';
+    }
   } catch {}
 }
 
@@ -1794,10 +1799,18 @@ function bindDescriptionModalShell() {
   });
 
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && elements.descriptionModal && elements.descriptionModal.style.display === 'flex') {
+    if (event.key === 'Escape' && elements.descriptionModal &&
+        (elements.descriptionModal.open || elements.descriptionModal.style.display === 'flex')) {
       closeDescriptionModal();
     }
   });
+
+  if (typeof elements.descriptionModal.addEventListener === 'function') {
+    elements.descriptionModal.addEventListener('cancel', (event) => {
+      event.preventDefault();
+      closeDescriptionModal();
+    });
+  }
 
   if (elements.closeDescriptionModal) {
     elements.closeDescriptionModal.addEventListener('keydown', (event) => {
@@ -2025,7 +2038,11 @@ function updateDescriptionUI(track) {
         modalDesc.dataset.infoExpanded = 'false';
         bindInfoModalInteractions();
         bindDescriptionModalShell();
-        modal.style.display = 'flex';
+        if (typeof modal.showModal === 'function') {
+          if (!modal.open) modal.showModal();
+        } else {
+          modal.style.display = 'flex';
+        }
       }
     };
     if (closeModalBtn && modal) {
@@ -2040,7 +2057,10 @@ function updateDescriptionUI(track) {
       elements.toggleDescriptionBtn.style.display = 'none';
       setIconControlDisabled(elements.toggleDescriptionBtn, true);
     }
-    if (modal) modal.style.display = 'none';
+    if (modal) {
+      if (typeof modal.close === 'function' && modal.open) modal.close();
+      else modal.style.display = 'none';
+    }
     if (modalDesc) modalDesc.innerHTML = '';
   }
 }
