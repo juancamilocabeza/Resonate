@@ -294,6 +294,9 @@ const elements = {
   nextBtn: document.getElementById('next-btn'),
   shuffleFavoritesBtn: document.getElementById('shuffle-favorites-btn'),
   favoriteBtn: document.getElementById('favorite-btn'),
+  volumeIcon: document.getElementById('volume-icon'),
+  volumeSlider: document.getElementById('volume-slider'),
+  volumeControl: document.getElementById('volume-control'),
 
   // Description / tracks UI
   descriptionContainer: document.getElementById('description-container'),
@@ -2886,6 +2889,7 @@ function loadVolume() {
       elements.volumeSlider.value = 0.7;
     }
     state.currentVolume = 0.7;
+    updateVolumeIcon();
   }
 }
 
@@ -2907,19 +2911,30 @@ function saveMutedState(muted) {
 }
 
 function updateVolumeIcon() {
-  if (!elements.volumeIcon || !elements.volumeSlider) return;
+  if (!elements.volumeIcon) return;
 
-  const volume = elements.audio.muted ? 0 : elements.volumeSlider.value;
-  const volumeLevel = parseFloat(volume);
+  const muted = !!(elements.audio && elements.audio.muted);
+  const sliderValue = muted ? 0 : (elements.volumeSlider ? Number(elements.volumeSlider.value) : 0);
+  const volumeLevel = Number.isFinite(sliderValue) ? sliderValue : 0;
 
-  if (elements.audio.muted || volumeLevel === 0) {
-    elements.volumeIcon.textContent = '🔇'; // Muted
-  } else if (volumeLevel < 0.3) {
-    elements.volumeIcon.textContent = '🔈'; // Low volume
-  } else if (volumeLevel < 0.7) {
-    elements.volumeIcon.textContent = '🔉'; // Medium volume
-  } else {
-    elements.volumeIcon.textContent = '🔊'; // High volume
+  const isMuted = muted || volumeLevel <= 0;
+
+  elements.volumeIcon.classList.toggle('muted', isMuted);
+  if (elements.volumeIcon.classList) {
+    elements.volumeIcon.classList.toggle('vol-low', !isMuted && volumeLevel < 0.35);
+    elements.volumeIcon.classList.toggle('vol-mid', !isMuted && volumeLevel >= 0.35 && volumeLevel < 0.7);
+    elements.volumeIcon.classList.toggle('vol-high', !isMuted && volumeLevel >= 0.7);
+  }
+
+  const pressed = isMuted ? 'true' : 'false';
+  elements.volumeIcon.setAttribute('aria-pressed', pressed);
+  elements.volumeIcon.setAttribute('aria-label', isMuted ? 'Unmute' : 'Mute');
+  elements.volumeIcon.setAttribute('title', isMuted ? 'Unmute' : 'Mute');
+
+  if (elements.volumeSlider) {
+    const displayValue = Math.round((isMuted ? 0 : volumeLevel) * 100);
+    elements.volumeSlider.setAttribute('aria-valuenow', String(displayValue));
+    elements.volumeSlider.setAttribute('aria-valuetext', `${displayValue} percent${isMuted ? ', muted' : ''}`);
   }
 }
 

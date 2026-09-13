@@ -40,6 +40,7 @@
   <link rel="stylesheet" href="css/player-bottom-sheet.css" />
   <link rel="stylesheet" href="css/onboarding.css" />
   <link rel="stylesheet" href="css/playlists.css" />
+  <link rel="stylesheet" href="css/player-ux.css" />
   <script src="js/cast.js"></script>
   <script>
     (function () {
@@ -415,6 +416,19 @@
 
       <!-- Persistent player: kept near the viewport edge for thumb-friendly access. -->
       <footer id="player-footer" class="main-player-section" aria-label="Audio player">
+      <!-- Expand/collapse toggle for the mobile mini-player (Spotify-style). -->
+      <button id="player-expand-btn" class="player-expand-btn" type="button"
+              aria-label="Expand player controls"
+              aria-expanded="false"
+              aria-controls="player-content"
+              title="Expand player">
+        <span class="player-expand-chevron" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+               stroke-linecap="round" stroke-linejoin="round" focusable="false">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </span>
+      </button>
       <div class="player-container">
         <div class="player-content" id="player-content">
           <div class="art" id="art">
@@ -438,6 +452,25 @@
                   </svg>
                 </span>
               </button>
+              <!-- Volume control: silent on devices where JS already wires it. -->
+              <div id="volume-control" class="volume-control" role="group" aria-label="Volume control">
+                <button id="volume-icon" class="volume-icon-btn" type="button"
+                        data-always-enabled
+                        aria-label="Mute or unmute"
+                        aria-pressed="false" title="Mute">
+                  <svg class="volume-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                       aria-hidden="true" focusable="false">
+                    <path d="M11 5 6 9H2v6h4l5 4V5z" fill="currentColor" stroke="none"/>
+                    <path class="vol-wave" d="M15.5 8.5a5 5 0 0 1 0 7"/>
+                    <path class="vol-wave vol-wave-2" d="M18.5 5.5a9 9 0 0 1 0 13"/>
+                  </svg>
+                </button>
+                <input id="volume-slider" class="volume-slider" type="range"
+                       min="0" max="1" step="0.01" value="0.7"
+                       aria-label="Volume" aria-valuemin="0" aria-valuemax="100"
+                       aria-valuenow="70" aria-valuetext="70 percent">
+              </div>
             </div>
           </div>
           <div class="progress-section">
@@ -819,6 +852,7 @@
   <script src="js/battery.js"></script>
   <script src="js/initialization.js" defer></script>
   <script src="js/player-bottom-sheet.js" defer></script>
+  <script src="js/player-ux.js" defer></script>
   <script src="js/onboarding.js" defer></script>
   <script src="js/analytics.js"></script>
   <script>

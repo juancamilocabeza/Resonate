@@ -1081,15 +1081,54 @@ async function initializeApp() {
 
   // Volume control event listeners
   if (elements.volumeSlider) {
+    // Fill the track progressively (styled input[type=range]).
+    const syncVolumeFill = () => {
+      const min = Number(elements.volumeSlider.min || 0);
+      const max = Number(elements.volumeSlider.max || 1);
+      const val = Number(elements.volumeSlider.value);
+      const pct = max > min ? ((val - min) / (max - min)) * 100 : 0;
+      elements.volumeSlider.style.setProperty('--vol-fill', `${pct}%`);
+    };
+
     elements.volumeSlider.addEventListener('input', (e) => {
       const volume = parseFloat(e.target.value);
       if (!isNaN(volume)) {
         elements.audio.volume = volume;
         saveVolume(volume);
         updateVolumeIcon();
+        syncVolumeFill();
         window.logger.debug(`Volume changed to ${volume}`, 'UI');
       }
     });
+
+    // Keyboard support (ArrowUp/Down adjust volume by default on range inputs).
+    elements.volumeSlider.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowUp' || e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === 'ArrowLeft') {
+        // Let the native range behavior apply; just sync the visual.
+        requestAnimationFrame(() => {
+          if (!elements.volumeSlider) return;
+          const volume = parseFloat(elements.volumeSlider.value);
+          if (!isNaN(volume)) {
+            elements.audio.volume = volume;
+            saveVolume(volume);
+            updateVolumeIcon();
+            syncVolumeFill();
+          }
+        });
+      }
+    });
+
+    elements.volumeSlider.addEventListener('change', (e) => {
+      const volume = parseFloat(e.target.value);
+      if (!isNaN(volume)) {
+        elements.audio.volume = volume;
+        saveVolume(volume);
+        updateVolumeIcon();
+        syncVolumeFill();
+      }
+    });
+
+    syncVolumeFill();
   }
 
   if (elements.volumeIcon) {
