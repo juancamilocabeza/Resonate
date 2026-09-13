@@ -2745,8 +2745,9 @@ function scheduleHideManualSkipLoaderFallback(delayMs = 3000) {
 
 function playPrevious() {
   state.userInteracted = true;
-  showStatus('Going back to previous track', 'info');
   if (state.isLoading) return;
+
+  showStatus('Going back to previous track', 'info', 1500);
 
   // Analytics: track skip previous
   try {
@@ -2768,9 +2769,9 @@ function playPrevious() {
 
 async function playNext() {
   state.userInteracted = true;
-  showStatus('Skipping to next track now', 'info');
-
   if (state.isLoading) return;
+
+  showStatus('Skipping to next track now', 'info', 1500);
 
   // Analytics: track skip next
   try {
@@ -4151,6 +4152,11 @@ function setupListenTracking() {
 
 // Enhanced progress bar interaction
 function setupProgressBarInteraction() {
+  // Idempotent setup: the document-level drag listeners (mousemove/mouseup/
+  // touchmove/touchend) would otherwise stack up if this is ever invoked again.
+  if (window._resonateProgressInteractionAttached) return;
+  window._resonateProgressInteractionAttached = true;
+
   if (!window.elements.progressBar || !window.elements.progress || !window.elements.currentTime) {
     if (window.logger && typeof window.logger.warn === 'function') window.logger.warn('Progress bar elements not fully initialized', 'PLAYBACK');
     return;
