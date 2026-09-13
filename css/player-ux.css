@@ -1,0 +1,797 @@
+/**
+ * player-ux.css — UX / UI Polish for the Resonate Player
+ *
+ * Loaded LAST (after all other player styles) so it can cleanly override
+ * the mini-player and control rules without touching real CSS files owned
+ * by individual features.
+ *
+ * Scope:
+ *   - Bigger, thumb-friendly hittable areas (>=44px, WCAG AA)
+ *   - Native-app micro-interactions (press scale, glow, ripple, status)
+ *   - Rotating "vinyl" artwork while a track is playing
+ *   - Expandable mobile mini-player (Spotify-style)
+ *   - Volume control styling (native range filled)
+ *   - Responsive tuning for small / landscape / tablet / desktop
+ *   - Accessibility: keyboard focus rings, contrast, reduced motion
+ */
+
+/* =====================================================================
+   BASE — remove tap highlights & consistent hit-area box sizing
+   ===================================================================== */
+.main-player-section button,
+.player-expand-btn,
+.volume-icon-btn {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* =====================================================================
+   MICRO-INTERACTIONS — buttery press feedback on every control
+   ===================================================================== */
+.main-player-section .controls button,
+.icon-control,
+.app-menu-btn,
+.player-expand-btn,
+.volume-icon-btn {
+  transition:
+    transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1),
+    background-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.25s ease,
+    filter 0.2s ease;
+}
+
+/* Press: quick squish + subtle glow */
+.main-player-section .controls button:active:not(:disabled),
+.icon-control:active:not(:disabled),
+.app-menu-btn:active:not(:disabled),
+.volume-icon-btn:active:not(:disabled) {
+  transform: scale(0.88);
+  filter: brightness(1.15);
+}
+
+/* Soft hover lift on desktop-ish pointers */
+@media (hover: hover) and (pointer: fine) {
+  .main-player-section .controls button:hover:not(:disabled),
+  .icon-control:hover:not(:disabled) {
+    transform: translateY(-1px) scale(1.04);
+  }
+  .main-player-section .controls button:active:not(:disabled),
+  .icon-control:active:not(:disabled) {
+    transform: scale(0.9);
+  }
+}
+
+/* Play button: deepen the accent so the white icon clears WCAG 1.4.11
+   (>=3:1) against the filled background in every theme. */
+.play-btn,
+.play-btn-favorite {
+  background-image: linear-gradient(rgba(0, 0, 0, 0.16), rgba(0, 0, 0, 0.16));
+  background-color: var(--primary);
+  background-blend-mode: multiply;
+}
+
+@supports (background-color: color-mix(in srgb, red 50%, black)) {
+  .play-btn,
+  .play-btn-favorite {
+    background-color: color-mix(in srgb, var(--primary) 84%, #000);
+    background-image: none;
+    background-blend-mode: normal;
+  }
+}
+
+/* =====================================================================
+   RIPPLE — lightweight vanilla ripple on transport controls
+   ===================================================================== */
+.main-player-section .controls button,
+.icon-control,
+.volume-icon-btn {
+  position: relative;
+  overflow: hidden;
+}
+
+.main-player-section .controls button::after,
+.icon-control::after,
+.volume-icon-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(circle at center, rgba(255, 255, 255, 0.22) 0%, transparent 60%);
+  opacity: 0;
+  transform: scale(0.4);
+  pointer-events: none;
+}
+
+.main-player-section .controls button:active::after,
+.icon-control:active::after,
+.volume-icon-btn:active::after {
+  opacity: 1;
+  transform: scale(1.6);
+  transition: transform 0.35s ease, opacity 0.35s ease;
+}
+
+/* =====================================================================
+   PLAY BUTTON — heartbeat glow while loading / playing
+   ===================================================================== */
+.play-btn[data-state="pause"] {
+  animation: playGlow 2.4s ease-in-out infinite;
+}
+
+@keyframes playGlow {
+  0%, 100% {
+    box-shadow:
+      0 4px 20px rgba(var(--primary-rgb), 0.45),
+      0 2px 6px rgba(var(--primary-rgb), 0.3),
+      0 0 0 0 rgba(var(--primary-rgb), 0.25);
+  }
+  50% {
+    box-shadow:
+      0 4px 24px rgba(var(--primary-rgb), 0.6),
+      0 2px 8px rgba(var(--primary-rgb), 0.4),
+      0 0 0 6px rgba(var(--primary-rgb), 0.08);
+  }
+}
+
+/* =====================================================================
+   VINYL ARTWORK — rotating disc while playing
+   The cover only becomes a spinning vinyl inside the EXPANDED mobile
+   sheet (where full attention is on the artwork). On the compact
+   mini-player and on desktop the artwork stays legible (square) and we
+   show a quieter "live" aura as playback feedback.
+   ===================================================================== */
+.art {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.art.is-playing::before {
+  content: '';
+  position: absolute;
+  inset: -8%;
+  z-index: -1;
+  border-radius: 50%;
+  background:
+    conic-gradient(
+      from 0deg,
+      rgba(var(--primary-rgb), 0.16),
+      transparent 16%,
+      rgba(var(--primary-rgb), 0.1) 50%,
+      transparent 70%,
+      rgba(var(--primary-rgb), 0.16)
+    );
+  filter: blur(22px);
+  opacity: 0.8;
+  animation: vinylAura 6s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes spinRecord {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes vinylAura {
+  from { transform: rotate(0deg) scale(1); }
+  50% { transform: rotate(180deg) scale(1.12); }
+  to { transform: rotate(360deg) scale(1); }
+}
+
+/* Center spindle hint — communicates "vinyl" affordance (expanded only) */
+.art.is-playing::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 26px;
+  height: 26px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow:
+    0 0 0 5px rgba(0, 0, 0, 0.3),
+    inset 0 0 0 6px rgba(0, 0, 0, 0.2);
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+/* Expanded sheet: true vinyl — round artwork that spins */
+#player-footer.player-expanded .art.is-playing img {
+  border-radius: 50%;
+  animation: spinRecord 18s linear infinite;
+}
+
+#player-footer.player-expanded .art.is-playing::after {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+#player-footer.player-expanded .art.paused img {
+  animation-play-state: paused;
+}
+
+/* Pause-friendly: hovering the vinyl stops it on fine pointers */
+@media (hover: hover) and (pointer: fine) {
+  #player-footer.player-expanded .art.is-playing:hover img {
+    animation-play-state: paused;
+  }
+}
+
+/* Desktop keeps the square cover; just a breathing glow as feedback */
+@media (min-width: 768px) {
+  .art.is-playing {
+    box-shadow:
+      0 4px 16px rgba(0, 0, 0, 0.3),
+      0 0 0 1px rgba(var(--primary-rgb), 0.35),
+      0 0 34px rgba(var(--primary-rgb), 0.22);
+  }
+}
+
+/* =====================================================================
+   EXPANDABLE MINI-PLAYER — mobile
+   ===================================================================== */
+#player-expand-btn {
+  display: none;
+}
+
+.player-expand-btn {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+  border: 1px solid rgba(var(--primary-rgb), 0.16);
+  color: var(--control-fg, var(--fg));
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.player-expand-btn:hover {
+  background: rgba(var(--primary-rgb), 0.1);
+  color: var(--primary);
+}
+
+.player-expand-btn .player-expand-chevron {
+  display: inline-flex;
+}
+
+.player-expand-btn svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.player-expand-btn[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+
+@media (max-width: 767px) {
+  /* Thin chevron strip pinned to the very top of the mini-player, so it
+     never covers the transport controls (play button sits at the end). */
+  #player-expand-btn {
+    display: inline-flex;
+    position: absolute;
+    top: 0;
+    right: 0;
+    left: 0;
+    width: 100%;
+    height: 24px;
+    min-width: 0;
+    min-height: 0;
+    border: none;
+    background: transparent;
+    color: var(--muted, rgba(255, 255, 255, 0.55));
+    box-shadow: none;
+    overflow: hidden;
+    opacity: 0;
+    transition: opacity 0.2s ease, color 0.2s ease;
+    pointer-events: none;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 3;
+  }
+
+  #player-expand-btn .player-expand-chevron {
+    width: 100%;
+    height: 12px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    color: inherit;
+  }
+
+  #player-expand-btn svg {
+    width: 14px;
+    height: 10px;
+    display: block;
+    margin-top: -2px;
+    opacity: 0.75;
+  }
+
+  /* Reveal the expand toggle when a track is actually loaded */
+  body.has-track #player-expand-btn {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  #player-expand-btn:hover {
+    color: var(--primary);
+  }
+}
+
+/* =====================================================================
+   EXPANDED STATE — full player sheet behaviour on mobile
+   ===================================================================== */
+@media (max-width: 767px) {
+  #player-footer.player-expanded {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    padding: 0;
+    margin: 0;
+    z-index: 700;
+    overflow-y: auto;
+    overflow-x: hidden;
+    border-radius: 0;
+    border: none;
+    background:
+      linear-gradient(
+        180deg,
+        rgba(var(--primary-rgb), 0.08) 0%,
+        rgba(var(--bg-rgb, 15, 15, 15), 0) 26%
+      ),
+      var(--bg, #0d0d0d);
+    -webkit-overflow-scrolling: touch;
+    animation: expandSheet 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  @keyframes expandSheet {
+    from {
+      opacity: 0;
+      transform: translateY(12%);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  #player-footer.player-expanded .player-container {
+    height: auto;
+    min-height: 100%;
+    max-width: 480px;
+    margin: 0 auto;
+    justify-content: flex-start;
+    padding: calc(env(safe-area-inset-top, 0px) + 18px) 20px
+      calc(env(safe-area-inset-bottom, 0px) + 24px);
+    box-sizing: border-box;
+  }
+
+  #player-footer.player-expanded .player-content {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+    gap: 6px;
+  }
+
+  #player-footer.player-expanded #player-expand-btn {
+    position: absolute;
+    top: calc(env(safe-area-inset-top, 0px) + 8px);
+    right: 12px;
+    bottom: auto;
+    left: auto;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    flex-direction: row;
+    border: 1px solid rgba(var(--primary-rgb), 0.18);
+    background: rgba(var(--primary-rgb), 0.08);
+    color: var(--fg);
+    z-index: 2;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+  }
+
+  #player-footer.player-expanded #player-expand-btn .player-expand-chevron {
+    height: 100%;
+    align-items: center;
+  }
+
+  #player-footer.player-expanded #player-expand-btn svg {
+    width: 18px;
+    height: 18px;
+    margin-top: 0;
+    opacity: 1;
+  }
+
+  #player-footer.player-expanded .art {
+    width: min(72vw, 320px);
+    height: min(72vw, 320px);
+    min-width: min(72vw, 320px);
+    min-height: min(72vw, 320px);
+    flex: 0 0 auto;
+    margin: 8px auto 14px;
+    border-radius: 50%;
+    box-shadow:
+      0 24px 64px rgba(0, 0, 0, 0.5),
+      0 8px 24px rgba(0, 0, 0, 0.3);
+  }
+
+  #player-footer.player-expanded .art img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+  }
+
+  #player-footer.player-expanded .current-track-info {
+    padding: 0 6px;
+    gap: 4px;
+    overflow: visible;
+  }
+
+  #player-footer.player-expanded .title,
+  #player-footer.player-expanded .creator {
+    display: block;
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+    white-space: normal;
+    text-overflow: clip;
+    word-break: break-word;
+  }
+
+  #player-footer.player-expanded .title {
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.25;
+  }
+
+  #player-footer.player-expanded .creator {
+    font-size: 15px;
+  }
+
+  #player-footer.player-expanded #description-container {
+    display: flex;
+    margin: 4px auto 8px;
+    gap: 10px;
+  }
+
+  /* Volume control (expanded only) */
+  #player-footer.player-expanded #volume-control {
+    display: inline-flex;
+  }
+
+  /* Reveal everything hidden by the mini-player rules
+     (!important wins over player-bottom-sheet.css's display:none !important) */
+  #player-footer.player-expanded .progress-section,
+  #player-footer.player-expanded #shuffle-favorites-btn,
+  #player-footer.player-expanded #prev-btn,
+  #player-footer.player-expanded #next-btn,
+  #player-footer.player-expanded #favorite-btn,
+  #player-footer.player-expanded #description-container {
+    display: flex !important;
+  }
+
+  #player-footer.player-expanded .progress-section {
+    width: 100%;
+    padding: 14px 10px 10px;
+    display: block !important;
+  }
+
+  #player-footer.player-expanded .controls {
+    width: 100%;
+    margin: 6px auto 0;
+    padding: 0 8px calc(var(--vv-bottom-inset, 0px) + 8px);
+    gap: clamp(10px, 4vw, 22px);
+  }
+
+  #player-footer.player-expanded #play-btn {
+    width: 72px;
+    height: 72px;
+    min-width: 72px;
+    min-height: 72px;
+  }
+}
+
+/* =====================================================================
+   VOLUME CONTROL — native range styled as a filled slider
+   ===================================================================== */
+.volume-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 4px 2px;
+  border-radius: 999px;
+  background: rgba(var(--primary-rgb), 0.08);
+  border: 1px solid rgba(var(--primary-rgb), 0.12);
+}
+
+.volume-icon-btn {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  border-radius: 50%;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--control-fg, var(--fg));
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.volume-icon-btn:hover {
+  color: var(--primary);
+  background: rgba(var(--primary-rgb), 0.1);
+}
+
+.volume-icon-svg {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+
+.volume-icon-svg .vol-wave,
+.volume-icon-svg .vol-wave-2 {
+  opacity: 1;
+  transition: opacity 0.2s ease;
+}
+
+.volume-icon-btn.muted .vol-wave,
+.volume-icon-btn.muted .vol-wave-2 {
+  opacity: 0;
+}
+
+.volume-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 92px;
+  height: 28px;
+  background: transparent;
+  cursor: pointer;
+  margin: 0;
+  /* Filled portion driven from JS via --vol-fill */
+  background-image:
+    linear-gradient(var(--primary), var(--primary));
+  background-repeat: no-repeat;
+  background-size: var(--vol-fill, 70%) 6px;
+  background-position: left center;
+}
+
+.volume-slider::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(var(--primary-rgb), 0.18);
+}
+
+.volume-slider::-moz-range-track {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(var(--primary-rgb), 0.18);
+}
+
+.volume-slider::-ms-track {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(var(--primary-rgb), 0.18);
+  border: none;
+  color: transparent;
+}
+
+.volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  border: none;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.35),
+    0 0 0 2px var(--primary);
+  margin-top: calc((6px - 18px) / 2);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.volume-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  border: none;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.35),
+    0 0 0 2px var(--primary);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.volume-slider:active::-webkit-slider-thumb {
+  transform: scale(1.25);
+}
+
+.volume-slider:active::-moz-range-thumb {
+  transform: scale(1.25);
+}
+
+.volume-slider:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* Hide the volume control when the player is not expanded on mobile,
+   it would otherwise crowd the mini-player. It reappears in the
+   expanded sheet (rule above) and stays visible on desktop. */
+@media (max-width: 767px) {
+  #volume-control {
+    display: none;
+  }
+}
+
+@media (min-width: 768px) {
+  #volume-control {
+    display: inline-flex;
+  }
+}
+
+/* =====================================================================
+   PROGRESS BAR — bigger hit area + taller hover track on fine pointers
+   ===================================================================== */
+.progress-section {
+  position: relative;
+}
+
+/* Invisible expanded hit target for the slim track */
+.progress-bar::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 32px;
+  transform: translateY(-50%);
+  z-index: -1;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .progress-bar {
+    height: 10px;
+    border-radius: 999px;
+  }
+  .progress,
+  .progress-buffered {
+    border-radius: 999px;
+  }
+  .progress-bar:hover {
+    height: 14px;
+  }
+  .progress-bar:hover .progress::after,
+  .progress-bar.focused .progress::after {
+    transform: translateY(-50%) scale(1);
+    opacity: 1;
+  }
+}
+
+/* =====================================================================
+   KEYBOARD ACCESSIBILITY — shared visible focus ring
+   ===================================================================== */
+.volume-icon-btn:focus-visible,
+.player-expand-btn:focus-visible,
+.main-player-section .controls button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Improve contrast on the time labels (was rgba primary 0.75 on dark) */
+.current-time,
+.total-time {
+  color: var(--fg);
+  opacity: 0.82;
+}
+
+.progress-bar:hover .current-time,
+.progress-bar:hover .total-time,
+.progress-bar:focus .current-time,
+.progress-bar:focus .total-time {
+  color: var(--primary);
+  opacity: 1;
+}
+
+/* =====================================================================
+   RESPONSIVE — small phones / landscape / tablets
+   ===================================================================== */
+@media (max-width: 360px) {
+  .main-player-section .controls {
+    gap: 6px;
+  }
+  .main-player-section .controls button:not(.play-btn):not(.play-btn-favorite) {
+    width: 44px;
+    height: 44px;
+  }
+  .main-player-section .controls .play-btn,
+  .main-player-section .controls .play-btn-favorite {
+    width: 64px;
+    height: 64px;
+  }
+}
+
+/* Landscape phones: keep controls compact but reachable */
+@media (max-height: 500px) and (orientation: landscape) {
+  #player-footer.player-expanded .art {
+    width: 38vh;
+    height: 38vh;
+    min-width: 38vh;
+    min-height: 38vh;
+    max-width: 50vw;
+    margin: 6px auto 10px;
+  }
+  #player-footer.player-expanded .controls {
+    margin-top: 2px;
+  }
+  #player-footer.player-expanded .progress-section {
+    padding: 8px 10px 6px;
+  }
+  #player-footer.player-expanded .current-track-info {
+    padding: 0;
+  }
+  #player-footer.player-expanded .volume-control {
+    margin: 2px auto;
+  }
+}
+
+/* Tablet+ — slightly larger artwork and spacing for a native feel */
+@media (min-width: 768px) {
+  .main-player-section .controls {
+    gap: clamp(12px, 2vw, 24px);
+  }
+  .art {
+    border-radius: 24px;
+  }
+  .progress-section {
+    max-width: 640px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .controls {
+    max-width: 640px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+
+/* =====================================================================
+   REDUCED MOTION — keep everything calm for vestibular-sensitive users
+   ===================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  .art.is-playing img,
+  .art.is-playing::before {
+    animation: none !important;
+  }
+  .play-btn[data-state="pause"] {
+    animation: none;
+  }
+  #player-footer.player-expanded {
+    animation: none;
+  }
+  .player-expand-btn svg,
+  .player-expand-chevron {
+    transition: none;
+  }
+}
