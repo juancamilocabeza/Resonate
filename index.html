@@ -91,6 +91,124 @@
   </script>
 </head>
 <body>
+  <!-- Splash / start view: shown to first-time visitors. The .hidden class is
+       added by JS (startApp / PWA bootstrap) once the app is interactive. -->
+  <div id="start-view" class="start-view" role="region" aria-label="Welcome to Resonate">
+    <div class="start-logo" aria-hidden="true">
+      <svg class="app-logo-svg start-logo-svg" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+        <circle cx="256" cy="256" r="200" stroke="currentColor" stroke-width="32" fill="none"/>
+        <path d="M96 256 C140 256, 180 180, 220 180 C260 180, 300 332, 340 332 C380 332, 416 256, 416 256" stroke="currentColor" stroke-width="32" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <h1 class="start-title">Resonate</h1>
+    <p class="start-subtitle">Enjoy content freely from archive.org — search, save resonates and listen offline.</p>
+    <button id="start-button" class="start-button" type="button">Get started</button>
+  </div>
+  <style>
+    /* Inline corrective styles (index.html-owned) for #start-view.
+       resonate.css defines .start-view with a stray `display:none` in the base
+       rule, which would permanently hide the splash. Fix that here so the
+       on-boarding screen is visible and the .hidden transition works. */
+    #start-view.start-view {
+      box-sizing: border-box;
+      padding: 24px;
+      text-align: center;
+      display: flex;
+      opacity: 1;
+      visibility: visible;
+      transition: opacity 0.4s ease, visibility 0.4s ease;
+    }
+    #start-view.start-view.hidden {
+      pointer-events: none;
+      opacity: 0;
+      visibility: hidden;
+    }
+    .start-logo-svg {
+      width: 96px;
+      height: 96px;
+      color: var(--accent, #3da9ff);
+      margin-bottom: 0.8rem;
+    }
+    .start-title {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--accent, #3da9ff);
+      margin-bottom: 0.8rem;
+    }
+    #start-view .start-button {
+      background: var(--accent, #3da9ff);
+      color: #000;
+      border: none;
+      border-radius: 14px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      padding: 12px 24px;
+      box-shadow: 0 6px 20px rgba(61, 169, 255, 0.25);
+    }
+    #start-view .start-button:active {
+      transform: scale(0.97);
+    }
+  </style>
+  <script>
+    /* Start-view bridge (index.html-owned).
+       ui.js's startApp() reads `elements.startView`, but ui.js never declares
+       that key. Without this, clicking #start-button throws a TypeError and the
+       splash never hides. Patch the reference as soon as window.elements exists
+       and re-export it so PWA bootstrap (initialization.js) sees the same node. */
+    (function () {
+      'use strict';
+      var attempts = 0;
+
+      function patch() {
+        if (attempts++ > 80) return; // give up after ~4s; never loop forever
+        if (!window.elements) {
+          setTimeout(patch, 50);
+          return;
+        }
+        if (window.elements.startView) return; // already patched (e.g. by a retry)
+        var sv = document.getElementById('start-view');
+        if (!sv) {
+          setTimeout(patch, 50);
+          return;
+        }
+        try {
+          window.elements.startView = sv;
+
+          // Safety net: if startApp() is unavailable (e.g. ui.js failed to
+          // load), keep the Start button functional by hiding the splash here.
+          // When window.startApp exists, initialization.js already wired the
+          // click handler, so this listener becomes a no-op to avoid double toggling.
+          var btn = document.getElementById('start-button');
+          if (btn && !btn.dataset.resonateStartBridge) {
+            btn.dataset.resonateStartBridge = '1';
+            btn.addEventListener('click', function () {
+              if (!sv || sv.classList.contains('hidden')) return;
+              if (typeof window.startApp === 'function') return;
+              try {
+                sv.classList.add('hidden');
+                var app = document.getElementById('app');
+                if (app) app.classList.add('active');
+              } catch (err) {
+                try { sv.classList.add('hidden'); } catch (e) {}
+                if (window.console && typeof window.console.error === 'function') {
+                  window.console.error('Start flow failed:', err);
+                }
+              }
+            });
+          }
+        } catch (err) {
+          setTimeout(patch, 50);
+        }
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function () { setTimeout(patch, 0); }, { once: true });
+      } else {
+        setTimeout(patch, 0);
+      }
+    })();
+  </script>
   <div class="app" id="app" data-nosnippet>
     <header id="app-header">
       <h1 class="app-title-heading">
@@ -331,7 +449,7 @@
                  aria-valuemin="0"
                  aria-valuemax="100"
                  aria-valuenow="0"
-                 aria-valuetext="0 segundos de 0 segundos"
+                 aria-valuetext="0:00 de 0:00"
                  aria-describedby="current-time total-time"
                  tabindex="0">
               <span class="current-time" id="current-time">0:00</span>
@@ -466,7 +584,7 @@
         <div class="sheet-content">
 
             <button id="resontes-toggle" class="theme-selector resontes-toggle sheet-action-item" type="button"
-                  type="button" aria-label="View resonates"
+                  aria-label="View resonates"
               aria-expanded="false" aria-controls="resontes-list" aria-live="polite"
               data-close-sheet-on-activate="true">
             <span class="sheet-item-icon resontes-icon" aria-hidden="true">
@@ -479,7 +597,7 @@
           </button>
 
           <button id="playlists-toggle" class="theme-selector playlists-toggle sheet-action-item" type="button"
-                  type="button" aria-label="View playlists"
+                  aria-label="View playlists"
               aria-expanded="false" aria-controls="playlists-list"
               data-close-sheet-on-activate="true">
             <span class="sheet-item-icon" aria-hidden="true">
