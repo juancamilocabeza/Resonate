@@ -41,6 +41,7 @@
   <link rel="stylesheet" href="css/onboarding.css" />
   <link rel="stylesheet" href="css/playlists.css" />
   <link rel="stylesheet" href="css/player-ux.css" />
+  <link rel="stylesheet" href="css/layout-redesign.css" />
   <script src="js/cast.js"></script>
   <script>
     (function () {
@@ -414,86 +415,137 @@
       </div><!-- /#content-layout -->
     </main>
 
-      <!-- Persistent player: kept near the viewport edge for thumb-friendly access. -->
+      <!-- ============================================================
+           PERSISTENT PLAYER — full-width bottom bar.
+           Desktop: sticky bottom bar (100% width) with three flex
+           sections (track info | transport + progress | volume / repeat /
+           shuffle). Mobile: compact floating mini-player that expands
+           into a full-screen "Now Playing" sheet via #player-expand-btn
+           (see css/layout-redesign.css and player-ux.css).
+           ============================================================ -->
       <footer id="player-footer" class="main-player-section" aria-label="Audio player">
-      <!-- Expand/collapse toggle for the mobile mini-player (Spotify-style). -->
-      <button id="player-expand-btn" class="player-expand-btn" type="button"
-              aria-label="Expand player controls"
-              aria-expanded="false"
-              aria-controls="player-content"
-              title="Expand player">
-        <span class="player-expand-chevron" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-               stroke-linecap="round" stroke-linejoin="round" focusable="false">
-            <polyline points="6 9 12 15 18 9"/>
-          </svg>
-        </span>
-      </button>
-      <div class="player-container">
+        <!-- Expand/collapse toggle for the mobile mini-player (Spotify-style). -->
+        <button id="player-expand-btn" class="player-expand-btn" type="button"
+                aria-label="Expand player controls"
+                aria-expanded="false"
+                aria-controls="player-content"
+                title="Expand player">
+          <span class="player-expand-chevron" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                 stroke-linecap="round" stroke-linejoin="round" focusable="false">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </span>
+        </button>
+        <!-- Compact progress strip: only visible on the mobile mini-player -->
         <div class="player-content" id="player-content">
-          <div class="art" id="art">
-            <span class="hint"></span>
-          </div>
-          <div class="current-track-info">
-            <div class="title-share-container">
-              <div class="title" id="title"></div>
+
+          <!-- LEFT — Track info -->
+          <div class="player-section player-section--info" aria-label="Now playing">
+            <div class="art" id="art">
+              <span class="hint"></span>
             </div>
-            <div class="creator" id="creator"></div>
+            <div class="current-track-info">
+              <div class="title-share-container">
+                <div class="title" id="title"></div>
+              </div>
+              <div class="creator" id="creator"></div>
+            </div>
+            <button id="player-menu-btn" class="icon-control player-menu-btn" type="button"
+                  aria-label="More track options" aria-expanded="false"
+                  aria-controls="player-options-sheet"
+                  data-sheet-target="player-options-sheet">
+              <span class="btn-icon" aria-hidden="true">
+                <svg class="btn-svg" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                  <circle cx="6" cy="12" r="1.75" fill="currentColor" stroke="none"></circle>
+                  <circle cx="12" cy="12" r="1.75" fill="currentColor" stroke="none"></circle>
+                  <circle cx="18" cy="12" r="1.75" fill="currentColor" stroke="none"></circle>
+                </svg>
+              </span>
+            </button>
             <div id="description-container">
-              <button id="player-menu-btn" class="icon-control player-menu-btn" type="button"
-                    aria-label="More track options" aria-expanded="false"
-                    aria-controls="player-options-sheet"
-                    data-sheet-target="player-options-sheet">
-                <span class="btn-icon" aria-hidden="true">
-                  <svg class="btn-svg" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-                    <circle cx="6" cy="12" r="1.75" fill="currentColor" stroke="none"></circle>
-                    <circle cx="12" cy="12" r="1.75" fill="currentColor" stroke="none"></circle>
-                    <circle cx="18" cy="12" r="1.75" fill="currentColor" stroke="none"></circle>
-                  </svg>
-                </span>
+              <button id="toggle-description-btn" class="icon-control" type="button"
+                      aria-label="Show track description" style="display:none">
+                <span class="btn-icon" aria-hidden="true">&#8505;</span>
               </button>
-              <!-- Volume control: silent on devices where JS already wires it. -->
-              <div id="volume-control" class="volume-control" role="group" aria-label="Volume control">
-                <button id="volume-icon" class="volume-icon-btn" type="button"
-                        data-always-enabled
-                        aria-label="Mute or unmute"
-                        aria-pressed="false" title="Mute">
-                  <svg class="volume-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                       stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                       aria-hidden="true" focusable="false">
-                    <path d="M11 5 6 9H2v6h4l5 4V5z" fill="currentColor" stroke="none"/>
-                    <path class="vol-wave" d="M15.5 8.5a5 5 0 0 1 0 7"/>
-                    <path class="vol-wave vol-wave-2" d="M18.5 5.5a9 9 0 0 1 0 13"/>
-                  </svg>
-                </button>
-                <input id="volume-slider" class="volume-slider" type="range"
-                       min="0" max="1" step="0.01" value="0.7"
-                       aria-label="Volume" aria-valuemin="0" aria-valuemax="100"
-                       aria-valuenow="70" aria-valuetext="70 percent">
+            </div>
+          </div>
+
+          <!-- CENTER — Transport controls + progress -->
+          <div class="player-section player-section--transport" aria-label="Playback controls">
+            <div class="controls">
+              <button id="prev-btn" class="prev-btn" type="button" aria-label="Previous" title="Previous track">
+                <svg class="control-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true" focusable="false">
+                  <polygon points="19,20 9,12 19,4"/>
+                  <rect x="5" y="4" width="2.5" height="16" rx="1"/>
+                </svg>
+              </button>
+              <button id="play-btn" class="play-btn" type="button" aria-label="Play" data-state="play">
+                <span class="transport-icon" aria-hidden="true"></span>
+              </button>
+              <button id="next-btn" class="next-btn" type="button" aria-label="Next" title="Next track">
+                <svg class="control-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true" focusable="false">
+                  <polygon points="5,4 15,12 5,20"/>
+                  <rect x="16.5" y="4" width="2.5" height="16" rx="1"/>
+                </svg>
+              </button>
+            </div>
+            <div class="progress-section">
+              <div class="progress-bar" 
+                   id="progress-bar"
+                   role="slider"
+                   aria-label="Playback position"
+                   aria-orientation="horizontal"
+                   aria-valuemin="0"
+                   aria-valuemax="100"
+                   aria-valuenow="0"
+                   aria-valuetext="0:00 de 0:00"
+                   aria-describedby="current-time total-time"
+                   tabindex="0">
+                <span class="current-time" id="current-time">0:00</span>
+                <div class="progress-buffered" id="progress-buffered"></div>
+                <div class="progress" id="progress"></div>
+                <div class="progress-tooltip" id="progress-tooltip">0:00</div>
+                <span class="total-time" id="total-time">0:00</span>
               </div>
             </div>
           </div>
-          <div class="progress-section">
-            <div class="progress-bar" 
-                 id="progress-bar"
-                 role="slider"
-                 aria-label="Playback position"
-                 aria-orientation="horizontal"
-                 aria-valuemin="0"
-                 aria-valuemax="100"
-                 aria-valuenow="0"
-                 aria-valuetext="0:00 de 0:00"
-                 aria-describedby="current-time total-time"
-                 tabindex="0">
-              <span class="current-time" id="current-time">0:00</span>
-              <div class="progress-buffered" id="progress-buffered"></div>
-              <div class="progress" id="progress"></div>
-              <div class="progress-tooltip" id="progress-tooltip">0:00</div>
-              <span class="total-time" id="total-time">0:00</span>
+
+          <!-- RIGHT — Secondary controls: volume, repeat, shuffle, favorite -->
+          <div class="player-section player-section--secondary" aria-label="Playback options">
+            <div id="volume-control" class="volume-control" role="group" aria-label="Volume control">
+              <button id="volume-icon" class="volume-icon-btn" type="button"
+                      data-always-enabled
+                      aria-label="Mute or unmute"
+                      aria-pressed="false" title="Mute">
+                <svg class="volume-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                     aria-hidden="true" focusable="false">
+                  <path d="M11 5 6 9H2v6h4l5 4V5z" fill="currentColor" stroke="none"/>
+                  <path class="vol-wave" d="M15.5 8.5a5 5 0 0 1 0 7"/>
+                  <path class="vol-wave vol-wave-2" d="M18.5 5.5a9 9 0 0 1 0 13"/>
+                </svg>
+              </button>
+              <input id="volume-slider" class="volume-slider" type="range"
+                     min="0" max="1" step="0.01" value="0.7"
+                     aria-label="Volume" aria-valuemin="0" aria-valuemax="100"
+                     aria-valuenow="70" aria-valuetext="70 percent">
             </div>
-          </div>
-          <div class="controls">
-            <button id="shuffle-favorites-btn" class="shuffle-favorites-btn" type="button" aria-label="Shuffle" title="Shuffle">
+            <button id="repeat-btn" class="repeat-btn icon-control" type="button"
+                    aria-label="Repeat off" title="Repeat" aria-pressed="false">
+              <svg class="control-icon repeat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+                   aria-hidden="true" focusable="false">
+                <polyline points="17 1 21 5 17 9"/>
+                <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+                <polyline points="7 23 3 19 7 15"/>
+                <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+                <text class="repeat-one-label" x="12" y="15" text-anchor="middle"
+                      font-size="9" font-weight="700" fill="currentColor"
+                      stroke="none" font-family="system-ui">1</text>
+              </svg>
+            </button>
+            <button id="shuffle-favorites-btn" class="shuffle-favorites-btn icon-control" type="button" aria-label="Shuffle" title="Shuffle">
               <svg class="control-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
                 <path d="M16 3h5v5"/>
                 <path d="M4 20L21 3"/>
@@ -501,26 +553,9 @@
                 <path d="M15 15l6 6"/>
               </svg>
             </button>
-            <button id="prev-btn" class="prev-btn" type="button" aria-label="Previous" title="Previous track">
-              <svg class="control-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true" focusable="false">
-                <polygon points="19,20 9,12 19,4"/>
-                <rect x="5" y="4" width="2.5" height="16" rx="1"/>
-              </svg>
-            </button>
-            <button id="play-btn" class="play-btn" type="button" aria-label="Play" data-state="play">
-              <span class="transport-icon" aria-hidden="true"></span>
-            </button>
-            <button id="next-btn" class="next-btn" type="button" aria-label="Next" title="Next track">
-              <svg class="control-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true" focusable="false">
-                <polygon points="5,4 15,12 5,20"/>
-                <rect x="16.5" y="4" width="2.5" height="16" rx="1"/>
-              </svg>
-            </button>
-            <button id="favorite-btn" class="additional-btn" type="button" aria-label="Add to resonates" title="Add to resonates"></button>
+            <button id="favorite-btn" class="additional-btn icon-control" type="button" aria-label="Add to resonates" title="Add to resonates"></button>
           </div>
         </div>
-      </div>
-
       </footer>
 
       <!-- ============================================================
@@ -853,6 +888,7 @@
   <script src="js/initialization.js" defer></script>
   <script src="js/player-bottom-sheet.js" defer></script>
   <script src="js/player-ux.js" defer></script>
+  <script src="js/player-repeat.js" defer></script>
   <script src="js/onboarding.js" defer></script>
   <script src="js/analytics.js"></script>
   <script>

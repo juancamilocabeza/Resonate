@@ -293,6 +293,7 @@ const elements = {
   prevBtn: document.getElementById('prev-btn'),
   nextBtn: document.getElementById('next-btn'),
   shuffleFavoritesBtn: document.getElementById('shuffle-favorites-btn'),
+  repeatBtn: document.getElementById('repeat-btn'),
   favoriteBtn: document.getElementById('favorite-btn'),
   volumeIcon: document.getElementById('volume-icon'),
   volumeSlider: document.getElementById('volume-slider'),

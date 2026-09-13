@@ -25,10 +25,10 @@
 
 // sw.js - Enhanced Service Worker for audio, metadata, and cover image caching
 const CACHE_NAMES = {
-  APP: 'resonate-v17p11',
-  STATIC: 'static-v17p11',
-  METADATA: 'metadata-v17p11',
-  SEARCH: 'search-v17p11',
+  APP: 'resonate-v17p12',
+  STATIC: 'static-v17p12',
+  METADATA: 'metadata-v17p12',
+  SEARCH: 'search-v17p12',
   COVERS: 'covers-v1'
 };
 

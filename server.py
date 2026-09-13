@@ -12,6 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 PORT = int(os.environ.get("PORT", "3000"))
+HOST = os.environ.get("HOST", "127.0.0.1")
 
 # Ensure common types
 mimetypes.add_type("text/javascript; charset=utf-8", ".js")
@@ -336,7 +337,7 @@ class ResonateHandler(BaseHTTPRequestHandler):
 
 def main() -> int:
     # Bind only to loopback to avoid firewall prompts/issues.
-    httpd = ThreadingHTTPServer(("127.0.0.1", PORT), ResonateHandler)
+    httpd = ThreadingHTTPServer((HOST, PORT), ResonateHandler)
     print(f"Resonate python server: http://localhost:{PORT}")
     try:
         httpd.serve_forever()

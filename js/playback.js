@@ -817,12 +817,14 @@ function getActiveDeckContextInfo() {
 // Playback state manager
 class PlaybackStateManager {
   constructor() {
-    // Repeat/mode toggle removed from UX; keep continuous playback by default.
-    const repeat = RepeatMode.ALL;
+    let repeat = RepeatMode.ALL;
     let shuffle = false;
     try {
       const config = JSON.parse(localStorage.getItem('playbackConfig'));
       if (config) {
+        if (typeof config.repeat === 'string') {
+          repeat = normalizeRepeatMode(config.repeat);
+        }
         if (typeof config.shuffle === 'boolean') shuffle = config.shuffle;
       }
       if (localStorage.getItem('resonate_shuffle_enabled') !== null) {
@@ -832,7 +834,7 @@ class PlaybackStateManager {
     this.state = {
       current: { track: null, context: null, contextId: null },
       queue: { items: [], position: 0 },
-      // Resonate UX: playback should be continuous por defecto
+      // Resonate UX: playback is continuous by default, repeat can be toggled.
       modes: { repeat, shuffle },
       history: { played: [], skipped: [] },
       stats: { consecutiveFailures: 0, totalFailures: 0 }
@@ -844,9 +846,11 @@ class PlaybackStateManager {
     this.state.current = { track, context, contextId };
   }
 
-  setRepeatMode() {
-    // Repeat/mode toggle removed from UX; keep continuous playback.
-    this.state.modes.repeat = RepeatMode.ALL;
+  setRepeatMode(mode) {
+    if ([RepeatMode.ALL, RepeatMode.ONE, RepeatMode.OFF].indexOf(mode) === -1) {
+      mode = RepeatMode.ALL;
+    }
+    this.state.modes.repeat = mode;
     this.saveConfig();
   }
 
@@ -859,6 +863,7 @@ class PlaybackStateManager {
   saveConfig() {
     try {
       localStorage.setItem('playbackConfig', JSON.stringify({
+        repeat: this.state.modes.repeat,
         shuffle: this.state.modes.shuffle
       }));
     } catch {}
@@ -866,7 +871,7 @@ class PlaybackStateManager {
 
   getPlaybackConfigStatus() {
     return {
-      repeat: RepeatMode.ALL,
+      repeat: this.state.modes.repeat,
       shuffle: this.state.modes.shuffle
     };
   }
@@ -904,7 +909,7 @@ class PlaybackStateManager {
   }
 
   getRepeatMode() {
-    return RepeatMode.ALL;
+    return this.state.modes.repeat;
   }
 
   getShuffleMode() {
@@ -4623,3 +4628,7 @@ async function playTrack(trackId) {
 
 // Expose for UI hints when status messages are disabled.
 window.showAutoplayCta = showAutoplayCta;
+
+// Expose the state manager so UI-layer modules (e.g. player-repeat.js)
+// can read and update the persisted repeat/shuffle modes.
+try { window.playbackStateManager = playbackStateManager; } catch (e) {}
