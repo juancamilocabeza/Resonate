@@ -3367,9 +3367,86 @@ function updateFavoriteButton() {
   applyResonteButtonState(btn, isResonte);
 }
 
+/* Status toast host — renders messages into #status-messages (auto-created)
+   so every showStatus() call site (playback, cache, offline, errors) has a
+   visible, non-blocking feedback surface again. Vanilla JS, no dependencies. */
+window.__resonateStatusHost = (function () {
+  'use strict';
+  const MAX_VISIBLE = 4;
+  const DEFAULT_DURATION_MS = 3000;
+  const FADE_OUT_MS = 280;
+
+  let container = null;
+  const timers = new Map();
+
+  const ensureContainer = () => {
+    if (container && container.isConnected) return container;
+    container = document.getElementById('status-messages');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'status-messages';
+      container.setAttribute('role', 'status');
+      container.setAttribute('aria-live', 'polite');
+      document.body.appendChild(container);
+    }
+    return container;
+  };
+
+  const prune = (host) => {
+    while (host && host.children && host.children.length > MAX_VISIBLE && host.firstElementChild) {
+      host.firstElementChild.remove();
+    }
+  };
+
+  const remove = (host, node) => {
+    if (!node.isConnected) return;
+    const t = timers.get(node);
+    if (t) { clearTimeout(t); timers.delete(node); }
+    node.classList.add('fade-out');
+    setTimeout(() => { if (node.isConnected) node.remove(); }, FADE_OUT_MS);
+  };
+
+  const show = (message, type, durationMs, withSpinner) => {
+    const host = ensureContainer();
+    const node = document.createElement('div');
+    node.className = 'status-message status-' + (String(type || 'info').trim().toLowerCase() || 'info');
+    if (withSpinner) {
+      const spinner = document.createElement('span');
+      spinner.className = 'status-spinner';
+      spinner.setAttribute('aria-hidden', 'true');
+      node.appendChild(spinner);
+    }
+    if (message instanceof Node) {
+      node.appendChild(message);
+    } else {
+      node.textContent = String(message == null ? '' : message);
+    }
+    host.appendChild(node);
+    prune(host);
+
+    const start = (dms) => {
+      timers.set(node, setTimeout(() => remove(host, node), Math.max(1200, dms)));
+    };
+
+    // Allow dismissal by click/tap (fires before the timer removes it).
+    node.addEventListener('click', () => remove(host, node));
+    start(typeof durationMs === 'number' && durationMs > 0 ? durationMs : DEFAULT_DURATION_MS);
+    return node;
+  };
+
+  return { show, ensureContainer };
+})();
+
 function showStatus(message, type = 'info', duration = null, priority = 'normal', showSpinner = false) {
-  // Status messages disabled - no-op function
-  return;
+  // History: this used to be a no-op. Now every message goes through the toast host.
+  if (message == null || message === '') return;
+  try {
+    window.__resonateStatusHost.show(message, type || 'info', typeof duration === 'number' ? duration : null, !!showSpinner);
+  } catch (err) {
+    if (window.logger && typeof window.logger.debug === 'function') {
+      window.logger.debug('showStatus toast failed: ' + (err && err.message), 'UI');
+    }
+  }
 }
 
 async function setArtwork(track, identifier) {
