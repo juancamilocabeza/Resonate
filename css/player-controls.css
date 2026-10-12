@@ -127,6 +127,8 @@
   .main-player-section .controls button:not(.play-btn):not(.play-btn-favorite) {
     width: 48px;
     height: 48px;
+    min-width: 48px;
+    min-height: 48px;
   }
 
   /* Prev/Next SVG icons scale up slightly for larger touch targets */

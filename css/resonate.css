@@ -4996,9 +4996,9 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
     line-height: 1.1;
   }
 
-  /* Remove non-critical height consumers to guarantee controls visibility */
+  /* Keep the track options button available without extra vertical spacing. */
   #description-container {
-    display: none;
+    margin: 0;
   }
 
   .current-time,
