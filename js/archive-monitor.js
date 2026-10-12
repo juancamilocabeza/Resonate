@@ -15,6 +15,21 @@
   var CHECK_TIMEOUT_MS   = 8000;       // timeout for availability check
   var PROBE_PATH         = '/api/archive/advancedsearch?q=test+music&rows=1&output=json';
   var PROBE_FALLBACK     = 'https://archive.org/advancedsearch.php?q=test+music&rows=1&output=json';
+
+  function shouldPreferArchiveProxy() {
+    try {
+      var qs = new URLSearchParams((window.location && window.location.search) ? window.location.search : '');
+      if (qs.get('noProxy') === '1') return false;
+      if (qs.get('proxy') === '1') return true;
+      var host = String((window.location && window.location.hostname) ? window.location.hostname : '');
+      var isTestHost = host === 'resonate.test' || host.endsWith('.test') || host === 'test';
+      var isLocalHost = host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0';
+      if (isTestHost) return true;
+      return isLocalHost && qs.get('proxy') === '1';
+    } catch (e) {
+      return false;
+    }
+  }
   var BANNER_ID          = 'archive-maintenance-banner';
   var STORAGE_KEY        = 'resonate_archive_dismissed_at';
   var DISMISS_COOLDOWN   = 5 * 60 * 1000; // 5 min cooldown before banner can re-appear after dismiss
@@ -62,8 +77,9 @@
       return Promise.resolve(false);
     }
 
-    // Try proxy endpoint first; fall back to direct
-    var urls = [PROBE_PATH, PROBE_FALLBACK];
+    // Only use the proxy in local/dev setups. Production static sites do not have
+    // a same-origin /api/archive implementation and would otherwise generate noisy 404s.
+    var urls = shouldPreferArchiveProxy() ? [PROBE_PATH, PROBE_FALLBACK] : [PROBE_FALLBACK, PROBE_PATH];
     var idx = 0;
 
     function tryNext() {
