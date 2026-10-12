@@ -15,5 +15,8 @@
   "license": "MIT",
   "engines": {
     "node": ">=14.0.0"
+  },
+  "scripts": {
+    "test": "node tests/player.test.js"
   }
 }
