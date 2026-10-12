@@ -245,6 +245,83 @@ test('Production logger silences invalid and NONE levels while INFO filters debu
   assert.match(output[0][1], /useful info/);
 });
 
+test('Speculative Archive.org audio prefetch leaves playback to native streaming', async () => {
+  const requestedUrls = [];
+  const { context } = await createSandbox({
+    fetch: async url => {
+      requestedUrls.push(url);
+      return { ok: true };
+    }
+  });
+  await evaluateScript(context, 'js/cache.js');
+
+  const cache = context.audioCache;
+  cache.isInitialized = true;
+  cache.cache = { match: async () => null };
+  cache.shouldPrefetch = async () => true;
+  cache.put = async () => {};
+
+  await cache.prefetchAudio('https://archive.org/download/item/track.mp3', { streamingOnly: true });
+  assert.deepEqual(requestedUrls, []);
+
+  await cache.prefetchAudio('https://archive.org/download/item/track.mp3');
+  assert.deepEqual(requestedUrls, ['https://archive.org/download/item/track.mp3']);
+});
+
+test('Service worker does not intercept Archive.org audio streaming requests', async () => {
+  const listeners = new Map();
+  const serviceWorkerConsole = {
+    debug() {},
+    log() {},
+    info() {},
+    warn() {},
+    error() {}
+  };
+  const serviceWorker = {
+    location: {
+      protocol: 'https:',
+      hostname: 'resonate.test',
+      origin: 'https://resonate.test',
+      port: ''
+    },
+    console: serviceWorkerConsole,
+    addEventListener(type, listener) {
+      listeners.set(type, listener);
+    }
+  };
+  const { context } = await createSandbox({
+    self: serviceWorker,
+    console: serviceWorkerConsole,
+    caches: {}
+  });
+  await evaluateScript(context, 'sw.js');
+
+  const fetchHandler = listeners.get('fetch');
+  for (const request of [
+    {
+      url: 'https://archive.org/download/item/track.mp3',
+      method: 'GET',
+      destination: 'audio',
+      headers: { has: () => false }
+    },
+    {
+      url: 'https://archive.org/download/item/track.mp3',
+      method: 'GET',
+      destination: '',
+      headers: { has: () => false }
+    }
+  ]) {
+    let intercepted = false;
+    fetchHandler({
+      request,
+      respondWith() {
+        intercepted = true;
+      }
+    });
+    assert.equal(intercepted, false);
+  }
+});
+
 test('Play starts the loaded track and updates the transport button', async () => {
   const { context, audio, playButton } = await createPlayer();
 

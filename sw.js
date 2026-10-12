@@ -132,7 +132,7 @@ function isAudioRequest(request, url) {
   if (request.destination === 'audio') return true;
   if (!isArchiveOrg(url)) return false;
   const path = url.pathname.toLowerCase();
-  return path.endsWith('.ogg') || path.endsWith('.mp3');
+  return path.endsWith('.flac') || path.endsWith('.ogg') || path.endsWith('.mp3');
 }
 
 function isMetadataRequest(url) {
@@ -488,6 +488,12 @@ self.addEventListener('fetch', (event) => {
   // Only handle our own assets and archive.org. Avoid intercepting third-party
   // scripts (e.g. analytics) which can otherwise show confusing 503 errors.
   if (!isSameOrigin(url) && !isArchiveOrg(url)) {
+    return;
+  }
+
+  // Let the browser stream Archive.org audio directly. Fetch interception forces
+  // CORS checks against redirected CDN hosts that may not expose audio to fetch().
+  if (isArchiveOrg(url) && isAudioRequest(event.request, url)) {
     return;
   }
 

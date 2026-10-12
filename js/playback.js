@@ -2235,7 +2235,7 @@ function preloadNextTrack(forceFull = false) {
     const preloadCount = forceFull ? 6 : 4;
     const upcoming = queue.slice(0, preloadCount).filter(t => t && t.url);
     for (const track of upcoming) {
-      audioCache.prefetchAudio(track.url, false)
+      audioCache.prefetchAudio(track.url, { streamingOnly: true })
         .then(() => prewarmAudioFromCache(track.url))
         .catch((err) => logPlayback('debug', 'Failed to prefetch upcoming track', err));
     }
@@ -2245,7 +2245,7 @@ function preloadNextTrack(forceFull = false) {
       const history = Array.isArray(state.playbackHistory) ? state.playbackHistory : [];
       const prevCandidate = history.length > 0 ? history[history.length - 1] : null;
       if (prevCandidate && prevCandidate.url) {
-        audioCache.prefetchAudio(prevCandidate.url, false)
+        audioCache.prefetchAudio(prevCandidate.url, { streamingOnly: true })
           .then(() => prewarmAudioFromCache(prevCandidate.url))
           .catch((err) => logPlayback('debug', 'Failed to prefetch previous candidate', err));
       }

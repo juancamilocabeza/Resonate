@@ -27,6 +27,16 @@ function nowMs() {
   return Date.now();
 }
 
+function isArchiveAudioUrl(url) {
+  try {
+    const parsedUrl = new URL(url, window.location.href);
+    return (parsedUrl.hostname === 'archive.org' || parsedUrl.hostname.endsWith('.archive.org')) &&
+      /\.(flac|ogg|mp3)$/i.test(parsedUrl.pathname);
+  } catch {
+    return false;
+  }
+}
+
 function fnv1aHash(input) {
   const str = String(input || '');
   let hash = 0x811c9dc5;
@@ -630,6 +640,11 @@ class AudioCache {
         if (existing) {
           logCache('debug', `Audio already cached: ${url}`);
           return; // Already cached
+        }
+
+        if (opts.streamingOnly && isArchiveAudioUrl(url)) {
+          logCache('debug', `Skipping speculative Archive.org audio download; stream on demand: ${url}`);
+          return;
         }
 
         logCache('info', `Pre-fetching audio: ${url}`);
