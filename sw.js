@@ -500,6 +500,12 @@ self.addEventListener('fetch', (event) => {
           const cache = await caches.open(CACHE_NAMES.COVERS);
           cachedResponse = await cache.match(event.request);
           if (cachedResponse) {
+            // Cross-origin image requests are often opaque and cannot carry a
+            // timestamp header, but a cached copy is still usable.
+            if (cachedResponse.type === 'opaque') {
+              console.log('SW: Serving cached cover:', url.pathname);
+              return cachedResponse;
+            }
             const dateHeader = cachedResponse.headers.get('sw-cached-date');
             const cacheAge = dateHeader ? (Date.now() - parseInt(dateHeader, 10)) : Number.POSITIVE_INFINITY;
             const sevenDays = 7 * 24 * 60 * 60 * 1000;
@@ -514,6 +520,16 @@ self.addEventListener('fetch', (event) => {
 
         try {
           const networkResponse = await fetch(event.request);
+          if (networkResponse && networkResponse.type === 'opaque') {
+            try {
+              const cache = await caches.open(CACHE_NAMES.COVERS);
+              await cache.put(event.request, networkResponse.clone());
+              await trimCache(CACHE_NAMES.COVERS, RUNTIME_CACHE_LIMITS.COVERS_MAX_ENTRIES);
+            } catch {
+              // Keep the network response usable if opaque caching is unavailable.
+            }
+            return networkResponse;
+          }
           if (networkResponse && networkResponse.ok) {
             try {
               const responseClone = networkResponse.clone();

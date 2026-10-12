@@ -604,6 +604,64 @@ test('Production hosts skip the archive proxy unless explicitly enabled', async 
   assert.equal(local.context.shouldPreferArchiveProxy(), true);
 });
 
+test('Service worker caches opaque Archive.org cover responses', async () => {
+  const entries = new Map();
+  const cache = {
+    async match(request) { return entries.get(request.url) || null; },
+    async put(request, response) { entries.set(request.url, response); },
+    async keys() { return Array.from(entries.keys(), url => ({ url })); },
+    async delete(request) { return entries.delete(request.url); }
+  };
+  const fetchHandlers = [];
+  let networkCalls = 0;
+  const opaqueResponse = {
+    type: 'opaque',
+    ok: false,
+    headers: new Headers(),
+    clone() { return this; }
+  };
+  const { context } = await createSandbox({
+    self: {
+      location: {
+        protocol: 'https:',
+        hostname: 'localhost',
+        port: '',
+        origin: 'https://resonate.test'
+      },
+      console,
+      addEventListener(type, handler) {
+        if (type === 'fetch') fetchHandlers.push(handler);
+      }
+    },
+    caches: { async open() { return cache; } },
+    fetch: async () => {
+      networkCalls += 1;
+      return opaqueResponse;
+    },
+    Headers,
+    Response
+  });
+  context.self.self = context.self;
+  await evaluateScript(context, 'sw.js');
+
+  const request = {
+    method: 'GET',
+    url: 'https://archive.org/services/img/chevelleblue320flac'
+  };
+  const fetchCover = async () => {
+    let responsePromise;
+    fetchHandlers[0]({
+      request,
+      respondWith(response) { responsePromise = response; }
+    });
+    return responsePromise;
+  };
+
+  assert.equal(await fetchCover(), opaqueResponse);
+  assert.equal(await fetchCover(), opaqueResponse);
+  assert.equal(networkCalls, 1);
+});
+
 test('Fast search sends a query with the audio filter and normalizes returned results', async () => {
   const { context } = await createSandbox({
     state: { networkOnline: true, searchUi: { mediatype: 'audio' } },
