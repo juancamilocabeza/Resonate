@@ -591,8 +591,7 @@
   </div>
   <audio id="audio" preload="metadata"></audio>
   <script>
-    // Production console silencer (early, before any app scripts).
-    // Debug can be explicitly enabled with ?debug=true or ?log=DEBUG (or localStorage overrides).
+    // Silence direct console calls in production; configured logger output remains available.
     (function () {
       try {
         var loc = window.location;
@@ -608,25 +607,19 @@
         var params = null;
         try { params = new URLSearchParams(loc.search || ''); } catch (e) { params = null; }
         var debugParam = params ? params.get('debug') : null;
-        var logParam = params ? params.get('log') : null;
 
         var storedDebug = null;
-        var storedLevel = null;
         try { storedDebug = localStorage.getItem('resonate_debug'); } catch (e) {}
-        try { storedLevel = localStorage.getItem('resonate_log_level'); } catch (e) {}
 
         var isTruthy = function (v) {
           v = String(v || '').trim().toLowerCase();
           return v === '1' || v === 'true' || v === 'yes' || v === 'on';
         };
-
-        var debugEnabled =
+        var rawConsoleDebugEnabled =
           isTruthy(debugParam) ||
-          isTruthy(storedDebug) ||
-          (typeof logParam === 'string' && logParam.length > 0) ||
-          (typeof storedLevel === 'string' && storedLevel.length > 0 && String(storedLevel).toUpperCase() !== 'NONE');
+          isTruthy(storedDebug);
 
-        if (!isDev && !debugEnabled && window.console) {
+        if (!isDev && !rawConsoleDebugEnabled && window.console) {
           var c = window.console;
           if (!window.__resonate_original_console__) {
             window.__resonate_original_console__ = {

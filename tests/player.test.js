@@ -190,6 +190,61 @@ async function evaluateScript(context, relativePath) {
   vm.runInContext(source, context, { filename: relativePath });
 }
 
+test('Production logger silences invalid and NONE levels while INFO filters debug traces', async () => {
+  for (const search of ['?log=NONE', '?log=unexpected']) {
+    const output = [];
+    const console = {
+      debug: (...args) => output.push(['debug', ...args]),
+      log: (...args) => output.push(['log', ...args]),
+      info: (...args) => output.push(['info', ...args]),
+      warn: (...args) => output.push(['warn', ...args]),
+      error: (...args) => output.push(['error', ...args])
+    };
+    const { context } = await createSandbox({
+      console,
+      location: {
+        href: `https://resonate.test/${search}`,
+        hostname: 'resonate.test',
+        protocol: 'https:',
+        hash: '',
+        search
+      }
+    });
+    await evaluateScript(context, 'js/logger.js');
+
+    assert.equal(context.logger.config.enabled, false);
+    context.console.log('should be silenced');
+    assert.deepEqual(output, []);
+  }
+
+  const output = [];
+  const console = {
+    debug: (...args) => output.push(['debug', ...args]),
+    log: (...args) => output.push(['log', ...args]),
+    info: (...args) => output.push(['info', ...args]),
+    warn: (...args) => output.push(['warn', ...args]),
+    error: (...args) => output.push(['error', ...args])
+  };
+  const { context } = await createSandbox({
+    console,
+    location: {
+      href: 'https://resonate.test/?log=INFO',
+      hostname: 'resonate.test',
+      protocol: 'https:',
+      hash: '',
+      search: '?log=INFO'
+    }
+  });
+  await evaluateScript(context, 'js/logger.js');
+
+  context.console.log('raw console output should be silenced');
+  context.logger.debug('debug trace', 'PLAYBACK');
+  context.logger.info('useful info', 'SYSTEM');
+  assert.equal(output.length, 1);
+  assert.equal(output[0][0], 'log');
+  assert.match(output[0][1], /useful info/);
+});
+
 test('Play starts the loaded track and updates the transport button', async () => {
   const { context, audio, playButton } = await createPlayer();
 

@@ -1509,7 +1509,7 @@ class SearchPlaylistContextHandler extends BaseContextHandler {
   async handleTrackEnd() {
     const repeatMode = this.stateManager.getRepeatMode();
 
-    window.logger && window.logger.info && window.logger.info('[DEBUG] handleTrackEnd called', { repeatMode });
+    window.logger && window.logger.debug && window.logger.debug({ event: 'handleTrackEnd', repeatMode }, 'PLAYBACK');
 
     if (repeatMode === RepeatMode.ONE) {
       const audio = getAudioEl();
@@ -1520,15 +1520,15 @@ class SearchPlaylistContextHandler extends BaseContextHandler {
     const shouldLoop = repeatMode === RepeatMode.ALL;
 
     const nextTrack = await this.getNextTrack(shouldLoop);
-    window.logger && window.logger.info && window.logger.info('[DEBUG] getNextTrack result', { nextTrack });
+    window.logger && window.logger.debug && window.logger.debug({ event: 'getNextTrack result', nextTrack }, 'PLAYBACK');
     if (nextTrack) {
       await this.retryManager.executeWithRetry(async () => {
-        window.logger && window.logger.info && window.logger.info('[DEBUG] playAudioTrackOptimized about to play', { nextTrack });
+        window.logger && window.logger.debug && window.logger.debug({ event: 'playAudioTrackOptimized about to play', nextTrack }, 'PLAYBACK');
         await playAudioTrackOptimized(nextTrack, nextTrack.id, 0, 1);
         this.stateManager.recordSuccess();
       }, RetryStrategy.NETWORK);
     } else {
-      window.logger && window.logger.info && window.logger.info('[DEBUG] No nextTrack found', { shouldLoop, repeatMode });
+      window.logger && window.logger.debug && window.logger.debug({ event: 'No nextTrack found', shouldLoop, repeatMode }, 'PLAYBACK');
       if (repeatMode === RepeatMode.OFF) {
         showStatus('Your playlist has finished playing', 'info', 2000);
         return;
@@ -1539,7 +1539,7 @@ class SearchPlaylistContextHandler extends BaseContextHandler {
         if (context && context.items && context.items.length > 0) {
           context.currentIndex = 0;
           const firstTrack = context.items[0];
-          window.logger && window.logger.info && window.logger.info('[DEBUG] Looping to first track', { firstTrack });
+          window.logger && window.logger.debug && window.logger.debug({ event: 'Looping to first track', firstTrack }, 'PLAYBACK');
           await playAudioTrackOptimized(firstTrack, firstTrack.id, 0, 1);
         }
         return;
@@ -1552,12 +1552,12 @@ class SearchPlaylistContextHandler extends BaseContextHandler {
   async getNextTrack(allowLoop = false) {
     const context = playbackManager.contextData.searchPlaylist;
     if (!context || !context.items || context.items.length === 0) {
-      window.logger && window.logger.info && window.logger.info('[DEBUG] getNextTrack: context/items missing', { context });
+      window.logger && window.logger.debug && window.logger.debug({ event: 'getNextTrack: context/items missing', context }, 'PLAYBACK');
       return null;
     }
 
     const isShuffle = this.stateManager.getShuffleMode();
-    window.logger && window.logger.info && window.logger.info('[DEBUG] getNextTrack: before logic', { isShuffle, currentIndex: context.currentIndex, itemsLength: context.items.length });
+    window.logger && window.logger.debug && window.logger.debug({ event: 'getNextTrack: before logic', isShuffle, currentIndex: context.currentIndex, itemsLength: context.items.length }, 'PLAYBACK');
     if (isShuffle) {
       const currentKey = state && state.currentTrack && state.currentTrack.url ? canonicalizeUrl(state.currentTrack.url) : '';
       const { deck } = ensureShuffleDeck('searchPlaylist', context.items, { currentKey });
@@ -1566,22 +1566,22 @@ class SearchPlaylistContextHandler extends BaseContextHandler {
         ? context.items.findIndex(it => getItemKeyForDeck('searchPlaylist', it) === nextKey)
         : -1;
       context.currentIndex = idx >= 0 ? idx : (context.currentIndex || 0);
-      window.logger && window.logger.info && window.logger.info('[DEBUG] getNextTrack: shuffle', { currentKey, nextKey, idx, currentIndex: context.currentIndex });
+      window.logger && window.logger.debug && window.logger.debug({ event: 'getNextTrack: shuffle', currentKey, nextKey, idx, currentIndex: context.currentIndex }, 'PLAYBACK');
     } else {
       if (typeof context.currentIndex !== 'number') context.currentIndex = 0;
       const nextIndex = context.currentIndex + 1;
-      window.logger && window.logger.info && window.logger.info('[DEBUG] getNextTrack: non-shuffle', { nextIndex, itemsLength: context.items.length, allowLoop });
+      window.logger && window.logger.debug && window.logger.debug({ event: 'getNextTrack: non-shuffle', nextIndex, itemsLength: context.items.length, allowLoop }, 'PLAYBACK');
       if (nextIndex >= context.items.length) {
         if (!allowLoop) return null;
         context.currentIndex = 0;
-        window.logger && window.logger.info && window.logger.info('[DEBUG] getNextTrack: loop to start', { currentIndex: context.currentIndex });
+        window.logger && window.logger.debug && window.logger.debug({ event: 'getNextTrack: loop to start', currentIndex: context.currentIndex }, 'PLAYBACK');
       } else {
         context.currentIndex = nextIndex;
-        window.logger && window.logger.info && window.logger.info('[DEBUG] getNextTrack: advance', { currentIndex: context.currentIndex });
+        window.logger && window.logger.debug && window.logger.debug({ event: 'getNextTrack: advance', currentIndex: context.currentIndex }, 'PLAYBACK');
       }
     }
 
-    window.logger && window.logger.info && window.logger.info('[DEBUG] getNextTrack: returning', { currentIndex: context.currentIndex, track: context.items[context.currentIndex] });
+    window.logger && window.logger.debug && window.logger.debug({ event: 'getNextTrack: returning', currentIndex: context.currentIndex, track: context.items[context.currentIndex] }, 'PLAYBACK');
     return context.items[context.currentIndex];
   }
 }

@@ -303,11 +303,14 @@ function createLogger() {
   const logLevelParam = urlParams.get('log');
   const storedDebug = safeGetLocalStorageItem('resonate_debug');
   const storedLevel = safeGetLocalStorageItem('resonate_log_level');
+  const isEnabledLogLevel = level =>
+    typeof level === 'string' &&
+    ['DEBUG', 'INFO', 'WARN', 'ERROR'].includes(level.toUpperCase());
   const debugExplicitlyEnabled =
     isTruthy(debugParam) ||
     isTruthy(storedDebug) ||
-    (typeof logLevelParam === 'string' && logLevelParam.length > 0) ||
-    (typeof storedLevel === 'string' && storedLevel.length > 0 && storedLevel.toUpperCase() !== 'NONE');
+    isEnabledLogLevel(logLevelParam) ||
+    isEnabledLogLevel(storedLevel);
 
   const config = {
     // In production we default to fully silent; enable logs only with explicit debug flags.
@@ -334,8 +337,8 @@ function createLogger() {
     }
   }
 
-  // Hard guarantee: in production, silence the global console unless debug is explicitly enabled.
-  if (!isDevelopment && !debugExplicitlyEnabled) {
+  // Keep raw console noise out of production; configured logger output uses its saved console reference.
+  if (!isDevelopment && !isTruthy(debugParam) && !isTruthy(storedDebug)) {
     silenceConsole();
   }
 
