@@ -753,7 +753,7 @@
   border: 1px solid var(--surface-border, rgba(255,255,255,0.12));
   border-radius: 16px;
   box-shadow: 0 16px 48px rgba(0,0,0,0.6);
-  min-width: 300px;
+  min-width: 0;
   max-width: 400px;
   width: calc(100% - 40px);
   overflow: hidden;
@@ -933,7 +933,7 @@
   }
   
   .pl-modal {
-    min-width: 280px;
+    min-width: min(280px, calc(100vw - 40px));
   }
   
   .pl-modal-actions {
