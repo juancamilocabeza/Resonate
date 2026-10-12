@@ -1770,8 +1770,6 @@ async function initializeApp() {
   window.playFromFavoritesQueue = playFromFavoritesQueue;
   window.playFromResontesQueue = playFromFavoritesQueue;
   window.updateProgressBar = updateProgressBar;
-  window.dispatchEvent(new Event('resonate:results-rendered'));
-
   // Debug functions for offline testing
   window.forceShowApp = () => {
     logInitDebug('Forcing app to show...');
