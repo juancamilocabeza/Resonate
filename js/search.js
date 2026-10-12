@@ -512,10 +512,14 @@ function shouldPreferArchiveProxy() {
     } catch {}
 
     const host = String((window.location && window.location.hostname) ? window.location.hostname : '');
-    if (host === 'localhost' || host === '127.0.0.1') {
-      return qs.get('proxy') === '1';
-    }
-    return true;
+    const isTestHost = host === 'resonate.test' || host.endsWith('.test') || host === 'test';
+    const isLocalHost = host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0';
+
+    // Static production sites do not ship a same-origin /api/archive backend,
+    // so proxying stays opt-in there. Test/dev hosts and explicit proxy flags remain enabled.
+    if (isTestHost) return true;
+    if (!isLocalHost) return false;
+    return qs.get('proxy') === '1';
   } catch {
     return false;
   }

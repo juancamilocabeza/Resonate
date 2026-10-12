@@ -532,6 +532,23 @@ test('Theme cycling follows Day, Night, Eco and persists each user choice', asyn
   assert.equal(themeToggle.dataset.theme, 'day');
 });
 
+test('Production hosts skip the archive proxy unless explicitly enabled', async () => {
+  const { context } = await createSandbox({
+    location: { href: 'https://www.resonateplayer.com/', hostname: 'www.resonateplayer.com', protocol: 'https:', search: '' }
+  });
+  await evaluateScript(context, 'js/search.js');
+
+  assert.equal(context.shouldPreferArchiveProxy(), false);
+  context.location.search = '?proxy=1';
+  assert.equal(context.shouldPreferArchiveProxy(), true);
+
+  const local = await createSandbox({
+    location: { href: 'http://localhost:8000/?proxy=1', hostname: 'localhost', protocol: 'http:', search: '?proxy=1' }
+  });
+  await evaluateScript(local.context, 'js/search.js');
+  assert.equal(local.context.shouldPreferArchiveProxy(), true);
+});
+
 test('Fast search sends a query with the audio filter and normalizes returned results', async () => {
   const { context } = await createSandbox({
     state: { networkOnline: true, searchUi: { mediatype: 'audio' } },
