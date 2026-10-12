@@ -305,3 +305,7 @@
 [data-theme="energy-saver"] .loader {
   animation-duration: var(--loader-duration, 2s) !important;
 }
+
+[data-theme="energy-saver"] .search-status-spinner {
+  animation-duration: var(--loader-duration, 2s) !important;
+}

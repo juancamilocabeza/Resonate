@@ -1018,7 +1018,7 @@ body.tracks-open #tracks-list-container .tlv2-list {
 
 /* Excluir ticker de optimizaciones en modo eco para mantener legibilidad */
 [data-theme="energy-saver"] .title.ticker .title-text {
-  animation-duration: unset !important;
+  animation-duration: var(--list-ticker-duration, 20s) !important;
 }
 
 [data-theme="energy-saver"] .ticker-text.ticker {
