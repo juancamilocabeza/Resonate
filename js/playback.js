@@ -3003,9 +3003,18 @@ function loadPlaybackQueue(context, items, startIndex = 0) {
   let normalizedItems = items;
   try {
     if (window.TrackNormalizer && typeof window.TrackNormalizer.normalizeTrackList === 'function') {
-      normalizedItems = window.TrackNormalizer.normalizeTrackList(items, {
+      const normalizeOptions = {
         totalTracks: Array.isArray(items) ? items.length : 0
-      });
+      };
+      const acceptsIdentifierOnly = context === 'search' || context === 'resontes';
+      if (acceptsIdentifierOnly && Array.isArray(items) && typeof window.TrackNormalizer.normalizeTrack === 'function') {
+        normalizedItems = items.map((item, index) => window.TrackNormalizer.normalizeTrack(item, {
+          ...normalizeOptions,
+          trackIndex: index
+        }));
+      } else {
+        normalizedItems = window.TrackNormalizer.normalizeTrackList(items, normalizeOptions);
+      }
     }
   } catch {}
 
