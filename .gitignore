@@ -1,11 +1,6 @@
 # Dependencies
 node_modules/
 
-# Test results
-test-results/
-playwright-report/
-playwright/.cache/
-
 # Logs
 *.log
 npm-debug.log*
