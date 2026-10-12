@@ -13,6 +13,7 @@
     try {
       const audio = getAudioEl();
       if (!audio) return false;
+      if (window._resonateTrackTransitionInProgress) return false;
       // Don't interfere while a track load is already in progress.
       if (window.state && window.state.isLoading) return false;
       // Only attempt to resume if the audio element actually has a source loaded.
@@ -84,6 +85,7 @@
     try {
       const audio = getAudioEl();
       if (!audio) return false;
+      if (window._resonateTrackTransitionInProgress) return false;
       if (window.state && window.state.isLoading) return false;
       if (!audio.src) return false;
       if (window.state && window.state.currentTrack && window.state.currentTrack.url) {
@@ -1436,6 +1438,12 @@ class SearchContextHandler extends BaseContextHandler {
             await playAudioTrackOptimized(files[0], nextTrack.identifier);
           }
           this.stateManager.recordSuccess();
+        } else {
+          scheduleAutoAdvance('search-result-without-audio', 0, () => {
+            this.handleTrackEnd().catch((error) => {
+              logPlayback('warn', 'Failed to skip search result without playable audio', error);
+            });
+          });
         }
       }, RetryStrategy.NETWORK);
     } else {
@@ -3966,6 +3974,7 @@ function setupListenTracking() {
       isTransitioning = false;
       endedHandlerExecuted = false;
       errorHandlerExecuted = false;
+      window._resonateTrackTransitionInProgress = false;
     }, 8000);
   };
 
@@ -3973,6 +3982,7 @@ function setupListenTracking() {
     endedHandlerExecuted = false;
     errorHandlerExecuted = false;
     isTransitioning = false;
+    window._resonateTrackTransitionInProgress = false;
     if (transitionUnlockId) {
       clearTimeout(transitionUnlockId);
       transitionUnlockId = null;
@@ -3992,39 +4002,39 @@ function setupListenTracking() {
     }
     endedHandlerExecuted = true;
     isTransitioning = true;
+    window._resonateTrackTransitionInProgress = true;
 
-    // Track listening statistics (must never block auto-advance)
-    if (state.currentTrack) {
+    // Track listening statistics must not delay or race the next-track transition.
+    const endedTrack = state.currentTrack;
+    const listenStart = state.currentTrackListenStart;
+    state.currentTrackListenStart = 0;
+    void (async () => {
+      if (!endedTrack) return;
       try {
-        const listenDuration = Date.now() - state.currentTrackListenStart;
-        const trackDuration = window.elements.audio.duration * 1000; // Convertir a ms
+        const listenDuration = Date.now() - listenStart;
+        const trackDuration = window.elements.audio.duration * 1000;
 
-        // Si se escuchó al menos el 90% de la pista, marcarla como escuchada completamente
         if (isFinite(trackDuration) && trackDuration > 0 && listenDuration >= trackDuration * 0.9) {
           if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.markAsFullyListened === 'function') {
-            await audioCache.markAsFullyListened(state.currentTrack.url);
+            await audioCache.markAsFullyListened(endedTrack.url);
           }
-          if (isTrackResonteSafe(state.currentTrack) && typeof audioCache !== 'undefined' && audioCache && typeof audioCache.replaceFavoritesQueueItem === 'function') {
-            await audioCache.replaceFavoritesQueueItem(state.currentTrack.url, null, getResontesList());
+          if (isTrackResonteSafe(endedTrack) && typeof audioCache !== 'undefined' && audioCache && typeof audioCache.replaceFavoritesQueueItem === 'function') {
+            await audioCache.replaceFavoritesQueueItem(endedTrack.url, null, getResontesList());
           }
           if (typeof audioCache !== 'undefined' && audioCache && typeof audioCache.getUsageStats === 'function') {
             const stats = await audioCache.getUsageStats();
             if (stats && stats.usagePercentage > 90) {
-              showStatus(`Cache storage almost full`, 'info', 3000);
+              showStatus('Cache storage almost full', 'info', 3000);
             }
           }
-        } else {
-          if (state.tracksSkippedEarly && state.currentTrack.url) {
-            const skipCount = state.tracksSkippedEarly.get(state.currentTrack.url) || 0;
-            state.tracksSkippedEarly.set(state.currentTrack.url, skipCount + 1);
-          }
+        } else if (state.tracksSkippedEarly && endedTrack.url) {
+          const skipCount = state.tracksSkippedEarly.get(endedTrack.url) || 0;
+          state.tracksSkippedEarly.set(endedTrack.url, skipCount + 1);
         }
       } catch (err) {
         logPlayback('debug', 'Listen tracking failed', err);
-      } finally {
-        state.currentTrackListenStart = 0;
       }
-    }
+    })();
 
     // Use enhanced playback controller for track end handling
     const currentContext = playbackManager.getCurrentContext();
@@ -4058,12 +4068,13 @@ function setupListenTracking() {
     if (errorHandlerExecuted || isTransitioning) return;
     errorHandlerExecuted = true;
     isTransitioning = true;
+    window._resonateTrackTransitionInProgress = true;
 
     try {
       showStatus('Track error. Skipping...', 'error', 2000);
     } catch {}
 
-    scheduleAutoAdvance('audio-error', 0, () => {
+    const advanceScheduled = scheduleAutoAdvance('audio-error', 0, () => {
       const currentContext = playbackManager.getCurrentContext();
       if (currentContext) {
         const contextId = currentContext === 'album' ? playbackManager.getCurrentAlbumId() : null;
@@ -4083,6 +4094,7 @@ function setupListenTracking() {
         scheduleTransitionUnlock();
       }
     });
+    if (!advanceScheduled) scheduleTransitionUnlock();
   });
 
   window.elements.audio.addEventListener('pause', () => {
