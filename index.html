@@ -39,7 +39,7 @@
   <link rel="stylesheet" href="css/player-controls.css" />
   <link rel="stylesheet" href="css/player-bottom-sheet.css" />
   <link rel="stylesheet" href="css/playlists.css" />
-  <script src="js/cast.js"></script>
+  <script src="js/cast.js" defer></script>
   <script>
     (function () {
       try {
@@ -91,6 +91,7 @@
 </head>
 <body>
   <div class="app" id="app" data-nosnippet>
+    <a class="skip-link" href="#content-layout">Skip to main content</a>
     <header id="app-header">
       <h1 id="app-title">
         <button id="app-title-action" class="app-title-action" type="button">
@@ -168,7 +169,7 @@
       </div>
     </div>
 
-    <div class="content-layout" id="content-layout">
+    <main class="content-layout" id="content-layout" tabindex="-1">
       <div class="discovery-section">
         <div id="tracks-list-container" class="tracks-container tracklist"></div>
 
@@ -583,7 +584,7 @@
         </div>
       </div>
     </div>
-    </div>
+    </main>
     <footer class="footer">
       &copy; 2026 Resonate Player - Early Stage - All rights reserved.
     </footer>
