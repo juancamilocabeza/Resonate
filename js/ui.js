@@ -3374,6 +3374,7 @@ async function setArtwork(track, identifier) {
         height: '100%',
         objectFit: 'cover',
         borderRadius: '12px',
+        fetchPriority: 'high',
         showFallback: false
       });
       elements.art.appendChild(img);
@@ -3384,6 +3385,8 @@ async function setArtwork(track, identifier) {
       img.style.height = '100%';
       img.style.objectFit = 'cover';
       img.style.borderRadius = '12px';
+      img.decoding = 'async';
+      img.fetchPriority = 'high';
       img.src = coverUrl;
       elements.art.appendChild(img);
     }
@@ -3397,6 +3400,8 @@ async function setArtwork(track, identifier) {
       img.style.height = '100%';
       img.style.objectFit = 'cover';
       img.style.borderRadius = '12px';
+      img.decoding = 'async';
+      img.fetchPriority = 'high';
       img.src = fallbackUrl;
       elements.art.appendChild(img);
     } catch {}

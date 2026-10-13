@@ -26,6 +26,7 @@
   <meta name="apple-mobile-web-app-title" content="Resonate">
   <meta name="cast-app-id" content="855FC5BE" data-allow-production="true">
   <link rel="manifest" href="/manifest.json" />
+  <link rel="preconnect" href="https://archive.org" crossorigin>
   <link rel="stylesheet" href="css/resonate.css" />
   <link rel="stylesheet" href="css/unified-search.css" />
   <link rel="stylesheet" href="css/unified-filters.css" />
@@ -39,7 +40,6 @@
   <link rel="stylesheet" href="css/player-controls.css" />
   <link rel="stylesheet" href="css/player-bottom-sheet.css" />
   <link rel="stylesheet" href="css/playlists.css" />
-  <script src="js/cast.js" defer></script>
   <script>
     (function () {
       try {
@@ -654,11 +654,8 @@
   <script src="js/album-tracks.js" defer></script>
   <script src="js/loaders.js" defer></script>
   <script src="js/playback.js" defer></script>
-  <script src="js/search.js" defer></script>
-  <script src="js/search-history.js" defer></script>
   <script src="js/tracklist.js" defer></script>
   <script src="js/playlist-manager.js" defer></script>
-  <script src="js/playlist-ui.js" defer></script>
   <script src="js/ui.js" defer></script>
   <script src="js/player-title.js" defer></script>
   <script src="js/offline.js" defer></script>
@@ -669,19 +666,76 @@
   <script src="js/analytics.js" defer></script>
   <script>
     if (window.location.hostname !== 'localhost' && !window.location.hostname.startsWith('127.')) {
-      (function() {
+      window.dataLayer = window.dataLayer || [];
+      window.gtag = window.gtag || function() { window.dataLayer.push(arguments); };
+      window.gtag('js', new Date());
+      window.gtag('config', 'G-BM0DX9WY1D');
+
+      var loadGoogleAnalytics = function() {
+        if (document.querySelector('script[src*="googletagmanager.com/gtag/js"]')) return;
         var script = document.createElement('script');
         script.async = true;
         script.src = 'https://www.googletagmanager.com/gtag/js?id=G-BM0DX9WY1D';
         document.head.appendChild(script);
-      })();
-      
-      window.dataLayer = window.dataLayer || [];
-      function gtag() { dataLayer.push(arguments); }
-      gtag('js', new Date());
-      gtag('config', 'G-BM0DX9WY1D');
+      };
+      var scheduleGoogleAnalytics = function() {
+        if (window.requestIdleCallback) {
+          window.requestIdleCallback(loadGoogleAnalytics, { timeout: 2000 });
+        } else {
+          window.setTimeout(loadGoogleAnalytics, 1000);
+        }
+      };
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', scheduleGoogleAnalytics, { once: true });
+      } else {
+        scheduleGoogleAnalytics();
+      }
     }
-  </script>    
+  </script>
+  <script>
+    (function() {
+      var featureScripts = [
+        'js/search.js',
+        'js/search-history.js',
+        'js/playlist-ui.js',
+        'js/cast.js'
+      ];
+
+      function loadFeatureScripts() {
+        var loads = featureScripts.map(function(src) {
+          return new Promise(function(resolve, reject) {
+            var script = document.createElement('script');
+            script.async = false;
+            script.src = src;
+            script.onload = resolve;
+            script.onerror = function() {
+              var error = new Error('Failed to load optional feature script: ' + src);
+              window.dispatchEvent(new CustomEvent('resonate:script-error', { detail: { src: src } }));
+              reject(error);
+            };
+            document.body.appendChild(script);
+          });
+        });
+        Promise.all(loads).catch(function(error) {
+          console.error(error);
+        });
+      }
+
+      function scheduleFeatureScripts() {
+        if (window.requestIdleCallback) {
+          window.requestIdleCallback(loadFeatureScripts, { timeout: 1000 });
+        } else {
+          window.setTimeout(loadFeatureScripts, 300);
+        }
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', scheduleFeatureScripts, { once: true });
+      } else {
+        scheduleFeatureScripts();
+      }
+    })();
+  </script>
   </body>
 </html>
 <!--2026 Resonate Player - All rights reserved-->
