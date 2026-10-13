@@ -1597,8 +1597,8 @@ async function initializeApp() {
 
 
   // Event listener para el h1 - ocultar resultados de búsqueda o favoritos al hacer clic
-  const appTitle = document.getElementById('app-title');
-  if (appTitle) {
+  const appTitleAction = document.getElementById('app-title-action');
+  if (appTitleAction) {
     const handleAppTitleActivate = (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -1618,13 +1618,7 @@ async function initializeApp() {
       window.logger?.info('App title activated - hiding search results and favorites list', 'UI');
     };
 
-    appTitle.addEventListener('click', handleAppTitleActivate);
-    appTitle.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault(); // Prevent page scroll on Space
-        handleAppTitleActivate(e);
-      }
-    });
+    appTitleAction.addEventListener('click', handleAppTitleActivate);
   }
 
   // Scroll-elevation for the app header

@@ -92,17 +92,16 @@
 <body>
   <div class="app" id="app" data-nosnippet>
     <header id="app-header">
-      <h1 id="app-title"
-          role="button"
-          tabindex="0"
-          aria-label="Resonate — go to home">
-        <span class="app-logo" aria-hidden="true">
-          <svg class="app-logo-svg" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
-            <circle cx="256" cy="256" r="200" stroke="currentColor" stroke-width="32" fill="none"/>
-            <path d="M96 256 C140 256, 180 180, 220 180 C260 180, 300 332, 340 332 C380 332, 416 256, 416 256" stroke="currentColor" stroke-width="32" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </span>
-        <span class="app-title-text">Resonate</span>
+      <h1 id="app-title">
+        <button id="app-title-action" class="app-title-action" type="button">
+          <span class="app-logo" aria-hidden="true">
+            <svg class="app-logo-svg" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+              <circle cx="256" cy="256" r="200" stroke="currentColor" stroke-width="32" fill="none"/>
+              <path d="M96 256 C140 256, 180 180, 220 180 C260 180, 300 332, 340 332 C380 332, 416 256, 416 256" stroke="currentColor" stroke-width="32" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+          <span class="app-title-text">Resonate</span>
+        </button>
       </h1>
       <!-- Global app menu trigger; player-specific actions live near the track info block -->
       <nav class="header-controls" aria-label="Header actions">
@@ -642,31 +641,31 @@
       }
     })();
   </script>
-  <script src="js/theme.js"></script>
-  <script src="js/description-utils.js"></script>
-  <script src="js/logger.js"></script>
-  <script src="js/cover-manager.js"></script>
-  <script src="js/media-session-manager.js"></script>
-  <script src="js/wake-lock-manager.js"></script>
-  <script src="js/subtitle-manager.js"></script>
-  <script src="js/cache.js"></script>
-  <script src="js/track-normalizer.js"></script>
-  <script src="js/album-tracks.js"></script>
-  <script src="js/loaders.js"></script>
-  <script src="js/playback.js"></script>
-  <script src="js/search.js"></script>
-  <script src="js/search-history.js"></script>
-  <script src="js/tracklist.js"></script>
-  <script src="js/playlist-manager.js"></script>
+  <script src="js/theme.js" defer></script>
+  <script src="js/description-utils.js" defer></script>
+  <script src="js/logger.js" defer></script>
+  <script src="js/cover-manager.js" defer></script>
+  <script src="js/media-session-manager.js" defer></script>
+  <script src="js/wake-lock-manager.js" defer></script>
+  <script src="js/subtitle-manager.js" defer></script>
+  <script src="js/cache.js" defer></script>
+  <script src="js/track-normalizer.js" defer></script>
+  <script src="js/album-tracks.js" defer></script>
+  <script src="js/loaders.js" defer></script>
+  <script src="js/playback.js" defer></script>
+  <script src="js/search.js" defer></script>
+  <script src="js/search-history.js" defer></script>
+  <script src="js/tracklist.js" defer></script>
+  <script src="js/playlist-manager.js" defer></script>
   <script src="js/playlist-ui.js" defer></script>
   <script src="js/ui.js" defer></script>
   <script src="js/player-title.js" defer></script>
-  <script src="js/offline.js"></script>
-  <script src="js/archive-monitor.js"></script>
-  <script src="js/battery.js"></script>
+  <script src="js/offline.js" defer></script>
+  <script src="js/archive-monitor.js" defer></script>
+  <script src="js/battery.js" defer></script>
   <script src="js/initialization.js" defer></script>
   <script src="js/player-bottom-sheet.js" defer></script>
-  <script src="js/analytics.js"></script>
+  <script src="js/analytics.js" defer></script>
   <script>
     if (window.location.hostname !== 'localhost' && !window.location.hostname.startsWith('127.')) {
       (function() {
