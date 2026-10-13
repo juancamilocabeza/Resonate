@@ -474,6 +474,10 @@ body.sheet-open {
   pointer-events: none;
 }
 
+[data-theme="day"] .header-resontes-count {
+  color: #065f46;
+}
+
 .header-resontes-btn.has-resontes .header-resontes-count {
   opacity: 1;
   transform: translate(30%, -30%) scale(1);

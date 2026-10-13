@@ -38,6 +38,7 @@
     position: null,      // e.g. 'absolute' — set when image must fill a positioned container
     inset: null,         // e.g. '0'        — used together with position:'absolute'
     borderRadius: '12px',
+    fetchPriority: 'auto',
     lazy: false,
     showFallback: true,
     fallbackType: 'svg', // 'svg' or 'none'
@@ -156,6 +157,8 @@
       if (opts.height) img.style.height = opts.height;
       if (opts.objectFit) img.style.objectFit = opts.objectFit;
       if (opts.objectPosition) img.style.objectPosition = opts.objectPosition;
+      img.decoding = 'async';
+      img.fetchPriority = opts.fetchPriority;
       if (opts.position) img.style.position = opts.position;
       if (opts.inset != null) img.style.inset = String(opts.inset);
       if (opts.borderRadius != null) img.style.borderRadius = opts.borderRadius;
@@ -193,6 +196,8 @@
     if (opts.height) img.style.height = opts.height;
     if (opts.objectFit) img.style.objectFit = opts.objectFit;
     if (opts.objectPosition) img.style.objectPosition = opts.objectPosition;
+    img.decoding = 'async';
+    img.fetchPriority = opts.fetchPriority;
     if (opts.position) img.style.position = opts.position;
     if (opts.inset != null) img.style.inset = String(opts.inset);
     if (opts.borderRadius != null) img.style.borderRadius = opts.borderRadius;

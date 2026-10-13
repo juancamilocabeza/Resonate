@@ -6,7 +6,7 @@
  *
  * Scale:
  *   Track title  → 22px / weight 600 / tight letter-spacing
- *   Artist text  → 14px / weight 400 / opacity 0.7
+ *   Artist text  → 14px / weight 400 / readable contrast
  */
 
 /* =====================================================================
@@ -22,14 +22,18 @@
     line-height: 1.25;
   }
 
-  /* Artist / creator: subdued secondary line */
+  /* Artist / creator: secondary line without reducing text contrast */
   .creator {
     font-size: 14px;
     font-weight: 400;
-    opacity: 0.7;
     letter-spacing: 0.01em;
     line-height: 1.35;
   }
+}
+
+[data-theme="day"] .creator {
+  color: #595959;
+  opacity: 1;
 }
 
 /* =====================================================================
