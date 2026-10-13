@@ -1067,6 +1067,21 @@ body {
   justify-content: flex-start;
 }
 
+.skip-link {
+  position: fixed;
+  top: -100px;
+  left: 8px;
+  z-index: 10000;
+  padding: 8px 12px;
+  border-radius: 4px;
+  background: var(--surface-2, #fff);
+  color: var(--fg, #111);
+}
+
+.skip-link:focus {
+  top: 8px;
+}
+
 /* Main content wrapper between header and footer */
 .content-layout {
   flex: 1 1 auto;
