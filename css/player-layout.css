@@ -79,7 +79,7 @@
   }
 }
 
-.main-player-section.has-art-background {
+.app.has-art-background {
   background-image:
     linear-gradient(rgba(0, 0, 0, 0.58), rgba(0, 0, 0, 0.58)),
     var(--player-art-background);
@@ -88,7 +88,13 @@
   background-repeat: no-repeat;
 }
 
-[data-theme="day"] .main-player-section.has-art-background {
+.app.has-art-background #app-header,
+.app.has-art-background .discovery-section,
+.app.has-art-background .main-player-section {
+  background-color: transparent;
+}
+
+[data-theme="day"] .app.has-art-background {
   background-image:
     linear-gradient(rgba(255, 255, 255, 0.68), rgba(255, 255, 255, 0.68)),
     var(--player-art-background);

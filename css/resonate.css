@@ -1249,6 +1249,7 @@ body:has(#pwa-install-banner.active) .app {
 .app-title-action {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: var(--spacing-sm);
   flex: 1 1 auto;
   min-width: 0;
