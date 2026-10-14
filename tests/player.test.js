@@ -721,6 +721,32 @@ test('Theme cycling follows Day, Night, Eco and persists each user choice', asyn
   assert.equal(themeToggle.dataset.theme, 'day');
 });
 
+test('Theme manager stays usable without a toggle and cycles from the active theme', async () => {
+  const root = createMockElement();
+  const document = Object.assign(createEventTarget(), {
+    readyState: 'loading',
+    documentElement: root,
+    getElementById: () => null,
+    querySelector: () => null
+  });
+  const { context, storage } = await createSandbox({
+    document,
+    getComputedStyle: () => ({ getPropertyValue: () => '' })
+  });
+  storage.set('resonate-theme', 'night');
+
+  await evaluateScript(context, 'js/theme.js');
+  document.dispatchEvent({ type: 'DOMContentLoaded' });
+  assert.equal(root.getAttribute('data-theme'), 'night');
+
+  context.ThemeManager.applyTheme('energy-saver');
+  context.ThemeManager.cycleTheme();
+
+  assert.equal(root.getAttribute('data-theme'), 'day');
+  assert.equal(context.ThemeManager.getCurrentTheme(), 'day');
+  assert.equal(storage.get('resonate-theme'), 'day');
+});
+
 test('Production hosts skip the archive proxy unless explicitly enabled', async () => {
   const { context } = await createSandbox({
     location: { href: 'https://www.resonateplayer.com/', hostname: 'www.resonateplayer.com', protocol: 'https:', search: '' }
