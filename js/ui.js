@@ -3365,15 +3365,13 @@ async function setArtwork(track, identifier) {
   const coverUrl = window.CoverManager?.getCoverUrl
     ? window.CoverManager.getCoverUrl(safeIdentifier)
     : `https://archive.org/services/img/${encodeURIComponent(safeIdentifier)}`;
-  const playerSection = elements.mainPlayerSection;
-
-  if (playerSection) {
+  if (elements.app) {
     if (coverUrl && safeIdentifier !== 'default') {
-      playerSection.style.setProperty('--player-art-background', `url("${coverUrl}")`);
-      playerSection.classList.add('has-art-background');
+      elements.app.style.setProperty('--player-art-background', `url("${coverUrl}")`);
+      elements.app.classList.add('has-art-background');
     } else {
-      playerSection.style.removeProperty('--player-art-background');
-      playerSection.classList.remove('has-art-background');
+      elements.app.style.removeProperty('--player-art-background');
+      elements.app.classList.remove('has-art-background');
     }
   }
 
