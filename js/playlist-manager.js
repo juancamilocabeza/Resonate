@@ -82,6 +82,18 @@
     };
   }
 
+  function sanitizeTracks(items, mapTrack) {
+    var seenUrls = new Set();
+    var tracks = [];
+    (Array.isArray(items) ? items : []).forEach(function (item) {
+      var sanitized = sanitizeTrack(mapTrack ? mapTrack(item) : item);
+      if (!sanitized || seenUrls.has(sanitized.url)) return;
+      seenUrls.add(sanitized.url);
+      tracks.push(sanitized);
+    });
+    return tracks;
+  }
+
   function sanitizePlaylist(raw) {
     if (!raw || typeof raw !== 'object') return null;
     var id = normalizeText(raw.id);
@@ -90,21 +102,12 @@
     var createdAt = Number(raw.createdAt);
     var updatedAt = Number(raw.updatedAt);
     var tracksInput = Array.isArray(raw.tracks) ? raw.tracks : [];
-    var seen = Object.create(null);
-    var tracks = [];
-    tracksInput.forEach(function (item) {
-      var sanitized = sanitizeTrack(item);
-      if (!sanitized) return;
-      if (seen[sanitized.url]) return;
-      seen[sanitized.url] = true;
-      tracks.push(sanitized);
-    });
     return {
       id: id,
       name: name,
       createdAt: Number.isFinite(createdAt) ? createdAt : Date.now(),
       updatedAt: Number.isFinite(updatedAt) ? updatedAt : Date.now(),
-      tracks: tracks
+      tracks: sanitizeTracks(tracksInput)
     };
   }
 
@@ -320,9 +323,8 @@
           };
           var items = Array.isArray(data.items) ? data.items
             : (Array.isArray(data.tracks) ? data.tracks : []);
-          var seen = Object.create(null);
-          items.forEach(function (item) {
-            var sanitized = sanitizeTrack({
+          playlist.tracks = sanitizeTracks(items, function (item) {
+            return {
               url: item && item.url,
               title: item && (item.name || item.title),
               creator: item && (item.author || item.creator),
@@ -330,11 +332,7 @@
               albumId: item && (item.albumId || item.id),
               duration: item && item.duration,
               trackIndex: item && item.trackIndex
-            });
-            if (!sanitized) return;
-            if (seen[sanitized.url]) return;
-            seen[sanitized.url] = true;
-            playlist.tracks.push(sanitized);
+            };
           });
           var playlists = load();
           playlists.push(playlist);
