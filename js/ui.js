@@ -280,6 +280,7 @@ const elements = {
 
   // Player
   playerContent: document.getElementById('player-content'),
+  mainPlayerSection: document.querySelector('.main-player-section'),
   art: document.getElementById('art'),
   title: document.getElementById('title'),
   creator: document.getElementById('creator'),
@@ -3360,13 +3361,23 @@ async function setArtwork(track, identifier) {
 
   // Get safe identifier
   const safeIdentifier = identifier || (track && track.id) || (track && track.identifier) || 'default';
+  const coverUrl = window.CoverManager?.getCoverUrl
+    ? window.CoverManager.getCoverUrl(safeIdentifier)
+    : `https://archive.org/services/img/${encodeURIComponent(safeIdentifier)}`;
+  const playerSection = elements.mainPlayerSection;
+
+  if (playerSection) {
+    if (coverUrl && safeIdentifier !== 'default') {
+      playerSection.style.setProperty('--player-art-background', `url("${coverUrl}")`);
+      playerSection.classList.add('has-art-background');
+    } else {
+      playerSection.style.removeProperty('--player-art-background');
+      playerSection.classList.remove('has-art-background');
+    }
+  }
 
   try {
     // Load cover using centralized manager
-    const coverUrl = window.CoverManager?.getCoverUrl
-      ? window.CoverManager.getCoverUrl(safeIdentifier)
-      : `https://archive.org/services/img/${encodeURIComponent(safeIdentifier)}`;
-
     if (window.CoverManager?.loadCover) {
       const img = await window.CoverManager.loadCover(safeIdentifier, {
         alt: 'Album cover',
