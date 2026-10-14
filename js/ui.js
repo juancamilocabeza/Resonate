@@ -2301,6 +2301,7 @@ const state = {
   isLoading: false,
   favorites: [],
   userInteracted: false,
+  userPaused: false,
   retryCount: 0,
   maxRetries: 5,
   searchResults: [],

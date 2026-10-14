@@ -323,23 +323,25 @@ test('Service worker does not intercept Archive.org audio streaming requests', a
 });
 
 test('Play starts the loaded track and updates the transport button', async () => {
-  const { context, audio, playButton } = await createPlayer();
+  const { context, audio, playButton, state } = await createPlayer();
 
   context.togglePlay();
   await Promise.resolve();
 
   assert.equal(audio.playCalls, 1);
+  assert.equal(state.userPaused, false);
   assert.equal(playButton.dataset.state, 'pause');
   assert.equal(playButton.attributes['aria-label'], 'Pause');
 });
 
 test('Pause stops the track and updates the transport button', async () => {
-  const { context, audio, playButton } = await createPlayer();
+  const { context, audio, playButton, state } = await createPlayer();
   audio.paused = false;
 
   context.togglePlay();
 
   assert.equal(audio.pauseCalls, 1);
+  assert.equal(state.userPaused, true);
   assert.equal(playButton.dataset.state, 'play');
   assert.equal(playButton.attributes['aria-label'], 'Play');
 });
