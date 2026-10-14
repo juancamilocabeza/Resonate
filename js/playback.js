@@ -1697,6 +1697,7 @@ class EnhancedPlaybackController {
   constructor() {
     this.stateManager = playbackStateManager;
     this.currentHandler = null;
+    this.transitionPromise = null;
   }
 
   setContext(contextType, contextId = null) {
@@ -1705,29 +1706,37 @@ class EnhancedPlaybackController {
   }
 
   async handleTrackEnd() {
+    if (this.transitionPromise) return this.transitionPromise;
     if (!this.currentHandler) return;
 
-    try {
-      await this.currentHandler.handleTrackEnd();
-    } catch (error) {
-      logPlayback('error', 'Error in track end handling', error);
-      this.stateManager.recordFailure();
+    const handler = this.currentHandler;
+    const transition = (async () => {
+      try {
+        await handler.handleTrackEnd();
+      } catch (error) {
+        logPlayback('error', 'Error in track end handling', error);
+        this.stateManager.recordFailure();
 
-      if (this.stateManager.shouldEnterSafeMode()) {
-        showStatus('Too many errors. Enabling safety mode', 'error', 3000);
-        showStatus('Playback paused for system safety', 'warning', 5000);
-        return;
-      }
-
-      // Try fallback: skip to next track
-      setTimeout(() => {
-        if (this.currentHandler) {
-          this.currentHandler.handleTrackEnd().catch((err) => {
-            logPlayback('error', 'Fallback track end handling failed', err);
-          });
+        if (this.stateManager.shouldEnterSafeMode()) {
+          showStatus('Too many errors. Enabling safety mode', 'error', 3000);
+          showStatus('Playback paused for system safety', 'warning', 5000);
+          return;
         }
-      }, 2000);
+
+        throw error;
+      }
+    })();
+
+    this.transitionPromise = transition;
+    try {
+      await transition;
+    } finally {
+      if (this.transitionPromise === transition) this.transitionPromise = null;
     }
+  }
+
+  isTransitioning() {
+    return this.transitionPromise !== null;
   }
 
   getCurrentHandler() {
@@ -3422,6 +3431,7 @@ function setupPreloadedPlayback(tracks, startIndex = 0) {
 }
 
 async function playNextInContext(maxRetries = 3) {
+  if (enhancedPlaybackController.isTransitioning()) return;
   // PREVENT MULTIPLE EXECUTION
   if (state.isLoading) return;
   state.isLoading = true;
@@ -3464,7 +3474,10 @@ async function playNextInContext(maxRetries = 3) {
               handleAutoSkipBudgetExhausted(budget.contextKey);
               return;
             }
-            return playNextInContext(maxRetries - 1);
+            scheduleAutoAdvance('album-track-retry', 0, () => {
+              playNextInContext(maxRetries - 1).catch((e) => logPlayback('warn', 'Album track retry failed', e));
+            });
+            return;
           }
           // Never stop; try again from next.
           scheduleAutoAdvance('album-track-error', 0, () => {
@@ -3595,7 +3608,10 @@ async function playNextInContext(maxRetries = 3) {
             await playAudioTrackOptimized(track, nextItem.identifier);
           }
         } else {
-          await playNextInContext();
+          scheduleAutoAdvance('search-result-without-audio', 0, () => {
+            playNextInContext().catch((e) => logPlayback('warn', 'Search result retry failed', e));
+          });
+          return;
         }
       } else if (context === 'favorites' || context === 'resontes') {
         // Use cache for favorites and resontes
@@ -4062,22 +4078,18 @@ function setupListenTracking() {
       try {
         const contextId = currentContext === 'album' ? playbackManager.getCurrentAlbumId() : null;
         enhancedPlaybackController.setContext(currentContext, contextId);
-        await enhancedPlaybackController.handleTrackEnd();
-        // Only schedule unlock after successful handling
         scheduleTransitionUnlock();
+        await enhancedPlaybackController.handleTrackEnd();
       } catch (err) {
         logPlayback('warn', 'Enhanced track end handling failed', err);
-        // Schedule unlock before fallback to prevent lock starvation
-        scheduleTransitionUnlock();
         scheduleAutoAdvance('enhanced-ended-fallback', 0, () => {
           playNextInContext().catch((e) => logPlayback('warn', 'Fallback playNextInContext failed', e));
         });
       }
     } else {
       // Resonate UX: never stop when context is missing.
-      playNextInContext().catch((e) => logPlayback('warn', 'No-context playNextInContext failed', e));
-      // Schedule unlock for no-context case
       scheduleTransitionUnlock();
+      playNextInContext().catch((e) => logPlayback('warn', 'No-context playNextInContext failed', e));
     }
 
     signalServiceWorkerSafeActivation();
@@ -4099,19 +4111,14 @@ function setupListenTracking() {
       if (currentContext) {
         const contextId = currentContext === 'album' ? playbackManager.getCurrentAlbumId() : null;
         enhancedPlaybackController.setContext(currentContext, contextId);
-        enhancedPlaybackController.handleTrackEnd().then(() => {
-          // Schedule unlock after successful handling
-          scheduleTransitionUnlock();
-        }).catch((err) => {
+        scheduleTransitionUnlock();
+        enhancedPlaybackController.handleTrackEnd().catch((err) => {
           logPlayback('warn', 'Error-skip handler failed', err);
-          // Schedule unlock before fallback
-          scheduleTransitionUnlock();
           playNextInContext().catch((e) => logPlayback('warn', 'Fallback skip failed', e));
         });
       } else {
-        playNextInContext().catch((e) => logPlayback('warn', 'Skip failed', e));
-        // Schedule unlock for no-context case
         scheduleTransitionUnlock();
+        playNextInContext().catch((e) => logPlayback('warn', 'Skip failed', e));
       }
     });
     if (!advanceScheduled) scheduleTransitionUnlock();
