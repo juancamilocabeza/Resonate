@@ -39,23 +39,10 @@
   padding: 10px 10px calc(10px + env(safe-area-inset-bottom, 0) + var(--vv-bottom-inset, 0px));
 }
 
-/* Consistent grid inside both containers — no per-context overrides */
-.search-results-list .resonate-grid,
-.search-results-list .card-grid,
-.resontes-list-content .resonate-grid,
-.resontes-list-content .card-grid {
-  grid-template-columns: repeat(2, minmax(140px, 1fr));
-  gap: 10px;
-}
-
 /* ===== TABLET RESPONSIVE (3 columns) ===== */
 @media (min-width: 600px) {
   .resonate-grid,
-  .card-grid,
-  .search-results-list .resonate-grid,
-  .search-results-list .card-grid,
-  .resontes-list-content .resonate-grid,
-  .resontes-list-content .card-grid {
+  .card-grid {
     grid-template-columns: repeat(3, minmax(140px, 1fr));
     gap: 12px;
   }
@@ -69,11 +56,7 @@
 /* ===== WIDE TABLET / SMALL DESKTOP (3 columns) ===== */
 @media (min-width: 768px) {
   .resonate-grid,
-  .card-grid,
-  .search-results-list .resonate-grid,
-  .search-results-list .card-grid,
-  .resontes-list-content .resonate-grid,
-  .resontes-list-content .card-grid {
+  .card-grid {
     grid-template-columns: repeat(3, minmax(160px, 1fr));
     gap: 14px;
   }
@@ -92,11 +75,7 @@
 /* ===== DESKTOP (4 columns) ===== */
 @media (min-width: 1024px) {
   .resonate-grid,
-  .card-grid,
-  .search-results-list .resonate-grid,
-  .search-results-list .card-grid,
-  .resontes-list-content .resonate-grid,
-  .resontes-list-content .card-grid {
+  .card-grid {
     grid-template-columns: repeat(4, minmax(160px, 1fr));
     gap: 14px;
   }
@@ -110,11 +89,7 @@
 /* ===== WIDE DESKTOP (5 columns) ===== */
 @media (min-width: 1280px) {
   .resonate-grid,
-  .card-grid,
-  .search-results-list .resonate-grid,
-  .search-results-list .card-grid,
-  .resontes-list-content .resonate-grid,
-  .resontes-list-content .card-grid {
+  .card-grid {
     grid-template-columns: repeat(5, minmax(160px, 1fr));
     gap: 16px;
   }
@@ -128,11 +103,7 @@
 /* ===== SMALL MOBILE TIGHTENING ===== */
 @media (max-width: 420px) {
   .resonate-grid,
-  .card-grid,
-  .search-results-list .resonate-grid,
-  .search-results-list .card-grid,
-  .resontes-list-content .resonate-grid,
-  .resontes-list-content .card-grid {
+  .card-grid {
     grid-template-columns: repeat(2, minmax(130px, 1fr));
     gap: 8px;
   }

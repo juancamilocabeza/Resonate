@@ -3805,22 +3805,7 @@ body.offline-mode .share-track-button {
 }
 
 /* ===== CARD GRID (New) ===== */
-/* Base grid layout is defined in unified-grid.css; these rules are context-specific overrides */
-
-/* Search results grid: always 2 columns on mobile */
-.search-results-list .card-grid {
-  grid-template-columns: repeat(2, minmax(140px, 1fr));
-}
-
-/* Resonates grid: always 2 columns on mobile */
-.resontes-list-content .card-grid {
-  grid-template-columns: repeat(2, minmax(140px, 1fr));
-}
-
-/* Compact card styling: Search + Resonates should look identical */
-.search-results-list .card-grid,
-.resontes-list-content .card-grid { gap: 8px; }
-
+/* Grid layout is defined in unified-grid.css; keep card styling context-specific. */
 .search-results-list .content-card,
 .resontes-list-content .content-card { border-radius: 10px; }
 
@@ -4227,16 +4212,10 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
 @media (min-width: 768px) {
   .search-results-list { padding: 10px 16px 0; }
   .resontes-list-content { padding: 10px 12px 0; }
-  /* Art size on tablets: 3 columns for both contexts */
-  .search-results-list .card-grid { grid-template-columns: repeat(3, minmax(160px, 1fr)); gap: 14px; }
-  .resontes-list-content .card-grid { grid-template-columns: repeat(3, minmax(160px, 1fr)); gap: 14px; }
 }
 @media (min-width: 1024px) {
   .search-results-list { max-width: 1200px; padding: 10px 24px 0; }
   .resontes-list-content { padding: 10px 12px 0; }
-  /* Art size on desktop: 4 columns for both contexts */
-  .search-results-list .card-grid { grid-template-columns: repeat(4, minmax(160px, 1fr)); gap: 14px; }
-  .resontes-list-content .card-grid { grid-template-columns: repeat(4, minmax(140px, 1fr)); gap: 12px; }
 }
 
 /* Extra desktop (1280px and up) - Wider container and denser grid */
@@ -4244,21 +4223,16 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
   .search-results,
   .search-container,
   .search-results-list { max-width: 1200px; }
-  /* Art size on wide desktop: 5 columns for search, 4 for resonates */
-  .search-results-list .card-grid { grid-template-columns: repeat(5, minmax(160px, 1fr)); gap: 16px; }
-  .resontes-list-content .card-grid { grid-template-columns: repeat(4, minmax(160px, 1fr)); gap: 16px; }
 }
 
 /* Mobile tightening for 2-column grid */
 @media (max-width: 420px) {
   .search-results-list { padding: 8px 8px 0; }
-  .search-results-list .card-grid { grid-template-columns: repeat(2, minmax(130px, 1fr)); gap: 8px; }
   .search-results-list .card-actions.card-actions-overlay { padding: 3px 5px; gap: 5px; }
   /* Proportionate button sizes on small mobile */
   .search-results-list .card-actions.card-actions-overlay .card-btn { width: 34px; height: 34px; }
 
   .resontes-list-content { padding: 8px 8px 0; }
-  .resontes-list-content .card-grid { grid-template-columns: repeat(2, minmax(130px, 1fr)); gap: 8px; }
 }
 
 .no-results-icon {
@@ -7361,23 +7335,10 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
   padding: 10px 10px calc(10px + env(safe-area-inset-bottom, 0) + var(--vv-bottom-inset, 0px));
 }
 
-/* Consistent grid inside both containers — no per-context overrides */
-.search-results-list .resonate-grid,
-.search-results-list .card-grid,
-.resontes-list-content .resonate-grid,
-.resontes-list-content .card-grid {
-  grid-template-columns: repeat(2, minmax(140px, 1fr));
-  gap: 10px;
-}
-
 /* ===== TABLET RESPONSIVE (3 columns) ===== */
 @media (min-width: 600px) {
   .resonate-grid,
-  .card-grid,
-  .search-results-list .resonate-grid,
-  .search-results-list .card-grid,
-  .resontes-list-content .resonate-grid,
-  .resontes-list-content .card-grid {
+  .card-grid {
     grid-template-columns: repeat(3, minmax(140px, 1fr));
     gap: 12px;
   }
@@ -7391,11 +7352,7 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
 /* ===== WIDE TABLET / SMALL DESKTOP (3 columns) ===== */
 @media (min-width: 768px) {
   .resonate-grid,
-  .card-grid,
-  .search-results-list .resonate-grid,
-  .search-results-list .card-grid,
-  .resontes-list-content .resonate-grid,
-  .resontes-list-content .card-grid {
+  .card-grid {
     grid-template-columns: repeat(3, minmax(160px, 1fr));
     gap: 14px;
   }
@@ -7414,11 +7371,7 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
 /* ===== DESKTOP (4 columns) ===== */
 @media (min-width: 1024px) {
   .resonate-grid,
-  .card-grid,
-  .search-results-list .resonate-grid,
-  .search-results-list .card-grid,
-  .resontes-list-content .resonate-grid,
-  .resontes-list-content .card-grid {
+  .card-grid {
     grid-template-columns: repeat(4, minmax(160px, 1fr));
     gap: 14px;
   }
@@ -7432,11 +7385,7 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
 /* ===== WIDE DESKTOP (5 columns) ===== */
 @media (min-width: 1280px) {
   .resonate-grid,
-  .card-grid,
-  .search-results-list .resonate-grid,
-  .search-results-list .card-grid,
-  .resontes-list-content .resonate-grid,
-  .resontes-list-content .card-grid {
+  .card-grid {
     grid-template-columns: repeat(5, minmax(160px, 1fr));
     gap: 16px;
   }
@@ -7450,11 +7399,7 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
 /* ===== SMALL MOBILE TIGHTENING ===== */
 @media (max-width: 420px) {
   .resonate-grid,
-  .card-grid,
-  .search-results-list .resonate-grid,
-  .search-results-list .card-grid,
-  .resontes-list-content .resonate-grid,
-  .resontes-list-content .card-grid {
+  .card-grid {
     grid-template-columns: repeat(2, minmax(130px, 1fr));
     gap: 8px;
   }
