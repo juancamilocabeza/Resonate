@@ -78,3 +78,18 @@
       0 2px 4px rgba(0, 0, 0, 0.08);
   }
 }
+
+.main-player-section.has-art-background {
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.58), rgba(0, 0, 0, 0.58)),
+    var(--player-art-background);
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+[data-theme="day"] .main-player-section.has-art-background {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.68), rgba(255, 255, 255, 0.68)),
+    var(--player-art-background);
+}
