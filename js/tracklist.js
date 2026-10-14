@@ -452,10 +452,10 @@
         shareBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           try {
-            if (typeof window.shareTrack === 'function') {
+            if (window.ResonateShare && typeof window.ResonateShare.shareTrack === 'function') {
               const shareAlbumTitle = (track && typeof track.album === 'string' ? track.album : '') || albumTitleForShare;
               const shareTrackIndex = (track && typeof track.trackIndex === 'number') ? track.trackIndex : index;
-              window.shareTrack(track.id || albumId, track.title, track.creator, shareAlbumTitle, 'track', shareTrackIndex);
+              window.ResonateShare.shareTrack(track.id || albumId, track.title, track.creator, shareAlbumTitle, 'track', shareTrackIndex);
             }
           } catch {}
         });

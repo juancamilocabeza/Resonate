@@ -250,6 +250,76 @@ test('Production logger silences invalid and NONE levels while INFO filters debu
   assert.match(output[0][1], /useful info/);
 });
 
+test('Share module builds canonical links and shares track metadata', async () => {
+  const shareCalls = [];
+  const statuses = [];
+  const document = {
+    title: '',
+    head: { appendChild() {} },
+    querySelector() { return null; },
+    createElement() { return { setAttribute() {} }; }
+  };
+  const { context } = await createSandbox({
+    document,
+    location: {
+      href: 'http://resonateplayer.com/player?old=1#track',
+      origin: 'http://resonateplayer.com',
+      hostname: 'www.resonateplayer.com',
+      protocol: 'http:',
+      search: '?old=1'
+    },
+    navigator: {
+      userAgent: '',
+      async share(data) { shareCalls.push(data); }
+    },
+    state: {
+      currentTrack: { id: 'track-1', creator: ' Artist ', album: 'Album', trackIndex: 3 }
+    },
+    CoverManager: { async getCoverImageForSharing() { return null; } },
+    showStatus: (...args) => statuses.push(args)
+  });
+  await evaluateScript(context, 'js/share.js');
+
+  assert.equal(
+    context.ResonateShare.buildShareUrl('track/1', 2.8),
+    'https://www.resonateplayer.com/?play=track%2F1&t=2'
+  );
+  await context.ResonateShare.shareTrack('track-1', ' Song ', null, null, 'track');
+
+  assert.equal(shareCalls.length, 1);
+  assert.equal(shareCalls[0].title, 'Album — Song');
+  assert.equal(shareCalls[0].url, 'https://www.resonateplayer.com/?play=track-1&t=3');
+  assert.match(shareCalls[0].text, /Artist/);
+  assert.equal(document.title, 'Album — Song - Artist | Resonate Player');
+  assert.deepEqual(statuses[0], ['Track shared successfully', 'info', 6000]);
+});
+
+test('Share module copies canonical link when Web Share is unavailable', async () => {
+  const copied = [];
+  const statuses = [];
+  const document = {
+    title: '',
+    head: { appendChild() {} },
+    querySelector() { return null; },
+    createElement() { return { setAttribute() {} }; }
+  };
+  const { context } = await createSandbox({
+    document,
+    navigator: {
+      userAgent: '',
+      clipboard: { async writeText(text) { copied.push(text); } }
+    },
+    CoverManager: { async getCoverImageForSharing() { return null; } },
+    showStatus: (...args) => statuses.push(args)
+  });
+  await evaluateScript(context, 'js/share.js');
+
+  await context.ResonateShare.shareTrack('track-2', 'Track');
+
+  assert.deepEqual(copied, ['https://resonate.test/?play=track-2']);
+  assert.deepEqual(statuses[0], ['Link copied to clipboard', 'info', 4000]);
+});
+
 test('Speculative Archive.org audio prefetch leaves playback to native streaming', async () => {
   const requestedUrls = [];
   const { context } = await createSandbox({

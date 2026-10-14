@@ -2431,7 +2431,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
 
   // Update meta tags for rich previews
   if (typeof updateMetaTags === 'function') {
-    updateMetaTags(track, identifier);
+    window.ResonateShare?.updateMetaTags(track, identifier);
   }
 
   // Preload covers for upcoming tracks in background
