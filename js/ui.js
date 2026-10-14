@@ -4575,19 +4575,6 @@ function createFavoriteInfo(result) {
   return infoDiv;
 }
 
-function getShareCapabilities() {
-  const canShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
-  const canCopy = (() => {
-    try {
-      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') return true;
-      return !!(document && typeof document.queryCommandSupported === 'function' && document.queryCommandSupported('copy'));
-    } catch {
-      return false;
-    }
-  })();
-  return { canShare, canCopy };
-}
-
 function getCastCapabilities(audioEl) {
   const el = audioEl || (elements && elements.audio) || document.getElementById('audio');
   const remote = el && el.remote ? el.remote : null;
@@ -4662,7 +4649,7 @@ function setShareButtonIcon(el, mode) {
 function applyShareButtonState(el) {
   if (!el) return;
 
-  const { canShare, canCopy } = getShareCapabilities();
+  const { canShare, canCopy } = window.ResonateShare.getShareCapabilities();
   const allowTitle = !(el.classList && el.classList.contains('theme-selector'));
 
   if (canShare) {
@@ -4869,7 +4856,7 @@ function createSearchResultElement(result, globalIndex) {
   shareBtn.addEventListener('click', async (e) => {
     e.stopPropagation();
     const shareKind = result.isTrackList ? 'track' : 'album';
-    await shareTrack(result.identifier, result.title, result.creator, null, shareKind);
+    await window.ResonateShare.shareTrack(result.identifier, result.title, result.creator, null, shareKind);
   });
 
   infoDiv.addEventListener('click', playFromSearchResult);
@@ -4973,7 +4960,7 @@ function getCardContextTracksLabel(expandBtn) {
 }
 
 function getCardContextShareLabel() {
-  const { canShare, canCopy } = getShareCapabilities();
+  const { canShare, canCopy } = window.ResonateShare.getShareCapabilities();
   if (canShare) return 'Share';
   if (canCopy) return 'Copy link';
   return 'Sharing not available';
@@ -5176,7 +5163,7 @@ function initCardContextSheetHandlers() {
       if (!st) return;
       const { identifier, title, creator, isAlbum } = st;
       try {
-        await shareTrack(identifier, title, creator, null, isAlbum ? 'album' : 'track');
+        await window.ResonateShare.shareTrack(identifier, title, creator, null, isAlbum ? 'album' : 'track');
       } catch {}
     });
   }
@@ -5514,7 +5501,7 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
       e.stopPropagation();
       try {
         const shareKind = isAlbum ? 'album' : 'track';
-        await shareTrack(identifier, title, creator, null, shareKind);
+        await window.ResonateShare.shareTrack(identifier, title, creator, null, shareKind);
       } catch {}
     });
     
@@ -5612,7 +5599,7 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
       e.stopPropagation();
       try {
         const shareKind = isAlbumFavorite ? 'album' : 'track';
-        shareTrack(identifier, title, creator, null, shareKind);
+        window.ResonateShare.shareTrack(identifier, title, creator, null, shareKind);
       } catch {}
     });
     
@@ -5847,7 +5834,7 @@ function displayAlbumTracks(albumId, tracksContainer) {
           shareBtn.addEventListener('click', (e) => {
             e.stopPropagation(); // Evitar que el clic se propague al resultado principal
             const albumTitleForShare = track.album || (files[0] && files[0].album) || '';
-            shareTrack(track.id || albumId, track.title, track.creator, albumTitleForShare, 'track', index);
+            window.ResonateShare.shareTrack(track.id || albumId, track.title, track.creator, albumTitleForShare, 'track', index);
           });
         }
 
@@ -8450,7 +8437,7 @@ function maybeShowOpenInAppBannerForSharedLink() {
     const trackIndex = Number.isFinite(parsedTrackIndex) && parsedTrackIndex >= 0 ? parsedTrackIndex : null;
 
     const shareUrl = (playIdentifier && typeof window.buildShareUrl === 'function')
-      ? window.buildShareUrl(playIdentifier, trackIndex)
+      ? window.ResonateShare.buildShareUrl(playIdentifier, trackIndex)
       : window.location.href;
 
     // Best-effort: if we're not already at the canonical shared URL, navigate there.
@@ -8875,376 +8862,6 @@ function displaySearchHistory() {
   state.searchActive = true;
   setSearchOpenState(true);
   scheduleSearchInsetsBurst();
-}
-
-function normalizeTrackTitle(title) {
-  const t = typeof title === 'string' ? title.trim() : '';
-  return t ? t : 'Track';
-}
-
-function normalizeTrackCreator(creator) {
-  const c = typeof creator === 'string' ? creator.trim() : '';
-  return c ? c : '';
-}
-
-function getCanonicalShareOrigin() {
-  try {
-    const origin = String(window.location.origin || '').trim();
-    const hostname = String(window.location.hostname || '').trim().toLowerCase();
-    // Production canonicalization: ensure shared links match the PWA install origin.
-    // Keep localhost/dev origins untouched.
-    if (hostname === 'resonateplayer.com' || hostname === 'www.resonateplayer.com') {
-      return 'https://www.resonateplayer.com';
-    }
-    return origin;
-  } catch {
-    return window.location.origin;
-  }
-}
-
-function buildShareUrl(identifier, trackIndex = null) {
-  const baseUrl = new URL(getCanonicalShareOrigin());
-  baseUrl.hash = '';
-  baseUrl.search = '';
-  // Always share within the PWA scope entrypoint.
-  baseUrl.pathname = '/';
-
-  const params = new URLSearchParams();
-  params.set('play', identifier);
-
-  const idx = typeof trackIndex === 'number' && isFinite(trackIndex) && trackIndex >= 0 ? Math.floor(trackIndex) : null;
-  if (idx !== null) {
-    params.set('t', String(idx));
-  }
-
-  baseUrl.search = params.toString();
-  return baseUrl.toString();
-}
-
-// Expose for other scripts (initialization.js) to reuse a single canonical share-link builder.
-window.buildShareUrl = buildShareUrl;
-
-function applyTrackMetaTagsForIdentifier(identifier, title, creator = '', trackIndex = null) {
-  if (!identifier) return;
-
-  const normalizedTitle = normalizeTrackTitle(title);
-  const normalizedCreator = normalizeTrackCreator(creator);
-  const shareUrl = buildShareUrl(identifier, trackIndex);
-  const imageUrl = `https://archive.org/services/img/${identifier}`;
-
-  const displayTitle = normalizedCreator ? `${normalizedTitle} - ${normalizedCreator}` : normalizedTitle;
-  const description = normalizedCreator
-    ? `Listen to "${normalizedTitle}" by ${normalizedCreator} on Resonate Player. Free music from archive.org.`
-    : `Listen to "${normalizedTitle}" on Resonate Player. Free music from archive.org.`;
-
-  document.title = `${displayTitle} | Resonate Player`;
-
-  // Open Graph
-  updateMetaTag('property', 'og:title', displayTitle);
-  updateMetaTag('property', 'og:description', description);
-  updateMetaTag('property', 'og:image', imageUrl);
-  updateMetaTag('property', 'og:url', shareUrl);
-  updateMetaTag('property', 'og:type', 'music.song');
-
-  // Twitter
-  updateMetaTag('property', 'twitter:card', 'summary_large_image');
-  updateMetaTag('property', 'twitter:title', displayTitle);
-  updateMetaTag('property', 'twitter:description', description);
-  updateMetaTag('property', 'twitter:image', imageUrl);
-  updateMetaTag('property', 'twitter:url', shareUrl);
-
-  // Basic meta
-  updateMetaTag('name', 'description', description);
-
-  window.logger?.debug({ message: 'Meta tags updated for sharing', title: normalizedTitle, creator: normalizedCreator, imageUrl, shareUrl }, 'NETWORK');
-}
-
-// Update Open Graph meta tags for rich previews
-function updateMetaTags(track, identifier) {
-  if (!track || !identifier) return;
-  const trackIndex = typeof track.trackIndex === 'number' && isFinite(track.trackIndex) ? track.trackIndex : null;
-  applyTrackMetaTagsForIdentifier(identifier, track.title, track.creator, trackIndex);
-}
-
-// Helper function to update or create meta tags
-function updateMetaTag(attrName, attrValue, content) {
-  let metaTag = document.querySelector(`meta[${attrName}="${attrValue}"]`);
-
-  if (metaTag) {
-    metaTag.setAttribute('content', content);
-  } else {
-    metaTag = document.createElement('meta');
-    metaTag.setAttribute(attrName, attrValue);
-    metaTag.setAttribute('content', content);
-    document.head.appendChild(metaTag);
-  }
-}
-
-// Share functionality
-async function shareTrack(identifier, title = 'Track', creator = null, albumTitle = null, kind = 'track', trackIndex = null) {
-  if (!identifier) {
-    showStatus('Nothing to share right now', 'warning');
-    return;
-  }
-
-  const shareKind = kind === 'album' ? 'album' : 'track';
-
-  const normalizedTrackTitle = normalizeTrackTitle(title);
-
-  let resolvedCreator = creator;
-  if (resolvedCreator === null || resolvedCreator === undefined) {
-    try {
-      if (window.state && window.state.currentTrack && window.state.currentTrack.id === identifier) {
-        resolvedCreator = window.state.currentTrack.creator;
-      }
-    } catch {}
-  }
-  resolvedCreator = normalizeTrackCreator(resolvedCreator);
-
-  let resolvedAlbumTitle = albumTitle;
-  if (resolvedAlbumTitle === null || resolvedAlbumTitle === undefined) {
-    try {
-      if (window.state && window.state.currentTrack && window.state.currentTrack.id === identifier) {
-        resolvedAlbumTitle = window.state.currentTrack.albumTitle || window.state.currentTrack.album || '';
-      }
-    } catch {}
-  }
-  const normalizedAlbumTitle = typeof resolvedAlbumTitle === 'string' ? resolvedAlbumTitle.trim() : '';
-  const includeAlbumTitle = !!(
-    normalizedAlbumTitle &&
-    normalizedAlbumTitle.toLowerCase() !== normalizedTrackTitle.toLowerCase()
-  );
-
-  let resolvedTrackIndex = trackIndex;
-  if (resolvedTrackIndex === null || resolvedTrackIndex === undefined) {
-    try {
-      if (shareKind === 'track' && includeAlbumTitle && window.state && window.state.currentTrack && window.state.currentTrack.id === identifier) {
-        resolvedTrackIndex = window.state.currentTrack.trackIndex;
-      }
-    } catch {}
-  }
-  if (!(typeof resolvedTrackIndex === 'number' && isFinite(resolvedTrackIndex) && resolvedTrackIndex >= 0)) {
-    resolvedTrackIndex = null;
-  }
-
-  const shareUrlTrackIndex = (shareKind === 'track' && includeAlbumTitle) ? resolvedTrackIndex : null;
-
-  const shareUrl = buildShareUrl(identifier, shareUrlTrackIndex);
-  const shareDataTitle = shareKind === 'album'
-    ? normalizedTrackTitle
-    : (includeAlbumTitle ? `${normalizedAlbumTitle} — ${normalizedTrackTitle}` : normalizedTrackTitle);
-
-  const textParts = [];
-  if (shareKind === 'album') {
-    textParts.push('You might like this album!');
-    textParts.push(`"${normalizedTrackTitle}"`);
-  } else {
-    textParts.push('You might like this!');
-    textParts.push(`"${normalizedTrackTitle}"`);
-    if (includeAlbumTitle) textParts.push(normalizedAlbumTitle);
-  }
-
-  if (resolvedCreator) textParts.push(resolvedCreator);
-  textParts.push('Enjoy it freely on Resonate Player');
-  const shareText = textParts.join('\n\n');
-
-  window.logger?.debug({
-    message: 'Attempting to share',
-    shareUrl,
-    title: shareDataTitle,
-    shareText,
-    creator: resolvedCreator,
-    albumTitle: normalizedAlbumTitle,
-    kind: shareKind,
-    trackIndex: shareUrlTrackIndex
-  }, 'NETWORK');
-
-  // Keep meta tags in sync for rich previews
-  applyTrackMetaTagsForIdentifier(identifier, shareDataTitle, resolvedCreator, shareUrlTrackIndex);
-
-  const { canShare, canCopy } = getShareCapabilities();
-  if (!canShare) {
-    if (canCopy) {
-      const copied = await tryCopyToClipboard(shareUrl);
-      if (copied) {
-        // Analytics: track clipboard copy as share
-        try {
-          if (window.ResonateAnalytics && typeof window.ResonateAnalytics.trackShare === 'function') {
-            window.ResonateAnalytics.trackShare({ method: 'copy_link', content_type: shareKind, item_id: identifier });
-          }
-        } catch (_) {}
-        showStatus('Link copied to clipboard', 'info', 4000);
-        return;
-      }
-    }
-    window.logger?.info('Web Share API no disponible', 'SYSTEM');
-    showStatus('Sharing not available', 'warning', 4000);
-    return;
-  }
-
-  // Try to get cover image for sharing
-  let coverFile = null;
-  try {
-    // Use CoverManager if available, otherwise fallback to local implementation
-    if (window.CoverManager && typeof window.CoverManager.getCoverImageForSharing === 'function') {
-      coverFile = await window.CoverManager.getCoverImageForSharing(identifier);
-    } else {
-      coverFile = await getCoverImageForSharing(identifier);
-    }
-    window.logger?.debug('Cover image obtained for sharing', 'NETWORK');
-  } catch (error) {
-    window.logger?.warn({ message: 'Could not get cover image', error }, 'NETWORK');
-  }
-
-  const isShareCancelled = (err) => {
-    return !!(err && (err.name === 'AbortError' || err.name === 'NotAllowedError'));
-  };
-
-  const isLikelyFileShareUnsupported = (err) => {
-    if (!err) return false;
-    const name = typeof err.name === 'string' ? err.name : '';
-    if (name === 'TypeError' || name === 'NotSupportedError' || name === 'DataError') return true;
-
-    const message = typeof err.message === 'string' ? err.message : '';
-    return /\b(files?|file)\b/i.test(message) || /canShare/i.test(message);
-  };
-
-  try {
-    window.logger?.debug('Using Web Share API with enriched message', 'NETWORK');
-
-    // Analytics: track share event
-    try {
-      if (window.ResonateAnalytics && typeof window.ResonateAnalytics.trackShare === 'function') {
-        window.ResonateAnalytics.trackShare({
-          method: 'web_share',
-          content_type: shareKind,
-          item_id: identifier
-        });
-      }
-    } catch (_) {}
-
-    const baseShareData = {
-      title: shareDataTitle,
-      text: shareText,
-      url: shareUrl
-    };
-
-    // Aggressive behavior: if we have a cover file, try sharing it even when
-    // navigator.canShare({ files }) is missing or returns false.
-    if (coverFile) {
-      try {
-        window.logger?.debug('Attempting to include cover image in share', 'NETWORK');
-        await navigator.share({ ...baseShareData, files: [coverFile] });
-        window.logger?.info('Web Share API success (with cover file)', 'NETWORK');
-        showStatus('Track shared successfully', 'info', 6000);
-        return;
-      } catch (errorWithFile) {
-        if (isShareCancelled(errorWithFile)) {
-          return;
-        }
-
-        // If file sharing isn't supported, retry once without the cover.
-        if (isLikelyFileShareUnsupported(errorWithFile)) {
-          try {
-            window.logger?.debug('File share unsupported, retrying without cover', 'NETWORK');
-            await navigator.share(baseShareData);
-            window.logger?.info('Web Share API success (without cover)', 'NETWORK');
-            showStatus('Track shared successfully', 'info', 6000);
-            return;
-          } catch (errorWithoutFile) {
-            if (isShareCancelled(errorWithoutFile)) {
-              return;
-            }
-            window.logger?.warn({ message: 'Web Share API failed', error: errorWithoutFile }, 'NETWORK');
-            showStatus('Sharing not available', 'warning', 4000);
-            return;
-          }
-        }
-
-        window.logger?.warn({ message: 'Web Share API failed', error: errorWithFile }, 'NETWORK');
-        showStatus('Sharing not available', 'warning', 4000);
-        return;
-      }
-    }
-
-    await navigator.share(baseShareData);
-    window.logger?.info('Web Share API success', 'NETWORK');
-    showStatus('Track shared successfully', 'info', 6000);
-  } catch (error) {
-    // If user cancels, don't spam.
-    if (isShareCancelled(error)) {
-      return;
-    }
-    window.logger?.warn({ message: 'Web Share API failed', error }, 'NETWORK');
-    showStatus('Sharing not available', 'warning', 4000);
-  }
-}
-
-// Get cover image as File for sharing
-async function getCoverImageForSharing(identifier) {
-  const coverUrl = `https://archive.org/services/img/${identifier}`;
-
-  try {
-    const response = await fetch(coverUrl);
-    if (!response.ok) {
-      window.logger?.warn({ message: 'Cover image request failed', status: response.status, identifier }, 'NETWORK');
-      return null;
-    }
-
-    const blob = await response.blob();
-
-    if (!blob || !blob.size) {
-      return null;
-    }
-
-    if (typeof File === 'undefined') {
-      return null;
-    }
-
-    // Create File from Blob
-    const filename = `cover-${identifier}.jpg`;
-    const blobType = blob && typeof blob.type === 'string' ? blob.type : '';
-    const fileType = blobType && blobType.startsWith('image/') ? blobType : 'image/jpeg';
-    return new File([blob], filename, { type: fileType });
-  } catch (error) {
-    // Best-effort only: sharing should still work without the cover.
-    window.logger?.warn({ message: 'Cover image fetch failed (continuing without image)', error }, 'NETWORK');
-    return null;
-  }
-}
-
-async function tryCopyToClipboard(text) {
-  if (!text) return false;
-
-  try {
-    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-  } catch {
-    // fall through to legacy copy
-  }
-
-  try {
-    const area = document.createElement('textarea');
-    area.value = text;
-    area.setAttribute('readonly', '');
-    area.style.position = 'fixed';
-    area.style.opacity = '0';
-    area.style.pointerEvents = 'none';
-    document.body.appendChild(area);
-    area.select();
-    const ok = document.execCommand('copy');
-    area.remove();
-    return !!ok;
-  } catch {
-    return false;
-  }
-}
-
-// Back-compat wrapper: older callers used this for share previews
-function updateMetaTagsForSharing(identifier, title, creator = '') {
-  applyTrackMetaTagsForIdentifier(identifier, title, creator);
 }
 
 // Initialize UI toggles

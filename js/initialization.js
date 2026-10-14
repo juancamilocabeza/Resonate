@@ -550,7 +550,7 @@ async function updateMetaTagsForSharedLink(identifier, trackIndex = null) {
     const shareUrl = (() => {
       try {
         if (typeof window.buildShareUrl === 'function') {
-          return window.buildShareUrl(identifier, trackIndex);
+          return window.ResonateShare.buildShareUrl(identifier, trackIndex);
         }
       } catch {}
 
@@ -824,7 +824,7 @@ async function playSharedContent(identifier, startTrackIndex = null) {
 
       // Update meta tags for rich previews when sharing
       if (typeof updateMetaTags === 'function') {
-        updateMetaTags(track, identifier);
+        window.ResonateShare?.updateMetaTags(track, identifier);
       }
 
       showStatus('Now playing your shared track', 'info', 3000);
@@ -1579,7 +1579,7 @@ async function initializeApp() {
         const trackIndexForShare = (state.currentTrack.totalTracks || 1) > 1 && typeof state.currentTrack.trackIndex === 'number'
           ? state.currentTrack.trackIndex
           : null;
-        await shareTrack(state.currentTrack.id, state.currentTrack.title, state.currentTrack.creator, albumTitleForShare, 'track', trackIndexForShare);
+        await window.ResonateShare.shareTrack(state.currentTrack.id, state.currentTrack.title, state.currentTrack.creator, albumTitleForShare, 'track', trackIndexForShare);
       } else {
         showStatus('Nothing to share right now', 'warning');
       }
