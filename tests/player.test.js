@@ -529,6 +529,61 @@ test('The playback manager keeps continuous repeat mode and persists shuffle cha
   assert.equal(state.shuffleFavorites, false);
 });
 
+test('Track-end and recovery requests share one in-flight transition', async () => {
+  const { context } = await createPlayer();
+  const controller = context.enhancedPlaybackController;
+  let resolveTransition;
+  let transitionCalls = 0;
+  controller.currentHandler = {
+    handleTrackEnd() {
+      transitionCalls += 1;
+      return new Promise(resolve => { resolveTransition = resolve; });
+    }
+  };
+
+  const endedTransition = controller.handleTrackEnd();
+  const duplicateTransition = controller.handleTrackEnd();
+  const recoveryTransition = context.playNextInContext();
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.equal(transitionCalls, 1);
+  assert.equal(controller.isTransitioning(), true);
+  resolveTransition();
+  await Promise.all([endedTransition, duplicateTransition, recoveryTransition]);
+  assert.equal(controller.isTransitioning(), false);
+});
+
+test('Context playback advances and loops continuously at the end of the queue', async () => {
+  const { context } = await createPlayer();
+  const tracks = [
+    { url: 'https://archive.org/first.mp3', title: 'First' },
+    { url: 'https://archive.org/second.mp3', title: 'Second' }
+  ];
+  const played = [];
+  context.playbackManager.setSearchPlaylist(tracks, 0);
+  context.enhancedPlaybackController.setContext('searchPlaylist');
+  context.playAudioTrackOptimized = async track => { played.push(track.title); };
+
+  await context.enhancedPlaybackController.handleTrackEnd();
+  await context.enhancedPlaybackController.handleTrackEnd();
+
+  assert.deepEqual(played, ['Second', 'First']);
+});
+
+test('A failed track transition releases its lock and propagates the error', async () => {
+  const { context } = await createPlayer();
+  const controller = context.enhancedPlaybackController;
+  controller.currentHandler = {
+    async handleTrackEnd() {
+      throw new Error('Track transition failed');
+    }
+  };
+
+  await assert.rejects(controller.handleTrackEnd(), /Track transition failed/);
+  assert.equal(controller.isTransitioning(), false);
+  assert.equal(context.playbackStateManager.state.stats.consecutiveFailures, 1);
+});
+
 test('Playback history retains only the newest 50 played tracks and 20 skipped tracks', async () => {
   const { context } = await createPlayer();
   const manager = context.playbackStateManager;
