@@ -20,9 +20,10 @@
       // Without a src there is nothing to resume (saved-state currentTrack alone
       // is not enough – the user must explicitly press Play to start fresh).
       if (!audio.src) return false;
+      const userPaused = !!(window.state && window.state.userPaused) || lastUserPaused;
       // Si hay una pista cargada y no está pausado manualmente
       if (window.state && window.state.currentTrack && window.state.currentTrack.url) {
-        if (audio.paused && !audio.ended && !lastUserPaused) {
+        if (audio.paused && !audio.ended && !userPaused) {
           return true;
         }
       }
@@ -47,17 +48,25 @@
   function setupManualPauseTracking() {
     const audio = getAudioEl();
     if (!audio) return;
+
+    const trackManualPauseState = (paused) => {
+      lastUserPaused = Boolean(paused);
+      try {
+        if (window.state) window.state.userPaused = Boolean(paused);
+      } catch {}
+    };
+
     audio.addEventListener('pause', () => {
       // Si el usuario pausó manualmente (no por fin de pista ni error)
       if (!audio.ended && !audio.seeking && !audio.error) {
-        lastUserPaused = true;
+        trackManualPauseState(true);
       }
     });
     audio.addEventListener('play', () => {
-      lastUserPaused = false;
+      trackManualPauseState(false);
     });
     audio.addEventListener('ended', () => {
-      lastUserPaused = false;
+      trackManualPauseState(false);
     });
   }
 
@@ -2937,6 +2946,7 @@ function togglePlay() {
       return;
     }
 
+    state.userPaused = false;
     audio.play().then(() => {
       setMainPlayButtonState(true);
       safeShowStatus('Music is playing now', 'info');
@@ -2961,6 +2971,7 @@ function togglePlay() {
       logPlayback('warn', 'Playback play() failed', error);
     });
   } else {
+    state.userPaused = true;
     audio.pause();
     setMainPlayButtonState(false);
     safeShowStatus('Music is now paused', 'info');
