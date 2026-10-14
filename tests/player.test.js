@@ -739,6 +739,25 @@ test('Invalid playlist tracks and unknown playlist operations are rejected', asy
   assert.equal(playlists.deletePlaylist('missing'), false);
 });
 
+test('Stored playlists sanitize tracks and remove normalized URL duplicates', async () => {
+  const { context, localStorage } = await createSandbox();
+  localStorage.setItem('resonate_playlists', JSON.stringify([{
+    id: 'stored',
+    name: 'Stored playlist',
+    tracks: [
+      { url: 'https://archive.org/track.mp3?utm_source=import', title: 'Track' },
+      { url: 'https://archive.org/track.mp3', title: 'Duplicate' },
+      { title: 'Missing URL' }
+    ]
+  }]));
+  await evaluateScript(context, 'js/playlist-manager.js');
+
+  const [playlist] = context.PlaylistManager.getAll();
+  assert.equal(playlist.tracks.length, 1);
+  assert.equal(playlist.tracks[0].url, 'https://archive.org/track.mp3');
+  assert.equal(playlist.tracks[0].title, 'Track');
+});
+
 test('Playlist import sanitizes items and drops duplicate or invalid URLs', async () => {
   class MockFileReader {
     readAsText(file) {
