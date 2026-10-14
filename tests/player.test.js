@@ -268,6 +268,79 @@ test('Speculative Archive.org audio prefetch leaves playback to native streaming
   assert.deepEqual(requestedUrls, ['https://archive.org/download/item/track.mp3']);
 });
 
+test('Audio cache initialization is shared by concurrent callers', async () => {
+  let cacheOpens = 0;
+  let databaseOpens = 0;
+  let connectionListeners = 0;
+  const db = {};
+  const { context } = await createSandbox({
+    navigator: {
+      userAgent: '',
+      onLine: true,
+      connection: {
+        addEventListener() { connectionListeners += 1; }
+      }
+    },
+    caches: {
+      async open() {
+        cacheOpens += 1;
+        return {};
+      }
+    },
+    indexedDB: {
+      open() {
+        databaseOpens += 1;
+        const request = { result: db };
+        queueMicrotask(() => request.onsuccess());
+        return request;
+      }
+    }
+  });
+  await evaluateScript(context, 'js/cache.js');
+
+  await Promise.all([context.audioCache.init(), context.audioCache.init()]);
+
+  assert.equal(cacheOpens, 1);
+  assert.equal(databaseOpens, 1);
+  assert.equal(connectionListeners, 1);
+  assert.equal(context.audioCache.isInitialized, true);
+});
+
+test('Audio cache routes context preloads through one deduplicated flow', async () => {
+  const { context } = await createSandbox();
+  await evaluateScript(context, 'js/cache.js');
+
+  const cache = context.audioCache;
+  cache.isInitialized = true;
+  const preloads = [];
+  const priorities = [];
+  cache.shouldPrefetch = async priority => {
+    priorities.push(priority);
+    return true;
+  };
+  cache.ensureMinTracksPerContext = async (contextName, tracks) => {
+    preloads.push({ context: contextName, tracks });
+  };
+
+  const resontes = [{ url: 'https://archive.org/download/item/resonte.mp3' }];
+  const searches = [{ url: 'https://archive.org/download/item/search.mp3' }];
+  const offline = [{ url: 'https://archive.org/download/item/offline.mp3' }];
+
+  await Promise.all([
+    cache.preloadResontes(resontes),
+    cache.preloadResontes(resontes),
+    cache.preloadSearchResults(searches),
+    cache.preloadOffline(offline)
+  ]);
+  await cache.preloadResontes(resontes);
+
+  assert.deepEqual(
+    preloads.map(({ context: preloadContext }) => preloadContext),
+    ['resontes', 'search', 'offline']
+  );
+  assert.deepEqual(priorities, [true, false, false]);
+});
+
 test('Service worker does not intercept Archive.org audio streaming requests', async () => {
   const listeners = new Map();
   const serviceWorkerConsole = {
