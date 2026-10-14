@@ -691,7 +691,7 @@
       ];
 
       function loadFeatureScripts() {
-        var loads = featureScripts.map(function(src) {
+        function loadScript(src) {
           return new Promise(function(resolve, reject) {
             var script = document.createElement('script');
             script.async = true;
@@ -705,6 +705,15 @@
             };
             document.body.appendChild(script);
           });
+        }
+
+        var loads = [
+          loadScript('js/search-query.js').then(function() {
+            return loadScript(featureScripts[0]);
+          })
+        ];
+        featureScripts.slice(1).forEach(function(src) {
+          loads.push(loadScript(src));
         });
         Promise.all(loads).catch(function(error) {
           console.error(error);

@@ -190,6 +190,11 @@ async function evaluateScript(context, relativePath) {
   vm.runInContext(source, context, { filename: relativePath });
 }
 
+async function evaluateSearchScripts(context) {
+  await evaluateScript(context, 'js/search-query.js');
+  await evaluateScript(context, 'js/search.js');
+}
+
 test('Production logger silences invalid and NONE levels while INFO filters debug traces', async () => {
   for (const search of ['?log=NONE', '?log=unexpected']) {
     const output = [];
@@ -824,7 +829,7 @@ test('Production hosts skip the archive proxy unless explicitly enabled', async 
   const { context } = await createSandbox({
     location: { href: 'https://www.resonateplayer.com/', hostname: 'www.resonateplayer.com', protocol: 'https:', search: '' }
   });
-  await evaluateScript(context, 'js/search.js');
+  await evaluateSearchScripts(context);
 
   assert.equal(context.shouldPreferArchiveProxy(), false);
   context.location.search = '?proxy=1';
@@ -833,7 +838,7 @@ test('Production hosts skip the archive proxy unless explicitly enabled', async 
   const local = await createSandbox({
     location: { href: 'http://localhost:8000/?proxy=1', hostname: 'localhost', protocol: 'http:', search: '?proxy=1' }
   });
-  await evaluateScript(local.context, 'js/search.js');
+  await evaluateSearchScripts(local.context);
   assert.equal(local.context.shouldPreferArchiveProxy(), true);
 });
 
@@ -895,6 +900,32 @@ test('Service worker caches opaque Archive.org cover responses', async () => {
   assert.equal(networkCalls, 1);
 });
 
+test('Search query helpers parse intent and build filtered Archive.org queries', async () => {
+  const { context } = await createSandbox({
+    state: { searchUi: { mediatype: 'audio' } }
+  });
+  await evaluateScript(context, 'js/search-query.js');
+
+  const artistIntent = context.parseSearchIntent('Massive Attack');
+  const mixedIntent = context.parseSearchIntent('Massive Attack - Teardrop');
+  const query = context.buildOptimizedArchiveQuery(
+    'Massive Attack - Teardrop',
+    context.getSearchNetworkFilterState(),
+    mixedIntent
+  );
+
+  assert.equal(context.normalizeString('Beyoncé'), 'beyonce');
+  assert.equal(artistIntent.intent, 'artist');
+  assert.equal(artistIntent.artist, 'Massive Attack');
+  assert.equal(mixedIntent.intent, 'mixed');
+  assert.equal(mixedIntent.artist, 'Massive Attack');
+  assert.equal(mixedIntent.title, 'Teardrop');
+  assert.match(query, /creator:\(Massive Attack\) AND title:\(Teardrop\)/);
+  assert.match(query, /mediatype:audio/);
+  assert.equal(context.getArchiveSortParam(artistIntent), '&sort[]=downloads+desc');
+  assert.equal(context.getArchiveSortParam(mixedIntent), '');
+});
+
 test('Fast search sends a query with the audio filter and normalizes returned results', async () => {
   const { context } = await createSandbox({
     state: { networkOnline: true, searchUi: { mediatype: 'audio' } },
@@ -914,7 +945,7 @@ test('Fast search sends a query with the audio filter and normalizes returned re
       };
     }
   });
-  await evaluateScript(context, 'js/search.js');
+  await evaluateSearchScripts(context);
   const result = await context.performFastSearch('title: A song', { rows: 5, timeout: 750 });
   const requestUrl = new URL(context.searchRequest.url, context.location.href);
 
@@ -936,7 +967,7 @@ test('Fast search does not issue a network request while the player is offline',
       throw new Error('Offline search should not reach fetch');
     }
   });
-  await evaluateScript(context, 'js/search.js');
+  await evaluateSearchScripts(context);
 
   const result = await context.performFastSearch('ambient music');
 
