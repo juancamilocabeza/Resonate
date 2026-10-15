@@ -1,13 +1,12 @@
 /**
  * Unified Card Actions CSS
  *
- * - .card-actions: normal-flow horizontal button row (used by resonates list)
- * - .card-actions-overlay: absolutely-positioned overlay over card media (used by search)
+ * - .card-actions-overlay: shared overlay over card media in search and resonates lists
  * - Only 2 visible actions on mobile: Favorite + More (⋯)
  * - Works on any album art (light or dark)
  */
 
-/* ===== CARD ACTIONS (normal flow – resonates list) ===== */
+/* ===== CARD ACTIONS ===== */
 .card-actions {
   display: flex;
   flex-direction: row;

@@ -805,6 +805,31 @@ function dispatchSearchWithFastPath(queryAtDispatch, { keepKeyboard = true, addT
   }
 }
 
+function renderTypeFilterPills(host, activeFilter, onChange) {
+  if (!host) return;
+
+  const definitions = [
+    { id: '', label: 'All' },
+    { id: 'single', label: 'Single' },
+    { id: 'album', label: 'Album' }
+  ];
+  host.innerHTML = definitions.map(definition => {
+    const isActive = definition.id === activeFilter || (!definition.id && !activeFilter);
+    const className = `filter-pill${isActive ? ' active' : ''}`;
+    return `<button type="button" class="${className}" data-type-filter="${escapeHtml(definition.id)}" aria-pressed="${isActive}">${escapeHtml(definition.label)}</button>`;
+  }).join('');
+
+  if (host.dataset.bound) return;
+  host.dataset.bound = 'true';
+  host.addEventListener('click', (event) => {
+    const button = event && event.target ? event.target.closest('button[data-type-filter]') : null;
+    if (!button) return;
+    event.preventDefault();
+    event.stopPropagation();
+    onChange(String(button.getAttribute('data-type-filter') || '').trim());
+  });
+}
+
 function ensureSearchFiltersHeader() {
   try {
     if (!elements.searchResultsHeader) return;
@@ -847,32 +872,12 @@ function ensureSearchFiltersHeader() {
           host.hidden = false;
 
           const active = (state.searchUi && typeof state.searchUi.typeFilter === 'string') ? state.searchUi.typeFilter : '';
-          const defs = [
-            { id: '', label: 'All' },
-            { id: 'single', label: 'Single' },
-            { id: 'album', label: 'Album' }
-          ];
-
-          host.innerHTML = defs.map(d => {
-            const isActive = d.id === active || (!d.id && !active);
-            const pressed = isActive ? 'true' : 'false';
-            const cls = `filter-pill${isActive ? ' active' : ''}`;
-            return `<button type="button" class="${cls}" data-type-filter="${escapeHtml(d.id)}" aria-pressed="${pressed}">${escapeHtml(d.label)}</button>`;
-          }).join('');
-
-          if (!host.dataset.bound) {
-            host.dataset.bound = 'true';
-            host.addEventListener('click', (e) => {
-              const btn = e && e.target ? e.target.closest('button[data-type-filter]') : null;
-              if (!btn) return;
-              try { e.preventDefault(); e.stopPropagation(); } catch {}
-              const next = String(btn.getAttribute('data-type-filter') || '').trim();
-              ensureSearchFilterDefaults();
-              state.searchUi.typeFilter = next;
-              try { ensureSearchFiltersHeader(); } catch {}
-              rerenderSearchResultsFromState(true);
-            });
-          }
+          renderTypeFilterPills(host, active, (next) => {
+            ensureSearchFilterDefaults();
+            state.searchUi.typeFilter = next;
+            ensureSearchFiltersHeader();
+            rerenderSearchResultsFromState(true);
+          });
         }
       }
     } catch {}
@@ -5395,9 +5400,8 @@ function buildContentCard(item, context = 'search', globalIndex = 0) {
 
   card.appendChild(body);
 
-  // Compact overlay action bar over the cover (search cards only)
-  // Favorites/resonates show buttons in a horizontal row below the card
-  if (context === 'search') {
+  // Keep actions in the same position for search and resonates cards.
+  if (context === 'search' || context === 'resonates') {
     actions.classList.add('card-actions-overlay');
     card.classList.add('actions-overlay');
     media.appendChild(actions);
@@ -7617,31 +7621,11 @@ function updateFavoritesList() {
       let filtersHost = document.getElementById('resontes-type-filters');
       if (filtersHost) {
         const activeTypeFilter = (state.favoritesUi && typeof state.favoritesUi.typeFilter === 'string') ? state.favoritesUi.typeFilter : '';
-        const filterDefs = [
-          { id: '', label: 'All' },
-          { id: 'single', label: 'Single' },
-          { id: 'album', label: 'Album' }
-        ];
-        
-        filtersHost.innerHTML = filterDefs.map(d => {
-          const isActive = d.id === activeTypeFilter || (!d.id && !activeTypeFilter);
-          const pressed = isActive ? 'true' : 'false';
-          const cls = `filter-pill${isActive ? ' active' : ''}`;
-          return `<button type="button" class="${cls}" data-type-filter="${escapeHtml(d.id)}" aria-pressed="${pressed}">${escapeHtml(d.label)}</button>`;
-        }).join('');
-        
-        if (!filtersHost.dataset.bound) {
-          filtersHost.dataset.bound = 'true';
-          filtersHost.addEventListener('click', (e) => {
-            const btn = e && e.target ? e.target.closest('button[data-type-filter]') : null;
-            if (!btn) return;
-            try { e.preventDefault(); e.stopPropagation(); } catch {}
-            const next = String(btn.getAttribute('data-type-filter') || '').trim();
-            if (!state.favoritesUi) state.favoritesUi = {};
-            state.favoritesUi.typeFilter = next;
-            updateFavoritesList();
-          });
-        }
+        renderTypeFilterPills(filtersHost, activeTypeFilter, (next) => {
+          if (!state.favoritesUi) state.favoritesUi = {};
+          state.favoritesUi.typeFilter = next;
+          updateFavoritesList();
+        });
       }
     } catch {}
   } catch {}
