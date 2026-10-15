@@ -459,6 +459,31 @@ test('Audio cache routes context preloads through one deduplicated flow', async 
   assert.deepEqual(priorities, [true, false, false]);
 });
 
+test('Audio cache deduplicates concurrent requests for the same URL', async () => {
+  const fetches = [];
+  const { context } = await createSandbox({
+    fetch: async url => {
+      fetches.push(url);
+      return new Response('audio-bytes', { headers: { 'Content-Type': 'audio/mpeg' } });
+    }
+  });
+  await evaluateScript(context, 'js/cache.js');
+
+  const cache = context.audioCache;
+  cache.isInitialized = true;
+  cache.cache = { match: async () => null };
+  cache.put = async () => {};
+
+  const url = 'https://archive.org/download/item/track.mp3';
+  const [first, second] = await Promise.all([
+    cache.get(url, true),
+    cache.get(url, true)
+  ]);
+
+  assert.equal(fetches.length, 1);
+  assert.equal(first?.blob?.size, second?.blob?.size);
+});
+
 test('Service worker does not intercept Archive.org audio streaming requests', async () => {
   const listeners = new Map();
   const serviceWorkerConsole = {

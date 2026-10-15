@@ -328,6 +328,8 @@ class AudioCache {
     this.maxCacheSize = this.loadPersistedMaxCacheSize() ?? CACHE_CONSTANTS.AUDIO_CACHE.DEFAULT_MAX_BYTES;
     this.isInitialized = false;
     this.preloadStates = new Map();
+    this.pendingAudioRequests = new Map();
+    this.pendingPrefetches = new Map();
     this.lastLimitPromptAt = 0;
     this.limitPromptCooldownMs = CACHE_CONSTANTS.AUDIO_CACHE.LIMIT_PROMPT_COOLDOWN_MS;
     this.networkProfile = getNetworkProfile();
@@ -471,60 +473,75 @@ class AudioCache {
   }
 
   async get(url, isPlayback = false) {
+    const normalizedUrl = String(url || '').trim();
+    if (!normalizedUrl) return null;
     if (!this.isInitialized) await this.init();
 
-    try {
-      // Try Cache API first (fastest path)
-      const cachedResponse = await this.cache.match(url);
-      if (cachedResponse) {
-        // Update access time in IndexedDB
-        await this.updateMetadata(url, { lastAccessed: nowMs() });
-        // Convert Response to blob for playback compatibility
-        const blob = await cachedResponse.blob();
-        if (!blob || !blob.size) {
-          logCache('warn', `Cached audio empty, removing: ${url}`);
-          try { await this.remove(url); } catch {}
-          return null;
-        }
-        // Verificar integridad si existe hash
-        try {
-          const meta = await this.getMetadata(url);
-          if (meta && meta.hash) {
-            const actualHash = await this.computeBlobHash(blob);
-            if (!actualHash) {
-              logCache('warn', `Integridad omitida para ${url}: hash no disponible`);
-            } else if (actualHash !== meta.hash) {
-              logCache('error', `Integridad fallida para ${url}: esperado ${meta.hash}, obtenido ${actualHash}`);
-              if (typeof window.showStatus === 'function') {
-                window.showStatus('Corrupted audio detected and removed: ' + url, 'error', 8000, 'error');
-              } else {
-                alert('Corrupted audio detected and removed: ' + url);
-              }
-              // Eliminar archivo corrupto
-              await this.remove(url);
-              return null;
-            }
-          }
-        } catch (err) {
-          logCache('warn', `Error verificando integridad de ${url}: ${err}`);
-        }
-        return { blob, fromCache: true };
-      }
+    if (this.pendingAudioRequests.has(normalizedUrl)) {
+      return this.pendingAudioRequests.get(normalizedUrl);
+    }
 
-      // Fallback to fetch: playback gets priority, prefetch waits
-      const queueFn = isPlayback ? 'enqueuePlayback' : 'enqueuePrefetch';
-      const response = await audioFetchQueue[queueFn](() => fetch(url));
-      if (response && response.ok) {
-        // Cache in background for future use
-        this.put(url, response.clone());
-        // Return blob for immediate playback
-        const blob = await response.blob();
-        return { blob, fromCache: false };
+    const request = (async () => {
+      try {
+        // Try Cache API first (fastest path)
+        const cachedResponse = await this.cache.match(normalizedUrl);
+        if (cachedResponse) {
+          // Update access time in IndexedDB
+          await this.updateMetadata(normalizedUrl, { lastAccessed: nowMs() });
+          // Convert Response to blob for playback compatibility
+          const blob = await cachedResponse.blob();
+          if (!blob || !blob.size) {
+            logCache('warn', `Cached audio empty, removing: ${normalizedUrl}`);
+            try { await this.remove(normalizedUrl); } catch {}
+            return null;
+          }
+          // Verificar integridad si existe hash
+          try {
+            const meta = await this.getMetadata(normalizedUrl);
+            if (meta && meta.hash) {
+              const actualHash = await this.computeBlobHash(blob);
+              if (!actualHash) {
+                logCache('warn', `Integridad omitida para ${normalizedUrl}: hash no disponible`);
+              } else if (actualHash !== meta.hash) {
+                logCache('error', `Integridad fallida para ${normalizedUrl}: esperado ${meta.hash}, obtenido ${actualHash}`);
+                if (typeof window.showStatus === 'function') {
+                  window.showStatus('Corrupted audio detected and removed: ' + normalizedUrl, 'error', 8000, 'error');
+                } else {
+                  alert('Corrupted audio detected and removed: ' + normalizedUrl);
+                }
+                // Eliminar archivo corrupto
+                await this.remove(normalizedUrl);
+                return null;
+              }
+            }
+          } catch (err) {
+            logCache('warn', `Error verificando integridad de ${normalizedUrl}: ${err}`);
+          }
+          return { blob, fromCache: true };
+        }
+
+        // Fallback to fetch: playback gets priority, prefetch waits
+        const queueFn = isPlayback ? 'enqueuePlayback' : 'enqueuePrefetch';
+        const response = await audioFetchQueue[queueFn](() => fetch(normalizedUrl));
+        if (response && response.ok) {
+          // Cache in background for future use
+          this.put(normalizedUrl, response.clone());
+          // Return blob for immediate playback
+          const blob = await response.blob();
+          return { blob, fromCache: false };
+        }
+        return null;
+      } catch (error) {
+        logCache('warn', `Failed to get cached audio: ${error.message}`);
+        return null;
       }
-      return null;
-    } catch (error) {
-      logCache('warn', `Failed to get cached audio: ${error.message}`);
-      return null;
+    })();
+
+    this.pendingAudioRequests.set(normalizedUrl, request);
+    try {
+      return await request;
+    } finally {
+      this.pendingAudioRequests.delete(normalizedUrl);
     }
   }
 
@@ -616,6 +633,10 @@ class AudioCache {
       logCache('warn', 'Skipping prefetch: invalid or undefined url');
       return;
     }
+    const normalizedUrl = String(url).trim();
+    if (this.pendingPrefetches.has(normalizedUrl)) {
+      return this.pendingPrefetches.get(normalizedUrl);
+    }
     if (!this.isInitialized) await this.init();
 
     const opts = (options && typeof options === 'object') ? options : { priority: !!options };
@@ -623,46 +644,55 @@ class AudioCache {
     const context = (opts.context && typeof opts.context === 'string') ? opts.context : null;
     const extraMeta = (opts.metadata && typeof opts.metadata === 'object') ? opts.metadata : {};
 
-    try {
-      const shouldFetch = await this.shouldPrefetch(priority);
-      if (!shouldFetch) {
-        logCache('info', `Skipping prefetch due to network or quota limits: ${url}`);
-        if (priority) {
-          this.scheduleSilentPrefetchRetry(() => this.prefetchAudio(url, opts), this.lastPrefetchBlockReason);
-        }
-        return;
-      }
-
-      await audioFetchQueue.enqueuePrefetch(async () => {
-        const existing = await this.cache.match(url);
-        if (existing) {
-          logCache('debug', `Audio already cached: ${url}`);
-          return; // Already cached
-        }
-
-        if (opts.streamingOnly && isArchiveAudioUrl(url)) {
-          logCache('debug', `Skipping speculative Archive.org audio download; stream on demand: ${url}`);
+    const request = (async () => {
+      try {
+        const shouldFetch = await this.shouldPrefetch(priority);
+        if (!shouldFetch) {
+          logCache('info', `Skipping prefetch due to network or quota limits: ${normalizedUrl}`);
+          if (priority) {
+            this.scheduleSilentPrefetchRetry(() => this.prefetchAudio(normalizedUrl, opts), this.lastPrefetchBlockReason);
+          }
           return;
         }
 
-        logCache('info', `Pre-fetching audio: ${url}`);
-        let isCrossOrigin = false;
-        try {
-          const targetUrl = new URL(url, window.location.href);
-          isCrossOrigin = targetUrl.origin !== window.location.origin;
-        } catch {}
+        await audioFetchQueue.enqueuePrefetch(async () => {
+          const existing = await this.cache.match(normalizedUrl);
+          if (existing) {
+            logCache('debug', `Audio already cached: ${normalizedUrl}`);
+            return; // Already cached
+          }
 
-        const response = await fetch(url, isCrossOrigin ? { mode: 'cors', credentials: 'omit' } : undefined);
-        if (response && response.ok) {
-          await this.put(url, response, priority, { ...extraMeta, context: context || extraMeta.context });
-        } else {
-          throw new Error(`Failed to fetch audio: ${response.status} ${response.statusText}`);
-        }
-      });
-    } catch (error) {
-      logCache('warn', `Failed to prefetch audio: ${error.message}`);
-      await this.recordFailedDownload(url, { lastError: error.message, isFavorite: priority, context });
-      this.scheduleBackgroundRetry();
+          if (opts.streamingOnly && isArchiveAudioUrl(normalizedUrl)) {
+            logCache('debug', `Skipping speculative Archive.org audio download; stream on demand: ${normalizedUrl}`);
+            return;
+          }
+
+          logCache('info', `Pre-fetching audio: ${normalizedUrl}`);
+          let isCrossOrigin = false;
+          try {
+            const targetUrl = new URL(normalizedUrl, window.location.href);
+            isCrossOrigin = targetUrl.origin !== window.location.origin;
+          } catch {}
+
+          const response = await fetch(normalizedUrl, isCrossOrigin ? { mode: 'cors', credentials: 'omit' } : undefined);
+          if (response && response.ok) {
+            await this.put(normalizedUrl, response, priority, { ...extraMeta, context: context || extraMeta.context });
+          } else {
+            throw new Error(`Failed to fetch audio: ${response.status} ${response.statusText}`);
+          }
+        });
+      } catch (error) {
+        logCache('warn', `Failed to prefetch audio: ${error.message}`);
+        await this.recordFailedDownload(normalizedUrl, { lastError: error.message, isFavorite: priority, context });
+        this.scheduleBackgroundRetry();
+      }
+    })();
+
+    this.pendingPrefetches.set(normalizedUrl, request);
+    try {
+      return await request;
+    } finally {
+      this.pendingPrefetches.delete(normalizedUrl);
     }
   }
 
