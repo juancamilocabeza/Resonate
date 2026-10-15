@@ -28,7 +28,6 @@
   let themeToggleEl = null;
   let autoThemeIntervalId = null;
   let autoThemeVisibilityListenerAdded = false;
-  let systemPreferenceListenerAdded = false;
 
   function isValidTheme(theme) {
     return typeof theme === 'string' && Object.prototype.hasOwnProperty.call(THEMES, theme);
@@ -214,27 +213,6 @@
     }
   }
 
-  function detectSystemPreference() {
-    if (!window.matchMedia) return;
-
-    const darkMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    if (!hasUserThemePreference()) {
-      applyTheme(darkMediaQuery.matches ? 'night' : 'day');
-    }
-    if (systemPreferenceListenerAdded) return;
-
-    systemPreferenceListenerAdded = true;
-    const onPreferenceChange = event => {
-      if (!hasUserThemePreference()) applyTheme(event.matches ? 'night' : 'day');
-    };
-
-    if (darkMediaQuery.addEventListener) {
-      darkMediaQuery.addEventListener('change', onPreferenceChange);
-    } else if (darkMediaQuery.addListener) {
-      darkMediaQuery.addListener(onPreferenceChange);
-    }
-  }
-
   function initThemeManager() {
     themeToggleEl = document.getElementById('theme-toggle');
     const initialTheme = getSavedTheme() ?? getThemeByTime();
@@ -242,15 +220,8 @@
 
     if (themeToggleEl) {
       themeToggleEl.addEventListener('click', cycleTheme);
-      themeToggleEl.addEventListener('keydown', function(event) {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          cycleTheme();
-        }
-      });
     }
 
-    detectSystemPreference();
     initTimeBasedTheme();
   }
 
