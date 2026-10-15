@@ -855,7 +855,7 @@ test('Playlist import sanitizes items and drops duplicate or invalid URLs', asyn
   await assert.rejects(context.PlaylistManager.importFromGrayjay(null), /No file provided/);
 });
 
-test('Theme cycling follows Day, Night, Eco and persists each user choice', async () => {
+test('Theme cycling follows Day, Night, Eco during daytime and persists each user choice', async () => {
   const root = createMockElement();
   const themeToggle = createMockElement('BUTTON');
   const metaTheme = createMockElement('META');
@@ -871,21 +871,31 @@ test('Theme cycling follows Day, Night, Eco and persists each user choice', asyn
   root.ownerDocument = document;
   themeToggle.ownerDocument = document;
   metaTheme.ownerDocument = document;
+  class MiddayDate extends Date {
+    constructor(...args) {
+      super(...(args.length ? args : [2026, 5, 1, 12]));
+    }
+  }
   const { context, localStorage } = await createSandbox({
     document,
+    Date: MiddayDate,
     getComputedStyle: () => ({ getPropertyValue: () => '' }),
     matchMedia: () => ({ matches: true, addEventListener() {} })
   });
   await evaluateScript(context, 'js/theme.js');
   document.dispatchEvent({ type: 'DOMContentLoaded' });
 
-  assert.equal(context.ThemeManager.getCurrentTheme(), 'night');
+  assert.equal(context.ThemeManager.getCurrentTheme(), 'day');
+  assert.equal(root.getAttribute('data-theme'), 'day');
+  themeToggle.dispatchEvent({ type: 'click' });
+  assert.equal(root.getAttribute('data-theme'), 'night');
+  assert.equal(localStorage.getItem('resonate-theme'), 'night');
+  themeToggle.dispatchEvent({ type: 'keydown', key: 'Enter' });
+  assert.equal(root.getAttribute('data-theme'), 'night');
   themeToggle.dispatchEvent({ type: 'click' });
   assert.equal(root.getAttribute('data-theme'), 'energy-saver');
   assert.equal(localStorage.getItem('resonate-theme'), 'energy-saver');
-  themeToggle.dispatchEvent({ type: 'keydown', key: 'Enter' });
-  assert.equal(root.getAttribute('data-theme'), 'day');
-  assert.equal(themeToggle.dataset.theme, 'day');
+  assert.equal(themeToggle.dataset.theme, 'energy-saver');
 });
 
 test('Theme manager stays usable without a toggle and cycles from the active theme', async () => {
