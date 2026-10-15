@@ -195,6 +195,49 @@ async function evaluateSearchScripts(context) {
   await evaluateScript(context, 'js/search.js');
 }
 
+test('Offline favorites preloading is opt-in and saved preferences are preserved', async () => {
+  const uiSource = await readFile(new URL('js/ui.js', projectRoot), 'utf8');
+  assert.match(uiSource, /favoritesPreloadEnabled:\s*false/);
+  assert.match(uiSource, /resontesPreloadEnabled:\s*false/);
+
+  for (const preference of [
+    {
+      name: 'loadFavoritesPreloadPreference',
+      stateKey: 'favoritesPreloadEnabled',
+      storageKey: 'resonate_preload_favorites_enabled',
+      toggleKey: 'preloadFavoritesToggle'
+    },
+    {
+      name: 'loadResontesPreloadPreference',
+      stateKey: 'resontesPreloadEnabled',
+      storageKey: 'resonate_preload_resontes_enabled',
+      toggleKey: 'preloadResontesToggle'
+    }
+  ]) {
+    const preferenceSource = uiSource.match(
+      new RegExp(`function ${preference.name}\\(\\) \\{[\\s\\S]*?\\n\\}`)
+    );
+    assert.ok(preferenceSource, `${preference.name} should exist`);
+
+    for (const [savedValue, expected] of [[null, false], ['true', true], ['false', false]]) {
+      const toggle = { checked: null };
+      const context = {
+        state: { [preference.stateKey]: true },
+        localStorage: { getItem: key => key === preference.storageKey ? savedValue : null },
+        elements: { [preference.toggleKey]: toggle },
+        window: { logger: { warn() {} } }
+      };
+      vm.runInNewContext(
+        `${preferenceSource[0]}; ${preference.name}();`,
+        context
+      );
+
+      assert.equal(context.state[preference.stateKey], expected);
+      assert.equal(toggle.checked, expected);
+    }
+  }
+});
+
 test('Production logger silences invalid and NONE levels while INFO filters debug traces', async () => {
   for (const search of ['?log=NONE', '?log=unexpected']) {
     const output = [];

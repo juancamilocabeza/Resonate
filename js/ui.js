@@ -2337,8 +2337,8 @@ const state = {
   playbackHistory: [],
   playbackQueue: [],
   playbackForward: [],
-  favoritesPreloadEnabled: true,
-  resontesPreloadEnabled: true,
+  favoritesPreloadEnabled: false,
+  resontesPreloadEnabled: false,
   contextReloadCount: {},
   contextRepeatCount: {},
 
@@ -2418,12 +2418,12 @@ function loadFavoritesPreloadPreference() {
   try {
     const saved = localStorage.getItem('resonate_preload_favorites_enabled');
     if (saved === null) {
-      state.favoritesPreloadEnabled = true;
+      state.favoritesPreloadEnabled = false;
     } else {
       state.favoritesPreloadEnabled = saved === 'true';
     }
   } catch (e) {
-    state.favoritesPreloadEnabled = true;
+    state.favoritesPreloadEnabled = false;
     window.logger?.warn(`Could not load favorites preload preference: ${e.message}`, 'UI');
   }
 
@@ -2437,12 +2437,12 @@ function loadResontesPreloadPreference() {
   try {
     const saved = localStorage.getItem('resonate_preload_resontes_enabled');
     if (saved === null) {
-      state.resontesPreloadEnabled = true;
+      state.resontesPreloadEnabled = false;
     } else {
       state.resontesPreloadEnabled = saved === 'true';
     }
   } catch (e) {
-    state.resontesPreloadEnabled = true;
+    state.resontesPreloadEnabled = false;
     window.logger?.warn(`Could not load resontes preload preference: ${e.message}`, 'UI');
   }
 
