@@ -1242,6 +1242,101 @@ test('Bottom sheet closes when the user activates the overlay', async () => {
   assert.equal(trigger.getAttribute('aria-expanded'), 'false');
 });
 
+test('Cast controls synchronize the playback queue and load the current track', async () => {
+  const button = createMockElement('BUTTON');
+  const audio = Object.assign(createEventTarget(), {
+    currentSrc: 'https://archive.org/audio.mp3',
+    currentTime: 18,
+    duration: 120
+  });
+  const contextData = {
+    album: {
+      items: [{ url: 'https://archive.org/audio.mp3' }, { url: 'https://archive.org/next.mp3' }],
+      currentIndex: 0
+    }
+  };
+  const track = {
+    url: 'https://archive.org/audio.mp3',
+    title: 'Current track',
+    trackIndex: 0
+  };
+  const calls = [];
+  const document = Object.assign(createEventTarget(), {
+    getElementById: id => id === 'current-track-cast' ? button : id === 'audio' ? audio : null
+  });
+  const { context } = await createSandbox({
+    document,
+    elements: { audio, currentTrackCast: button },
+    state: { currentTrack: track },
+    playbackManager: {
+      getCurrentContext: () => 'album',
+      contextData
+    },
+    loadPlaybackQueue: (...args) => calls.push(['queue', ...args]),
+    getCastCapabilities: () => ({ canRemotePlayback: false, canAirPlay: false }),
+    CastManager: {
+      ensureReady: async () => true,
+      requestSession: async () => calls.push(['session']),
+      loadMediaFromTrack: async (...args) => calls.push(['load', ...args])
+    },
+    showStatus: message => calls.push(['status', message]),
+    logger: { info() {}, warn() {} }
+  });
+  await evaluateScript(context, 'js/cast-controls.js');
+
+  button.dispatchEvent({ type: 'click' });
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.equal(contextData.album.currentIndex, 0);
+  assert.deepEqual(calls[0], ['queue', 'album', contextData.album.items, 1]);
+  assert.deepEqual(calls[1], ['session']);
+  assert.equal(calls[2][0], 'load');
+  assert.equal(calls[2][1], track);
+  assert.equal(calls[2][2], audio.currentSrc);
+  assert.equal(calls[2][3], audio.currentTime);
+  assert.equal(calls[2][4], audio.duration);
+  assert.equal(calls[2][5].force, true);
+  assert.deepEqual(calls[3], ['status', 'Casting to device']);
+});
+
+test('Cast controls use native remote playback when the Cast sender is unavailable', async () => {
+  const button = createMockElement('BUTTON');
+  const calls = [];
+  const audio = Object.assign(createEventTarget(), {
+    currentSrc: 'https://archive.org/audio.mp3',
+    remote: {
+      watchAvailability(callback) {
+        callback(true);
+      },
+      async prompt() {
+        calls.push('remote-prompt');
+      }
+    }
+  });
+  const document = Object.assign(createEventTarget(), {
+    getElementById: id => id === 'current-track-cast' ? button : id === 'audio' ? audio : null
+  });
+  const { context } = await createSandbox({
+    document,
+    elements: { audio, currentTrackCast: button },
+    location: {
+      href: 'https://resonate.test/',
+      hostname: 'resonate.test',
+      protocol: 'https:',
+      search: ''
+    },
+    getCastCapabilities: () => ({ canRemotePlayback: true, canAirPlay: false }),
+    showStatus: message => calls.push(message),
+    logger: { info() {}, warn() {} }
+  });
+  await evaluateScript(context, 'js/cast-controls.js');
+
+  button.dispatchEvent({ type: 'click' });
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.deepEqual(calls, ['remote-prompt', 'Choose a device to cast']);
+});
+
 async function runTests() {
   let failures = 0;
   for (const { name, run } of testCases) {
