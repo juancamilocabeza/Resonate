@@ -964,6 +964,4 @@
     skipBy: skipBy,
     loadMediaFromTrack: loadMediaFromTrack
   };
-
-  preloadCastFrameworkScript();
 })();
