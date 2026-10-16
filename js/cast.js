@@ -17,6 +17,115 @@
   var lastRemoteContentId = '';
   var lastMediaSessionId = '';
   var castPlaybackMonitorId = null;
+  var remotePlayerListeners = [];
+  var castContextListeners = [];
+  var mediaSessionUpdateListener = null;
+  var observedMediaSession = null;
+  var localAudioListeners = [];
+  var suppressLocalAudioSync = false;
+  var hadActiveCastSession = false;
+  var fallbackInProgress = false;
+  var lastLocalSeekAt = 0;
+  var lastLocalSeekPosition = -1;
+  var pendingMuteState = null;
+  var requestTimeoutMs = 30000;
+
+  function addTrackedListener(target, type, listener, collection) {
+    if (!target || typeof target.addEventListener !== 'function') return;
+    target.addEventListener(type, listener);
+    collection.push({ target: target, type: type, listener: listener });
+  }
+
+  function destroyCastManager() {
+    detachSessionListeners();
+    removeTrackedListeners(remotePlayerListeners);
+    removeTrackedListeners(castContextListeners);
+    removeTrackedListeners(localAudioListeners);
+    remotePlayer = null;
+    remoteController = null;
+    hadActiveCastSession = false;
+    castReady = false;
+    castInitAttempted = false;
+    fallbackInProgress = false;
+    try {
+      var button = (window.elements && window.elements.currentTrackCast)
+        || document.getElementById('current-track-cast');
+      if (button) {
+        button.removeAttribute('data-cast-state');
+        button.removeAttribute('aria-pressed');
+      }
+    } catch (error) {
+      logCastError('Could not reset Cast button state during cleanup', error);
+    }
+  }
+
+  class CastManager {
+    isReady() { return castReady; }
+    getInitError() { return castInitError; }
+    getCastState() { return getCastState(); }
+    getCastButtonState() {
+      var button = (window.elements && window.elements.currentTrackCast)
+        || document.getElementById('current-track-cast');
+      return button && button.dataset ? button.dataset.castState || 'NOT_CONNECTED' : 'NOT_CONNECTED';
+    }
+    getRemotePositionState() { return getRemotePositionState(); }
+    init() { return initCastFramework(); }
+    ensureReady() { return ensureCastFrameworkReady(); }
+    requestSession() { return requestSession(); }
+    isSessionActive() { return isSessionActive(); }
+    disconnect() { return disconnect(); }
+    togglePlayback() { return togglePlayback(); }
+    play() { return play(); }
+    pause() { return pause(); }
+    seekTo(seconds) { return seekTo(seconds); }
+    skipBy(deltaSeconds) { return skipBy(deltaSeconds); }
+    setVolume(volume, muted) { return setVolume(volume, muted); }
+    loadMediaFromTrack(track, audioUrl, currentTime, duration, options) {
+      return loadMediaFromTrack(track, audioUrl, currentTime, duration, options);
+    }
+    destroy() { return destroyCastManager(); }
+  }
+
+  function removeTrackedListeners(collection) {
+    while (collection.length) {
+      var binding = collection.pop();
+      try {
+        if (binding.target && typeof binding.target.removeEventListener === 'function') {
+          binding.target.removeEventListener(binding.type, binding.listener);
+        }
+      } catch (error) {
+        logCastError('Could not remove a Cast event listener', error);
+      }
+    }
+  }
+
+  function logCastError(message, error) {
+    try {
+      if (window.logger && typeof window.logger.warn === 'function') {
+        window.logger.warn({ message: message, error: error }, 'CAST');
+      } else if (window.console && typeof window.console.warn === 'function') {
+        window.console.warn(message, error);
+      }
+    } catch (loggingError) {
+      if (window.console && typeof window.console.warn === 'function') {
+        window.console.warn(message, error, loggingError);
+      }
+    }
+  }
+
+  function withTimeout(promise, operation) {
+    var timer;
+    return Promise.race([
+      Promise.resolve(promise),
+      new Promise(function (_resolve, reject) {
+        timer = window.setTimeout(function () {
+          reject(new Error(operation + ' timed out'));
+        }, requestTimeoutMs);
+      })
+    ]).finally(function () {
+      if (timer) window.clearTimeout(timer);
+    });
+  }
 
   function getDefaultCastAppId() {
     try {
@@ -191,6 +300,7 @@
 
   function refreshCastButtonState() {
     try {
+      updateCastButtonState();
       if (typeof window.applyCastButtonState === 'function') {
         window.applyCastButtonState(document.getElementById('current-track-cast'));
       }
@@ -270,9 +380,14 @@
     try {
       var audio = getAudioElement();
       if (audio && !audio.paused) {
+        suppressLocalAudioSync = true;
         audio.pause();
+        suppressLocalAudioSync = false;
       }
-    } catch (e) {}
+    } catch (error) {
+      suppressLocalAudioSync = false;
+      logCastError('Could not pause local audio while casting', error);
+    }
   }
 
   function maybeShowCastingHint(sessionId) {
@@ -282,32 +397,262 @@
     } catch (e) {}
   }
 
+  function getCurrentRemotePosition() {
+    var position = remotePlayer ? Number(remotePlayer.currentTime) : NaN;
+    if (!isFinite(position) || position < 0) {
+      var audio = getAudioElement();
+      position = audio ? Number(audio.currentTime) : 0;
+    }
+    return isFinite(position) && position >= 0 ? position : 0;
+  }
+
+  function restoreLocalPlayback() {
+    if (!hadActiveCastSession || fallbackInProgress) return;
+    fallbackInProgress = true;
+
+    // Capture the receiver position before ending the session and resume HTML5 audio at that point.
+    var audio = getAudioElement();
+    var track = window.state && window.state.currentTrack ? window.state.currentTrack : null;
+    var mediaInfo = remotePlayer && remotePlayer.mediaInfo;
+    var fallbackTrack = mediaInfo ? buildFallbackTrackFromMediaInfo(mediaInfo, track) : null;
+    if (fallbackTrack && fallbackTrack.track) {
+      track = Object.assign({}, track || {}, fallbackTrack.track);
+      if (window.state) window.state.currentTrack = track;
+      updateLocalNowPlaying(track, fallbackTrack.identifier);
+    }
+
+    var source = track && track.url
+      ? String(track.url)
+      : mediaInfo && mediaInfo.contentId
+        ? String(mediaInfo.contentId)
+        : '';
+    var position = getCurrentRemotePosition();
+    var shouldPlay = !!(remotePlayer && !remotePlayer.isPaused);
+
+    hadActiveCastSession = false;
+    if (!audio || !source) {
+      fallbackInProgress = false;
+      updateLocalTransportState();
+      return;
+    }
+
+    var normalizedSource = normalizeContentId(source);
+    var currentSource = normalizeContentId(audio.currentSrc || audio.src || '');
+    var sourceChanged = !currentSource || currentSource !== normalizedSource;
+    var restorePosition = function () {
+      suppressLocalAudioSync = true;
+      try {
+        if (isFinite(Number(audio.duration)) && Number(audio.duration) > 0) {
+          audio.currentTime = Math.min(position, Number(audio.duration));
+        } else {
+          audio.currentTime = position;
+        }
+      } catch (error) {
+        logCastError('Could not restore local playback position', error);
+      }
+      suppressLocalAudioSync = false;
+      updateLocalTransportState();
+
+      if (shouldPlay) {
+        var playResult;
+        try {
+          playResult = audio.play();
+        } catch (error) {
+          fallbackInProgress = false;
+          logCastError('Could not resume local playback after Cast ended', error);
+          return;
+        }
+        if (playResult && typeof playResult.then === 'function') {
+          Promise.resolve(playResult).then(function () {
+            fallbackInProgress = false;
+          }).catch(function (error) {
+            fallbackInProgress = false;
+            logCastError('Could not resume local playback after Cast ended', error);
+          });
+        } else {
+          fallbackInProgress = false;
+        }
+      } else {
+        fallbackInProgress = false;
+      }
+    };
+
+    if (sourceChanged) {
+      var metadataTimer = null;
+      var metadataSettled = false;
+      var cleanupMetadataWait = function () {
+        metadataSettled = true;
+        audio.removeEventListener('loadedmetadata', onMetadata);
+        audio.removeEventListener('error', onAudioError);
+        if (metadataTimer) window.clearTimeout(metadataTimer);
+      };
+      var onMetadata = function () {
+        cleanupMetadataWait();
+        restorePosition();
+      };
+      var onAudioError = function () {
+        cleanupMetadataWait();
+        fallbackInProgress = false;
+        logCastError('Local audio failed to load after Cast ended', audio.error || new Error('Unknown audio error'));
+      };
+      audio.addEventListener('loadedmetadata', onMetadata, { once: true });
+      audio.addEventListener('error', onAudioError, { once: true });
+      audio.src = source;
+      try {
+        audio.load();
+        if (!metadataSettled) {
+          metadataTimer = window.setTimeout(function () {
+            cleanupMetadataWait();
+            fallbackInProgress = false;
+            logCastError('Local audio did not become ready after Cast ended', new Error('Audio metadata load timed out'));
+          }, requestTimeoutMs);
+        }
+      } catch (error) {
+        cleanupMetadataWait();
+        fallbackInProgress = false;
+        logCastError('Could not reload local audio after Cast ended', error);
+      }
+    } else {
+      restorePosition();
+    }
+  }
+
+  function applyRemoteVolumeToLocal() {
+    if (!remotePlayer || !remotePlayer.isConnected) return;
+    var audio = getAudioElement();
+    if (!audio) return;
+    var volume = Number(remotePlayer.volumeLevel);
+    var muted = !!remotePlayer.isMuted;
+    if (!isFinite(volume)) return;
+
+    suppressLocalAudioSync = true;
+    try {
+      audio.volume = Math.max(0, Math.min(1, volume));
+      audio.muted = muted;
+      pendingMuteState = null;
+      if (window.state) window.state.currentVolume = audio.volume;
+      var slider = window.elements && window.elements.volumeSlider;
+      if (slider) slider.value = String(audio.volume);
+      if (typeof window.saveVolume === 'function') window.saveVolume(audio.volume);
+      if (typeof window.saveMutedState === 'function') window.saveMutedState(muted);
+      if (typeof window.updateVolumeIcon === 'function') window.updateVolumeIcon();
+    } catch (error) {
+      logCastError('Could not synchronize remote volume with the local player', error);
+    } finally {
+      suppressLocalAudioSync = false;
+    }
+  }
+
+  function syncVolumeToRemote() {
+    if (!remotePlayer || !remotePlayer.isConnected || !remoteController) return;
+    var audio = getAudioElement();
+    if (!audio) return;
+    try {
+      var volume = Math.max(0, Math.min(1, Number(audio.volume)));
+      if (isFinite(volume) && volume !== Number(remotePlayer.volumeLevel)) {
+        remotePlayer.volumeLevel = volume;
+        remoteController.setVolumeLevel();
+      }
+      if (!!audio.muted !== !!remotePlayer.isMuted && pendingMuteState !== !!audio.muted) {
+        pendingMuteState = !!audio.muted;
+        remoteController.muteOrUnmute();
+      }
+    } catch (error) {
+      logCastError('Could not synchronize local volume with Cast', error);
+    }
+  }
+
+  function handleLocalAudioEvent(type) {
+    if (suppressLocalAudioSync || fallbackInProgress || !remotePlayer
+      || !remotePlayer.isConnected || !isSessionActive()) return;
+    try {
+      if (type === 'play') {
+        play();
+        enforceLocalPause();
+      } else if (type === 'pause') {
+        pause();
+      } else if (type === 'seeked') {
+        var audio = getAudioElement();
+        if (!audio) return;
+        var now = Date.now();
+        var position = Number(audio.currentTime);
+        if (now - lastLocalSeekAt < 300 && Math.abs(position - lastLocalSeekPosition) < 0.5) return;
+        lastLocalSeekAt = now;
+        lastLocalSeekPosition = position;
+        seekTo(position);
+      } else if (type === 'volumechange') {
+        syncVolumeToRemote();
+      }
+    } catch (error) {
+      logCastError('Could not synchronize local ' + type + ' event with Cast', error);
+    }
+  }
+
+  function attachLocalAudioListeners() {
+    var audio = getAudioElement();
+    if (!audio || localAudioListeners.length) return;
+    ['play', 'pause', 'seeked', 'volumechange'].forEach(function (type) {
+      var listener = function () { handleLocalAudioEvent(type); };
+      addTrackedListener(audio, type, listener, localAudioListeners);
+    });
+  }
+
+  function detachMediaSessionListener() {
+    if (!observedMediaSession || !mediaSessionUpdateListener) return;
+    try {
+      if (typeof observedMediaSession.removeUpdateListener === 'function') {
+        observedMediaSession.removeUpdateListener(mediaSessionUpdateListener);
+      }
+    } catch (error) {
+      logCastError('Could not remove Cast media-session listener', error);
+    }
+    observedMediaSession = null;
+    mediaSessionUpdateListener = null;
+    lastMediaSessionId = '';
+  }
+
+  function detachSessionListeners() {
+    detachMediaSessionListener();
+    stopCastPlaybackMonitor();
+  }
+
   function ensureRemotePlayer() {
     if (!isCastFrameworkReady()) return;
-    if (remotePlayer && remoteController) return;
+    if (remotePlayer && remoteController) {
+      attachLocalAudioListeners();
+      return;
+    }
 
     try {
       remotePlayer = new window.cast.framework.RemotePlayer();
+      // A single controller instance serves the lifetime of the app; detach its listeners on destroy.
       remoteController = new window.cast.framework.RemotePlayerController(remotePlayer);
 
-      remoteController.addEventListener(window.cast.framework.RemotePlayerEventType.IS_CONNECTED_CHANGED, function () {
+      addTrackedListener(remoteController, window.cast.framework.RemotePlayerEventType.IS_CONNECTED_CHANGED, function () {
         try {
           var connected = !!remotePlayer.isConnected;
           if (connected) {
+            hadActiveCastSession = true;
             enforceLocalPause();
             var context = getCastContext();
             var session = context ? context.getCurrentSession() : null;
             var sessionId = session && session.getSessionId ? String(session.getSessionId()) : '';
             maybeShowCastingHint(sessionId);
             startCastPlaybackMonitor();
+            if (remotePlayer.mediaInfo) applyRemoteVolumeToLocal();
+            else syncVolumeToRemote();
           } else {
             stopCastPlaybackMonitor();
+            restoreLocalPlayback();
           }
+          refreshCastButtonState();
           updateLocalTransportState();
-        } catch (e) {}
-      });
+        } catch (error) {
+          logCastError('Could not synchronize Cast connection state', error);
+        }
+      }, remotePlayerListeners);
 
-      remoteController.addEventListener(window.cast.framework.RemotePlayerEventType.PLAYER_STATE_CHANGED, function () {
+      addTrackedListener(remoteController, window.cast.framework.RemotePlayerEventType.PLAYER_STATE_CHANGED, function () {
         try {
           if (remotePlayer && !remotePlayer.isPaused) {
             enforceLocalPause();
@@ -315,10 +660,12 @@
           updateLocalTransportState();
           maybeAdvanceOnRemoteEnd();
           maybeAdvanceNearRemoteEnd();
-        } catch (e) {}
-      });
+        } catch (error) {
+          logCastError('Could not synchronize remote playback state', error);
+        }
+      }, remotePlayerListeners);
 
-      remoteController.addEventListener(window.cast.framework.RemotePlayerEventType.MEDIA_INFO_CHANGED, function () {
+      addTrackedListener(remoteController, window.cast.framework.RemotePlayerEventType.MEDIA_INFO_CHANGED, function () {
         try {
           if (remotePlayer && remotePlayer.mediaInfo) {
             enforceLocalPause();
@@ -332,22 +679,38 @@
             var session = context ? context.getCurrentSession() : null;
             attachMediaSessionListeners(session);
           } catch (e) {}
-        } catch (e) {}
-      });
+        } catch (error) {
+          logCastError('Could not synchronize remote media information', error);
+        }
+      }, remotePlayerListeners);
 
-      remoteController.addEventListener(window.cast.framework.RemotePlayerEventType.CURRENT_TIME_CHANGED, function () {
+      addTrackedListener(remoteController, window.cast.framework.RemotePlayerEventType.CURRENT_TIME_CHANGED, function () {
         try {
+          syncRemoteProgressToLocalUi();
           if (typeof window.updateMediaPositionState === 'function') {
             window.updateMediaPositionState();
           }
-        } catch (e) {}
+        } catch (error) {
+          logCastError('Could not synchronize remote playback position', error);
+        }
+      }, remotePlayerListeners);
+
+      [
+        window.cast.framework.RemotePlayerEventType.VOLUME_LEVEL_CHANGED,
+        window.cast.framework.RemotePlayerEventType.IS_MUTED_CHANGED
+      ].forEach(function (eventType) {
+        if (!eventType) return;
+        addTrackedListener(remoteController, eventType, applyRemoteVolumeToLocal, remotePlayerListeners);
       });
-    } catch (e) {}
+      attachLocalAudioListeners();
+    } catch (error) {
+      logCastError('Could not initialize the Cast remote player', error);
+    }
   }
 
   function getRemotePositionState() {
     try {
-      if (!remotePlayer || !remotePlayer.isConnected) return null;
+      if (!remotePlayer || !remotePlayer.isConnected || !isSessionActive()) return null;
       var duration = Number(remotePlayer.duration);
       var position = Number(remotePlayer.currentTime);
       var playbackRate = Number(remotePlayer.playbackRate || 1);
@@ -358,6 +721,38 @@
     } catch (e) {
       return null;
     }
+  }
+
+  function syncRemoteProgressToLocalUi() {
+    if (!remotePlayer || !remotePlayer.isConnected) return;
+    var duration = Number(remotePlayer.duration);
+    var position = Number(remotePlayer.currentTime);
+    if (!isFinite(duration) || duration <= 0 || !isFinite(position)) return;
+    position = Math.max(0, Math.min(position, duration));
+
+    var elements = window.elements || {};
+    if (elements.progress) elements.progress.style.width = (position / duration * 100) + '%';
+    if (elements.currentTime) {
+      elements.currentTime.textContent = typeof window.formatTime === 'function'
+        ? window.formatTime(position)
+        : formatClockTime(position);
+    }
+    if (elements.totalTime) {
+      elements.totalTime.textContent = typeof window.formatTime === 'function'
+        ? window.formatTime(duration)
+        : formatClockTime(duration);
+    }
+    if (elements.progressBar) {
+      elements.progressBar.setAttribute('aria-valuenow', String(Math.round(position / duration * 100)));
+      elements.progressBar.setAttribute('aria-valuetext', formatClockTime(position) + ' de ' + formatClockTime(duration));
+    }
+  }
+
+  function formatClockTime(seconds) {
+    var value = Math.max(0, Math.floor(Number(seconds) || 0));
+    var minutes = Math.floor(value / 60);
+    var remainingSeconds = value % 60;
+    return minutes + ':' + (remainingSeconds < 10 ? '0' : '') + remainingSeconds;
   }
 
   function normalizeContentId(contentId) {
@@ -585,32 +980,48 @@
   }
 
   function attachMediaSessionListeners(session) {
+    if (!session || typeof session.getMediaSession !== 'function') return;
     try {
-      if (!session || typeof session.getMediaSession !== 'function') return;
       var mediaSession = session.getMediaSession();
-      if (!mediaSession) return;
+      if (!mediaSession) {
+        detachMediaSessionListener();
+        return;
+      }
       var mediaSessionId = mediaSession.mediaSessionId ? String(mediaSession.mediaSessionId) : '';
-      if (mediaSessionId && mediaSessionId === lastMediaSessionId) return;
-      if (mediaSessionId) lastMediaSessionId = mediaSessionId;
+      if (mediaSession === observedMediaSession
+        || (mediaSessionId && mediaSessionId === lastMediaSessionId)) return;
 
-      mediaSession.addUpdateListener(function (isAlive) {
+      detachMediaSessionListener();
+      observedMediaSession = mediaSession;
+      lastMediaSessionId = mediaSessionId;
+      mediaSessionUpdateListener = function (isAlive) {
         try {
           if (!isAlive) return;
-          if (mediaSession.media) {
-            syncLocalTrackFromRemoteMedia(mediaSession.media, false);
-          }
+          if (mediaSession.media) syncLocalTrackFromRemoteMedia(mediaSession.media, false);
           maybeAdvanceOnMediaSession(mediaSession);
-        } catch (e) {}
-      });
-    } catch (e) {}
+          updateLocalTransportState();
+          applyRemoteVolumeToLocal();
+          syncRemoteProgressToLocalUi();
+        } catch (error) {
+          logCastError('Could not synchronize Cast media-session state', error);
+        }
+      };
+      if (typeof mediaSession.addUpdateListener === 'function') {
+        mediaSession.addUpdateListener(mediaSessionUpdateListener);
+      }
+    } catch (error) {
+      logCastError('Could not observe the Cast media session', error);
+    }
   }
 
   function updateLocalTransportState() {
     try {
-      if (!remotePlayer) return;
       var playBtn = (window.elements && window.elements.playBtn) ? window.elements.playBtn : document.getElementById('play-btn');
       if (!playBtn) return;
-      var isPlaying = !remotePlayer.isPaused;
+      var audio = getAudioElement();
+      var isPlaying = remotePlayer && remotePlayer.isConnected && isSessionActive()
+        ? !remotePlayer.isPaused
+        : !!(audio && !audio.paused);
       if (window.setMainPlayButtonState) {
         window.setMainPlayButtonState(isPlaying);
       }
@@ -618,6 +1029,45 @@
         window.mediaSessionManager.updatePlaybackState(isPlaying ? 'playing' : 'paused');
       }
     } catch (e) {}
+  }
+
+  function updateCastButtonState() {
+    var button = (window.elements && window.elements.currentTrackCast)
+      || document.getElementById('current-track-cast');
+    if (!button) return;
+
+    var CastState = window.cast && window.cast.framework ? window.cast.framework.CastState : null;
+    var SessionState = window.cast && window.cast.framework ? window.cast.framework.SessionState : null;
+    var castState = getCastState();
+    var sessionState = getSessionState();
+    var state = 'NOT_CONNECTED';
+
+    if (SessionState && (
+      sessionState === SessionState.SESSION_STARTED
+      || sessionState === SessionState.SESSION_RESUMED
+    )) {
+      state = 'CONNECTED';
+    } else if (SessionState && (
+      sessionState === SessionState.SESSION_STARTING
+      || sessionState === SessionState.SESSION_RESUMING
+    ) || (CastState && castState === CastState.CONNECTING)) {
+      state = 'CONNECTING';
+    } else if (remotePlayer && remotePlayer.isConnected
+      && (!SessionState || sessionState == null)) {
+      state = 'CONNECTED';
+    } else if (CastState && castState === CastState.CONNECTED) {
+      state = 'CONNECTED';
+    } else if (CastState && castState === CastState.NO_DEVICES_AVAILABLE) {
+      state = 'NO_DEVICES_AVAILABLE';
+    }
+
+    try {
+      button.dataset.castState = state;
+      button.setAttribute('data-cast-state', state);
+      button.setAttribute('aria-pressed', state === 'CONNECTED' ? 'true' : 'false');
+    } catch (error) {
+      logCastError('Could not expose the Cast button state', error);
+    }
   }
 
   function initCastFramework() {
@@ -637,11 +1087,12 @@
       var context = window.cast.framework.CastContext.getInstance();
       context.setOptions({
         receiverApplicationId: appId,
-        autoJoinPolicy: window.chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
+        autoJoinPolicy: window.chrome.cast.AutoJoinPolicy.ORIGINAL_URL
       });
 
       try {
-        context.addEventListener(window.cast.framework.CastContextEventType.SESSION_STATE_CHANGED, function (event) {
+        // Keep context observers for app lifetime so resumed sessions reattach without duplicate handlers.
+        addTrackedListener(context, window.cast.framework.CastContextEventType.SESSION_STATE_CHANGED, function (event) {
           try {
             var state = event && event.sessionState ? String(event.sessionState) : '';
             var session = context.getCurrentSession();
@@ -651,6 +1102,7 @@
               lastMediaUrl = '';
             }
             updateCastUi(state, session);
+            refreshCastButtonState();
             ensureRemotePlayer();
             if (sessionId) {
               maybeShowCastingHint(sessionId);
@@ -658,36 +1110,50 @@
             attachMediaSessionListeners(session);
             if (state === String(window.cast.framework.SessionState.SESSION_STARTED)
               || state === String(window.cast.framework.SessionState.SESSION_RESUMED)) {
+              hadActiveCastSession = true;
               startCastPlaybackMonitor();
             } else if (state === String(window.cast.framework.SessionState.SESSION_ENDED)) {
-              stopCastPlaybackMonitor();
+              restoreLocalPlayback();
+              detachSessionListeners();
             }
             try {
               if (remotePlayer && remotePlayer.mediaInfo) {
                 syncLocalTrackFromRemoteMedia(remotePlayer.mediaInfo, true);
               }
             } catch (e) {}
-          } catch (e) {}
-        });
-      } catch (e) {}
+          } catch (error) {
+            logCastError('Could not handle Cast session state change', error);
+          }
+        }, castContextListeners);
+      } catch (error) {
+        logCastError('Could not subscribe to Cast session changes', error);
+      }
 
       try {
-        context.addEventListener(window.cast.framework.CastContextEventType.CAST_STATE_CHANGED, function () {
+        addTrackedListener(context, window.cast.framework.CastContextEventType.CAST_STATE_CHANGED, function () {
           try {
+            updateCastButtonState();
             if (typeof window.applyCastButtonState === 'function') {
               window.applyCastButtonState(document.getElementById('current-track-cast'));
             }
-          } catch (e) {}
-        });
-      } catch (e) {}
+          } catch (error) {
+            logCastError('Could not update the Cast button state', error);
+          }
+        }, castContextListeners);
+      } catch (error) {
+        logCastError('Could not subscribe to Cast availability changes', error);
+      }
 
       castReady = true;
       castInitError = null;
+      ensureRemotePlayer();
+      attachLocalAudioListeners();
       refreshCastButtonState();
       return true;
     } catch (e) {
       castInitError = e && e.message ? e.message : 'Cast init failed';
       castReady = false;
+      logCastError('Could not initialize the Cast framework', e);
       return false;
     }
   }
@@ -714,7 +1180,16 @@
   function requestSession() {
     var context = getCastContext();
     if (!context) return Promise.reject(new Error('Cast context not available'));
-    return context.requestSession();
+    try {
+      return withTimeout(context.requestSession(), 'Cast session request').catch(function (error) {
+        logCastError('Cast session request failed', error);
+        refreshCastButtonState();
+        throw error;
+      });
+    } catch (error) {
+      logCastError('Cast session request failed', error);
+      return Promise.reject(error);
+    }
   }
 
   function getSessionState() {
@@ -741,7 +1216,8 @@
     try {
       context.endCurrentSession(true);
       return true;
-    } catch (e) {
+    } catch (error) {
+      logCastError('Could not end the Cast session', error);
       return false;
     }
   }
@@ -758,7 +1234,8 @@
       req.currentTime = Math.max(0, Number(seconds) || 0);
       mediaSession.seek(req);
       return true;
-    } catch (e) {
+    } catch (error) {
+      logCastError('Could not seek the Cast receiver', error);
       return false;
     }
   }
@@ -768,7 +1245,8 @@
       var state = getRemotePositionState();
       if (!state) return false;
       return seekTo(state.position + Number(deltaSeconds || 0));
-    } catch (e) {
+    } catch (error) {
+      logCastError('Could not toggle Cast playback', error);
       return false;
     }
   }
@@ -783,8 +1261,55 @@
     }
   }
 
+  function play() {
+    if (!remoteController) return false;
+    try {
+      if (remotePlayer && remotePlayer.isPaused) remoteController.playOrPause();
+      return true;
+    } catch (error) {
+      logCastError('Could not start Cast playback', error);
+      return false;
+    }
+  }
+
+  function pause() {
+    if (!remoteController) return false;
+    try {
+      if (remotePlayer && !remotePlayer.isPaused) remoteController.playOrPause();
+      return true;
+    } catch (error) {
+      logCastError('Could not pause Cast playback', error);
+      return false;
+    }
+  }
+
+  function setVolume(volume, muted) {
+    if (!remotePlayer || !remotePlayer.isConnected || !remoteController) return false;
+    var value = Number(volume);
+    if (!isFinite(value)) return false;
+    try {
+      remotePlayer.volumeLevel = Math.max(0, Math.min(1, value));
+      remoteController.setVolumeLevel();
+      if (typeof muted === 'boolean' && muted !== !!remotePlayer.isMuted) {
+        remoteController.muteOrUnmute();
+      }
+      return true;
+    } catch (error) {
+      logCastError('Could not set Cast volume', error);
+      return false;
+    }
+  }
+
   function getCoverUrl(track) {
     if (!track) return '';
+    var supplied = track.coverArt || track.coverUrl || track.artwork || track.image || track.thumbnail;
+    if (supplied) {
+      try {
+        return new URL(String(supplied), window.location.href).href;
+      } catch (error) {
+        logCastError('Ignoring invalid track artwork URL', error);
+      }
+    }
     var id = track.id || track.identifier || track.albumId || '';
     if (!id) return '';
     return 'https://archive.org/services/img/' + encodeURIComponent(id);
@@ -853,7 +1378,6 @@
     if (!force && lastMediaUrl && lastMediaUrl === url) {
       return Promise.resolve();
     }
-    lastMediaUrl = url;
 
     var title = (track && track.title) ? String(track.title) : 'Track';
     var artist = (track && track.creator) ? String(track.creator) : '';
@@ -888,15 +1412,22 @@
     var session = context.getCurrentSession();
     if (!session) return Promise.reject(new Error('Cast session not available'));
 
-    return session.loadMedia(request).then(function (result) {
+    return withTimeout(Promise.resolve().then(function () {
+      return session.loadMedia(request);
+    }), 'Cast media load').then(function (result) {
+      lastMediaUrl = url;
       try {
         attachMediaSessionListeners(session);
       } catch (e) {}
       return result;
+    }).catch(function (error) {
+      logCastError('Could not load media on the Cast receiver', error);
+      throw error;
     });
   }
 
   function onGCastApiAvailable(isAvailable) {
+    // Google calls this global callback once the asynchronously loaded sender SDK is ready.
     if (!isAvailable) {
       castInitError = castInitError || 'Cast API unavailable';
       settleCastApiWaiters(false);
@@ -949,19 +1480,5 @@
     refreshCastButtonState();
   }
 
-  window.CastManager = {
-    isReady: function () { return castReady; },
-    getInitError: function () { return castInitError; },
-    getCastState: getCastState,
-    getRemotePositionState: getRemotePositionState,
-    init: initCastFramework,
-    ensureReady: ensureCastFrameworkReady,
-    requestSession: requestSession,
-    isSessionActive: isSessionActive,
-    disconnect: disconnect,
-    togglePlayback: togglePlayback,
-    seekTo: seekTo,
-    skipBy: skipBy,
-    loadMediaFromTrack: loadMediaFromTrack
-  };
+  window.CastManager = new CastManager();
 })();

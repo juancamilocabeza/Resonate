@@ -17,6 +17,10 @@ function createEventTarget() {
       if (!listeners.has(type)) listeners.set(type, []);
       listeners.get(type).push(listener);
     },
+    removeEventListener(type, listener) {
+      const registered = listeners.get(type) || [];
+      listeners.set(type, registered.filter(item => item !== listener));
+    },
     dispatchEvent(event) {
       const dispatchedEvent = { target: this, preventDefault() {}, ...event };
       for (const listener of listeners.get(event.type) || []) listener.call(this, dispatchedEvent);
@@ -1335,6 +1339,229 @@ test('Cast controls use native remote playback when the Cast sender is unavailab
   await new Promise(resolve => setImmediate(resolve));
 
   assert.deepEqual(calls, ['remote-prompt', 'Choose a device to cast']);
+});
+
+test('Cast manager configures CAF, synchronizes state, and restores local playback on disconnect', async () => {
+  const button = createMockElement('BUTTON');
+  const playButton = createMockElement('BUTTON');
+  const audio = Object.assign(createEventTarget(), {
+    src: 'https://archive.org/current.mp3',
+    currentSrc: 'https://archive.org/current.mp3',
+    currentTime: 7,
+    duration: 180,
+    volume: 0.7,
+    muted: false,
+    paused: true,
+    playCalls: 0,
+    pauseCalls: 0,
+    play() {
+      this.playCalls += 1;
+      this.paused = false;
+      return Promise.resolve();
+    },
+    pause() {
+      this.pauseCalls += 1;
+      this.paused = true;
+    },
+    load() {}
+  });
+  const controller = Object.assign(createEventTarget(), {
+    calls: [],
+    playOrPause() { this.calls.push('playOrPause'); },
+    setVolumeLevel() { this.calls.push('setVolumeLevel'); },
+    muteOrUnmute() { this.calls.push('muteOrUnmute'); }
+  });
+  const remotePlayer = {
+    isConnected: false,
+    isPaused: true,
+    currentTime: 0,
+    duration: 180,
+    volumeLevel: 0.7,
+    isMuted: false,
+    mediaInfo: null
+  };
+  let loadedMediaRequest = null;
+  const mediaUpdateListeners = new Set();
+  let lastSeekRequest = null;
+  const mediaSession = {
+    mediaSessionId: 1,
+    addUpdateListener(listener) { mediaUpdateListeners.add(listener); },
+    removeUpdateListener(listener) { mediaUpdateListeners.delete(listener); },
+    seek(request) { lastSeekRequest = request; }
+  };
+  const contextTarget = createEventTarget();
+  const castContext = Object.assign(contextTarget, {
+    options: null,
+    castState: 'NO_DEVICES_AVAILABLE',
+    sessionState: 'NO_SESSION',
+    session: null,
+    setOptions(options) { this.options = options; },
+    getCastState() { return this.castState; },
+    getSessionState() { return this.sessionState; },
+    getCurrentSession() { return this.session; },
+    requestSession() { return Promise.resolve(this.session); },
+    endCurrentSession() {}
+  });
+  const session = {
+    getSessionId: () => 'cast-session',
+    getMediaSession: () => mediaSession,
+    loadMedia(request) {
+      loadedMediaRequest = request;
+      return Promise.resolve();
+    }
+  };
+  castContext.session = session;
+  class MediaInfo {
+    constructor(contentId, contentType) {
+      this.contentId = contentId;
+      this.contentType = contentType;
+    }
+  }
+  class LoadRequest {
+    constructor(media) { this.media = media; }
+  }
+  class MusicTrackMediaMetadata {}
+  class SeekRequest {}
+  const castFramework = {
+    CastState: { NO_DEVICES_AVAILABLE: 'NO_DEVICES_AVAILABLE', NOT_CONNECTED: 'NOT_CONNECTED', CONNECTING: 'CONNECTING', CONNECTED: 'CONNECTED' },
+    SessionState: {
+      NO_SESSION: 'NO_SESSION',
+      SESSION_STARTING: 'SESSION_STARTING',
+      SESSION_STARTED: 'SESSION_STARTED',
+      SESSION_RESUMING: 'SESSION_RESUMING',
+      SESSION_RESUMED: 'SESSION_RESUMED',
+      SESSION_ENDED: 'SESSION_ENDED'
+    },
+    CastContextEventType: {
+      SESSION_STATE_CHANGED: 'SESSION_STATE_CHANGED',
+      CAST_STATE_CHANGED: 'CAST_STATE_CHANGED'
+    },
+    RemotePlayerEventType: {
+      IS_CONNECTED_CHANGED: 'IS_CONNECTED_CHANGED',
+      PLAYER_STATE_CHANGED: 'PLAYER_STATE_CHANGED',
+      MEDIA_INFO_CHANGED: 'MEDIA_INFO_CHANGED',
+      CURRENT_TIME_CHANGED: 'CURRENT_TIME_CHANGED',
+      VOLUME_LEVEL_CHANGED: 'VOLUME_LEVEL_CHANGED',
+      IS_MUTED_CHANGED: 'IS_MUTED_CHANGED'
+    },
+    CastContext: { getInstance: () => castContext },
+    RemotePlayer: class { constructor() { return remotePlayer; } },
+    RemotePlayerController: class { constructor() { return controller; } }
+  };
+  const meta = {
+    getAttribute(name) {
+      return name === 'content' ? 'CUSTOM_RECEIVER' : name === 'data-allow-production' ? 'true' : null;
+    }
+  };
+  const body = { classList: createClassList() };
+  const document = Object.assign(createEventTarget(), {
+    body,
+    getElementById(id) {
+      if (id === 'current-track-cast') return button;
+      if (id === 'play-btn') return playButton;
+      if (id === 'audio') return audio;
+      return null;
+    },
+    querySelector(selector) {
+      return selector === 'meta[name="cast-app-id"]' ? meta : null;
+    }
+  });
+  const { context } = await createSandbox({
+    document,
+    elements: { audio, currentTrackCast: button, playBtn: playButton },
+    state: { currentTrack: { url: audio.src, title: 'Current song', creator: 'Artist' } },
+    location: { href: 'https://resonate.test/', hostname: 'resonate.test', protocol: 'https:', search: '' },
+    navigator: { userAgent: 'Chrome', vendor: 'Google Inc.' },
+    cast: { framework: castFramework },
+    chrome: {
+      cast: {
+        AutoJoinPolicy: { ORIGINAL_URL: 'ORIGINAL_URL' },
+        media: {
+          DEFAULT_MEDIA_RECEIVER_APP_ID: 'CC1AD845',
+          MediaInfo,
+          LoadRequest,
+          MusicTrackMediaMetadata,
+          SeekRequest,
+          StreamType: { BUFFERED: 'BUFFERED' }
+        },
+        Image: class Image { constructor(url) { this.url = url; } }
+      }
+    },
+    setInterval: () => 1,
+    clearInterval() {},
+    applyCastButtonState() {},
+    setMainPlayButtonState(playing) { context.playingState = playing; }
+  });
+
+  await evaluateScript(context, 'js/cast.js');
+  const manager = context.CastManager;
+  assert.equal(castContext.options.receiverApplicationId, 'CUSTOM_RECEIVER');
+  assert.equal(castContext.options.autoJoinPolicy, 'ORIGINAL_URL');
+  assert.equal(manager.getCastButtonState(), 'NO_DEVICES_AVAILABLE');
+
+  castContext.sessionState = 'SESSION_STARTING';
+  castContext.castState = 'CONNECTING';
+  castContext.dispatchEvent({ type: 'SESSION_STATE_CHANGED', sessionState: 'SESSION_STARTING' });
+  assert.equal(manager.getCastButtonState(), 'CONNECTING');
+
+  castContext.sessionState = 'SESSION_STARTED';
+  castContext.castState = 'CONNECTED';
+  castContext.dispatchEvent({ type: 'SESSION_STATE_CHANGED', sessionState: 'SESSION_STARTED' });
+  await manager.loadMediaFromTrack({
+    url: audio.src,
+    title: 'Current song',
+    creator: 'Artist',
+    albumTitle: 'Album',
+    trackIndex: 1,
+    totalTracks: 9,
+    coverArt: 'https://archive.org/cover.jpg'
+  }, audio.src, 12, 180, { force: true });
+  assert.equal(loadedMediaRequest.media.contentType, 'audio/mpeg');
+  assert.equal(loadedMediaRequest.media.duration, 180);
+  assert.equal(loadedMediaRequest.media.metadata.title, 'Current song');
+  assert.equal(loadedMediaRequest.media.metadata.artist, 'Artist');
+  assert.equal(loadedMediaRequest.media.metadata.albumName, 'Album');
+  assert.equal(loadedMediaRequest.media.metadata.trackNumber, 2);
+  assert.equal(loadedMediaRequest.media.metadata.totalTrackCount, 9);
+  assert.equal(loadedMediaRequest.media.metadata.images[0].url, 'https://archive.org/cover.jpg');
+  assert.equal(loadedMediaRequest.currentTime, 12);
+
+  remotePlayer.isConnected = true;
+  remotePlayer.isPaused = false;
+  remotePlayer.currentTime = 42;
+  controller.dispatchEvent({ type: 'IS_CONNECTED_CHANGED' });
+  assert.equal(manager.getCastButtonState(), 'CONNECTED');
+  assert.equal(audio.paused, true);
+  assert.equal(context.playingState, true);
+  remotePlayer.isPaused = true;
+  controller.dispatchEvent({ type: 'PLAYER_STATE_CHANGED' });
+  assert.equal(context.playingState, false);
+  remotePlayer.isPaused = false;
+  controller.dispatchEvent({ type: 'PLAYER_STATE_CHANGED' });
+  assert.equal(context.playingState, true);
+  remotePlayer.volumeLevel = 0.3;
+  remotePlayer.isMuted = true;
+  controller.dispatchEvent({ type: 'VOLUME_LEVEL_CHANGED' });
+  assert.equal(audio.volume, 0.3);
+  assert.equal(audio.muted, true);
+  audio.volume = 0.45;
+  audio.dispatchEvent({ type: 'volumechange' });
+  assert.equal(remotePlayer.volumeLevel, 0.45);
+  audio.currentTime = 50;
+  audio.dispatchEvent({ type: 'seeked' });
+  assert.equal(lastSeekRequest.currentTime, 50);
+
+  remotePlayer.isConnected = false;
+  castContext.session = null;
+  castContext.castState = 'NOT_CONNECTED';
+  castContext.sessionState = 'SESSION_ENDED';
+  castContext.dispatchEvent({ type: 'SESSION_STATE_CHANGED', sessionState: 'SESSION_ENDED' });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(audio.currentTime, 42);
+  assert.equal(audio.playCalls, 1);
+  assert.equal(manager.getCastButtonState(), 'NOT_CONNECTED');
+  assert.equal(mediaUpdateListeners.size, 0);
+  manager.destroy();
 });
 
 async function runTests() {
