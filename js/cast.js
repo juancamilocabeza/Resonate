@@ -77,6 +77,10 @@
     togglePlayback() { return togglePlayback(); }
     play() { return play(); }
     pause() { return pause(); }
+    prepareLocalPlaybackForCast() { return prepareLocalPlaybackForCast(); }
+    resumeLocalPlaybackAfterCastFailure(snapshot) {
+      return resumeLocalPlaybackAfterCastFailure(snapshot);
+    }
     seekTo(seconds) { return seekTo(seconds); }
     skipBy(deltaSeconds) { return skipBy(deltaSeconds); }
     setVolume(volume, muted) { return setVolume(volume, muted); }
@@ -387,6 +391,58 @@
     } catch (error) {
       suppressLocalAudioSync = false;
       logCastError('Could not pause local audio while casting', error);
+    }
+  }
+
+  function prepareLocalPlaybackForCast() {
+    var audio = getAudioElement();
+    if (!audio) return null;
+    var snapshot = {
+      currentTime: Number(audio.currentTime) || 0,
+      wasPlaying: !audio.paused && !audio.ended,
+      source: normalizeContentId(audio.currentSrc || audio.src || '')
+    };
+    suppressLocalAudioSync = true;
+    try {
+      if (snapshot.wasPlaying) audio.pause();
+    } catch (error) {
+      logCastError('Could not pause local audio while connecting to Cast', error);
+    } finally {
+      suppressLocalAudioSync = false;
+    }
+    return snapshot;
+  }
+
+  function resumeLocalPlaybackAfterCastFailure(snapshot) {
+    if (!snapshot || isSessionActive() || isSessionPending()) return false;
+    var audio = getAudioElement();
+    if (!audio) return false;
+
+    var currentSource = normalizeContentId(audio.currentSrc || audio.src || '');
+    if (snapshot.source && currentSource === snapshot.source) {
+      try {
+        if (isFinite(Number(audio.duration)) && Number(audio.duration) > 0) {
+          audio.currentTime = Math.min(snapshot.currentTime, Number(audio.duration));
+        } else {
+          audio.currentTime = snapshot.currentTime;
+        }
+      } catch (error) {
+        logCastError('Could not restore local audio position after Cast connection failed', error);
+      }
+    }
+
+    if (!snapshot.wasPlaying) return true;
+    try {
+      var playResult = audio.play();
+      if (playResult && typeof playResult.catch === 'function') {
+        playResult.catch(function (error) {
+          logCastError('Could not resume local audio after Cast connection failed', error);
+        });
+      }
+      return true;
+    } catch (error) {
+      logCastError('Could not resume local audio after Cast connection failed', error);
+      return false;
     }
   }
 
@@ -1111,6 +1167,8 @@
       ensureRemotePlayer();
       if (isActive) {
         hadActiveCastSession = true;
+        // A confirmed sender session takes playback ownership, even if the receiver is still loading media.
+        enforceLocalPause();
         if (sessionId) maybeShowCastingHint(sessionId);
         attachMediaSessionListeners(session);
         startCastPlaybackMonitor();
@@ -1245,6 +1303,14 @@
     return state === SessionState.SESSION_STARTED
       || state === SessionState.SESSION_RESUMED
       || (SessionState.SESSION_ENDING && state === SessionState.SESSION_ENDING);
+  }
+
+  function isSessionPending() {
+    if (!isCastFrameworkReady()) return false;
+    var state = getSessionState();
+    var SessionState = window.cast && window.cast.framework ? window.cast.framework.SessionState : null;
+    if (!SessionState) return false;
+    return state === SessionState.SESSION_STARTING || state === SessionState.SESSION_RESUMING;
   }
 
   function disconnect() {

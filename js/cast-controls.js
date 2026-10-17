@@ -235,8 +235,21 @@
 
     if (!managerReady) return false;
 
+    let localPlaybackSnapshot = null;
     try {
       syncCastPlaybackContext(track, state);
+      // Pause the sender before showing the device picker; otherwise local audio overlaps receiver startup.
+      if (typeof manager.prepareLocalPlaybackForCast === 'function') {
+        localPlaybackSnapshot = manager.prepareLocalPlaybackForCast();
+      } else if (audioElement && audioElement.paused === false
+        && typeof audioElement.pause === 'function') {
+        localPlaybackSnapshot = {
+          currentTime: audioElement.currentTime,
+          wasPlaying: true,
+          source: audioElement.currentSrc || audioElement.src || ''
+        };
+        audioElement.pause();
+      }
       await manager.requestSession();
       if (!castUrl) {
         showCastHint('Connected to Cast. Select a track to play.');
@@ -253,6 +266,22 @@
       showCastHint('Casting to device');
       return true;
     } catch (error) {
+      if (localPlaybackSnapshot && typeof manager.resumeLocalPlaybackAfterCastFailure === 'function') {
+        manager.resumeLocalPlaybackAfterCastFailure(localPlaybackSnapshot);
+      } else if (localPlaybackSnapshot && localPlaybackSnapshot.wasPlaying
+        && !(typeof manager.isSessionActive === 'function' && manager.isSessionActive())
+        && audioElement && typeof audioElement.play === 'function') {
+        try {
+          const playResult = audioElement.play();
+          if (playResult && typeof playResult.catch === 'function') {
+            playResult.catch(playError => {
+              reportCastError('Could not resume local audio after Cast connection failed', playError);
+            });
+          }
+        } catch (playError) {
+          reportCastError('Could not resume local audio after Cast connection failed', playError);
+        }
+      }
       reportCastError('Cast session failed', error);
       showCastHint('Cast session failed. Check sender domain and devices.', 'warning', 4500);
       return false;

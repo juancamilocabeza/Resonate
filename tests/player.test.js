@@ -1341,6 +1341,61 @@ test('Cast controls use native remote playback when the Cast sender is unavailab
   assert.deepEqual(calls, ['remote-prompt', 'Choose a device to cast']);
 });
 
+test('Cast handoff pauses local audio before receiver startup and resumes it after failure', async () => {
+  const button = createMockElement('BUTTON');
+  const calls = [];
+  const audio = Object.assign(createEventTarget(), {
+    src: 'https://archive.org/current.mp3',
+    currentSrc: 'https://archive.org/current.mp3',
+    currentTime: 23,
+    paused: false,
+    pause() {
+      calls.push('local-pause');
+      this.paused = true;
+    },
+    play() {
+      calls.push('local-resume');
+      this.paused = false;
+      return Promise.resolve();
+    }
+  });
+  const document = Object.assign(createEventTarget(), {
+    getElementById: id => id === 'current-track-cast' ? button : id === 'audio' ? audio : null
+  });
+  const { context } = await createSandbox({
+    document,
+    elements: { audio, currentTrackCast: button },
+    state: { currentTrack: { url: audio.src, title: 'Song' } },
+    getCastCapabilities: () => ({ canRemotePlayback: false, canAirPlay: false }),
+    CastManager: {
+      ensureReady: async () => true,
+      prepareLocalPlaybackForCast() {
+        const snapshot = { wasPlaying: !audio.paused, currentTime: audio.currentTime, source: audio.currentSrc };
+        audio.pause();
+        return snapshot;
+      },
+      async requestSession() {
+        calls.push('request-session');
+        throw new Error('Device selection failed');
+      },
+      resumeLocalPlaybackAfterCastFailure(snapshot) {
+        calls.push(['restore', snapshot.currentTime]);
+        audio.play();
+      },
+      isSessionActive: () => false
+    },
+    showStatus() {},
+    logger: { info() {}, warn() {} }
+  });
+  await evaluateScript(context, 'js/cast-controls.js');
+
+  button.dispatchEvent({ type: 'click' });
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.deepEqual(calls.slice(0, 3), ['local-pause', 'request-session', ['restore', 23]]);
+  assert.equal(audio.paused, false);
+});
+
 test('Cast manager configures CAF, synchronizes state, and restores local playback on disconnect', async () => {
   const button = createMockElement('BUTTON');
   const playButton = createMockElement('BUTTON');
