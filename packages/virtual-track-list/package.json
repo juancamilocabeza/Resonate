@@ -1,0 +1,14 @@
+{
+  "name": "@resonate/virtual-track-list",
+  "version": "1.0.0",
+  "description": "A virtualized track list component for Choo",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node test.js"
+  },
+  "dependencies": {
+    "nanohtml": "^1.10.0",
+    "nanocomponent": "^6.6.0"
+  }
+}

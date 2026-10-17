@@ -616,9 +616,11 @@ test('Clicking the progress bar seeks to the selected position and updates ARIA 
     closest: () => null
   });
   const progress = { style: {} };
+  const progressThumb = { style: {} };
   const currentTime = { textContent: '', offsetWidth: 0 };
   context.elements.progressBar = progressBar;
   context.elements.progress = progress;
+  context.elements.progressThumb = progressThumb;
   context.elements.currentTime = currentTime;
   context.elements.totalTime = { textContent: '', offsetWidth: 0 };
   context.setupProgressBarInteraction();
@@ -626,9 +628,115 @@ test('Clicking the progress bar seeks to the selected position and updates ARIA 
   progressBar.dispatchEvent({ type: 'click', clientX: 25 });
 
   assert.equal(audio.currentTime, 30);
-  assert.equal(progress.style.width, '25%');
+  assert.equal(progress.style.transform, 'scaleX(0.25)');
+  assert.equal(progressThumb.style.transform, 'translate3d(25%, 0, 0)');
   assert.equal(attributes['aria-valuenow'], 25);
   assert.equal(attributes['aria-valuetext'], '0:30 de 2:00');
+});
+
+test('Pointer dragging batches seek updates to one animation frame', async () => {
+  const { context, audio } = await createPlayer();
+  const attributes = {};
+  const progressBar = Object.assign(createEventTarget(), {
+    classList: createClassList(),
+    getBoundingClientRect: () => ({ left: 0, width: 100 }),
+    setAttribute(name, value) { attributes[name] = value; },
+    closest: () => null
+  });
+  const progress = { style: {} };
+  const progressThumb = { style: {} };
+  context.elements.progressBar = progressBar;
+  context.elements.progress = progress;
+  context.elements.progressThumb = progressThumb;
+  context.elements.currentTime = { textContent: '', offsetWidth: 0 };
+  context.elements.totalTime = { textContent: '', offsetWidth: 0 };
+
+  let nextFrameId = 0;
+  const frames = new Map();
+  context.requestAnimationFrame = callback => {
+    const id = ++nextFrameId;
+    frames.set(id, callback);
+    return id;
+  };
+  context.cancelAnimationFrame = id => frames.delete(id);
+  context.setupProgressBarInteraction();
+
+  progressBar.dispatchEvent({
+    type: 'pointerdown',
+    pointerId: 1,
+    pointerType: 'touch',
+    isPrimary: true,
+    clientX: 10,
+    cancelable: true
+  });
+  context.document.dispatchEvent({
+    type: 'pointermove',
+    pointerId: 1,
+    clientX: 70,
+    cancelable: true
+  });
+
+  assert.equal(frames.size, 1);
+  assert.equal(audio.currentTime, 0);
+  const [frameId, renderFrame] = frames.entries().next().value;
+  frames.delete(frameId);
+  renderFrame();
+  assert.equal(audio.currentTime, 84);
+  assert.equal(progress.style.transform, 'scaleX(0.7)');
+  assert.equal(progressThumb.style.transform, 'translate3d(70%, 0, 0)');
+  assert.equal(attributes['aria-valuenow'], 70);
+
+  context.document.dispatchEvent({
+    type: 'pointerup',
+    pointerId: 1,
+    clientX: 75
+  });
+  assert.equal(audio.currentTime, 90);
+  assert.equal(context.state.isSeeking, false);
+});
+
+test('Playback time updates coalesce and render the latest position in one animation frame', async () => {
+  const { context, audio } = await createPlayer();
+  const progressBar = Object.assign(createEventTarget(), {
+    setAttribute(name, value) { this[name] = value; }
+  });
+  const progress = { style: {} };
+  const progressThumb = { style: {} };
+  const currentTime = { textContent: '' };
+  const totalTime = { textContent: '' };
+  context.elements.progressBar = progressBar;
+  context.elements.progress = progress;
+  context.elements.progressThumb = progressThumb;
+  context.elements.progressBuffered = { style: {} };
+  context.elements.currentTime = currentTime;
+  context.elements.totalTime = totalTime;
+  audio.buffered = { length: 0 };
+
+  let nextFrameId = 0;
+  const frames = new Map();
+  context.requestAnimationFrame = callback => {
+    const id = ++nextFrameId;
+    frames.set(id, callback);
+    return id;
+  };
+  context.cancelAnimationFrame = id => frames.delete(id);
+  let mediaPositionUpdates = 0;
+  context.updateMediaPositionState = () => { mediaPositionUpdates += 1; };
+
+  context.updateProgressBar();
+  audio.currentTime = 45;
+  context.updateProgressBar();
+  assert.equal(frames.size, 1);
+
+  const [frameId, renderFrame] = frames.entries().next().value;
+  frames.delete(frameId);
+  renderFrame();
+  assert.equal(progress.style.transform, 'scaleX(0.375)');
+  assert.equal(progressThumb.style.transform, 'translate3d(37.5%, 0, 0)');
+  assert.equal(currentTime.textContent, '0:45');
+  assert.equal(totalTime.textContent, '2:00');
+  assert.equal(progressBar['aria-valuenow'], 38);
+  assert.equal(mediaPositionUpdates, 1);
 });
 
 test('Playlist queue filters invalid tracks and starts from the requested index', async () => {

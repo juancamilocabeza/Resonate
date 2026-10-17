@@ -286,6 +286,7 @@ const elements = {
   creator: document.getElementById('creator'),
   progressBar: document.getElementById('progress-bar'),
   progress: document.getElementById('progress'),
+  progressThumb: document.getElementById('progress-thumb'),
   progressBuffered: document.getElementById('progress-buffered'),
   progressTooltip: document.getElementById('progress-tooltip'),
   currentTime: document.getElementById('current-time'),

@@ -3826,26 +3826,44 @@ async function playPreviousInContext() {
   }
 }
 
+let progressUpdateFrame = null;
+
+function updateProgressVisual(progressPercent) {
+  const percent = Math.max(0, Math.min(100, Number(progressPercent) || 0));
+  if (window.elements.progress) {
+    window.elements.progress.style.transform = `scaleX(${percent / 100})`;
+  }
+  if (window.elements.progressThumb) {
+    window.elements.progressThumb.style.transform = `translate3d(${percent}%, 0, 0)`;
+  }
+}
+
 function updateProgressBar() {
-  if (!state.isSeeking && window.elements.audio && window.elements.audio.duration && isFinite(window.elements.audio.duration)) {
-    const progressPercent = (window.elements.audio.currentTime / window.elements.audio.duration) * 100;
-    if (window.elements.progress) window.elements.progress.style.width = `${progressPercent}%`;
-    if (window.elements.currentTime) window.elements.currentTime.textContent = formatTime(window.elements.audio.currentTime);
-    if (window.elements.totalTime) window.elements.totalTime.textContent = formatTime(window.elements.audio.duration);
-    
-    // Update buffered visual
+  if (state.isSeeking || !window.elements.audio || !window.elements.audio.duration || !isFinite(window.elements.audio.duration)) return;
+  if (progressUpdateFrame !== null) return;
+
+  progressUpdateFrame = window.requestAnimationFrame(() => {
+    progressUpdateFrame = null;
+    const audio = window.elements.audio;
+    if (state.isSeeking || !audio || !audio.duration || !isFinite(audio.duration)) return;
+
+    const currentTime = audio.currentTime;
+    const duration = audio.duration;
+    const progressPercent = (currentTime / duration) * 100;
+    updateProgressVisual(progressPercent);
+    if (window.elements.currentTime) window.elements.currentTime.textContent = formatTime(currentTime);
+    if (window.elements.totalTime) window.elements.totalTime.textContent = formatTime(duration);
+
     updateBufferedProgress();
-    
-    // Update ARIA attributes
+
     if (window.elements.progressBar) {
       window.elements.progressBar.setAttribute('aria-valuenow', Math.round(progressPercent));
-      window.elements.progressBar.setAttribute('aria-valuetext', 
-        `${formatTime(window.elements.audio.currentTime)} de ${formatTime(window.elements.audio.duration)}`);
+      window.elements.progressBar.setAttribute('aria-valuetext',
+        `${formatTime(currentTime)} de ${formatTime(duration)}`);
     }
 
-    // Actualizar Media Session
     updateMediaPositionState();
-  }
+  });
 }
 
 function updateBufferedProgress() {
@@ -4199,6 +4217,10 @@ function setupProgressBarInteraction() {
 
   const tooltip = document.getElementById('progress-tooltip');
   let isDragging = false;
+  let activePointerId = null;
+  let dragMetrics = null;
+  let pendingDragClientX = null;
+  let dragFrame = null;
 
   // Dynamic offset calculation
   const getOffsets = () => {
@@ -4225,13 +4247,70 @@ function setupProgressBarInteraction() {
     }
   };
 
+  const applyProgressOnDrag = (clientX) => {
+    if (!dragMetrics || !window.elements.audio || !window.elements.progress || !window.elements.currentTime) return;
+    const duration = window.elements.audio.duration;
+    if (!duration || !isFinite(duration)) return;
+
+    const clickPosition = Math.max(0, Math.min(1,
+      (clientX - (dragMetrics.left + dragMetrics.offsetLeft)) / dragMetrics.effectiveWidth));
+    const seekTime = clickPosition * duration;
+    const progressPercent = clickPosition * 100;
+
+    updateProgressVisual(progressPercent);
+    window.elements.currentTime.textContent = formatTime(seekTime);
+    window.elements.audio.currentTime = seekTime;
+    window.elements.progressBar.setAttribute('aria-valuenow', Math.round(progressPercent));
+    window.elements.progressBar.setAttribute('aria-valuetext',
+      `${formatTime(seekTime)} de ${formatTime(duration)}`);
+  };
+
+  const flushPendingDrag = () => {
+    if (dragFrame !== null) {
+      window.cancelAnimationFrame(dragFrame);
+      dragFrame = null;
+    }
+    if (pendingDragClientX !== null) {
+      applyProgressOnDrag(pendingDragClientX);
+      pendingDragClientX = null;
+    }
+  };
+
+  const scheduleProgressOnDrag = (clientX) => {
+    pendingDragClientX = clientX;
+    if (dragFrame !== null) return;
+    dragFrame = window.requestAnimationFrame(() => {
+      dragFrame = null;
+      if (pendingDragClientX === null) return;
+      applyProgressOnDrag(pendingDragClientX);
+      pendingDragClientX = null;
+    });
+  };
+
   const startDrag = (e) => {
     if (!window.elements.audio || !window.elements.audio.duration || !isFinite(window.elements.audio.duration)) return;
     if (!window.elements.progressBar) return;
+    if (isDragging || !e.isPrimary || (e.pointerType === 'mouse' && e.button !== 0)) return;
 
     isDragging = true;
     state.isSeeking = true;
-    
+    activePointerId = e.pointerId;
+
+    const progressBarRect = window.elements.progressBar.getBoundingClientRect();
+    const { offsetLeft, offsetRight } = getOffsets();
+    const effectiveWidth = progressBarRect.width - offsetLeft - offsetRight;
+    if (effectiveWidth <= 0) {
+      isDragging = false;
+      state.isSeeking = false;
+      activePointerId = null;
+      return;
+    }
+    dragMetrics = {
+      left: progressBarRect.left,
+      offsetLeft,
+      effectiveWidth
+    };
+
     try {
       window.elements.progressBar.classList.add('dragging');
       const progressSection = resolveProgressSection();
@@ -4241,24 +4320,31 @@ function setupProgressBarInteraction() {
     }
 
     triggerHaptic();
-    // Actualizar inmediatamente al comenzar el arrastre
-    updateProgressOnDrag(e);
+    scheduleProgressOnDrag(e.clientX);
 
     if (e.cancelable) {
       e.preventDefault();
     }
+    if (typeof window.elements.progressBar.setPointerCapture === 'function') {
+      window.elements.progressBar.setPointerCapture(e.pointerId);
+    }
   };
 
   const drag = (e) => {
-    if (!isDragging) return;
-    updateProgressOnDrag(e);
+    if (!isDragging || e.pointerId !== activePointerId) return;
+    scheduleProgressOnDrag(e.clientX);
+    if (e.cancelable) e.preventDefault();
   };
 
-  const endDrag = () => {
-    if (!isDragging) return;
+  const endDrag = (e) => {
+    if (!isDragging || (e && e.pointerId !== activePointerId)) return;
 
+    if (e && typeof e.clientX === 'number') pendingDragClientX = e.clientX;
+    flushPendingDrag();
     isDragging = false;
     state.isSeeking = false;
+    activePointerId = null;
+    dragMetrics = null;
     if (window.elements.progressBar) {
       window.elements.progressBar.classList.remove('dragging');
     }
@@ -4268,38 +4354,6 @@ function setupProgressBarInteraction() {
       tooltip.style.opacity = '0';
       tooltip.style.visibility = 'hidden';
     }
-  };
-
-  const updateProgressOnDrag = (e) => {
-    if (!window.elements.progressBar || !window.elements.progress || !window.elements.currentTime || !window.elements.audio) return;
-    
-    const progressBarRect = window.elements.progressBar.getBoundingClientRect();
-    let clientX;
-
-    if (e.type.includes('touch')) {
-      clientX = e.touches[0].clientX;
-    } else {
-      clientX = e.clientX;
-    }
-
-    // Calculate click position with dynamic offset compensation
-    const { offsetLeft, offsetRight } = getOffsets();
-    const effectiveWidth = progressBarRect.width - offsetLeft - offsetRight;
-
-    const clickPosition = Math.max(0, Math.min(1, (clientX - (progressBarRect.left + offsetLeft)) / effectiveWidth));
-    const seekTime = clickPosition * window.elements.audio.duration;
-
-    // Update display
-    window.elements.progress.style.width = `${clickPosition * 100}%`;
-    window.elements.currentTime.textContent = formatTime(seekTime);
-
-    // Update audio on both drag and click
-    window.elements.audio.currentTime = seekTime;
-    
-    // Update ARIA
-    window.elements.progressBar.setAttribute('aria-valuenow', Math.round(clickPosition * 100));
-    window.elements.progressBar.setAttribute('aria-valuetext', 
-      `${formatTime(seekTime)} de ${formatTime(window.elements.audio.duration)}`);
   };
 
   // Tooltip on hover/drag
@@ -4321,6 +4375,7 @@ function setupProgressBarInteraction() {
     
     const { offsetLeft, offsetRight } = getOffsets();
     const effectiveWidth = progressBarRect.width - offsetLeft - offsetRight;
+    if (effectiveWidth <= 0) return;
     const hoverPosition = Math.max(0, Math.min(1, (clientX - (progressBarRect.left + offsetLeft)) / effectiveWidth));
     const hoverTime = hoverPosition * window.elements.audio.duration;
     
@@ -4335,6 +4390,23 @@ function setupProgressBarInteraction() {
       tooltip.style.opacity = '0';
       tooltip.style.visibility = 'hidden';
     }
+  };
+
+  const seekFromClick = (e) => {
+    if (e.isTrusted || e.detail > 0) return;
+    const progressBarRect = window.elements.progressBar.getBoundingClientRect();
+    const { offsetLeft, offsetRight } = getOffsets();
+    const effectiveWidth = progressBarRect.width - offsetLeft - offsetRight;
+    if (effectiveWidth <= 0) return;
+
+    dragMetrics = {
+      left: progressBarRect.left,
+      offsetLeft,
+      effectiveWidth
+    };
+    applyProgressOnDrag(e.clientX);
+    dragMetrics = null;
+    triggerHaptic();
   };
 
   // Keyboard navigation
@@ -4380,9 +4452,37 @@ function setupProgressBarInteraction() {
     }
   });
 
-  // Mouse events
-  window.elements.progressBar.addEventListener('mousemove', showTooltip);
-  window.elements.progressBar.addEventListener('mouseleave', hideTooltip);
+  const onPointerMoveForTooltip = (e) => {
+    if (!isDragging && e.pointerType === 'mouse') showTooltip(e);
+  };
+  const cleanupPointerEvents = () => {
+    if (dragFrame !== null) {
+      window.cancelAnimationFrame(dragFrame);
+      dragFrame = null;
+    }
+    if (progressUpdateFrame !== null) {
+      window.cancelAnimationFrame(progressUpdateFrame);
+      progressUpdateFrame = null;
+    }
+    pendingDragClientX = null;
+    dragMetrics = null;
+    activePointerId = null;
+    document.removeEventListener('pointermove', drag);
+    document.removeEventListener('pointerup', endDrag);
+    document.removeEventListener('pointercancel', endDrag);
+    window.elements.progressBar.removeEventListener('pointerdown', startDrag);
+    window.elements.progressBar.removeEventListener('click', seekFromClick);
+    window.elements.progressBar.removeEventListener('pointermove', onPointerMoveForTooltip);
+    window.elements.progressBar.removeEventListener('pointerleave', hideTooltip);
+    window.elements.progressBar.classList.remove('dragging');
+    const progressSection = resolveProgressSection();
+    if (progressSection) progressSection.classList.remove('dragging');
+    isDragging = false;
+    state.isSeeking = false;
+  };
+
+  window.elements.progressBar.addEventListener('pointermove', onPointerMoveForTooltip);
+  window.elements.progressBar.addEventListener('pointerleave', hideTooltip);
   
   // Focus/blur for visual feedback
   window.elements.progressBar.addEventListener('focus', () => {
@@ -4393,25 +4493,12 @@ function setupProgressBarInteraction() {
     window.elements.progressBar.classList.remove('focused');
   });
 
-  // Configure events - remove duplicates
-  if (window.elements.progressBar) {
-    window.elements.progressBar.addEventListener('mousedown', startDrag);
-    window.elements.progressBar.addEventListener('touchstart', startDrag, { passive: false });
-  }
-  
-  document.addEventListener('mousemove', drag);
-  document.addEventListener('mouseup', endDrag);
-  document.addEventListener('touchmove', drag, { passive: false });
-  document.addEventListener('touchend', endDrag, { passive: false });
-  // SOLO UN event listener para click
-  if (window.elements.progressBar) {
-    window.elements.progressBar.addEventListener('click', (e) => {
-      if (!isDragging) { // Solo procesar clicks que no sean parte de un arrastre
-        triggerHaptic();
-        updateProgressOnDrag(e);
-      }
-    });
-  }
+  window.elements.progressBar.addEventListener('pointerdown', startDrag);
+  window.elements.progressBar.addEventListener('click', seekFromClick);
+  document.addEventListener('pointermove', drag, { passive: false });
+  document.addEventListener('pointerup', endDrag);
+  document.addEventListener('pointercancel', endDrag);
+  window.addEventListener('unload', cleanupPointerEvents, { once: true });
 }
 
 function updateShuffleButton() {

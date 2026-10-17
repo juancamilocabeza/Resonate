@@ -28,15 +28,15 @@
   }
 
   /* Thumb: always visible on touch devices, larger for finger precision */
-  .progress::after {
+  .progress-thumb::after {
     /* 18px thumb diameter */
     width: 18px;
     height: 18px;
-    right: -9px;
+    left: -9px;
 
     /* Always visible on touch (no hover required) */
     opacity: 1;
-    transform: translateY(-50%) scale(1);
+    transform: translate(-50%, -50%) scale(1);
 
     /* Larger glow ring */
     box-shadow:
@@ -45,11 +45,11 @@
   }
 
   /* Grow thumb slightly while dragging */
-  .progress-bar.dragging .progress::after {
+  .progress-bar.dragging .progress-thumb::after {
     width: 22px;
     height: 22px;
-    right: -11px;
-    transform: translateY(-50%) scale(1);
+    left: -11px;
+    transform: translate(-50%, -50%) scale(1);
     box-shadow:
       0 3px 14px rgba(0, 0, 0, 0.4),
       0 0 0 3px rgba(255, 255, 255, 0.9);
@@ -66,8 +66,8 @@
    TOUCH DEVICES — Ensure thumb is never hidden on coarse pointers
    ===================================================================== */
 @media (hover: none) and (pointer: coarse) {
-  .progress::after {
+  .progress-thumb::after {
     opacity: 1;
-    transform: translateY(-50%) scale(1);
+    transform: translate(-50%, -50%) scale(1);
   }
 }

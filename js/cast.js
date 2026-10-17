@@ -787,7 +787,9 @@
     position = Math.max(0, Math.min(position, duration));
 
     var elements = window.elements || {};
-    if (elements.progress) elements.progress.style.width = (position / duration * 100) + '%';
+    var progressPercent = position / duration * 100;
+    if (elements.progress) elements.progress.style.transform = 'scaleX(' + (progressPercent / 100) + ')';
+    if (elements.progressThumb) elements.progressThumb.style.transform = 'translate3d(' + progressPercent + '%, 0, 0)';
     if (elements.currentTime) {
       elements.currentTime.textContent = typeof window.formatTime === 'function'
         ? window.formatTime(position)
@@ -799,7 +801,7 @@
         : formatClockTime(duration);
     }
     if (elements.progressBar) {
-      elements.progressBar.setAttribute('aria-valuenow', String(Math.round(position / duration * 100)));
+      elements.progressBar.setAttribute('aria-valuenow', String(Math.round(progressPercent)));
       elements.progressBar.setAttribute('aria-valuetext', formatClockTime(position) + ' de ' + formatClockTime(duration));
     }
   }
