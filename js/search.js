@@ -53,6 +53,14 @@ function getSearchCacheKey(query, page) {
   return `search:${SEARCH_CACHE_SCHEMA}:${q}:${filterKey}:${orderKey}:${page}`;
 }
 
+function hasCachedSearchResults(query) {
+  const normalizedQuery = String(query || '').trim();
+  if (!normalizedQuery || !window.enhancedCache || typeof window.enhancedCache.get !== 'function') {
+    return false;
+  }
+  return Boolean(window.enhancedCache.get('search', getSearchCacheKey(normalizedQuery, 0)));
+}
+
 // Expose a stable cache-key helper for the UI (used for deferred metadata enrichment updates).
 try {
   if (typeof window !== 'undefined' && typeof window.__resonateGetSearchCacheKey !== 'function') {
@@ -2811,6 +2819,7 @@ function prefetchNextSearchPages(query, currentPage, hasMore, count = 2) {
 
 window.performOptimizedSearch = performOptimizedSearch;
 window.performFastSearch = performFastSearch;
+window.hasCachedSearchResults = hasCachedSearchResults;
 window.fetchOptimizedPlayableFiles = fetchOptimizedPlayableFiles;
 window.playOptimizedSearchResult = playOptimizedSearchResult;
 
