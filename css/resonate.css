@@ -920,7 +920,7 @@ body.tracks-open #tracks-list-container .tlv2-list {
   box-shadow: 0 0 12px rgba(var(--primary-rgb), 0.5);
 }
 
-[data-theme="day"] .progress::after {
+[data-theme="day"] .progress-thumb::after {
   background: var(--primary);
   box-shadow: 0 2px 8px rgba(var(--primary-rgb), 0.5), 0 0 0 2px rgba(255, 255, 255, 1);
 }
@@ -1760,10 +1760,12 @@ h3 {
   height: 100%;
   background: linear-gradient(90deg, var(--accent-alt), var(--accent));
   border-radius: 3px;
-  width: 0%;
+  width: 100%;
   max-width: 100%;
-  will-change: width;
-  transition: width 0.1s linear;
+  transform: scaleX(0);
+  transform-origin: left center;
+  will-change: transform;
+  transition: transform 0.1s linear;
   position: absolute;
   left: 0;
   top: 0;
@@ -1771,13 +1773,25 @@ h3 {
   z-index: 3;
 }
 
-/* Progress Thumb (Now Visible) */
-.progress::after {
+/* Progress thumb is moved independently so fill updates stay compositor-friendly. */
+.progress-thumb {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  transform: translate3d(0, 0, 0);
+  will-change: transform;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.progress-thumb::after {
   content: '';
   position: absolute;
-  right: -6px;
+  left: -6px;
   top: 50%;
-  transform: translateY(-50%) scale(0);
+  transform: translate(-50%, -50%) scale(0);
   width: 12px;
   height: 12px;
   background: var(--accent);
@@ -1788,16 +1802,16 @@ h3 {
   z-index: 10;
 }
 
-.progress-bar:hover .progress::after,
-.progress-bar.dragging .progress::after,
-.progress-bar:focus .progress::after,
-.progress-bar.focused .progress::after {
+.progress-bar:hover .progress-thumb::after,
+.progress-bar.dragging .progress-thumb::after,
+.progress-bar:focus .progress-thumb::after,
+.progress-bar.focused .progress-thumb::after {
   opacity: 1;
-  transform: translateY(-50%) scale(1);
+  transform: translate(-50%, -50%) scale(1);
 }
 
-.progress-bar.dragging .progress::after {
-  transform: translateY(-50%) scale(1.2);
+.progress-bar.dragging .progress-thumb::after {
+  transform: translate(-50%, -50%) scale(1.2);
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4), 0 0 0 3px rgba(255, 255, 255, 0.9);
 }
 
