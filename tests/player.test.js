@@ -1406,6 +1406,129 @@ test('Fast search does not issue a network request while the player is offline',
   assert.equal(fetchCalls, 0);
 });
 
+test('Cached search results are detected using the active query and filter key', async () => {
+  const cache = new Map();
+  const enhancedCache = {
+    get: (type, key) => cache.get(`${type}:${key}`) || null,
+    set: (type, key, value) => cache.set(`${type}:${key}`, value)
+  };
+  const { context } = await createSandbox({
+    state: { searchUi: { mediatype: 'audio' } },
+    enhancedCache
+  });
+  await evaluateSearchScripts(context);
+
+  assert.equal(context.hasCachedSearchResults('ambient music'), false);
+  const key = context.__resonateGetSearchCacheKey('ambient music', 0);
+  enhancedCache.set('search', key, { results: [{ identifier: 'cached-release' }] });
+
+  assert.equal(context.hasCachedSearchResults('ambient music'), true);
+  assert.equal(context.hasCachedSearchResults('  '), false);
+  context.state.searchUi.mediatype = 'movies';
+  assert.equal(context.hasCachedSearchResults('ambient music'), false);
+});
+
+test('Editing a submitted query aborts its UI requests and invalidates its response', async () => {
+  const uiSource = await readFile(new URL('js/ui.js', projectRoot), 'utf8');
+  const helper = uiSource.match(/function cancelSearchForQueryChange\(query\) \{[\s\S]*?\n\}/);
+  assert.ok(helper, 'cancelSearchForQueryChange should exist');
+
+  let aborts = 0;
+  let headerUpdates = 0;
+  const state = {
+    currentSearchQuery: 'slow search',
+    searchRequestId: 4,
+    searchUi: { isSearching: true, isUpgrading: true },
+    _uiSearchControllers: { fast: {}, optimized: {} }
+  };
+  const context = {
+    state,
+    abortUiSearchControllers() { aborts += 1; },
+    ensureSearchFiltersHeader() { headerUpdates += 1; }
+  };
+  vm.runInNewContext(`${helper[0]}; cancelSearchForQueryChange('new search');`, context);
+
+  assert.equal(state.searchRequestId, 5);
+  assert.equal(state._uiSearchControllers, null);
+  assert.equal(state.searchUi.isSearching, false);
+  assert.equal(state.searchUi.isUpgrading, false);
+  assert.equal(aborts, 1);
+  assert.equal(headerUpdates, 1);
+});
+
+test('A late search page cannot append to a newer query or clear its loading state', async () => {
+  const uiSource = await readFile(new URL('js/ui.js', projectRoot), 'utf8');
+  const loader = uiSource.match(/async function loadNextSearchResultsPage\(\) \{[\s\S]*?\n\}/);
+  assert.ok(loader, 'loadNextSearchResultsPage should exist');
+
+  let resolvePage;
+  let displays = 0;
+  const state = {
+    currentSearchHasMore: true,
+    currentSearchPage: 0,
+    currentSearchQuery: 'old query',
+    searchRequestId: 1,
+    isLoadingMore: false
+  };
+  const context = {
+    state,
+    window: {
+      performOptimizedSearch: () => new Promise(resolve => { resolvePage = resolve; }),
+      logger: { warn() {} }
+    },
+    displaySearchResults() { displays += 1; }
+  };
+  const pageRequest = vm.runInNewContext(`${loader[0]}; loadNextSearchResultsPage();`, context);
+
+  state.currentSearchQuery = 'new query';
+  state.searchRequestId = 2;
+  state.isLoadingMore = true;
+  resolvePage({ results: [{ identifier: 'stale-result' }], hasMore: false });
+
+  assert.equal(await pageRequest, false);
+  assert.equal(state.currentSearchPage, 0);
+  assert.equal(state.isLoadingMore, true);
+  assert.equal(displays, 0);
+});
+
+test('Search pagination preserves an existing load lock and releases its own lock after success', async () => {
+  const uiSource = await readFile(new URL('js/ui.js', projectRoot), 'utf8');
+  const loader = uiSource.match(/async function loadNextSearchResultsPage\(\) \{[\s\S]*?\n\}/);
+  assert.ok(loader, 'loadNextSearchResultsPage should exist');
+
+  let calls = 0;
+  let displays = 0;
+  const state = {
+    currentSearchHasMore: true,
+    currentSearchPage: 0,
+    currentSearchQuery: 'query',
+    searchRequestId: 1,
+    isLoadingMore: true
+  };
+  const context = {
+    state,
+    window: {
+      performOptimizedSearch: async () => {
+        calls += 1;
+        return { results: [{ identifier: 'next-page-result' }], hasMore: false };
+      }
+    },
+    displaySearchResults() { displays += 1; }
+  };
+  const loadPage = vm.runInNewContext(`${loader[0]}; loadNextSearchResultsPage;`, context);
+
+  assert.equal(await loadPage(), false);
+  assert.equal(state.isLoadingMore, true);
+  assert.equal(calls, 0);
+
+  state.isLoadingMore = false;
+  assert.equal(await loadPage(), true);
+  assert.equal(state.currentSearchPage, 1);
+  assert.equal(state.isLoadingMore, false);
+  assert.equal(calls, 1);
+  assert.equal(displays, 1);
+});
+
 test('MediaSession controls dispatch user actions and clamp the reported seek position', async () => {
   const handlers = new Map();
   const positions = [];

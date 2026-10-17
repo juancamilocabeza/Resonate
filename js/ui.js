@@ -662,6 +662,22 @@ function abortUiSearchControllers() {
   }
 }
 
+function cancelSearchForQueryChange(query) {
+  const currentQuery = String(query || '').trim();
+  const dispatchedQuery = String(state.currentSearchQuery || '').trim();
+  if (!dispatchedQuery || currentQuery === dispatchedQuery || !state._uiSearchControllers) return false;
+
+  state.searchRequestId = (state.searchRequestId || 0) + 1;
+  abortUiSearchControllers();
+  state._uiSearchControllers = null;
+  if (state.searchUi) {
+    state.searchUi.isSearching = false;
+    state.searchUi.isUpgrading = false;
+  }
+  try { ensureSearchFiltersHeader(); } catch {}
+  return true;
+}
+
 function dispatchSearchWithFastPath(queryAtDispatch, { keepKeyboard = true, addToHistory = true, showLoader = false } = {}) {
   try {
     const q = String(queryAtDispatch || '').trim();
@@ -713,6 +729,7 @@ function dispatchSearchWithFastPath(queryAtDispatch, { keepKeyboard = true, addT
     }
 
     let displayedKind = null; // 'fast' | 'optimized'
+    let displayedResult = null;
     let historyAdded = false;
 
     const stillCurrent = () => {
@@ -736,6 +753,13 @@ function dispatchSearchWithFastPath(queryAtDispatch, { keepKeyboard = true, addT
       if (!result) return;
       if (kind === 'fast' && displayedKind === 'optimized') return;
       if (kind === displayedKind) return;
+      if (
+        kind === 'optimized' &&
+        displayedKind === 'fast' &&
+        Array.isArray(displayedResult?.results) &&
+        displayedResult.results.length > 0 &&
+        (!Array.isArray(result.results) || result.results.length === 0)
+      ) return;
 
       // Once something is visible, don't keep the UI locked as "searching".
       try {
@@ -747,6 +771,7 @@ function dispatchSearchWithFastPath(queryAtDispatch, { keepKeyboard = true, addT
 
       displaySearchResults(result, true);
       displayedKind = kind;
+      displayedResult = result;
 
       if (kind === 'optimized') {
         try {
@@ -758,7 +783,9 @@ function dispatchSearchWithFastPath(queryAtDispatch, { keepKeyboard = true, addT
     };
 
     const fastFn = (window.performFastSearch || null);
-    const fastPromise = (typeof fastFn === 'function')
+    const hasCachedResults = typeof window.hasCachedSearchResults === 'function'
+      && window.hasCachedSearchResults(q);
+    const fastPromise = (typeof fastFn === 'function' && !hasCachedResults)
       ? fastFn(q, {
         signal: state._uiSearchControllers.fast.signal,
         rows: 6,
@@ -1346,7 +1373,7 @@ function ensureSearchInputControllerBound() {
       e.stopPropagation();
 
       // Mark any in-flight search as stale.
-      state.searchRequestId = (state.searchRequestId || 0) + 1;
+      cancelSearchForQueryChange('');
 
       input.value = '';
       updateSearchClearButton();
@@ -1449,6 +1476,7 @@ function ensureSearchInputControllerBound() {
   input.addEventListener('input', (e) => {
     const currentQuery = (e.target.value || '').trim();
     updateSearchClearButton();
+    cancelSearchForQueryChange(currentQuery);
 
     if (currentQuery === '') {
       isCleaning = true;
@@ -3494,6 +3522,7 @@ function hideSearchResults({ restoreFocus = false } = {}) {
   }
   
   elements.searchResults.classList.remove('active');
+  try { elements.searchResultsList?.setAttribute('aria-busy', 'false'); } catch {}
   try {
     if (elements.searchResultsHeader) elements.searchResultsHeader.hidden = true;
   } catch {}
@@ -3641,6 +3670,7 @@ function navigateSearchResults(direction) {
 // Show skeleton loaders while search is in progress
 function showSearchSkeletons(count = 8) {
   if (!elements.searchResultsList) return;
+  elements.searchResultsList.setAttribute('aria-busy', 'true');
   
   // Show search results panel if not already visible
   if (elements.searchResults && !elements.searchResults.classList.contains('active')) {
@@ -3680,6 +3710,7 @@ function displaySearchResults(searchData, clearExisting = true) {
   } catch {}
 
   if (!searchData) return;
+  try { elements.searchResultsList?.setAttribute('aria-busy', 'false'); } catch {}
   const { hasMore, total } = searchData;
   const deferred = searchData.deferredMetadata === true;
   const resultsRaw = Array.isArray(searchData.results) ? searchData.results : [];
@@ -3894,17 +3925,24 @@ function updateSearchResultsCount(filteredCount = null) {
 }
 
 async function loadNextSearchResultsPage() {
+  const requestId = state.searchRequestId || 0;
+  const query = String(state.currentSearchQuery || '').trim();
+  let ownsLoadingState = false;
   try {
     if (!state.currentSearchHasMore || state.isLoadingMore) return false;
 
     state.isLoadingMore = true;
+    ownsLoadingState = true;
     const nextPage = (Number.isFinite(state.currentSearchPage) ? state.currentSearchPage : 0) + 1;
-    const result = await (window.performOptimizedSearch || performOptimizedSearch)(state.currentSearchQuery, nextPage, {
+    const result = await (window.performOptimizedSearch || performOptimizedSearch)(query, nextPage, {
       showLoader: false,
       activateUI: false,
       abortPrevious: false,
       deferMetadata: true
     });
+    if ((state.searchRequestId || 0) !== requestId || String(state.currentSearchQuery || '').trim() !== query) {
+      return false;
+    }
     state.currentSearchPage = nextPage;
     displaySearchResults(result, false);
     return true;
@@ -3912,7 +3950,9 @@ async function loadNextSearchResultsPage() {
     window.logger?.warn({ message: 'Error en lazy loading', error }, 'NETWORK');
     return false;
   } finally {
-    state.isLoadingMore = false;
+    if (ownsLoadingState && (state.searchRequestId || 0) === requestId && String(state.currentSearchQuery || '').trim() === query) {
+      state.isLoadingMore = false;
+    }
   }
 }
 
