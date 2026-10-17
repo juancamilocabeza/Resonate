@@ -1975,6 +1975,10 @@ function createPlayableFiles(audioFiles, identifier, metadata, { qualityTier, al
   const mergeTrackMetadata = (preferred, alternate) => {
     if (!preferred || !alternate || preferred === alternate) return preferred;
     const merged = { ...preferred };
+    merged.sources = [...(preferred.sources || []), ...(alternate.sources || [])]
+      .filter((source, index, sources) =>
+        sources.findIndex(candidate => candidate.url === source.url) === index
+      )
 
     if (merged.duration === null || merged.duration === undefined) {
       merged.duration = alternate.duration;
@@ -2024,7 +2028,13 @@ function createPlayableFiles(audioFiles, identifier, metadata, { qualityTier, al
         trackIndex: index,
         totalTracks: audioFiles.length,
         fileName: file.name,
-        fileSize: file.size || 0
+        fileSize: file.size || 0,
+        sources: [{
+          url: `https://archive.org/download/${identifier}/${encodeURIComponent(file.name)}`,
+          format: file.format || (file.name.split('.').pop() || '').toUpperCase(),
+          codec: file.codec || '',
+          bitrate: Number.parseFloat(file.bitrate) || null
+        }]
       };
     });
     // Deduplication: prefer .ogg over .mp3 for the same track based on title and artist
@@ -2111,7 +2121,13 @@ function createPlayableFiles(audioFiles, identifier, metadata, { qualityTier, al
       trackIndex: 0,
       totalTracks: 1,
       fileName: audioFile.name,
-      fileSize: audioFile.size || 0
+      fileSize: audioFile.size || 0,
+      sources: [{
+        url: `https://archive.org/download/${identifier}/${encodeURIComponent(audioFile.name)}`,
+        format: audioFile.format || (audioFile.name.split('.').pop() || '').toUpperCase(),
+        codec: audioFile.codec || '',
+        bitrate: Number.parseFloat(audioFile.bitrate) || null
+      }]
     }];
   }
   try {

@@ -2244,7 +2244,7 @@ async function loadAudioWithCache(track) {
   }
 }
 
-function preloadNextTrack(forceFull = false) {
+function preloadNextTrack(forceFull = false, networkProfile = null) {
   try {
     if (!state) return;
     if (typeof audioCache === 'undefined' || !audioCache || typeof audioCache.prefetchAudio !== 'function') return;
@@ -2256,13 +2256,20 @@ function preloadNextTrack(forceFull = false) {
       }
     } catch {}
 
-    // Mejora: precargar las próximas 4 pistas (o más si forceFull)
+    // Bound upcoming-track lookahead by the active network prefetch target.
     const queue = Array.isArray(state.playbackQueue) ? state.playbackQueue : [];
-    const preloadCount = forceFull ? 6 : 4;
+    const controller = window.adaptiveStreamController;
+    const prefetchSeconds = controller && controller.state
+      ? controller.state.prefetchSeconds
+      : networkProfile && networkProfile.prefetchSeconds
+        ? networkProfile.prefetchSeconds
+      : 30;
+    const preloadCount = Math.max(1, Math.min(forceFull ? 6 : 4, Math.ceil(prefetchSeconds / 10)));
     const upcoming = queue.slice(0, preloadCount).filter(t => t && t.url);
     for (const track of upcoming) {
-      audioCache.prefetchAudio(track.url, { streamingOnly: true })
-        .then(() => prewarmAudioFromCache(track.url))
+      const selectedTrack = controller ? controller.selectSource(track) : track;
+      audioCache.prefetchAudio(selectedTrack.url, { streamingOnly: true })
+        .then(() => prewarmAudioFromCache(selectedTrack.url))
         .catch((err) => logPlayback('debug', 'Failed to prefetch upcoming track', err));
     }
 
@@ -2280,6 +2287,36 @@ function preloadNextTrack(forceFull = false) {
     // Never let prefetch break playback
   }
 }
+
+window.applyAdaptiveStreamProfile = function (profile) {
+  const audio = getAudioEl();
+  if (!audio || !profile) return;
+
+  audio.preload = profile.prefetchSeconds <= 5 ? 'metadata' : 'auto';
+  preloadNextTrack(false, profile);
+  if (state && !state.isLoading && state.currentTrack && !isCastPlaybackActive()) {
+    const controller = window.adaptiveStreamController;
+    const selectedTrack = controller && controller.selectSource(state.currentTrack);
+    if (selectedTrack && selectedTrack.url !== state.currentTrack.url) {
+      const wasPlaying = !audio.paused;
+      const currentTime = audio.currentTime;
+      state.currentTrack = { ...state.currentTrack, ...selectedTrack };
+      state.currentAudioUrl = selectedTrack.url;
+      state.currentBlobUrl = null;
+      audio.pause();
+      audio.addEventListener('loadedmetadata', () => {
+        if (Number.isFinite(currentTime) && currentTime < audio.duration) {
+          audio.currentTime = currentTime;
+        }
+        if (wasPlaying) {
+          audio.play().catch(error => logPlayback('warn', 'Could not resume after adaptive source change', error));
+        }
+      }, { once: true });
+      audio.src = selectedTrack.url;
+      audio.load();
+    }
+  }
+};
 
 // ---- Resontes naming (backward compatible) ----
 function getResontesList() {
@@ -2307,6 +2344,9 @@ function isTrackResonteSafe(track) {
 async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalTracks = 1, showProgress = true) {
   // Global loading lock: used by togglePlay/Next/Prev to avoid races.
   state.isLoading = true;
+  if (window.adaptiveStreamController) {
+    track = window.adaptiveStreamController.selectSource(track);
+  }
 
   // Show loader based on context - ONLY playback shows progress
   if (window.Loaders && typeof window.Loaders.showLoader === 'function') {

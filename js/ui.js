@@ -6033,6 +6033,27 @@ function __resonateAttachConnectivityHandlersOnce() {
   });
 }
 
+function showAdaptiveStreamNotice(message) {
+  let region = document.getElementById('status-messages');
+  if (!region) {
+    region = document.createElement('div');
+    region.id = 'status-messages';
+    region.setAttribute('role', 'status');
+    region.setAttribute('aria-live', 'polite');
+    region.setAttribute('aria-atomic', 'true');
+    document.body.appendChild(region);
+  }
+
+  const notice = document.createElement('div');
+  notice.className = 'status-message status-info';
+  notice.textContent = message;
+  region.replaceChildren(notice);
+  window.setTimeout(() => {
+    notice.classList.add('fade-out');
+    window.setTimeout(() => notice.remove(), 300);
+  }, 3000);
+}
+
 function setupConnectivityMonitoring() {
   // navigator.onLine can be undefined or unreliable in some contexts.
   // Default to online unless explicitly false.
@@ -6040,6 +6061,28 @@ function setupConnectivityMonitoring() {
 
   __resonateSetSearchOnlineState(state.networkOnline);
   __resonateAttachConnectivityHandlersOnce();
+
+  if (!window.adaptiveStreamController && window.AdaptiveStreamController) {
+    const onNetworkStateChange = (networkState, previousState) => {
+      if (typeof window.applyAdaptiveStreamProfile === 'function') {
+        window.applyAdaptiveStreamProfile(networkState);
+      }
+      if (networkState.saveData && (!previousState || !previousState.saveData)) {
+        showAdaptiveStreamNotice('Modo Ahorro de Datos Activo');
+      } else if (previousState && previousState.quality !== networkState.quality) {
+        showAdaptiveStreamNotice(`Calidad de streaming: ${networkState.quality}`);
+      }
+    };
+    let controller = null;
+    controller = new window.AdaptiveStreamController({
+      bus: state.events,
+      onStateChange: (networkState, previousState) => {
+        if (controller) onNetworkStateChange(networkState, previousState);
+      }
+    });
+    window.adaptiveStreamController = controller;
+    onNetworkStateChange(controller.state, null);
+  }
 }
 
 // Configuration constants for page lifecycle

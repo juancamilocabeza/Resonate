@@ -1,0 +1,15 @@
+{
+  "name": "@resonate/player-component",
+  "version": "1.0.0",
+  "description": "Accessible Choo/Nanocomponent controls for the Resonate audio player",
+  "main": "src/AccessibleAudioPlayer.js",
+  "style": "src/AudioPlayer.css",
+  "type": "module",
+  "scripts": {
+    "test": "node test.js"
+  },
+  "dependencies": {
+    "nanohtml": "^1.10.0",
+    "nanocomponent": "^6.6.0"
+  }
+}
