@@ -2,6 +2,12 @@
 
 // --- Playback Robustness Watcher ---
 // Reintenta de forma transparente el playback y wake lock si el audio debería estar sonando y no lo está
+function isCastPlaybackActive() {
+  return Boolean(window.CastManager
+    && typeof window.CastManager.isSessionActive === 'function'
+    && window.CastManager.isSessionActive());
+}
+
 (function setupPlaybackRobustnessWatcher() {
   let lastUserPaused = false;
   let lastManualPause = false;
@@ -13,6 +19,7 @@
     try {
       const audio = getAudioEl();
       if (!audio) return false;
+      if (isCastPlaybackActive()) return false;
       if (window._resonateTrackTransitionInProgress) return false;
       // Don't interfere while a track load is already in progress.
       if (window.state && window.state.isLoading) return false;
@@ -94,6 +101,7 @@
     try {
       const audio = getAudioEl();
       if (!audio) return false;
+      if (isCastPlaybackActive()) return false;
       if (window._resonateTrackTransitionInProgress) return false;
       if (window.state && window.state.isLoading) return false;
       if (!audio.src) return false;
@@ -2350,8 +2358,11 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
     if (elements.playBtn) elements.playBtn.disabled = false;
   } catch {}
 
-  audioEl.pause();
-  audioEl.currentTime = 0;
+  const castWasActive = isCastPlaybackActive();
+  if (!castWasActive) {
+    audioEl.pause();
+    audioEl.currentTime = 0;
+  }
 
   {
     const trackTitle = track.title || 'Untitled';
@@ -2416,18 +2427,41 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
   updateFavoriteButton();
   updateMediaSessionMetadata(track, identifier);
 
-  try {
-    if (window.CastManager && typeof window.CastManager.isSessionActive === 'function' && window.CastManager.isSessionActive()) {
-      var castDuration = null;
-      if (track && typeof track.duration === 'number' && isFinite(track.duration) && track.duration > 0) {
+  if (castWasActive) {
+    try {
+      let castDuration = null;
+      if (typeof track.duration === 'number' && isFinite(track.duration) && track.duration > 0) {
         castDuration = track.duration;
-      } else if (audioEl && typeof audioEl.duration === 'number' && isFinite(audioEl.duration) && audioEl.duration > 0) {
+      } else if (typeof audioEl.duration === 'number' && isFinite(audioEl.duration) && audioEl.duration > 0) {
         castDuration = audioEl.duration;
       }
-      var castUrl = track.url || '';
-      window.CastManager.loadMediaFromTrack(track, castUrl, 0, castDuration);
+      await window.CastManager.loadMediaFromTrack(track, track.url, 0, castDuration, { force: true });
+      state.isLoading = false;
+      try {
+        updateLoaderProgress(100);
+        resetAutoSkipBudgetForCurrentContext();
+        safeShowStatus('Casting to device', 'info');
+      } catch (error) {
+        logPlayback('warn', 'Could not update Cast playback UI', error);
+      }
+      try {
+        if (window.Loaders && typeof window.Loaders.hideLoader === 'function') window.Loaders.hideLoader();
+      } catch (error) {
+        logPlayback('warn', 'Could not hide Cast playback loader', error);
+      }
+      return true;
+    } catch (error) {
+      state.isLoading = false;
+      try {
+        if (window.Loaders && typeof window.Loaders.hideLoader === 'function') window.Loaders.hideLoader();
+      } catch (loaderError) {
+        logPlayback('warn', 'Could not hide Cast playback loader', loaderError);
+      }
+      throw error;
+    } finally {
+      stopInitialRamp();
     }
-  } catch {}
+  }
 
   // Update meta tags for rich previews
   if (typeof updateMetaTags === 'function') {
@@ -2462,7 +2496,6 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
         ? window.CastManager.isSessionActive()
         : false;
       if (castActive) {
-        try { audio.pause(); } catch {}
         state.isLoading = false;
         resolve(true);
         return;

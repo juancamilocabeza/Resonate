@@ -790,6 +790,41 @@ test('Context playback advances and loops continuously at the end of the queue',
   assert.deepEqual(played, ['Second', 'First']);
 });
 
+test('Cast playback advances the queue on the receiver without starting local audio', async () => {
+  const { context, audio, state } = await createPlayer();
+  const tracks = [
+    { url: 'https://archive.org/first.mp3', title: 'First' },
+    { url: 'https://archive.org/second.mp3', title: 'Second' }
+  ];
+  const loadedOnReceiver = [];
+  context.elements.title = { textContent: '' };
+  context.elements.creator = { textContent: '' };
+  context.setArtwork = async () => {};
+  context.updateFavoriteButton = () => {};
+  context.updateMediaSessionMetadata = () => {};
+  context.CastManager = {
+    isSessionActive: () => true,
+    async loadMediaFromTrack(track, url, currentTime, duration, options) {
+      loadedOnReceiver.push({ title: track.title, url, currentTime, duration, force: options.force });
+    }
+  };
+  context.playbackManager.setSearchPlaylist(tracks, 0);
+  context.enhancedPlaybackController.setContext('searchPlaylist');
+
+  await context.enhancedPlaybackController.handleTrackEnd();
+  await context.enhancedPlaybackController.handleTrackEnd();
+
+  assert.deepEqual(
+    loadedOnReceiver.map(item => item.title),
+    ['Second', 'First']
+  );
+  assert.ok(loadedOnReceiver.every(item => item.force));
+  assert.equal(audio.playCalls, 0);
+  assert.equal(audio.pauseCalls, 0);
+  assert.equal(audio.src, 'https://archive.org/audio.mp3');
+  assert.equal(state.isLoading, false);
+});
+
 test('A failed track transition releases its lock and propagates the error', async () => {
   const { context } = await createPlayer();
   const controller = context.enhancedPlaybackController;
