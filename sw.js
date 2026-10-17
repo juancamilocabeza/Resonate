@@ -46,7 +46,7 @@ function deriveSwVersion() {
 const SW_VERSION = deriveSwVersion();
 
 // Must be defined before activate/fetch handlers so it can be preserved.
-const AUDIO_CACHE_NAME = 'audio-cache-v1';
+const AUDIO_CACHE_NAME = 'resonate-audio-v1';
 
 const RUNTIME_CACHE_LIMITS = {
   SEARCH_MAX_ENTRIES: 80,
@@ -77,6 +77,8 @@ const STATIC_FILES = [
   '/js/cover-manager.js',
   '/js/wake-lock-manager.js',
   '/js/subtitle-manager.js',
+  '/js/local-track-storage.js',
+  '/js/local-track-storage-worker.js',
   '/js/playlist-manager.js',
   '/js/playlist-ui.js',
   '/icons/favicon.svg',
@@ -131,9 +133,125 @@ function isCoverRequest(url) {
 
 function isAudioRequest(request, url) {
   if (request.destination === 'audio') return true;
-  if (!isArchiveOrg(url)) return false;
   const path = url.pathname.toLowerCase();
-  return path.endsWith('.flac') || path.endsWith('.ogg') || path.endsWith('.mp3');
+  if (/\.(?:mp3|opus|flac)$/.test(path)) return true;
+  return isSameOrigin(url) && /^\/api\/(?:.*\/)?(?:audio|stream)(?:\/|$)/.test(path);
+}
+
+function parseByteRange(rangeHeader, size) {
+  const match = /^bytes=(\d*)-(\d*)$/i.exec(rangeHeader || '');
+  if (!match || (!match[1] && !match[2])) return null;
+
+  const startValue = match[1] ? Number(match[1]) : null;
+  const endValue = match[2] ? Number(match[2]) : null;
+  if ((startValue !== null && !Number.isSafeInteger(startValue)) ||
+      (endValue !== null && !Number.isSafeInteger(endValue))) {
+    return null;
+  }
+
+  if (size === 0) return { unsatisfiable: true };
+
+  let start;
+  let end;
+  if (startValue === null) {
+    const suffixLength = endValue;
+    if (suffixLength === 0) return { unsatisfiable: true };
+    start = Math.max(size - suffixLength, 0);
+    end = size - 1;
+  } else {
+    start = startValue;
+    end = endValue === null ? size - 1 : Math.min(endValue, size - 1);
+  }
+
+  if (start >= size || start > end) return { unsatisfiable: true };
+  return { start, end };
+}
+
+function getAudioContentType(response, url) {
+  const contentType = getContentType(response);
+  if (contentType) return contentType;
+  const path = url.pathname.toLowerCase();
+  if (path.endsWith('.mp3')) return 'audio/mpeg';
+  if (path.endsWith('.opus')) return 'audio/ogg';
+  if (path.endsWith('.flac')) return 'audio/flac';
+  return 'application/octet-stream';
+}
+
+async function cacheFullAudioResponse(request, response) {
+  if (!response || (response.status !== 200 && response.type !== 'opaque')) return;
+  const cache = await caches.open(AUDIO_CACHE_NAME);
+  await cache.put(request.url, response.clone());
+}
+
+async function fetchAndCacheFullAudio(request) {
+  const headers = new Headers(request.headers);
+  headers.delete('Range');
+  const fullRequest = new Request(request, { headers });
+  const response = await fetch(fullRequest);
+  await cacheFullAudioResponse(request, response);
+}
+
+async function handleAudioRequest(event, request, url) {
+  const rangeHeader = request.headers.get('Range');
+  let cachedResponse = null;
+
+  try {
+    const cache = await caches.open(AUDIO_CACHE_NAME);
+    cachedResponse = await cache.match(request.url);
+    if (cachedResponse) {
+      if (!rangeHeader) return cachedResponse;
+      if (cachedResponse.type !== 'opaque' && cachedResponse.status === 200) {
+        const buffer = await cachedResponse.arrayBuffer();
+        const range = parseByteRange(rangeHeader, buffer.byteLength);
+        if (range && range.unsatisfiable) {
+          return new Response(null, {
+            status: 416,
+            headers: {
+              'Accept-Ranges': 'bytes',
+              'Content-Range': `bytes */${buffer.byteLength}`
+            }
+          });
+        }
+
+        if (range) {
+          const body = buffer.slice(range.start, range.end + 1);
+          return new Response(body, {
+            status: 206,
+            headers: {
+              'Accept-Ranges': 'bytes',
+              'Content-Length': String(body.byteLength),
+              'Content-Range': `bytes ${range.start}-${range.end}/${buffer.byteLength}`,
+              'Content-Type': getAudioContentType(cachedResponse, url)
+            }
+          });
+        }
+
+        return cachedResponse;
+      }
+    }
+  } catch (error) {
+    console.warn('SW: Audio cache lookup failed:', request.url, error);
+  }
+
+  const networkResponse = await fetch(request);
+
+  // A range response is not a complete audio file. Fetch the full resource in
+  // the background so a later offline range request can be served from cache.
+  if (rangeHeader && networkResponse.status !== 200) {
+    event.waitUntil(
+      fetchAndCacheFullAudio(request).catch((error) => {
+        console.warn('SW: Failed to cache full audio response:', request.url, error);
+      })
+    );
+  } else if (networkResponse.status === 200 || networkResponse.type === 'opaque') {
+    event.waitUntil(
+      cacheFullAudioResponse(request, networkResponse).catch((error) => {
+        console.warn('SW: Failed to cache audio response:', request.url, error);
+      })
+    );
+  }
+
+  return networkResponse;
 }
 
 function isMetadataRequest(url) {
@@ -474,6 +592,7 @@ self.addEventListener('fetch', (event) => {
 
   const url = getUrl(event.request);
   if (!url) return;
+  const audioRequest = isAudioRequest(event.request, url);
 
   // Never intercept the service worker script itself
   if (url.pathname === '/sw.js') {
@@ -482,7 +601,7 @@ self.addEventListener('fetch', (event) => {
 
   // Never intercept same-origin API requests.
   // These are dynamic and should always go to network (and avoid SW bugs/caching).
-  if (isSameOrigin(url) && url.pathname.startsWith('/api/')) {
+  if (isSameOrigin(url) && url.pathname.startsWith('/api/') && !audioRequest) {
     return;
   }
 
@@ -492,9 +611,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Let the browser stream Archive.org audio directly. Fetch interception forces
-  // CORS checks against redirected CDN hosts that may not expose audio to fetch().
-  if (isArchiveOrg(url) && isAudioRequest(event.request, url)) {
+  if (audioRequest) {
+    event.respondWith(handleAudioRequest(event, event.request, url));
     return;
   }
 
