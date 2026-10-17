@@ -1338,6 +1338,56 @@ test('Cast controls synchronize the playback queue and load the current track', 
   assert.deepEqual(calls[3], ['status', 'Casting to device']);
 });
 
+test('Cast controls use the current playlist URL instead of an album track index', async () => {
+  const button = createMockElement('BUTTON');
+  const tracks = [
+    { url: 'https://archive.org/first.mp3' },
+    { url: 'https://archive.org/current.mp3' },
+    { url: 'https://archive.org/next.mp3' }
+  ];
+  const audio = Object.assign(createEventTarget(), {
+    currentSrc: tracks[1].url,
+    currentTime: 18,
+    duration: 120
+  });
+  const contextData = {
+    searchPlaylist: { items: tracks, currentIndex: 0 }
+  };
+  const track = {
+    url: tracks[1].url,
+    title: 'Current track',
+    trackIndex: 0
+  };
+  const queued = [];
+  const document = Object.assign(createEventTarget(), {
+    getElementById: id => id === 'current-track-cast' ? button : id === 'audio' ? audio : null
+  });
+  const { context } = await createSandbox({
+    document,
+    elements: { audio, currentTrackCast: button },
+    state: { currentTrack: track },
+    playbackManager: {
+      getCurrentContext: () => 'searchPlaylist',
+      contextData
+    },
+    loadPlaybackQueue: (...args) => queued.push(args),
+    getCastCapabilities: () => ({ canRemotePlayback: false, canAirPlay: false }),
+    CastManager: {
+      ensureReady: async () => true,
+      requestSession: async () => {},
+      loadMediaFromTrack: async () => {}
+    },
+    logger: { info() {}, warn() {} }
+  });
+  await evaluateScript(context, 'js/cast-controls.js');
+
+  button.dispatchEvent({ type: 'click' });
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.equal(contextData.searchPlaylist.currentIndex, 1);
+  assert.deepEqual(queued, [['searchPlaylist', tracks, 2]]);
+});
+
 test('Cast controls use native remote playback when the Cast sender is unavailable', async () => {
   const button = createMockElement('BUTTON');
   const calls = [];

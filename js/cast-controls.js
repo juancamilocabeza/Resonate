@@ -63,20 +63,18 @@
         ? manager.contextData[currentContext]
         : null;
       if (currentContext && currentContextData && Array.isArray(currentContextData.items) && currentContextData.items.length > 0) {
-        let startIndex = -1;
-        if (track && typeof track.trackIndex === 'number' && track.trackIndex >= 0) {
-          startIndex = track.trackIndex;
-        }
-
-        if (startIndex < 0 && track) {
-          if (currentContext === 'search') {
-            startIndex = currentContextData.items.findIndex(item => item && (item.identifier || item.id) === (track.albumId || track.id));
-          } else if (track.url) {
-            startIndex = currentContextData.items.findIndex(item => item && item.url === track.url);
-          }
-        }
-
-        if (startIndex < 0) startIndex = 0;
+        const isSearchContext = currentContext === 'search';
+        const startIndex = getTrackIndex(
+          currentContextData.items,
+          isSearchContext
+            ? (track && (track.albumId || track.id))
+            : (track && track.url),
+          isSearchContext
+            ? item => item && (item.identifier || item.id)
+            : item => item && item.url,
+          track,
+          currentContext === 'album'
+        );
         currentContextData.currentIndex = startIndex;
 
         if (currentContext === 'album' && !currentContextData.currentAlbumId) {
@@ -146,9 +144,13 @@
   }
 
   function getTrackIndex(items, matchValue, getItemValue, track, preferTrackIndex) {
-    let index = preferTrackIndex && track && typeof track.trackIndex === 'number' ? track.trackIndex : -1;
-    if (index < 0 && matchValue) {
+    let index = -1;
+    if (matchValue) {
       index = items.findIndex(item => getItemValue(item) === matchValue);
+    }
+    if (index < 0 && preferTrackIndex && track && Number.isInteger(track.trackIndex)
+      && track.trackIndex >= 0 && track.trackIndex < items.length) {
+      index = track.trackIndex;
     }
     return index < 0 ? 0 : index;
   }
