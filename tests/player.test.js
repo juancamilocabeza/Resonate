@@ -488,8 +488,18 @@ test('Audio cache deduplicates concurrent requests for the same URL', async () =
   assert.equal(first?.blob?.size, second?.blob?.size);
 });
 
-test('Service worker does not intercept Archive.org audio streaming requests', async () => {
+async function createServiceWorkerHarness({ fetch, audioEntries = [] }) {
   const listeners = new Map();
+  const audioCacheEntries = new Map(audioEntries);
+  const audioCache = {
+    async match(key) {
+      const response = audioCacheEntries.get(typeof key === 'string' ? key : key.url);
+      return response ? response.clone() : null;
+    },
+    async put(key, response) {
+      audioCacheEntries.set(typeof key === 'string' ? key : key.url, response);
+    }
+  };
   const serviceWorkerConsole = {
     debug() {},
     log() {},
@@ -506,40 +516,146 @@ test('Service worker does not intercept Archive.org audio streaming requests', a
     },
     console: serviceWorkerConsole,
     addEventListener(type, listener) {
-      listeners.set(type, listener);
+      if (!listeners.has(type)) listeners.set(type, []);
+      listeners.get(type).push(listener);
     }
   };
   const { context } = await createSandbox({
     self: serviceWorker,
     console: serviceWorkerConsole,
-    caches: {}
+    caches: { open: async () => audioCache },
+    fetch,
+    Request,
+    Response,
+    Headers
   });
   await evaluateScript(context, 'sw.js');
 
-  const fetchHandler = listeners.get('fetch');
-  for (const request of [
-    {
-      url: 'https://archive.org/download/item/track.mp3',
-      method: 'GET',
-      destination: 'audio',
-      headers: { has: () => false }
-    },
-    {
-      url: 'https://archive.org/download/item/track.mp3',
-      method: 'GET',
-      destination: '',
-      headers: { has: () => false }
-    }
-  ]) {
-    let intercepted = false;
-    fetchHandler({
-      request,
-      respondWith() {
-        intercepted = true;
+  return {
+    audioCacheEntries,
+    async dispatch(request) {
+      let responsePromise = null;
+      const backgroundTasks = [];
+      for (const handler of listeners.get('fetch') || []) {
+        handler({
+          request,
+          respondWith(response) {
+            responsePromise = Promise.resolve(response);
+          },
+          waitUntil(task) {
+            backgroundTasks.push(Promise.resolve(task));
+          }
+        });
       }
-    });
-    assert.equal(intercepted, false);
-  }
+      return {
+        intercepted: responsePromise !== null,
+        response: responsePromise ? await responsePromise : null,
+        backgroundTasks
+      };
+    }
+  };
+}
+
+test('Service worker serves cached audio byte ranges with partial content headers', async () => {
+  let networkRequests = 0;
+  const url = 'https://archive.org/download/item/track.mp3';
+  const harness = await createServiceWorkerHarness({
+    fetch: async () => {
+      networkRequests += 1;
+      throw new Error('Cached audio should not trigger a network request');
+    },
+    audioEntries: [[url, new Response('0123456789', {
+      headers: { 'Content-Type': 'audio/mpeg' }
+    })]]
+  });
+
+  const { intercepted, response } = await harness.dispatch(new Request(url, {
+    headers: { Range: 'bytes=2-5' }
+  }));
+  assert.equal(intercepted, true);
+  assert.equal(response.status, 206);
+  assert.equal(await response.text(), '2345');
+  assert.equal(response.headers.get('Accept-Ranges'), 'bytes');
+  assert.equal(response.headers.get('Content-Range'), 'bytes 2-5/10');
+  assert.equal(response.headers.get('Content-Length'), '4');
+  assert.equal(response.headers.get('Content-Type'), 'audio/mpeg');
+  assert.equal(networkRequests, 0);
+
+  const suffix = await harness.dispatch(new Request(url, {
+    headers: { Range: 'bytes=-3' }
+  }));
+  assert.equal(await suffix.response.text(), '789');
+  assert.equal(suffix.response.headers.get('Content-Range'), 'bytes 7-9/10');
+
+  const unsatisfiable = await harness.dispatch(new Request(url, {
+    headers: { Range: 'bytes=10-' }
+  }));
+  assert.equal(unsatisfiable.response.status, 416);
+  assert.equal(unsatisfiable.response.headers.get('Content-Range'), 'bytes */10');
+  assert.equal(networkRequests, 0);
+});
+
+test('Service worker caches a complete response after an uncached audio range request', async () => {
+  const url = 'https://archive.org/download/item/track.opus';
+  const requests = [];
+  const harness = await createServiceWorkerHarness({
+    fetch: async request => {
+      requests.push(request);
+      if (request.headers.has('Range')) {
+        return new Response('0123', {
+          status: 206,
+          headers: { 'Content-Range': 'bytes 0-3/10', 'Content-Type': 'audio/ogg' }
+        });
+      }
+      return new Response('0123456789', {
+        headers: { 'Content-Type': 'audio/ogg' }
+      });
+    }
+  });
+
+  const first = await harness.dispatch(new Request(url, {
+    headers: { Range: 'bytes=0-3' }
+  }));
+  assert.equal(first.response.status, 206);
+  await Promise.all(first.backgroundTasks);
+  assert.equal(requests.length, 2);
+  assert.equal(requests[1].headers.has('Range'), false);
+  assert.equal(await harness.audioCacheEntries.get(url).clone().text(), '0123456789');
+
+  const second = await harness.dispatch(new Request(url, {
+    headers: { Range: 'bytes=4-' }
+  }));
+  assert.equal(second.response.status, 206);
+  assert.equal(await second.response.text(), '456789');
+  assert.equal(second.response.headers.get('Content-Range'), 'bytes 4-9/10');
+  assert.equal(requests.length, 2);
+});
+
+test('Service worker intercepts API audio streams but leaves other API calls alone', async () => {
+  const requestedUrls = [];
+  const harness = await createServiceWorkerHarness({
+    fetch: async request => {
+      requestedUrls.push(request.url);
+      return new Response('stream', { headers: { 'Content-Type': 'audio/mpeg' } });
+    }
+  });
+
+  const stream = await harness.dispatch(new Request('https://resonate.test/api/stream/track'));
+  assert.equal(stream.intercepted, true);
+  assert.equal(await stream.response.text(), 'stream');
+  await Promise.all(stream.backgroundTasks);
+
+  const metadata = await harness.dispatch(new Request('https://resonate.test/api/archive/metadata/item'));
+  assert.equal(metadata.intercepted, false);
+  assert.deepEqual(requestedUrls, ['https://resonate.test/api/stream/track']);
+});
+
+test('Service worker does not intercept unrelated API requests', async () => {
+  const harness = await createServiceWorkerHarness({
+    fetch: async () => new Response('unused')
+  });
+  const { intercepted } = await harness.dispatch(new Request('https://resonate.test/api/search'));
+  assert.equal(intercepted, false);
 });
 
 test('Play starts the loaded track and updates the transport button', async () => {
