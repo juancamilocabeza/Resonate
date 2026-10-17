@@ -1430,6 +1430,9 @@ test('Cast manager configures CAF, synchronizes state, and restores local playba
       SESSION_STARTED: 'SESSION_STARTED',
       SESSION_RESUMING: 'SESSION_RESUMING',
       SESSION_RESUMED: 'SESSION_RESUMED',
+      SESSION_ENDING: 'SESSION_ENDING',
+      SESSION_START_FAILED: 'SESSION_START_FAILED',
+      SESSION_RESUME_FAILED: 'SESSION_RESUME_FAILED',
       SESSION_ENDED: 'SESSION_ENDED'
     },
     CastContextEventType: {
@@ -1499,6 +1502,14 @@ test('Cast manager configures CAF, synchronizes state, and restores local playba
   assert.equal(castContext.options.autoJoinPolicy, 'ORIGINAL_URL');
   assert.equal(manager.getCastButtonState(), 'NO_DEVICES_AVAILABLE');
 
+  castContext.castState = 'CONNECTED';
+  castContext.dispatchEvent({ type: 'CAST_STATE_CHANGED' });
+  assert.equal(manager.getCastButtonState(), 'NOT_CONNECTED');
+
+  castContext.castState = 'NO_DEVICES_AVAILABLE';
+  castContext.dispatchEvent({ type: 'CAST_STATE_CHANGED' });
+  assert.equal(manager.getCastButtonState(), 'NO_DEVICES_AVAILABLE');
+
   castContext.sessionState = 'SESSION_STARTING';
   castContext.castState = 'CONNECTING';
   castContext.dispatchEvent({ type: 'SESSION_STATE_CHANGED', sessionState: 'SESSION_STARTING' });
@@ -1551,9 +1562,16 @@ test('Cast manager configures CAF, synchronizes state, and restores local playba
   audio.dispatchEvent({ type: 'seeked' });
   assert.equal(lastSeekRequest.currentTime, 50);
 
+  // Wait for CAF's terminal session event rather than restoring local audio on a transient disconnect.
   remotePlayer.isConnected = false;
+  controller.dispatchEvent({ type: 'IS_CONNECTED_CHANGED' });
+  assert.equal(audio.playCalls, 0);
+  castContext.sessionState = 'SESSION_ENDING';
+  castContext.dispatchEvent({ type: 'SESSION_STATE_CHANGED', sessionState: 'SESSION_ENDING' });
+  assert.equal(manager.getCastButtonState(), 'CONNECTED');
+  castContext.sessionState = 'SESSION_ENDED';
   castContext.session = null;
-  castContext.castState = 'NOT_CONNECTED';
+  castContext.castState = 'CONNECTED';
   castContext.sessionState = 'SESSION_ENDED';
   castContext.dispatchEvent({ type: 'SESSION_STATE_CHANGED', sessionState: 'SESSION_ENDED' });
   await new Promise(resolve => setImmediate(resolve));
@@ -1561,6 +1579,18 @@ test('Cast manager configures CAF, synchronizes state, and restores local playba
   assert.equal(audio.playCalls, 1);
   assert.equal(manager.getCastButtonState(), 'NOT_CONNECTED');
   assert.equal(mediaUpdateListeners.size, 0);
+
+  // Initialization must reconcile a session that auto-joined before listeners were registered.
+  audio.paused = true;
+  castContext.session = session;
+  castContext.sessionState = 'SESSION_RESUMED';
+  castContext.castState = 'CONNECTED';
+  remotePlayer.isConnected = true;
+  remotePlayer.isPaused = false;
+  manager.destroy();
+  assert.equal(manager.init(), true);
+  assert.equal(manager.getCastButtonState(), 'CONNECTED');
+  assert.equal(mediaUpdateListeners.size, 1);
   manager.destroy();
 });
 

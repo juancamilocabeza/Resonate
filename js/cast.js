@@ -407,7 +407,7 @@
   }
 
   function restoreLocalPlayback() {
-    if (!hadActiveCastSession || fallbackInProgress) return;
+    if (!hadActiveCastSession || fallbackInProgress || isSessionActive()) return;
     fallbackInProgress = true;
 
     // Capture the receiver position before ending the session and resume HTML5 audio at that point.
@@ -1040,22 +1040,34 @@
     var SessionState = window.cast && window.cast.framework ? window.cast.framework.SessionState : null;
     var castState = getCastState();
     var sessionState = getSessionState();
+    var context = getCastContext();
+    var session = null;
+    try {
+      session = context ? context.getCurrentSession() : null;
+    } catch (error) {
+      logCastError('Could not read the current Cast session', error);
+    }
     var state = 'NOT_CONNECTED';
-
-    if (SessionState && (
+    var isActiveSession = !!(SessionState && (
       sessionState === SessionState.SESSION_STARTED
       || sessionState === SessionState.SESSION_RESUMED
-    )) {
-      state = 'CONNECTED';
-    } else if (SessionState && (
+      || (SessionState.SESSION_ENDING && sessionState === SessionState.SESSION_ENDING)
+    ));
+    var isStartingSession = !!(SessionState && (
       sessionState === SessionState.SESSION_STARTING
       || sessionState === SessionState.SESSION_RESUMING
-    ) || (CastState && castState === CastState.CONNECTING)) {
+    ));
+
+    // CAF session lifecycle is authoritative; CastState can lag briefly at session end.
+    if (isActiveSession) {
+      state = 'CONNECTED';
+    } else if (isStartingSession || (CastState && castState === CastState.CONNECTING)) {
       state = 'CONNECTING';
     } else if (remotePlayer && remotePlayer.isConnected
-      && (!SessionState || sessionState == null)) {
+      && (!SessionState || sessionState == null) && session) {
       state = 'CONNECTED';
-    } else if (CastState && castState === CastState.CONNECTED) {
+    } else if (CastState && castState === CastState.CONNECTED && session
+      && (!SessionState || sessionState == null)) {
       state = 'CONNECTED';
     } else if (CastState && castState === CastState.NO_DEVICES_AVAILABLE) {
       state = 'NO_DEVICES_AVAILABLE';
@@ -1067,6 +1079,55 @@
       button.setAttribute('aria-pressed', state === 'CONNECTED' ? 'true' : 'false');
     } catch (error) {
       logCastError('Could not expose the Cast button state', error);
+    }
+  }
+
+  function handleSessionStateChange(context, state) {
+    var SessionState = window.cast && window.cast.framework
+      ? window.cast.framework.SessionState
+      : null;
+    if (!context || !SessionState) return;
+
+    try {
+      var session = context.getCurrentSession();
+      var sessionId = session && session.getSessionId ? String(session.getSessionId()) : '';
+      var isActive = state === String(SessionState.SESSION_STARTED)
+        || state === String(SessionState.SESSION_RESUMED)
+        || (SessionState.SESSION_ENDING
+          && state === String(SessionState.SESSION_ENDING));
+      var isStarting = state === String(SessionState.SESSION_STARTING)
+        || state === String(SessionState.SESSION_RESUMING);
+      var isFailed = (SessionState.SESSION_START_FAILED
+          && state === String(SessionState.SESSION_START_FAILED))
+        || (SessionState.SESSION_RESUME_FAILED
+          && state === String(SessionState.SESSION_RESUME_FAILED));
+
+      if (sessionId !== lastSessionId) {
+        lastSessionId = sessionId;
+        lastMediaUrl = '';
+      }
+
+      updateCastUi(state, session);
+      ensureRemotePlayer();
+      if (isActive) {
+        hadActiveCastSession = true;
+        if (sessionId) maybeShowCastingHint(sessionId);
+        attachMediaSessionListeners(session);
+        startCastPlaybackMonitor();
+      } else if (isStarting) {
+        attachMediaSessionListeners(session);
+      } else if (isFailed || state === String(SessionState.SESSION_ENDED)) {
+        restoreLocalPlayback();
+        detachSessionListeners();
+      }
+
+      if (isActive && remotePlayer && remotePlayer.mediaInfo) {
+        syncLocalTrackFromRemoteMedia(remotePlayer.mediaInfo, true);
+      }
+      refreshCastButtonState();
+      updateLocalTransportState();
+    } catch (error) {
+      logCastError('Could not handle Cast session state change', error);
     }
   }
 
@@ -1093,37 +1154,10 @@
       try {
         // Keep context observers for app lifetime so resumed sessions reattach without duplicate handlers.
         addTrackedListener(context, window.cast.framework.CastContextEventType.SESSION_STATE_CHANGED, function (event) {
-          try {
-            var state = event && event.sessionState ? String(event.sessionState) : '';
-            var session = context.getCurrentSession();
-            var sessionId = session && session.getSessionId ? String(session.getSessionId()) : '';
-            if (sessionId !== lastSessionId) {
-              lastSessionId = sessionId;
-              lastMediaUrl = '';
-            }
-            updateCastUi(state, session);
-            refreshCastButtonState();
-            ensureRemotePlayer();
-            if (sessionId) {
-              maybeShowCastingHint(sessionId);
-            }
-            attachMediaSessionListeners(session);
-            if (state === String(window.cast.framework.SessionState.SESSION_STARTED)
-              || state === String(window.cast.framework.SessionState.SESSION_RESUMED)) {
-              hadActiveCastSession = true;
-              startCastPlaybackMonitor();
-            } else if (state === String(window.cast.framework.SessionState.SESSION_ENDED)) {
-              restoreLocalPlayback();
-              detachSessionListeners();
-            }
-            try {
-              if (remotePlayer && remotePlayer.mediaInfo) {
-                syncLocalTrackFromRemoteMedia(remotePlayer.mediaInfo, true);
-              }
-            } catch (e) {}
-          } catch (error) {
-            logCastError('Could not handle Cast session state change', error);
-          }
+          var state = event && event.sessionState
+            ? String(event.sessionState)
+            : String(getSessionState() || '');
+          handleSessionStateChange(context, state);
         }, castContextListeners);
       } catch (error) {
         logCastError('Could not subscribe to Cast session changes', error);
@@ -1148,7 +1182,8 @@
       castInitError = null;
       ensureRemotePlayer();
       attachLocalAudioListeners();
-      refreshCastButtonState();
+      // A session may have auto-joined before listeners were installed; reconcile its snapshot.
+      handleSessionStateChange(context, String(context.getSessionState() || ''));
       return true;
     } catch (e) {
       castInitError = e && e.message ? e.message : 'Cast init failed';
@@ -1207,7 +1242,9 @@
     var state = getSessionState();
     var SessionState = window.cast && window.cast.framework ? window.cast.framework.SessionState : null;
     if (!SessionState) return false;
-    return state === SessionState.SESSION_STARTED || state === SessionState.SESSION_RESUMED;
+    return state === SessionState.SESSION_STARTED
+      || state === SessionState.SESSION_RESUMED
+      || (SessionState.SESSION_ENDING && state === SessionState.SESSION_ENDING);
   }
 
   function disconnect() {
@@ -1442,7 +1479,9 @@
   function updateCastUi(state, session) {
     var SessionState = window.cast && window.cast.framework ? window.cast.framework.SessionState : null;
     if (!SessionState) return;
-    var active = state === SessionState.SESSION_STARTED || state === SessionState.SESSION_RESUMED;
+    var active = state === SessionState.SESSION_STARTED
+      || state === SessionState.SESSION_RESUMED
+      || (SessionState.SESSION_ENDING && state === SessionState.SESSION_ENDING);
     try { document.body.classList.toggle('casting-active', !!active); } catch (e) {}
 
     try {
