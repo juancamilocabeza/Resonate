@@ -2003,6 +2003,16 @@ function isAllowedAudioUrl(url) {
   }
 }
 
+function isArchiveAudioUrlForDirectPlayback(url) {
+  try {
+    const parsedUrl = new URL(url, window.location.href);
+    return (parsedUrl.hostname === 'archive.org' || parsedUrl.hostname.endsWith('.archive.org')) &&
+      /\.(flac|ogg|mp3)$/i.test(parsedUrl.pathname);
+  } catch {
+    return false;
+  }
+}
+
 // Load audio from cache or network
 async function loadAudioWithCache(track) {
   if (!track || !track.url) {
@@ -2064,6 +2074,11 @@ async function loadAudioWithCache(track) {
     // Si no está en caché y no hay conexión, no podemos cargarlo
     if (!state.networkOnline) {
       throw new Error('Offline and audio not available in cache');
+    }
+
+    if (isArchiveAudioUrlForDirectPlayback(track.url)) {
+      logPlayback('info', `Streaming Archive.org audio directly: ${track.title || track.url}`);
+      return track.url;
     }
 
     // Check file size with HEAD request to decide streaming strategy

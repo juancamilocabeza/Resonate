@@ -367,7 +367,7 @@ test('Share module copies canonical link when Web Share is unavailable', async (
   assert.deepEqual(statuses[0], ['Link copied to clipboard', 'info', 4000]);
 });
 
-test('Speculative Archive.org audio prefetch leaves playback to native streaming', async () => {
+test('Uncached Archive.org audio uses native streaming instead of cross-origin fetches', async () => {
   const requestedUrls = [];
   const { context } = await createSandbox({
     fetch: async url => {
@@ -387,7 +387,24 @@ test('Speculative Archive.org audio prefetch leaves playback to native streaming
   assert.deepEqual(requestedUrls, []);
 
   await cache.prefetchAudio('https://archive.org/download/item/track.mp3');
-  assert.deepEqual(requestedUrls, ['https://archive.org/download/item/track.mp3']);
+  assert.deepEqual(requestedUrls, []);
+
+  assert.equal(await cache.get('https://archive.org/download/item/track.mp3', true), null);
+  assert.deepEqual(requestedUrls, []);
+});
+
+test('Archive.org playback streams directly when its audio is not cached', async () => {
+  const { context } = await createPlayer();
+  let fetches = 0;
+  context.fetch = async () => {
+    fetches += 1;
+    throw new Error('Archive.org audio should not be fetched as a cross-origin blob');
+  };
+  context.audioCache = { get: async () => null };
+
+  const url = 'https://archive.org/download/item/track.mp3';
+  assert.equal(await context.loadAudioWithCache({ url, title: 'Track' }), url);
+  assert.equal(fetches, 0);
 });
 
 test('Audio cache initialization is shared by concurrent callers', async () => {
@@ -478,7 +495,7 @@ test('Audio cache deduplicates concurrent requests for the same URL', async () =
   cache.cache = { match: async () => null };
   cache.put = async () => {};
 
-  const url = 'https://archive.org/download/item/track.mp3';
+  const url = 'https://media.example.test/download/item/track.mp3';
   const [first, second] = await Promise.all([
     cache.get(url, true),
     cache.get(url, true)
@@ -570,6 +587,7 @@ test('Service worker serves cached audio byte ranges with partial content header
   });
 
   const { intercepted, response } = await harness.dispatch(new Request(url, {
+    mode: 'no-cors',
     headers: { Range: 'bytes=2-5' }
   }));
   assert.equal(intercepted, true);
@@ -582,12 +600,14 @@ test('Service worker serves cached audio byte ranges with partial content header
   assert.equal(networkRequests, 0);
 
   const suffix = await harness.dispatch(new Request(url, {
+    mode: 'no-cors',
     headers: { Range: 'bytes=-3' }
   }));
   assert.equal(await suffix.response.text(), '789');
   assert.equal(suffix.response.headers.get('Content-Range'), 'bytes 7-9/10');
 
   const unsatisfiable = await harness.dispatch(new Request(url, {
+    mode: 'no-cors',
     headers: { Range: 'bytes=10-' }
   }));
   assert.equal(unsatisfiable.response.status, 416);
@@ -614,6 +634,7 @@ test('Service worker caches a complete response after an uncached audio range re
   });
 
   const first = await harness.dispatch(new Request(url, {
+    mode: 'no-cors',
     headers: { Range: 'bytes=0-3' }
   }));
   assert.equal(first.response.status, 206);
@@ -623,12 +644,31 @@ test('Service worker caches a complete response after an uncached audio range re
   assert.equal(await harness.audioCacheEntries.get(url).clone().text(), '0123456789');
 
   const second = await harness.dispatch(new Request(url, {
+    mode: 'no-cors',
     headers: { Range: 'bytes=4-' }
   }));
   assert.equal(second.response.status, 206);
   assert.equal(await second.response.text(), '456789');
   assert.equal(second.response.headers.get('Content-Range'), 'bytes 4-9/10');
   assert.equal(requests.length, 2);
+});
+
+test('Service worker does not intercept CORS fetches for Archive.org audio', async () => {
+  let networkRequests = 0;
+  const harness = await createServiceWorkerHarness({
+    fetch: async () => {
+      networkRequests += 1;
+      return new Response('audio');
+    }
+  });
+
+  const { intercepted } = await harness.dispatch(new Request(
+    'https://archive.org/download/item/track.mp3',
+    { mode: 'cors' }
+  ));
+
+  assert.equal(intercepted, false);
+  assert.equal(networkRequests, 0);
 });
 
 test('Service worker intercepts API audio streams but leaves other API calls alone', async () => {

@@ -594,6 +594,12 @@ self.addEventListener('fetch', (event) => {
   if (!url) return;
   const audioRequest = isAudioRequest(event.request, url);
 
+  // Archive.org file hosts may not allow CORS. Let script fetches reach the
+  // browser directly; native media requests can still use the audio handler.
+  if (audioRequest && isArchiveOrg(url) && event.request.mode === 'cors') {
+    return;
+  }
+
   // Never intercept the service worker script itself
   if (url.pathname === '/sw.js') {
     return; // let the browser fetch it directly
