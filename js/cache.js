@@ -520,6 +520,11 @@ class AudioCache {
           return { blob, fromCache: true };
         }
 
+        if (isArchiveAudioUrl(normalizedUrl)) {
+          logCache('debug', `Archive.org audio is not cached; leaving it to native streaming: ${normalizedUrl}`);
+          return null;
+        }
+
         // Fallback to fetch: playback gets priority, prefetch waits
         const queueFn = isPlayback ? 'enqueuePlayback' : 'enqueuePrefetch';
         const response = await audioFetchQueue[queueFn](() => fetch(normalizedUrl));
@@ -664,6 +669,11 @@ class AudioCache {
 
           if (opts.streamingOnly && isArchiveAudioUrl(normalizedUrl)) {
             logCache('debug', `Skipping speculative Archive.org audio download; stream on demand: ${normalizedUrl}`);
+            return;
+          }
+
+          if (isArchiveAudioUrl(normalizedUrl)) {
+            logCache('debug', `Skipping Archive.org audio prefetch; the file host may not allow cross-origin downloads: ${normalizedUrl}`);
             return;
           }
 
