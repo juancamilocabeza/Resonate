@@ -19,6 +19,8 @@ const SEARCH_LIMITS = {
 // Cache schema/version for search result caching.
 // Bump when search query/ranking behavior changes to avoid mixing old results.
 const SEARCH_CACHE_SCHEMA = 'intent-pop-v3';
+const SEARCH_MEMORY_CACHE_LIMIT = 50;
+const searchMemoryCache = new Map();
 
 // Curated filter options for Archive.org searches.
 // Note: Archive advancedsearch doesn't expose robust faceting; keep this list intentionally small.
@@ -53,12 +55,46 @@ function getSearchCacheKey(query, page) {
   return `search:${SEARCH_CACHE_SCHEMA}:${q}:${filterKey}:${orderKey}:${page}`;
 }
 
+function getMemoryCachedSearchResults(cacheKey) {
+  if (!searchMemoryCache.has(cacheKey)) return null;
+  const cached = searchMemoryCache.get(cacheKey);
+  // Map insertion order is the LRU order, so promote every successful read.
+  searchMemoryCache.delete(cacheKey);
+  searchMemoryCache.set(cacheKey, cached);
+  return cached;
+}
+
+function setMemoryCachedSearchResults(cacheKey, results) {
+  searchMemoryCache.delete(cacheKey);
+  searchMemoryCache.set(cacheKey, results);
+  if (searchMemoryCache.size > SEARCH_MEMORY_CACHE_LIMIT) {
+    // Evict the least recently used entry when the 50-entry limit is exceeded.
+    const oldestKey = searchMemoryCache.keys().next().value;
+    searchMemoryCache.delete(oldestKey);
+  }
+}
+
+function cacheSearchResults(cacheKey, results) {
+  setMemoryCachedSearchResults(cacheKey, results);
+  if (window.enhancedCache) window.enhancedCache.set('search', cacheKey, results);
+}
+
+function emitSearchLifecycleEvent(eventName, detail) {
+  const bus = window.emitter || (typeof emitter !== 'undefined' ? emitter : null);
+  // Keep existing emitter subscribers and native browser event listeners in sync.
+  if (bus && typeof bus.emit === 'function') bus.emit(eventName, detail);
+  if (typeof window.dispatchEvent === 'function' && typeof window.CustomEvent === 'function') {
+    window.dispatchEvent(new window.CustomEvent(eventName, { detail }));
+  }
+}
+
 function hasCachedSearchResults(query) {
   const normalizedQuery = String(query || '').trim();
-  if (!normalizedQuery || !window.enhancedCache || typeof window.enhancedCache.get !== 'function') {
-    return false;
-  }
-  return Boolean(window.enhancedCache.get('search', getSearchCacheKey(normalizedQuery, 0)));
+  if (!normalizedQuery) return false;
+  const cacheKey = getSearchCacheKey(normalizedQuery, 0);
+  if (getMemoryCachedSearchResults(cacheKey)) return true;
+  if (!window.enhancedCache || typeof window.enhancedCache.get !== 'function') return false;
+  return Boolean(window.enhancedCache.get('search', cacheKey));
 }
 
 // Expose a stable cache-key helper for the UI (used for deferred metadata enrichment updates).
@@ -214,7 +250,7 @@ function scheduleSearchPageEnrichment({ cacheKey, normalizedQuery, page, process
           total,
           deferredMetadata: false
         };
-        if (window.enhancedCache) window.enhancedCache.set('search', resolvedKey, full);
+        cacheSearchResults(resolvedKey, full);
 
         // Notify UI: if ui.js isn't loaded yet, queue it for later.
         try {
@@ -742,8 +778,10 @@ async function performOptimizedSearch(query, page = 0, options = {}) {
     : 'idle';
 
   const cacheKey = getSearchCacheKey(query, page);
-  const cached = window.enhancedCache && window.enhancedCache.get('search', cacheKey);
+  const memoryCached = getMemoryCachedSearchResults(cacheKey);
+  const cached = memoryCached || (window.enhancedCache && window.enhancedCache.get('search', cacheKey));
   if (cached) {
+    if (!memoryCached) setMemoryCachedSearchResults(cacheKey, cached);
     // If we have a deferred result and the caller wants full enrichment, upgrade it.
     if (cached.deferredMetadata === true && !deferMetadata) {
       try {
@@ -755,7 +793,7 @@ async function performOptimizedSearch(query, page = 0, options = {}) {
           total: typeof cached.total === 'number' ? cached.total : 0,
           deferredMetadata: false
         };
-        if (window.enhancedCache) window.enhancedCache.set('search', cacheKey, upgraded);
+        cacheSearchResults(cacheKey, upgraded);
         return upgraded;
       } catch {
         return cached;
@@ -1126,7 +1164,7 @@ async function performOptimizedSearch(query, page = 0, options = {}) {
           deferredMetadata: true,
           similarOnly
         };
-        if (window.enhancedCache) window.enhancedCache.set('search', cacheKey, fastResult);
+        cacheSearchResults(cacheKey, fastResult);
         // Enrich in idle time so first paint isn't blocked.
         if (scheduleEnrichment) {
           scheduleSearchPageEnrichment({
@@ -1145,12 +1183,11 @@ async function performOptimizedSearch(query, page = 0, options = {}) {
       // Full (blocking) enrichment: filter non-playables and compute track counts.
       const enrichedResults = await enrichSearchResultsWithMetadata(processedResults, normalizedQuery, { signal });
       const searchResult = { results: enrichedResults, hasMore, total, deferredMetadata: false, similarOnly };
-      if (window.enhancedCache) window.enhancedCache.set('search', cacheKey, searchResult);
+      cacheSearchResults(cacheKey, searchResult);
       return searchResult;
     } catch (error) {
       // If the user typed a new query, the previous one is expected to abort.
       if (error && (error.name === 'AbortError' || String(error).includes('AbortError'))) {
-        logSearch('Search aborted', 'debug', 'NETWORK');
         return { results: [], hasMore: false };
       }
       logSearch(error, 'error', 'NETWORK');
@@ -1219,7 +1256,7 @@ async function performOptimizedSearch(query, page = 0, options = {}) {
               deferredMetadata: true,
               similarOnly
             };
-            if (window.enhancedCache) window.enhancedCache.set('search', cacheKey, fastResult);
+            cacheSearchResults(cacheKey, fastResult);
             if (scheduleEnrichment) {
               scheduleSearchPageEnrichment({
                 cacheKey,
@@ -1236,12 +1273,11 @@ async function performOptimizedSearch(query, page = 0, options = {}) {
 
           const enrichedFallback = await enrichSearchResultsWithMetadata(processedFallbackResults, normalizedQuery, { signal });
           const searchResult = { results: enrichedFallback, hasMore, total, deferredMetadata: false, similarOnly };
-          if (window.enhancedCache) window.enhancedCache.set('search', cacheKey, searchResult);
+          cacheSearchResults(cacheKey, searchResult);
           return searchResult;
         }
       } catch (fallbackError) {
         if (fallbackError && (fallbackError.name === 'AbortError' || String(fallbackError).includes('AbortError'))) {
-          logSearch('Search aborted', 'debug', 'NETWORK');
           return { results: [], hasMore: false };
         }
         logSearch(fallbackError, 'error', 'NETWORK');
@@ -1249,7 +1285,11 @@ async function performOptimizedSearch(query, page = 0, options = {}) {
       if (activateUI) {
         setSearchErrorMessage('Error in search. Try other terms.');
       }
-      return { results: [], hasMore: false };
+      emitSearchLifecycleEvent('search:error', {
+        query: normalizedQuery,
+        error
+      });
+      return { results: [], hasMore: false, error };
     } finally {
       if (showLoader && window.Loaders && typeof window.Loaders.hideLoader === 'function') {
         window.Loaders.hideLoader();
