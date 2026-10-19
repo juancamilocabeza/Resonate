@@ -505,18 +505,27 @@ test('Audio cache deduplicates concurrent requests for the same URL', async () =
   assert.equal(first?.blob?.size, second?.blob?.size);
 });
 
-async function createServiceWorkerHarness({ fetch, audioEntries = [] }) {
+async function createServiceWorkerHarness({ fetch, audioEntries = [], connection = null }) {
   const listeners = new Map();
   const audioCacheEntries = new Map(audioEntries);
-  const audioCache = {
+  const audioPrecacheEntries = new Map();
+  const makeCache = entries => ({
     async match(key) {
-      const response = audioCacheEntries.get(typeof key === 'string' ? key : key.url);
+      const response = entries.get(typeof key === 'string' ? key : key.url);
       return response ? response.clone() : null;
     },
     async put(key, response) {
-      audioCacheEntries.set(typeof key === 'string' ? key : key.url, response);
+      entries.set(typeof key === 'string' ? key : key.url, response);
+    },
+    async delete(key) {
+      return entries.delete(typeof key === 'string' ? key : key.url);
+    },
+    async keys() {
+      return [...entries.keys()].map(url => ({ url }));
     }
-  };
+  });
+  const audioCache = makeCache(audioCacheEntries);
+  const audioPrecache = makeCache(audioPrecacheEntries);
   const serviceWorkerConsole = {
     debug() {},
     log() {},
@@ -531,6 +540,7 @@ async function createServiceWorkerHarness({ fetch, audioEntries = [] }) {
       origin: 'https://resonate.test',
       port: ''
     },
+    navigator: connection ? { connection } : undefined,
     console: serviceWorkerConsole,
     addEventListener(type, listener) {
       if (!listeners.has(type)) listeners.set(type, []);
@@ -540,7 +550,14 @@ async function createServiceWorkerHarness({ fetch, audioEntries = [] }) {
   const { context } = await createSandbox({
     self: serviceWorker,
     console: serviceWorkerConsole,
-    caches: { open: async () => audioCache },
+    caches: {
+      open: async name => (name === 'audio-precache-v1' ? audioPrecache : audioCache),
+      async delete(name) {
+        if (name === 'audio-precache-v1') audioPrecacheEntries.clear();
+        else if (name === 'resonate-audio-v1') audioCacheEntries.clear();
+        return true;
+      }
+    },
     fetch,
     Request,
     Response,
@@ -550,6 +567,7 @@ async function createServiceWorkerHarness({ fetch, audioEntries = [] }) {
 
   return {
     audioCacheEntries,
+    audioPrecacheEntries,
     async dispatch(request) {
       let responsePromise = null;
       const backgroundTasks = [];
@@ -569,6 +587,21 @@ async function createServiceWorkerHarness({ fetch, audioEntries = [] }) {
         response: responsePromise ? await responsePromise : null,
         backgroundTasks
       };
+    },
+    async dispatchMessage(data) {
+      const replies = [];
+      const backgroundTasks = [];
+      for (const handler of listeners.get('message') || []) {
+        handler({
+          data,
+          source: { postMessage: message => replies.push(message) },
+          waitUntil(task) {
+            backgroundTasks.push(Promise.resolve(task));
+          }
+        });
+      }
+      await Promise.all(backgroundTasks);
+      return replies;
     }
   };
 }
@@ -613,6 +646,103 @@ test('Service worker serves cached audio byte ranges with partial content header
   assert.equal(unsatisfiable.response.status, 416);
   assert.equal(unsatisfiable.response.headers.get('Content-Range'), 'bytes */10');
   assert.equal(networkRequests, 0);
+});
+
+test('Service worker precaches 256 KB audio ranges and serves cached initial playback ranges', async () => {
+  const requested = [];
+  const urls = Array.from({ length: 4 }, (_, index) =>
+    `https://archive.org/download/item/track-${index}.mp3`
+  );
+  const chunk = new Uint8Array(256 * 1024);
+  chunk.fill(65);
+  const harness = await createServiceWorkerHarness({
+    fetch: async (url, options) => {
+      requested.push({ url: String(url), options });
+      return new Response(chunk, {
+        status: 206,
+        headers: {
+          'Content-Range': 'bytes 0-262143/1000000',
+          'Content-Type': 'audio/mpeg'
+        }
+      });
+    }
+  });
+
+  const [message] = await harness.dispatchMessage({ type: 'PRECACHE_AUDIO', urls });
+  assert.equal(message.type, 'PRECACHE_AUDIO_RESULT');
+  assert.equal(message.skipped, false);
+  assert.equal(message.results.length, 3);
+  assert.equal(requested.length, 3);
+  assert.ok(requested.every(item => item.options.headers.Range === 'bytes=0-262143'));
+  assert.equal(harness.audioPrecacheEntries.size, 3);
+
+  const partial = harness.audioPrecacheEntries.get(urls[0]);
+  assert.equal(partial.status, 200);
+  assert.equal(partial.headers.get('X-Audio-Precache-Partial'), 'true');
+  assert.equal(partial.headers.get('X-Audio-Precache-Content-Range'), 'bytes 0-262143/1000000');
+
+  const playbackRange = await harness.dispatch(new Request(urls[0], {
+    mode: 'no-cors',
+    headers: { Range: 'bytes=0-9' }
+  }));
+  assert.equal(playbackRange.response.status, 206);
+  assert.equal(await playbackRange.response.arrayBuffer().then(buffer => buffer.byteLength), 10);
+  assert.equal(playbackRange.response.headers.get('Content-Range'), 'bytes 0-9/1000000');
+  assert.equal(requested.length, 3);
+});
+
+test('Service worker skips audio precaching on cellular and data-saving connections', async () => {
+  for (const connection of [
+    { type: 'cellular', saveData: false },
+    { type: 'wifi', saveData: true }
+  ]) {
+    let networkRequests = 0;
+    const harness = await createServiceWorkerHarness({
+      fetch: async () => {
+        networkRequests += 1;
+        return new Response(new Uint8Array([1]), {
+          status: 206,
+          headers: { 'Content-Range': 'bytes 0-0/10' }
+        });
+      },
+      connection
+    });
+
+    const [message] = await harness.dispatchMessage({
+      type: 'PRECACHE_AUDIO',
+      urls: ['https://archive.org/download/item/track.mp3']
+    });
+    assert.equal(message.skipped, true);
+    assert.equal(networkRequests, 0);
+    assert.equal(harness.audioPrecacheEntries.size, 0);
+  }
+});
+
+test('Service worker keeps audio precache at or below 50 MB using FIFO eviction', async () => {
+  const urls = Array.from({ length: 201 }, (_, index) =>
+    `https://archive.org/download/item/fifo-${index}.mp3`
+  );
+  const chunk = new Uint8Array(256 * 1024);
+  const harness = await createServiceWorkerHarness({
+    fetch: async () => new Response(chunk, {
+      status: 206,
+      headers: { 'Content-Range': 'bytes 0-262143/1000000' }
+    })
+  });
+
+  for (let index = 0; index < urls.length; index += 3) {
+    await harness.dispatchMessage({
+      type: 'PRECACHE_AUDIO',
+      urls: urls.slice(index, index + 3)
+    });
+  }
+
+  const cachedBytes = [...harness.audioPrecacheEntries.values()]
+    .reduce((total, response) => total + Number(response.headers.get('X-Audio-Precache-Size')), 0);
+  assert.ok(cachedBytes <= 50 * 1024 * 1024);
+  assert.equal(harness.audioPrecacheEntries.size, 200);
+  assert.equal(harness.audioPrecacheEntries.has(urls[0]), false);
+  assert.equal(harness.audioPrecacheEntries.has(urls[200]), true);
 });
 
 test('Service worker caches a complete response after an uncached audio range request', async () => {
@@ -1466,6 +1596,65 @@ test('Cached search results are detected using the active query and filter key',
   assert.equal(context.hasCachedSearchResults('  '), false);
   context.state.searchUi.mediatype = 'movies';
   assert.equal(context.hasCachedSearchResults('ambient music'), false);
+  const memoryKey = context.__resonateGetSearchCacheKey('ambient music', 0);
+  context.setMemoryCachedSearchResults(memoryKey, { results: [{ identifier: 'memory-release' }] });
+  assert.equal(context.hasCachedSearchResults('ambient music'), true);
+});
+
+test('Search memory cache keeps the 50 most recently used results', async () => {
+  const { context } = await createSandbox({
+    state: { searchUi: { mediatype: 'audio' } }
+  });
+  await evaluateSearchScripts(context);
+
+  const oldestResult = { results: [{ identifier: 'recently-used' }] };
+  for (let index = 0; index < 50; index += 1) {
+    context.setMemoryCachedSearchResults(`query-${index}`, index === 0 ? oldestResult : { results: [] });
+  }
+
+  assert.equal(context.getMemoryCachedSearchResults('query-0'), oldestResult);
+  context.setMemoryCachedSearchResults('query-50', { results: [] });
+
+  assert.equal(context.getMemoryCachedSearchResults('query-0'), oldestResult);
+  assert.equal(context.getMemoryCachedSearchResults('query-1'), null);
+  assert.ok(context.getMemoryCachedSearchResults('query-50'));
+});
+
+test('Search input dispatch waits for a 300ms debounce and uses the latest query', async () => {
+  const uiSource = await readFile(new URL('js/ui.js', projectRoot), 'utf8');
+  const helper = uiSource.match(/function scheduleSearchWithDebounce\(query, input\) \{[\s\S]*?\n\}/);
+  assert.ok(helper, 'scheduleSearchWithDebounce should exist');
+
+  const timers = [];
+  const clearedTimers = [];
+  const dispatchedQueries = [];
+  const state = { currentSearchQuery: '', searchDebounceTimeout: null };
+  const context = {
+    state,
+    setTimeout(callback, delay) {
+      const timer = { callback, delay };
+      timers.push(timer);
+      return timer;
+    },
+    clearTimeout(timer) {
+      clearedTimers.push(timer);
+    },
+    dispatchSearchWithFastPath(query) {
+      dispatchedQueries.push(query);
+    }
+  };
+  vm.runInNewContext(helper[0], context);
+
+  const input = { value: 'first query' };
+  context.scheduleSearchWithDebounce('first query', input);
+  input.value = 'latest query';
+  context.scheduleSearchWithDebounce('latest query', input);
+
+  assert.equal(timers[0].delay, 300);
+  assert.deepEqual(clearedTimers, [timers[0]]);
+  assert.equal(timers[1].delay, 300);
+  timers[1].callback();
+  assert.deepEqual(dispatchedQueries, ['latest query']);
 });
 
 test('Editing a submitted query aborts its UI requests and invalidates its response', async () => {

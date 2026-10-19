@@ -662,7 +662,39 @@ function abortUiSearchControllers() {
   }
 }
 
+function clearSearchDebounce() {
+  if (state.searchDebounceTimeout == null) return;
+  clearTimeout(state.searchDebounceTimeout);
+  state.searchDebounceTimeout = null;
+}
+
+function emitSearchEvent(eventName, detail) {
+  const bus = window.emitter || (typeof emitter !== 'undefined' ? emitter : null);
+  if (bus && typeof bus.emit === 'function') bus.emit(eventName, detail);
+  if (typeof window.dispatchEvent === 'function' && typeof window.CustomEvent === 'function') {
+    window.dispatchEvent(new window.CustomEvent(eventName, { detail }));
+  }
+}
+
+function scheduleSearchWithDebounce(query, input) {
+  const normalizedQuery = String(query || '').trim();
+  if (!normalizedQuery || normalizedQuery === String(state.currentSearchQuery || '').trim()) return;
+
+  if (state.searchDebounceTimeout != null) {
+    clearTimeout(state.searchDebounceTimeout);
+  }
+  state.searchDebounceTimeout = setTimeout(() => {
+    state.searchDebounceTimeout = null;
+    // Ignore a stale timer if the input changed again before it fired.
+    const latestQuery = (input.value || '').trim();
+    if (latestQuery === normalizedQuery) {
+      dispatchSearchWithFastPath(latestQuery, { keepKeyboard: true, addToHistory: false });
+    }
+  }, 300);
+}
+
 function cancelSearchForQueryChange(query) {
+  if (typeof clearSearchDebounce === 'function') clearSearchDebounce();
   const currentQuery = String(query || '').trim();
   const dispatchedQuery = String(state.currentSearchQuery || '').trim();
   if (!dispatchedQuery || currentQuery === dispatchedQuery || !state._uiSearchControllers) return false;
@@ -680,6 +712,7 @@ function cancelSearchForQueryChange(query) {
 
 function dispatchSearchWithFastPath(queryAtDispatch, { keepKeyboard = true, addToHistory = true, showLoader = false } = {}) {
   try {
+    clearSearchDebounce();
     const q = String(queryAtDispatch || '').trim();
     if (!q) return;
 
@@ -715,6 +748,7 @@ function dispatchSearchWithFastPath(queryAtDispatch, { keepKeyboard = true, addT
       state.searchUi.showingHistory = false;
       ensureSearchFiltersHeader();
     } catch {}
+    emitSearchEvent('search:loading', { query: q });
 
     try { elements.searchResults?.classList?.add('active'); } catch {}
     state.searchActive = true;
@@ -750,7 +784,7 @@ function dispatchSearchWithFastPath(queryAtDispatch, { keepKeyboard = true, addT
 
     const showResult = (result, kind) => {
       if (!stillCurrent()) return;
-      if (!result) return;
+      if (!result || result.error) return;
       if (kind === 'fast' && displayedKind === 'optimized') return;
       if (kind === displayedKind) return;
       if (
@@ -772,6 +806,7 @@ function dispatchSearchWithFastPath(queryAtDispatch, { keepKeyboard = true, addT
       displaySearchResults(result, true);
       displayedKind = kind;
       displayedResult = result;
+      emitSearchEvent('search:success', { query: q, results: result.results || [] });
 
       if (kind === 'optimized') {
         try {
@@ -812,10 +847,18 @@ function dispatchSearchWithFastPath(queryAtDispatch, { keepKeyboard = true, addT
 
     optimizedPromise.then((optResult) => {
       if (!optResult) return;
+      if (optResult.error) {
+        if (stillCurrent()) {
+          try { showStatus('Search encountered an error', 'error'); } catch {}
+        }
+        return;
+      }
       showResult(optResult, 'optimized');
     }).catch((error) => {
+      if (error && error.name === 'AbortError') return;
       window.logger?.error({ message: 'Search error', error }, 'NETWORK');
       if (stillCurrent() && displayedKind == null) {
+        emitSearchEvent('search:error', { query: q, error });
         try { showStatus('Search encountered an error', 'error'); } catch {}
       }
     }).finally(() => {
@@ -1496,6 +1539,8 @@ function ensureSearchInputControllerBound() {
       // Avoid showing stale results while the user is editing.
       hideSearchResults();
     }
+
+    scheduleSearchWithDebounce(currentQuery, input);
   });
 
   input.addEventListener('paste', () => {
