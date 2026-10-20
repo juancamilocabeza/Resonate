@@ -128,7 +128,13 @@
     const labelParts = [];
     if (baseLabel) labelParts.push(baseLabel);
     if (isPlaying) labelParts.push('currently playing');
-    if (isOffline) labelParts.push('available offline');
+    if (row.dataset.offlineAvailability === 'partial') {
+      labelParts.push('partially available offline');
+    } else if (row.dataset.offlineAvailability === 'network-required') {
+      labelParts.push('network required');
+    } else if (isOffline) {
+      labelParts.push('available offline');
+    }
     row.setAttribute('aria-label', labelParts.join(', ') || baseLabel || '');
   }
 
@@ -254,6 +260,7 @@
         const row = document.createElement('div');
         row.className = 'tlv2-row track-row';
         row.dataset.trackIndex = String(index);
+        if (track && track.url) row.dataset.trackUrl = String(track.url);
 
         // Staggered entrance animation index (capped to keep delays reasonable)
         row.style.setProperty('--row-i', String(Math.min(index, 19)));

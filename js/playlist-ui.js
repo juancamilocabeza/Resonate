@@ -67,7 +67,12 @@
     row.setAttribute('aria-selected', isPlaying ? 'true' : 'false');
     const baseLabel = row.dataset.baseAriaLabel || row.getAttribute('aria-label') || '';
     if (!baseLabel) return;
-    row.setAttribute('aria-label', isPlaying ? `${baseLabel}, currently playing` : baseLabel);
+    const labelParts = [baseLabel]
+    if (isPlaying) labelParts.push('currently playing')
+    if (row.dataset.offlineAvailability === 'available') labelParts.push('available offline')
+    if (row.dataset.offlineAvailability === 'partial') labelParts.push('partially available offline')
+    if (row.dataset.offlineAvailability === 'network-required') labelParts.push('network required')
+    row.setAttribute('aria-label', labelParts.join(', '))
   }
 
   function createPlaylistTrackSummary(pl) {

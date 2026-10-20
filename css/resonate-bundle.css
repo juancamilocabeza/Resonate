@@ -5037,7 +5037,8 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
   fill: none;
 }
 
-.visually-hidden {
+.visually-hidden,
+.sr-only {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -5045,8 +5046,35 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
   margin: -1px;
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
+}
+
+.o-50 {
+  opacity: 0.5;
+}
+
+.offline-track-status {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5em;
+  margin-inline-start: auto;
+  font-size: 0.9em;
+}
+
+.offline-track-cached .offline-track-status {
+  color: #218838;
+}
+
+.offline-track-partial .offline-track-status {
+  color: #9a6700;
+}
+
+.offline-track-network-required .offline-track-status {
+  color: #666;
 }
 
 .btn-secondary:hover {
