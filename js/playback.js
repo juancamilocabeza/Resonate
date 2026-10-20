@@ -2357,6 +2357,17 @@ function isTrackResonteSafe(track) {
 
 // Play audio track with UI updates and state management
 async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalTracks = 1, showProgress = true) {
+  if (isPlaybackOffline()) {
+    const availability = await getOfflineTrackAvailability(track && track.url)
+    if (!availability.available) {
+      const title = track && track.title ? track.title : 'Esta pista'
+      const message = `${title} no está disponible sin conexión. Conéctate a internet para reproducirla.`
+      safeShowStatus(message, 'warning', 5000)
+      announceAccessibilityMessage(message, 'assertive')
+      return false
+    }
+  }
+
   // Global loading lock: used by togglePlay/Next/Prev to avoid races.
   state.isLoading = true;
   if (window.adaptiveStreamController) {
@@ -2496,6 +2507,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
         updateLoaderProgress(100);
         resetAutoSkipBudgetForCurrentContext();
         safeShowStatus('Casting to device', 'info');
+        announcePlaybackTrack(track);
       } catch (error) {
         logPlayback('warn', 'Could not update Cast playback UI', error);
       }
@@ -2597,6 +2609,7 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
         } else {
           safeShowStatus('Now playing your selected track', 'info');
         }
+        announcePlaybackTrack(track);
 
         // EJECUTAR CALLBACK ONPLAY
         if (state.onPlayCallback && typeof state.onPlayCallback === 'function') {
@@ -3100,11 +3113,62 @@ function togglePlay() {
   }
 }
 
-function loadPlaybackQueue(context, items, startIndex = 0) {
+function announceAccessibilityMessage (message, priority = 'polite') {
+  try {
+    if (!window.A11yAnnouncer || typeof window.A11yAnnouncer.announce !== 'function') return
+    window.A11yAnnouncer.announce(message, priority)
+  } catch (error) {
+    logPlayback('warn', 'Failed to announce accessibility status', error)
+  }
+}
+
+function isPlaybackOffline () {
+  return (typeof navigator !== 'undefined' && navigator.onLine === false) ||
+    (window.state && window.state.networkOnline === false)
+}
+
+async function getOfflineTrackAvailability (trackUrl) {
+  if (!trackUrl) return { available: false, complete: false, partial: false }
+  if (window.OfflineStatusManager &&
+    typeof window.OfflineStatusManager.checkTrackAvailability === 'function') {
+    return window.OfflineStatusManager.checkTrackAvailability(trackUrl)
+  }
+
+  try {
+    const cached = typeof audioCache !== 'undefined' && audioCache &&
+      typeof audioCache.get === 'function'
+      ? await audioCache.get(trackUrl)
+      : null
+    return { available: !!cached, complete: !!cached, partial: false }
+  } catch (error) {
+    logPlayback('warn', 'Unable to check offline track availability', error)
+    return { available: false, complete: false, partial: false }
+  }
+}
+
+function announcePlaybackTrack (track) {
+  const title = track && track.title ? track.title : 'Pista sin título'
+  const artist = track && (track.artist || track.creator)
+  announceAccessibilityMessage(`Reproduciendo: ${title}${artist ? `, ${artist}` : ''}`)
+}
+
+function announcePlaybackQueue (queue) {
+  const count = queue.length
+  const tracksLabel = count === 1 ? 'pista' : 'pistas'
+  announceAccessibilityMessage(
+    count
+      ? `Cola de reproducción continua actualizada: ${count} ${tracksLabel}.`
+      : 'La cola de reproducción está vacía.'
+  )
+}
+
+function loadPlaybackQueue(context, items, startIndex = 0, options = {}) {
+  const previousQueue = Array.isArray(state.playbackQueue) ? state.playbackQueue.slice() : []
   state.playbackQueue = [];
 
   if (!items || items.length === 0) {
     // No items to load into FIFO
+    if (previousQueue.length && !options.silent) announcePlaybackQueue(state.playbackQueue)
     return;
   }
 
@@ -3143,6 +3207,7 @@ function loadPlaybackQueue(context, items, startIndex = 0) {
 
   if (validItems.length === 0) {
     // No valid items to load into FIFO
+    if (previousQueue.length && !options.silent) announcePlaybackQueue(state.playbackQueue)
     return;
   }
 
@@ -3202,6 +3267,20 @@ function loadPlaybackQueue(context, items, startIndex = 0) {
         audioCache.prefetchAudio(second.url, false).catch((err) => logPlayback('debug', 'Failed to prefetch second queue item', err));
       }
     }
+
+  }
+
+  const queueChanged = previousQueue.length !== state.playbackQueue.length ||
+    previousQueue.some((item, index) => {
+      const previousKey = item && (item.url || item.identifier || item.id)
+      const nextItem = state.playbackQueue[index]
+      const nextKey = nextItem && (nextItem.url || nextItem.identifier || nextItem.id)
+      return previousKey !== nextKey
+    })
+  if (queueChanged && !options.silent) announcePlaybackQueue(state.playbackQueue)
+  if (window.OfflineStatusManager &&
+    typeof window.OfflineStatusManager.updateQueueStatus === 'function') {
+    window.OfflineStatusManager.updateQueueStatus()
   }
 }
 
@@ -4632,6 +4711,7 @@ function toggleShuffleFavorites() {
   if (state.shuffleFavorites) {
     // Activar modo aleatorio
     showStatus('Shuffle mode is now on', 'info', 2000);
+    announceAccessibilityMessage('Modo aleatorio activado. La reproducción continua sigue activa.');
 
     // Anchor the persisted deck to the currently playing item (so Next is stable and has no repeats).
     try {
@@ -4642,7 +4722,7 @@ function toggleShuffleFavorites() {
 
     // Rebuild FIFO only for URL-based contexts.
     if ((context === 'favorites' || context === 'album' || context === 'searchPlaylist') && items.length > 0) {
-      loadPlaybackQueue(context, items, 0);
+      loadPlaybackQueue(context, items, 0, { silent: true });
       if (context === 'favorites' && typeof audioCache !== 'undefined' && audioCache && typeof audioCache.loadFavoritesQueue === 'function') {
         audioCache.loadFavoritesQueue(items, true);
       }
@@ -4650,6 +4730,7 @@ function toggleShuffleFavorites() {
   } else {
     // Desactivar modo aleatorio: volver a modo secuencial
     showStatus('Sequential mode. Shuffle is off', 'info', 2000);
+    announceAccessibilityMessage('Modo aleatorio desactivado. La reproducción continua sigue activa.');
 
     if ((context === 'favorites' || context === 'album' || context === 'searchPlaylist') && items.length > 0) {
       // Rebuild FIFO starting after the current track (avoid immediate duplicate).
@@ -4658,7 +4739,7 @@ function toggleShuffleFavorites() {
         const idx = items.findIndex(it => getItemKeyForDeck(context, it) === currentKey);
         if (idx >= 0) startIndex = (idx + 1) % items.length;
       }
-      loadPlaybackQueue(context, items, startIndex);
+      loadPlaybackQueue(context, items, startIndex, { silent: true });
     }
   }
 

@@ -5857,6 +5857,7 @@ function displayAlbumTracks(albumId, tracksContainer) {
       files.forEach((track, index) => {
         const trackItem = document.createElement('div');
         trackItem.className = 'track-item track-row';
+        if (track && track.url) trackItem.dataset.trackUrl = String(track.url);
 
         const isFavoritesContext = tracksContainer.closest('#favorites-list') !== null;
 

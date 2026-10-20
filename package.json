@@ -17,6 +17,6 @@
     "node": ">=14.0.0"
   },
   "scripts": {
-    "test": "node tests/player.test.js && node tests/audio-worklet.test.js && node tests/audio-node-lifecycle-manager.test.js && node tests/continuous-queue-manager.test.js && node tests/crossfade-controller.test.js && node tests/gapless-buffer-manager.test.js && node tests/adaptive-stream-controller.test.js && node packages/player-component/test.js && node tests/local-track-storage.test.js && node tests/search-worker.test.js"
+    "test": "node tests/player.test.js && node tests/audio-worklet.test.js && node tests/audio-master-chain.test.js && node tests/media-session-adapter.test.js && node tests/a11y-announcer.test.js && node tests/offline-status-manager.test.js && node tests/gapless-buffer-manager.test.js && node tests/adaptive-stream-controller.test.js && node packages/player-component/test.js && node tests/local-track-storage.test.js && node tests/search-worker.test.js"
   }
 }

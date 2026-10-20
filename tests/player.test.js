@@ -130,6 +130,7 @@ async function createPlayer() {
     userInteracted: false,
     networkOnline: true
   };
+  const announcements = [];
   const context = {
     URL,
     URLSearchParams,
@@ -140,6 +141,11 @@ async function createPlayer() {
     navigator: { userAgent: '' },
     location: { href: 'https://resonate.test/', hostname: 'resonate.test', protocol: 'https:', search: '' },
     state,
+    A11yAnnouncer: {
+      announce(message, priority) {
+        announcements.push({ message, priority });
+      }
+    },
     setTimeout: () => 1,
     clearTimeout() {},
     setInterval: () => 1,
@@ -158,7 +164,7 @@ async function createPlayer() {
   vm.runInContext(normalizerSource, context, { filename: 'js/track-normalizer.js' });
   vm.runInContext(playbackSource, context, { filename: 'js/playback.js' });
 
-  return { context, audio, playButton, state };
+  return { context, audio, playButton, state, announcements };
 }
 
 async function createSandbox(globals = {}) {
@@ -1099,7 +1105,7 @@ test('Sequential context navigation advances, wraps, and goes back', async () =>
 });
 
 test('The shuffle button interaction toggles the persisted mode and rebuilds the queue', async () => {
-  const { context, state } = await createPlayer();
+  const { context, state, announcements } = await createPlayer();
   const shuffleButton = Object.assign(createMockElement('BUTTON'), {
     dataset: {},
     disabled: false
@@ -1116,11 +1122,62 @@ test('The shuffle button interaction toggles the persisted mode and rebuilds the
   assert.equal(context.playbackStateManager.getShuffleMode(), true);
   assert.equal(context.localStorage.getItem('resonate_shuffle_enabled'), 'true');
   assert.equal(shuffleButton.classList.contains('active'), true);
+  assert.match(announcements[0].message, /Modo aleatorio activado/);
 
   context.toggleShuffleFavorites();
   assert.equal(state.shuffleFavorites, false);
   assert.equal(context.playbackStateManager.getShuffleMode(), false);
   assert.equal(shuffleButton.classList.contains('active'), false);
+  assert.match(announcements[1].message, /Modo aleatorio desactivado/);
+});
+
+test('Loading a changed continuous playback queue announces its size', async () => {
+  const { context, state, announcements } = await createPlayer();
+  state.networkOnline = false;
+
+  context.loadPlaybackQueue('playlist', [
+    { url: 'https://archive.org/one.mp3' },
+    { url: 'https://archive.org/two.mp3' }
+  ]);
+
+  assert.equal(state.playbackQueue.length, 2);
+  assert.match(announcements[0].message, /Cola de reproducción continua actualizada: 2 pistas/);
+
+  context.loadPlaybackQueue('playlist', [
+    { url: 'https://archive.org/one.mp3' },
+    { url: 'https://archive.org/two.mp3' }
+  ]);
+  assert.equal(announcements.length, 1);
+});
+
+test('Playback track announcements include the track and artist', async () => {
+  const { context, announcements } = await createPlayer();
+
+  context.announcePlaybackTrack({ title: 'A New Track', artist: 'An Artist' });
+
+  assert.equal(announcements[0].message, 'Reproduciendo: A New Track, An Artist');
+});
+
+test('Offline playback refuses tracks absent from offline caches and announces why', async () => {
+  const { context, audio, state, announcements } = await createPlayer();
+  const statuses = [];
+  state.networkOnline = false;
+  context.showStatus = (...args) => statuses.push(args);
+  context.OfflineStatusManager = {
+    async checkTrackAvailability() {
+      return { available: false, complete: false, partial: false };
+    }
+  };
+
+  const result = await context.playAudioTrackOptimized({
+    url: 'https://archive.org/not-cached.mp3',
+    title: 'Uncached track'
+  });
+
+  assert.equal(result, false);
+  assert.equal(audio.playCalls, 0);
+  assert.match(statuses[0][0], /no está disponible sin conexión/);
+  assert.equal(announcements[0].priority, 'assertive');
 });
 
 test('Loading an empty queue clears any previous queue', async () => {
