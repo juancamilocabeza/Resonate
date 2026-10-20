@@ -205,6 +205,241 @@ async function evaluateSearchScripts(context) {
   await evaluateScript(context, 'js/search.js');
 }
 
+test('Main player markup uses semantic music headings, artwork, and time elements', async () => {
+  const html = await readFile(new URL('index.html', projectRoot), 'utf8');
+  assert.match(html, /<article\b[^>]*itemscope[^>]*itemtype="https:\/\/schema\.org\/MusicRecording"/);
+  assert.match(html, /<h1\b[^>]*id="title"[^>]*itemprop="name"/);
+  assert.match(html, /<h2\b[^>]*itemprop="byArtist"/);
+  assert.match(html, /<figure\b[^>]*class="art"[^>]*id="art"/);
+  assert.match(html, /<img\b[^>]*alt="Portada del álbum"[^>]*loading="eager"[^>]*fetchpriority="high"/);
+  assert.match(html, /<time\b[^>]*id="current-time"[^>]*datetime="PT0S"/);
+  assert.match(html, /<time\b[^>]*id="total-time"[^>]*datetime="PT0S"/);
+});
+
+test('Canonical routes update the document, browser history, and restore playback on popstate', async () => {
+  const historyCalls = [];
+  const history = {
+    state: null,
+    pushState(state, title, url) {
+      this.state = state;
+      historyCalls.push(['push', state, title, url]);
+    },
+    replaceState(state, title, url) {
+      this.state = state;
+      historyCalls.push(['replace', state, title, url]);
+    }
+  };
+  const head = {
+    children: [],
+    appendChild(element) {
+      element.parentNode = this;
+      this.children.push(element);
+      return element;
+    }
+  };
+  const document = {
+    head,
+    createElement(tagName) {
+      const attributes = {};
+      return {
+        tagName,
+        parentNode: null,
+        setAttribute(name, value) { attributes[name] = String(value); },
+        getAttribute(name) { return attributes[name] || null; }
+      };
+    },
+    querySelector(selector) {
+      if (selector !== 'link[rel="canonical"]') return null;
+      return head.children.find(element => element.getAttribute('rel') === 'canonical') || null;
+    }
+  };
+  const listeners = new Map();
+  const restoredTracks = [];
+  let routeManager;
+  const state = {
+    currentTrack: {
+      trackId: 'album:track-one.mp3',
+      id: 'album-id',
+      albumId: 'album-id',
+      trackIndex: 2,
+      title: 'Canción Única'
+    }
+  };
+  const { context } = await createSandbox({
+    document,
+    history,
+    state,
+    async playSharedContent(albumId, trackIndex) {
+      restoredTracks.push([albumId, trackIndex]);
+      state.currentTrack = {
+        id: albumId,
+        albumId,
+        trackIndex,
+        title: 'Previous Song'
+      };
+      routeManager.setCanonicalUrl(state.currentTrack.title);
+    }
+  });
+  context.addEventListener = (type, listener) => listeners.set(type, listener);
+  await evaluateScript(context, 'js/CanonicalRouteManager.js');
+  routeManager = context.CanonicalRouteManager;
+
+  const canonicalUrl = context.CanonicalRouteManager.setCanonicalUrl(state.currentTrack.title);
+  assert.equal(canonicalUrl, 'https://www.resonateplayer.com/track/cancion-unica');
+  assert.equal(document.querySelector('link[rel="canonical"]').getAttribute('href'), canonicalUrl);
+  assert.equal(historyCalls[0][0], 'push');
+  assert.deepEqual(JSON.parse(JSON.stringify(historyCalls[0][1])), {
+    trackId: 'album:track-one.mp3',
+    albumId: 'album-id',
+    trackIndex: 2
+  });
+  assert.equal(historyCalls[0][2], 'Canción Única');
+  assert.equal(historyCalls[0][3], 'https://resonate.test/track/cancion-unica');
+
+  const routeState = { trackId: 'album:previous.mp3', albumId: 'previous-album', trackIndex: 1 };
+  await listeners.get('popstate')({ state: routeState });
+  assert.deepEqual(restoredTracks, [['previous-album', 1]]);
+
+  assert.equal(historyCalls[1][0], 'replace');
+  assert.equal(historyCalls[1][3], 'https://resonate.test/track/previous-song');
+});
+
+test('Social metadata updates Open Graph and Twitter tags without leaving stale track data', async () => {
+  const head = {
+    children: [],
+    appendChild(element) {
+      element.parentNode = this;
+      this.children.push(element);
+      return element;
+    },
+    removeChild(element) {
+      this.children = this.children.filter(child => child !== element);
+      element.parentNode = null;
+      return element;
+    }
+  };
+  const document = {
+    head,
+    createElement(tagName) {
+      const attributes = {};
+      return {
+        tagName,
+        parentNode: null,
+        setAttribute(name, value) { attributes[name] = String(value); },
+        getAttribute(name) { return attributes[name] || null; }
+      };
+    },
+    querySelector(selector) {
+      const match = selector.match(/^meta\[(property|name)="([^"]+)"\]$/);
+      if (!match) return null;
+      return head.children.find(element => element.getAttribute(match[1]) === match[2]) || null;
+    }
+  };
+  const { context } = await createSandbox({ document });
+  await evaluateScript(context, 'js/SocialMetaManager.js');
+
+  context.SocialMetaManager.updateOpenGraph({
+    title: 'First Song',
+    creator: 'Example Artist',
+    albumDescription: 'A new album',
+    albumId: 'example-album',
+    duration: 225,
+    url: 'https://archive.org/download/example/track.mp3'
+  });
+  const getContent = key => document.querySelector(`meta[property="${key}"]`)?.getAttribute('content');
+  assert.equal(getContent('og:title'), 'First Song - Example Artist');
+  assert.equal(getContent('og:description'), 'A new album');
+  assert.equal(getContent('og:type'), 'music.song');
+  assert.equal(getContent('og:image'), 'https://archive.org/services/img/example-album');
+  assert.equal(getContent('og:image:alt'), 'First Song - Example Artist album cover');
+  assert.equal(getContent('og:image:width'), '1200');
+  assert.equal(getContent('og:image:height'), '630');
+  assert.equal(getContent('og:audio'), 'https://archive.org/download/example/track.mp3');
+  assert.equal(getContent('og:audio:type'), 'audio/mpeg');
+  assert.equal(getContent('music:duration'), '225');
+  assert.equal(getContent('twitter:card'), 'summary_large_image');
+  assert.equal(getContent('twitter:title'), 'First Song - Example Artist');
+  assert.equal(getContent('twitter:description'), 'A new album');
+  assert.equal(getContent('twitter:image'), 'https://archive.org/services/img/example-album');
+
+  context.SocialMetaManager.updateOpenGraph({
+    title: 'Second Song',
+    url: 'https://example.com/second.opus'
+  });
+  assert.equal(getContent('og:title'), 'Second Song');
+  assert.equal(getContent('og:audio'), 'https://example.com/second.opus');
+  assert.equal(getContent('og:audio:type'), 'audio/opus');
+  assert.equal(getContent('music:duration'), undefined);
+  assert.equal(getContent('og:image'), undefined);
+});
+
+test('Structured data updates the current recording and removes stale schema', async () => {
+  const head = {
+    children: [],
+    appendChild(element) {
+      element.parentNode = this;
+      this.children.push(element);
+      return element;
+    },
+    removeChild(element) {
+      this.children = this.children.filter(child => child !== element);
+      element.parentNode = null;
+      return element;
+    }
+  };
+  const document = {
+    head,
+    createElement(tagName) {
+      return { tagName, parentNode: null, textContent: '' };
+    },
+    getElementById(id) {
+      return head.children.find(element => element.id === id) || null;
+    }
+  };
+  const { context } = await createSandbox({ document });
+  await evaluateScript(context, 'js/SEOStructuredData.js');
+
+  context.SEOStructuredData.updateTrackSchema({
+    title: 'First Track',
+    creator: 'Example Artist',
+    albumTitle: 'Example Album',
+    albumId: 'example-album',
+    duration: 225.8,
+    url: 'https://archive.org/download/example/track.mp3'
+  });
+
+  assert.equal(head.children.length, 1);
+  assert.equal(head.children[0].id, 'schema-jsonld');
+  assert.equal(head.children[0].type, 'application/ld+json');
+  const firstSchema = JSON.parse(head.children[0].textContent);
+  assert.equal(firstSchema['@context'], 'https://schema.org');
+  assert.equal(firstSchema['@type'], 'MusicRecording');
+  assert.equal(firstSchema.name, 'First Track');
+  assert.deepEqual(JSON.parse(JSON.stringify(firstSchema.byArtist)), { '@type': 'MusicGroup', name: 'Example Artist' });
+  assert.deepEqual(JSON.parse(JSON.stringify(firstSchema.inAlbum)), {
+    '@type': 'MusicAlbum',
+    name: 'Example Album',
+    image: 'https://archive.org/services/img/example-album'
+  });
+  assert.equal(firstSchema.duration, 'PT3M45S');
+  assert.deepEqual(JSON.parse(JSON.stringify(firstSchema.audio)), {
+    '@type': 'AudioObject',
+    contentUrl: 'https://archive.org/download/example/track.mp3',
+    encodingFormat: 'audio/mpeg'
+  });
+
+  context.SEOStructuredData.updateTrackSchema({ title: 'Second Track', url: 'https://example.com/second.ogg' });
+  assert.equal(head.children.length, 1);
+  const secondSchema = JSON.parse(head.children[0].textContent);
+  assert.equal(secondSchema.name, 'Second Track');
+  assert.equal(secondSchema.duration, undefined);
+  assert.equal(secondSchema.inAlbum, undefined);
+  assert.equal(secondSchema.audio.encodingFormat, 'audio/ogg');
+
+  context.SEOStructuredData.updateTrackSchema(null);
+  assert.equal(head.children.length, 0);
+});
+
 test('Offline favorites preloading is opt-in and saved preferences are preserved', async () => {
   const uiSource = await readFile(new URL('js/ui.js', projectRoot), 'utf8');
   assert.match(uiSource, /favoritesPreloadEnabled:\s*false/);

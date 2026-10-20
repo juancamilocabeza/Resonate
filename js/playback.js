@@ -1885,6 +1885,11 @@ function formatTime(seconds) {
   return `${minutes}:${String(remainingSeconds).padStart(2, '0')}`;
 }
 
+function formatIsoDuration(seconds) {
+  if (!Number.isFinite(seconds) || seconds < 0) return 'PT0S';
+  return `PT${Math.floor(seconds)}S`;
+}
+
 let activeLoaderProgress = 0;
 
 // In-memory preloaded blob URLs for near-instant next-track playback
@@ -2488,6 +2493,10 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
     isAlbumTrack: totalTracks > 1,
     albumId: identifier
   };
+  window.SEOStructuredData?.updateTrackSchema(state.currentTrack);
+  window.CanonicalRouteManager?.setCanonicalUrl(
+    state.currentTrack.title || state.currentTrack.name || state.currentTrack.trackId || state.currentTrack.id
+  );
   updateLoaderProgress(30);
 
   updateFavoriteButton();
@@ -3985,8 +3994,14 @@ function updateProgressBar() {
     const duration = audio.duration;
     const progressPercent = (currentTime / duration) * 100;
     updateProgressVisual(progressPercent);
-    if (window.elements.currentTime) window.elements.currentTime.textContent = formatTime(currentTime);
-    if (window.elements.totalTime) window.elements.totalTime.textContent = formatTime(duration);
+    if (window.elements.currentTime) {
+      window.elements.currentTime.textContent = formatTime(currentTime);
+      window.elements.currentTime.dateTime = formatIsoDuration(currentTime);
+    }
+    if (window.elements.totalTime) {
+      window.elements.totalTime.textContent = formatTime(duration);
+      window.elements.totalTime.dateTime = formatIsoDuration(duration);
+    }
 
     updateBufferedProgress();
 
@@ -4393,6 +4408,8 @@ function setupProgressBarInteraction() {
 
     updateProgressVisual(progressPercent);
     window.elements.currentTime.textContent = formatTime(seekTime);
+    window.elements.currentTime.dateTime = formatIsoDuration(seekTime);
+    window.elements.totalTime.dateTime = formatIsoDuration(duration);
     window.elements.audio.currentTime = seekTime;
     window.elements.progressBar.setAttribute('aria-valuenow', Math.round(progressPercent));
     window.elements.progressBar.setAttribute('aria-valuetext',
