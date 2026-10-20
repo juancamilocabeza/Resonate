@@ -46,10 +46,10 @@ function deriveSwVersion() {
 const SW_VERSION = deriveSwVersion();
 
 // Must be defined before activate/fetch handlers so it can be preserved.
-const AUDIO_CACHE_NAME = 'resonate-audio-v1';
-const AUDIO_PRECACHE_NAME = 'audio-precache-v1';
+const AUDIO_CACHE_NAME = 'continuous-queue-v1';
+const AUDIO_PRECACHE_NAME = 'search-precache-v1';
 const AUDIO_PRECACHE_CHUNK_SIZE = 256 * 1024;
-const AUDIO_PRECACHE_MAX_BYTES = 50 * 1024 * 1024;
+const AUDIO_PRECACHE_MAX_BYTES = 20 * 1024 * 1024;
 let audioPrecacheQueue = Promise.resolve();
 
 const RUNTIME_CACHE_LIMITS = {
@@ -198,23 +198,27 @@ function shouldSkipAudioPrecache() {
     connection.effectiveType === '2g';
 }
 
-async function trimAudioPrecache(cache) {
+async function enforceFIFOQuota(cacheName, maxByteSize) {
+  const cache = await caches.open(cacheName);
   const keys = await cache.keys();
   let totalBytes = 0;
   const entries = [];
 
   for (const key of keys) {
     const response = await cache.match(key);
-    const size = Number(response && response.headers.get('x-audio-precache-size')) || 0;
+    const contentLength = response && response.headers.get('Content-Length');
+    const size = contentLength && /^\d+$/.test(contentLength) ? Number(contentLength) : 0;
     entries.push({ key, size });
     totalBytes += size;
   }
 
   for (const entry of entries) {
-    if (totalBytes <= AUDIO_PRECACHE_MAX_BYTES) break;
+    if (totalBytes <= maxByteSize) break;
     await cache.delete(entry.key);
     totalBytes -= entry.size;
   }
+
+  return totalBytes;
 }
 
 async function precacheAudioUrl(url) {
@@ -256,12 +260,11 @@ async function precacheAudioUrl(url) {
   headers.set('Content-Length', String(chunk.byteLength));
   headers.set('X-Audio-Precache-Partial', 'true');
   headers.set('X-Audio-Precache-Content-Range', cachedRange);
-  headers.set('X-Audio-Precache-Size', String(chunk.byteLength));
 
   const cache = await caches.open(AUDIO_PRECACHE_NAME);
   await cache.delete(parsedUrl.href);
   await cache.put(parsedUrl.href, new Response(chunk, { status: 200, headers }));
-  await trimAudioPrecache(cache);
+  await enforceFIFOQuota(AUDIO_PRECACHE_NAME, AUDIO_PRECACHE_MAX_BYTES);
 
   return { url: parsedUrl.href, cached: true, bytes: chunk.byteLength };
 }
@@ -704,7 +707,8 @@ self.addEventListener('activate', (event) => {
             cacheName !== CACHE_NAMES.METADATA &&
             cacheName !== CACHE_NAMES.COVERS &&
             cacheName !== CACHE_NAMES.SEARCH &&
-            cacheName !== AUDIO_CACHE_NAME
+            cacheName !== AUDIO_CACHE_NAME &&
+            cacheName !== AUDIO_PRECACHE_NAME
           ) {
             console.log('SW: Deleting old cache:', cacheName);
             return caches.delete(cacheName);
