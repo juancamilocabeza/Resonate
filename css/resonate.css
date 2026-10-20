@@ -4315,8 +4315,8 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
   color: var(--primary-text);
   font-size: 10px;
   padding: 8px 0 !important;
-  position: sticky;
-  bottom: 0;
+  position: relative;
+  bottom: auto;
   left: 0;
   right: 0;
   background: var(--bg);
@@ -4326,7 +4326,8 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  margin-top: 0;
+  margin-top: auto;
+  flex-shrink: 0;
   width: 100% !important;
   line-height: 1.25;
   margin-left: 0 !important;
@@ -4347,10 +4348,10 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
     --search-height-mobile: var(--search-height-tablet);
   }
 
-  /* Tablet footer - use sticky like mobile */
+  /* Keep the footer in document flow below the main content. */
   .footer {
-    position: sticky;
-    bottom: 0;
+    position: relative;
+    bottom: auto;
     padding: 10px 0 !important;
     opacity: 1;
     font-size: 10px;
