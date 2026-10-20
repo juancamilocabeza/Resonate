@@ -511,10 +511,10 @@ test('Audio cache deduplicates concurrent requests for the same URL', async () =
   assert.equal(first?.blob?.size, second?.blob?.size);
 });
 
-async function createServiceWorkerHarness({ fetch, audioEntries = [], connection = null }) {
+async function createServiceWorkerHarness({ fetch, audioEntries = [], precacheEntries = [], connection = null }) {
   const listeners = new Map();
   const audioCacheEntries = new Map(audioEntries);
-  const audioPrecacheEntries = new Map();
+  const audioPrecacheEntries = new Map(precacheEntries);
   const makeCache = entries => ({
     async match(key) {
       const response = entries.get(typeof key === 'string' ? key : key.url);
@@ -557,10 +557,10 @@ async function createServiceWorkerHarness({ fetch, audioEntries = [], connection
     self: serviceWorker,
     console: serviceWorkerConsole,
     caches: {
-      open: async name => (name === 'audio-precache-v1' ? audioPrecache : audioCache),
+      open: async name => (name === 'search-precache-v1' ? audioPrecache : audioCache),
       async delete(name) {
-        if (name === 'audio-precache-v1') audioPrecacheEntries.clear();
-        else if (name === 'resonate-audio-v1') audioCacheEntries.clear();
+        if (name === 'search-precache-v1') audioPrecacheEntries.clear();
+        else if (name === 'continuous-queue-v1') audioCacheEntries.clear();
         return true;
       }
     },
@@ -654,6 +654,31 @@ test('Service worker serves cached audio byte ranges with partial content header
   assert.equal(networkRequests, 0);
 });
 
+test('Service worker prioritizes continuous-queue audio over search precache', async () => {
+  const url = 'https://archive.org/download/item/track.mp3';
+  const harness = await createServiceWorkerHarness({
+    fetch: async () => {
+      throw new Error('Cached audio should not trigger a network request');
+    },
+    audioEntries: [[url, new Response('queue-audio', {
+      headers: { 'Content-Type': 'audio/mpeg' }
+    })]],
+    precacheEntries: [[url, new Response('search-audio', {
+      headers: {
+        'Content-Type': 'audio/mpeg',
+        'X-Audio-Precache-Content-Range': 'bytes 0-11/12'
+      }
+    })]]
+  });
+
+  const { response } = await harness.dispatch(new Request(url, {
+    mode: 'no-cors',
+    headers: { Range: 'bytes=0-4' }
+  }));
+  assert.equal(response.status, 206);
+  assert.equal(await response.text(), 'queue');
+});
+
 test('Service worker precaches 256 KB audio ranges and serves cached initial playback ranges', async () => {
   const requested = [];
   const urls = Array.from({ length: 4 }, (_, index) =>
@@ -724,8 +749,8 @@ test('Service worker skips audio precaching on cellular and data-saving connecti
   }
 });
 
-test('Service worker keeps audio precache at or below 50 MB using FIFO eviction', async () => {
-  const urls = Array.from({ length: 201 }, (_, index) =>
+test('Service worker keeps search precache at or below 20 MB using Content-Length FIFO eviction', async () => {
+  const urls = Array.from({ length: 81 }, (_, index) =>
     `https://archive.org/download/item/fifo-${index}.mp3`
   );
   const chunk = new Uint8Array(256 * 1024);
@@ -744,11 +769,11 @@ test('Service worker keeps audio precache at or below 50 MB using FIFO eviction'
   }
 
   const cachedBytes = [...harness.audioPrecacheEntries.values()]
-    .reduce((total, response) => total + Number(response.headers.get('X-Audio-Precache-Size')), 0);
-  assert.ok(cachedBytes <= 50 * 1024 * 1024);
-  assert.equal(harness.audioPrecacheEntries.size, 200);
+    .reduce((total, response) => total + Number(response.headers.get('Content-Length')), 0);
+  assert.ok(cachedBytes <= 20 * 1024 * 1024);
+  assert.equal(harness.audioPrecacheEntries.size, 80);
   assert.equal(harness.audioPrecacheEntries.has(urls[0]), false);
-  assert.equal(harness.audioPrecacheEntries.has(urls[200]), true);
+  assert.equal(harness.audioPrecacheEntries.has(urls[80]), true);
 });
 
 test('Service worker caches a complete response after an uncached audio range request', async () => {
