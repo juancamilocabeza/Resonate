@@ -229,15 +229,18 @@
 
       <div class="main-player-section">
       <div class="player-container">
-        <div class="player-content" id="player-content">
-          <div class="art" id="art">
+        <article class="player-content" id="player-content" itemscope itemtype="https://schema.org/MusicRecording">
+          <figure class="art" id="art">
             <span class="hint"></span>
-          </div>
+            <img alt="Portada del álbum" itemprop="image" loading="eager" fetchpriority="high" hidden>
+          </figure>
           <div class="current-track-info">
             <div class="title-share-container">
-              <div class="title" id="title"></div>
+              <h1 class="title" id="title" itemprop="name"></h1>
             </div>
-            <div class="creator" id="creator"></div>
+            <h2 class="creator" itemprop="byArtist" itemscope itemtype="https://schema.org/MusicGroup">
+              <span id="creator" itemprop="name"></span>
+            </h2>
             <div id="description-container">
               <span id="player-menu-btn" class="icon-control player-menu-btn" role="button" tabindex="0"
                     aria-label="More track options" aria-expanded="false"
@@ -263,13 +266,13 @@
                  aria-valuenow="0"
                  aria-valuetext="0 segundos de 0 segundos"
                  tabindex="0">
-              <span class="current-time" id="current-time">0:00</span>
+              <time class="current-time" id="current-time" datetime="PT0S">0:00</time>
               <div class="progress-buffered" id="progress-buffered"></div>
               <div class="progress" id="progress"></div>
               <div class="progress-thumb" id="progress-thumb" aria-hidden="true"></div>
               <div class="progress-tooltip" id="progress-tooltip">0:00</div>
-              <span class="total-time" id="total-time">0:00</span>
-            </div>
+              <time class="total-time" id="total-time" datetime="PT0S">0:00</time>
+            </article>
           </div>
           <div class="controls">
             <button id="shuffle-favorites-btn" class="shuffle-favorites-btn" aria-label="Shuffle" title="Shuffle">
@@ -597,7 +600,10 @@
   <script src="js/cache.js" defer></script>
   <script src="js/track-normalizer.js" defer></script>
   <script src="js/adaptive-stream-controller.js" defer></script>
+  <script src="js/CanonicalRouteManager.js" defer></script>
+  <script src="js/SocialMetaManager.js" defer></script>
   <script src="js/share.js" defer></script>
+  <script src="js/SEOStructuredData.js" defer></script>
   <script src="js/album-tracks.js" defer></script>
   <script src="js/loaders.js" defer></script>
   <script src="js/playback.js" defer></script>

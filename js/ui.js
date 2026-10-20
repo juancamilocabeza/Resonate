@@ -3438,6 +3438,15 @@ async function setArtwork(track, identifier) {
 
   // Clear existing artwork
   elements.art.innerHTML = '';
+  const albumTitle = track.albumTitle || track.album || track.title || track.creator || 'álbum';
+  const altText = `Portada del álbum ${albumTitle}`;
+  const prepareArtwork = (img) => {
+    img.alt = altText;
+    img.loading = 'eager';
+    img.fetchPriority = 'high';
+    img.setAttribute('itemprop', 'image');
+    return img;
+  };
 
   // Get safe identifier
   const safeIdentifier = identifier || (track && track.id) || (track && track.identifier) || 'default';
@@ -3458,7 +3467,7 @@ async function setArtwork(track, identifier) {
     // Load cover using centralized manager
     if (window.CoverManager?.loadCover) {
       const img = await window.CoverManager.loadCover(safeIdentifier, {
-        alt: 'Album cover',
+        alt: altText,
         width: '100%',
         height: '100%',
         objectFit: 'cover',
@@ -3466,16 +3475,14 @@ async function setArtwork(track, identifier) {
         fetchPriority: 'high',
         showFallback: false
       });
-      elements.art.appendChild(img);
+      elements.art.appendChild(prepareArtwork(img));
     } else if (coverUrl) {
-      const img = new Image();
-      img.alt = 'Album cover';
+      const img = prepareArtwork(new Image());
       img.style.width = '100%';
       img.style.height = '100%';
       img.style.objectFit = 'cover';
       img.style.borderRadius = '12px';
       img.decoding = 'async';
-      img.fetchPriority = 'high';
       img.src = coverUrl;
       elements.art.appendChild(img);
     }
@@ -3483,14 +3490,12 @@ async function setArtwork(track, identifier) {
     window.logger?.warn({ message: 'Failed to load artwork', error }, 'UI');
     const fallbackUrl = `https://archive.org/services/img/${encodeURIComponent(safeIdentifier)}`;
     try {
-      const img = new Image();
-      img.alt = 'Album cover';
+      const img = prepareArtwork(new Image());
       img.style.width = '100%';
       img.style.height = '100%';
       img.style.objectFit = 'cover';
       img.style.borderRadius = '12px';
       img.decoding = 'async';
-      img.fetchPriority = 'high';
       img.src = fallbackUrl;
       elements.art.appendChild(img);
     } catch {}

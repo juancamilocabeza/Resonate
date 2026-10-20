@@ -77,6 +77,15 @@
     updateMetaTag('property', 'twitter:image', imageUrl);
     updateMetaTag('property', 'twitter:url', shareUrl);
     updateMetaTag('name', 'description', description);
+    const currentTrack = window.state?.currentTrack;
+    const matchesCurrentTrack = currentTrack && (
+      currentTrack.albumId === identifier ||
+      currentTrack.id === identifier ||
+      currentTrack.identifier === identifier
+    );
+    window.SocialMetaManager?.updateOpenGraph(matchesCurrentTrack
+      ? currentTrack
+      : { title: normalizedTitle, creator: normalizedCreator, albumId: identifier });
 
     window.logger?.debug({
       message: 'Meta tags updated for sharing',

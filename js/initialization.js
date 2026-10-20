@@ -666,7 +666,9 @@ async function handleSharedLink() {
           // Only clear the shared-link params once playback started successfully.
           if (sharedPlaybackStarted) {
             try {
-              window.history.replaceState({}, '', cleanedUrl);
+              if (!window.location.pathname.startsWith('/track/')) {
+                window.history.replaceState({}, '', cleanedUrl);
+              }
             } catch {}
           }
         }
@@ -1347,6 +1349,10 @@ async function initializeApp() {
   const ensureHistoryEntry = () => {
     if (__resonateHistoryEntryAdded) return;
     if (!state || !state.userInteracted) return;
+    if (window.history.state && window.history.state.trackId) {
+      __resonateHistoryEntryAdded = true;
+      return;
+    }
     try {
       window.history.pushState(null, '', window.location.href);
       __resonateHistoryEntryAdded = true;
