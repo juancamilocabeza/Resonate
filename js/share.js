@@ -71,11 +71,11 @@
     updateMetaTag('property', 'og:image', imageUrl);
     updateMetaTag('property', 'og:url', shareUrl);
     updateMetaTag('property', 'og:type', 'music.song');
-    updateMetaTag('property', 'twitter:card', 'summary_large_image');
-    updateMetaTag('property', 'twitter:title', displayTitle);
-    updateMetaTag('property', 'twitter:description', description);
-    updateMetaTag('property', 'twitter:image', imageUrl);
-    updateMetaTag('property', 'twitter:url', shareUrl);
+    updateMetaTag('name', 'twitter:card', 'summary_large_image');
+    updateMetaTag('name', 'twitter:title', displayTitle);
+    updateMetaTag('name', 'twitter:description', description);
+    updateMetaTag('name', 'twitter:image', imageUrl);
+    updateMetaTag('name', 'twitter:url', shareUrl);
     updateMetaTag('name', 'description', description);
     const currentTrack = window.state?.currentTrack;
     const matchesCurrentTrack = currentTrack && (

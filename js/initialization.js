@@ -580,11 +580,11 @@ async function updateMetaTagsForSharedLink(identifier, trackIndex = null) {
     updateMetaTag('property', 'og:type', 'music.song');
 
     // Update Twitter Card tags
-    updateMetaTag('property', 'twitter:card', 'summary_large_image');
-    updateMetaTag('property', 'twitter:title', `${resolvedTitle} - ${resolvedCreator}`);
-    updateMetaTag('property', 'twitter:description', `Listen to "${resolvedTitle}" by ${resolvedCreator} on Resonate Player. Free music from archive.org.`);
-    updateMetaTag('property', 'twitter:image', imageUrl);
-    updateMetaTag('property', 'twitter:url', shareUrl);
+    updateMetaTag('name', 'twitter:card', 'summary_large_image');
+    updateMetaTag('name', 'twitter:title', `${resolvedTitle} - ${resolvedCreator}`);
+    updateMetaTag('name', 'twitter:description', `Listen to "${resolvedTitle}" by ${resolvedCreator} on Resonate Player. Free music from archive.org.`);
+    updateMetaTag('name', 'twitter:image', imageUrl);
+    updateMetaTag('name', 'twitter:url', shareUrl);
 
     // Update basic meta description
     updateMetaTag('name', 'description', `Listen to "${resolvedTitle}" by ${resolvedCreator} on Resonate Player. Free music from archive.org.`);
@@ -596,7 +596,7 @@ async function updateMetaTagsForSharedLink(identifier, trackIndex = null) {
     // Fallback: update with generic content but correct image
     const imageUrl = `https://archive.org/services/img/${identifier}`;
     updateMetaTag('property', 'og:image', imageUrl);
-    updateMetaTag('property', 'twitter:image', imageUrl);
+    updateMetaTag('name', 'twitter:image', imageUrl);
   }
 }
 

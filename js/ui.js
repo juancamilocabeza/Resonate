@@ -6720,6 +6720,7 @@ function loadSavedPlaybackState() {
       if (savedState.trackDescription && !state.currentTrack.description) {
         state.currentTrack.description = savedState.trackDescription;
       }
+      window.SEOStructuredData?.updateTrackSchema(state.currentTrack);
       {
         const trackTitle = state.currentTrack.title || 'Untitled';
         const isAlbumTrack = (state.currentTrack.totalTracks || 1) > 1 || !!state.currentTrack.isAlbumTrack;

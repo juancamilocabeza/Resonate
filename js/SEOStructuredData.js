@@ -88,8 +88,8 @@
     if (!script) {
       script = window.document.createElement('script');
       script.id = 'schema-jsonld';
-      script.type = 'application/ld+json';
     }
+    script.type = 'application/ld+json';
 
     const audioUrl = normalizeString(trackData.url || trackData.audioUrl);
     const albumName = normalizeString(trackData.albumTitle || trackData.albumName || trackData.album);
@@ -118,7 +118,7 @@
     }
 
     script.textContent = JSON.stringify(recording).replace(/</g, '\\u003c');
-    if (!script.parentNode) window.document.head.appendChild(script);
+    if (script.parentNode !== window.document.head) window.document.head.appendChild(script);
   }
 
   window.SEOStructuredData = { updateTrackSchema };

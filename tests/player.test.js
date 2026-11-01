@@ -214,6 +214,9 @@ test('Main player markup uses semantic music headings, artwork, and time element
   assert.match(html, /<img\b[^>]*alt="Portada del álbum"[^>]*loading="eager"[^>]*fetchpriority="high"/);
   assert.match(html, /<time\b[^>]*id="current-time"[^>]*datetime="PT0S"/);
   assert.match(html, /<time\b[^>]*id="total-time"[^>]*datetime="PT0S"/);
+  const playerArticle = html.match(/<article class="player-content"[\s\S]*?<\/article>/)?.[0] || '';
+  assert.match(playerArticle, /<div class="progress-bar"[\s\S]*?<\/div>\s*<\/div>/);
+  assert.match(playerArticle, /<button id="favorite-btn"[\s\S]*?<\/button>\s*<\/div>\s*<\/article>$/);
 });
 
 test('Canonical routes update the document, browser history, and restore playback on popstate', async () => {
@@ -346,7 +349,10 @@ test('Social metadata updates Open Graph and Twitter tags without leaving stale 
     duration: 225,
     url: 'https://archive.org/download/example/track.mp3'
   });
-  const getContent = key => document.querySelector(`meta[property="${key}"]`)?.getAttribute('content');
+  const getContent = key => {
+    const attribute = key.startsWith('twitter:') ? 'name' : 'property';
+    return document.querySelector(`meta[${attribute}="${key}"]`)?.getAttribute('content');
+  };
   assert.equal(getContent('og:title'), 'First Song - Example Artist');
   assert.equal(getContent('og:description'), 'A new album');
   assert.equal(getContent('og:type'), 'music.song');
@@ -371,12 +377,27 @@ test('Social metadata updates Open Graph and Twitter tags without leaving stale 
   assert.equal(getContent('og:audio:type'), 'audio/opus');
   assert.equal(getContent('music:duration'), undefined);
   assert.equal(getContent('og:image'), undefined);
+
+  context.SocialMetaManager.updateOpenGraph(null);
+  assert.equal(getContent('og:title'), undefined);
+  assert.equal(getContent('twitter:card'), undefined);
 });
 
 test('Structured data updates the current recording and removes stale schema', async () => {
+  const body = {
+    children: [],
+    appendChild(element) {
+      element.parentNode = this;
+      this.children.push(element);
+      return element;
+    }
+  };
   const head = {
     children: [],
     appendChild(element) {
+      if (element.parentNode && Array.isArray(element.parentNode.children)) {
+        element.parentNode.children = element.parentNode.children.filter(child => child !== element);
+      }
       element.parentNode = this;
       this.children.push(element);
       return element;
@@ -389,11 +410,12 @@ test('Structured data updates the current recording and removes stale schema', a
   };
   const document = {
     head,
+    body,
     createElement(tagName) {
       return { tagName, parentNode: null, textContent: '' };
     },
     getElementById(id) {
-      return head.children.find(element => element.id === id) || null;
+      return [...head.children, ...body.children].find(element => element.id === id) || null;
     }
   };
   const { context } = await createSandbox({ document });
@@ -438,6 +460,14 @@ test('Structured data updates the current recording and removes stale schema', a
 
   context.SEOStructuredData.updateTrackSchema(null);
   assert.equal(head.children.length, 0);
+
+  const misplacedScript = document.createElement('script');
+  misplacedScript.id = 'schema-jsonld';
+  body.appendChild(misplacedScript);
+  context.SEOStructuredData.updateTrackSchema({ title: 'Restored Track' });
+  assert.equal(body.children.length, 0);
+  assert.equal(head.children.length, 1);
+  assert.equal(head.children[0].type, 'application/ld+json');
 });
 
 test('Offline favorites preloading is opt-in and saved preferences are preserved', async () => {
