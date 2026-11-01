@@ -1453,6 +1453,7 @@ async function initializeApp() {
   };
 
   // Handle offline mode after everything is initialized
+  window.PlayerStatusViews?.updateQueueEmpty()
   schedule(handleOfflineMode, INIT_TIMING.OFFLINE_MODE_DELAY_MS);
 
 }
@@ -1599,7 +1600,12 @@ function handleOfflineMode() {
 
     // Show connectivity indicators but don't hide the app
     if (isOffline) {
-      showStatus('You\'re offline. Play favorites anytime!', 'warning', 5000, 'offline');
+      const audio = window.elements && window.elements.audio
+      if (!audio || audio.paused) window.PlayerStatusViews?.showNetworkError()
+      else window.PlayerStatusViews?.announce(
+        'Sin conexión a Internet. La pista actual seguirá reproduciéndose mientras esté disponible.',
+        'polite'
+      )
       if (window.logger) window.logger.info('Offline mode indicators activated', 'SYSTEM');
     }
     // Note: Offline music section is completely disabled as requested

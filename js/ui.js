@@ -320,6 +320,25 @@ const elements = {
 };
 window.elements = elements;
 
+// streamToOwnProgress is an optional percentage supplied by track metadata.
+window.updateCoopBadge = function updateCoopBadge(track) {
+  const label = document.getElementById('coop-progress-label');
+  const fill = document.getElementById('coop-progress-fill');
+  const progress = track && track.streamToOwnProgress;
+  if (!label || !fill) return;
+
+  if (typeof progress !== 'number' || !Number.isFinite(progress) || progress < 0 || progress > 100) {
+    label.textContent = 'Progress unavailable for this track';
+    fill.style.transform = 'scaleX(0)';
+    return;
+  }
+
+  const roundedProgress = Math.round(progress);
+  label.textContent = `${roundedProgress}% toward owning this track`;
+  fill.style.transform = `scaleX(${roundedProgress / 100})`;
+};
+window.updateCoopBadge(window.state && window.state.currentTrack);
+
 try {
   if (elements.currentTrackShare) {
     applyShareButtonState(elements.currentTrackShare);
@@ -1103,14 +1122,14 @@ function getViewportMetrics() {
 
 function computeOverlayInsets({
   inputEl,
-  anchorEl,
+  anchorEl = null,
   metrics,
   gapPx = 10,
   minPanelHeight = null
 }) {
   const m = metrics || getViewportMetrics();
   const { vpTop, vpHeight } = m;
-  if (!vpHeight || !inputEl || !anchorEl) return null;
+  if (!vpHeight || !inputEl) return null;
 
   const inputRect = inputEl.getBoundingClientRect();
   // Prefer visual-viewport coordinates, but fall back if a browser reports a
@@ -1128,8 +1147,8 @@ function computeOverlayInsets({
     ? Math.max(0, footerRect.height)
     : Math.max(0, (anchorEl && anchorEl.offsetHeight) || 0);
 
-  const anchorRect = anchorEl.getBoundingClientRect();
-  let anchorTopVp = anchorRect.top - vpTop;
+  const anchorRect = anchorEl ? anchorEl.getBoundingClientRect() : null;
+  let anchorTopVp = anchorRect ? anchorRect.top - vpTop : vpHeight;
 
   // When using a sticky footer, its rect can be reported in odd coordinates in some mobile/PWA layouts.
   if (footerRect) {
@@ -1150,7 +1169,9 @@ function computeOverlayInsets({
   if (!Number.isFinite(anchorTopVp)) anchorTopVp = vpHeight;
   anchorTopVp = Math.max(0, Math.min(anchorTopVp, vpHeight));
 
-  const requiredBottomPx = Math.max(0, Math.round(vpHeight - anchorTopVp + gapPx));
+  const requiredBottomPx = anchorEl
+    ? Math.max(0, Math.round(vpHeight - anchorTopVp + gapPx))
+    : Math.max(gapPx, Math.round((m.bottomInset || 0) + gapPx));
   let bottomPx = Math.min(requiredBottomPx, vpHeight);
 
   const minHeight = minPanelHeight == null
@@ -1221,12 +1242,15 @@ function setSearchPanelInsets(metricsOverride = null) {
 
     const searchInput = elements.searchInput;
     const footer = document.querySelector('.footer');
-    const playerSection = document.querySelector('.main-player-section');
-    if (!searchInput || !(footer || playerSection)) return;
+    if (!searchInput) return;
 
     const metrics = metricsOverride || getViewportMetrics();
-    const anchorEl = footer || playerSection;
-    const insets = computeOverlayInsets({ inputEl: searchInput, anchorEl, metrics, gapPx: 10 });
+    const insets = computeOverlayInsets({
+      inputEl: searchInput,
+      anchorEl: footer,
+      metrics,
+      gapPx: 10
+    });
     applyOverlayInsetVars({
       cssTopVar: '--search-panel-top',
       cssBottomVar: '--search-panel-bottom',
@@ -3429,7 +3453,12 @@ function updateFavoriteButton() {
 }
 
 function showStatus(message, type = 'info', duration = null, priority = 'normal', showSpinner = false) {
-  // Status messages disabled - no-op function
+  if (message && window.PlayerStatusViews) {
+    window.PlayerStatusViews.announce(
+      message,
+      type === 'error' || priority === 'assertive' ? 'assertive' : 'polite'
+    )
+  }
   return;
 }
 

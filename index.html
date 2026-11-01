@@ -29,6 +29,10 @@
   <link rel="preconnect" href="https://archive.org" crossorigin>
   <link rel="preload" href="css/resonate-bundle.css" as="style" />
   <link rel="stylesheet" href="css/resonate-bundle.css" />
+  <link rel="stylesheet" href="styles/theme.css" />
+  <link rel="stylesheet" href="css/player-editorial.css" />
+  <link rel="stylesheet" href="css/player-motion.css" />
+  <link rel="stylesheet" href="css/player-status-views.css" />
 </head>
 <body>
   <div class="app" id="app" data-nosnippet>
@@ -229,11 +233,57 @@
 
       <div class="main-player-section">
       <div class="player-container">
+        <section class="player-status-view" id="queue-empty-view" role="status" aria-live="polite" aria-atomic="true" hidden>
+          <div class="player-status-view__illustration" aria-hidden="true">
+            <svg viewBox="0 0 96 64" fill="none" focusable="false">
+              <path d="M5 32h17l8-16 13 32 10-24 8 16h30" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="5" cy="32" r="3" fill="currentColor"/>
+              <circle cx="91" cy="40" r="3" fill="currentColor"/>
+            </svg>
+          </div>
+          <h2 class="player-status-view__title">Tu cola está en silencio</h2>
+          <p class="player-status-view__message">Explora la búsqueda para descubrir música independiente.</p>
+          <button class="player-status-view__action" id="queue-empty-search" type="button">Explorar música</button>
+        </section>
+        <section class="player-status-view player-status-view--error" id="playback-error-view" role="alert" aria-live="assertive" aria-atomic="true" hidden>
+          <div class="player-status-view__illustration" aria-hidden="true">
+            <svg viewBox="0 0 48 48" fill="none" focusable="false">
+              <path d="M24 5 44 41H4L24 5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+              <path d="M24 17v11m0 6h.01" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <h2 class="player-status-view__title" id="playback-error-title"></h2>
+          <p class="player-status-view__message" id="playback-error-message"></p>
+          <div class="player-status-view__actions">
+            <button class="player-status-view__action" id="playback-error-primary" type="button"></button>
+            <button class="player-status-view__action player-status-view__action--quiet" id="playback-error-search" type="button">Buscar otra pista</button>
+          </div>
+        </section>
         <article class="player-content" id="player-content" itemscope itemtype="https://schema.org/MusicRecording">
-          <figure class="art" id="art">
-            <span class="hint"></span>
-            <img alt="Portada del álbum" itemprop="image" loading="eager" fetchpriority="high" hidden>
-          </figure>
+          <div class="editorial-art-frame">
+            <figure class="art" id="art">
+              <span class="hint"></span>
+              <img alt="Portada del álbum" itemprop="image" loading="eager" fetchpriority="high" hidden>
+            </figure>
+            <div class="progress-section">
+              <div class="progress-bar"
+                   id="progress-bar"
+                   role="slider"
+                   aria-label="Playback position"
+                   aria-valuemin="0"
+                   aria-valuemax="100"
+                   aria-valuenow="0"
+                   aria-valuetext="0 segundos de 0 segundos"
+                   tabindex="0">
+                <time class="current-time" id="current-time" datetime="PT0S">0:00</time>
+                <div class="progress-buffered" id="progress-buffered"></div>
+                <div class="progress" id="progress"></div>
+                <div class="progress-thumb" id="progress-thumb" aria-hidden="true"></div>
+                <div class="progress-tooltip" id="progress-tooltip">0:00</div>
+                <time class="total-time" id="total-time" datetime="PT0S">0:00</time>
+              </div>
+            </div>
+          </div>
           <div class="current-track-info">
             <div class="title-share-container">
               <h1 class="title" id="title" itemprop="name"></h1>
@@ -255,23 +305,14 @@
                 </span>
               </span>
             </div>
-          </div>
-          <div class="progress-section">
-            <div class="progress-bar" 
-                 id="progress-bar"
-                 role="slider"
-                 aria-label="Playback position"
-                 aria-valuemin="0"
-                 aria-valuemax="100"
-                 aria-valuenow="0"
-                 aria-valuetext="0 segundos de 0 segundos"
-                 tabindex="0">
-              <time class="current-time" id="current-time" datetime="PT0S">0:00</time>
-              <div class="progress-buffered" id="progress-buffered"></div>
-              <div class="progress" id="progress"></div>
-              <div class="progress-thumb" id="progress-thumb" aria-hidden="true"></div>
-              <div class="progress-tooltip" id="progress-tooltip">0:00</div>
-              <time class="total-time" id="total-time" datetime="PT0S">0:00</time>
+            <aside class="coop-badge" aria-label="Stream-to-own purchase progress">
+              <div class="coop-badge__copy">
+                <span class="coop-badge__title">Stream-to-own</span>
+                <span class="coop-badge__status" id="coop-progress-label">Progress unavailable for this track</span>
+              </div>
+              <div class="coop-badge__meter" aria-hidden="true">
+                <span class="coop-badge__fill" id="coop-progress-fill"></span>
+              </div>
             </div>
           </div>
           <div class="controls">
@@ -603,10 +644,12 @@
   <script src="js/SEOStructuredData.js" defer></script>
   <script src="js/album-tracks.js" defer></script>
   <script src="js/loaders.js" defer></script>
+  <script src="js/PlayerMotion.js" defer></script>
   <script src="js/playback.js" defer></script>
   <script src="js/tracklist.js" defer></script>
   <script src="js/playlist-manager.js" defer></script>
   <script src="js/ui.js" defer></script>
+  <script src="js/PlayerStatusViews.js" defer></script>
   <script src="js/player-title.js" defer></script>
   <script src="js/offline.js" defer></script>
   <script src="js/archive-monitor.js" defer></script>

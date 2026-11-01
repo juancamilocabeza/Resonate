@@ -172,7 +172,11 @@
 
     handleConnectionChange (offline) {
       if (this.window.state) this.window.state.networkOnline = !offline
-      if (offline && this.window.A11yAnnouncer &&
+      if (offline && this.window.PlayerStatusViews &&
+        typeof this.window.PlayerStatusViews.showNetworkError === 'function') {
+        const audio = this.window.elements && this.window.elements.audio
+        if (!audio || audio.paused) this.window.PlayerStatusViews.showNetworkError()
+      } else if (offline && this.window.A11yAnnouncer &&
         typeof this.window.A11yAnnouncer.announce === 'function') {
         this.window.A11yAnnouncer.announce(
           'Sin conexión. Solo se pueden reproducir pistas guardadas para uso sin conexión.',
