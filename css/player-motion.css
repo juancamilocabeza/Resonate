@@ -1,0 +1,62 @@
+.play-btn .transport-icon {
+  position: relative;
+  transform-origin: center;
+  transition: transform 180ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.play-btn[data-state="play"] .transport-icon::before,
+.play-btn[data-state="play"] .transport-icon::after,
+.play-btn[data-state="pause"] .transport-icon::before,
+.play-btn[data-state="pause"] .transport-icon::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: block !important;
+  width: 20px;
+  height: 22px;
+  border: 0;
+  border-radius: 1px;
+  background: currentColor;
+  content: "";
+  transition: opacity 180ms ease, transform 180ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.play-btn .transport-icon::before {
+  clip-path: polygon(8% 0, 100% 50%, 8% 100%);
+  opacity: 1;
+  transform: translate(-43%, -50%) scale(1);
+}
+
+.play-btn .transport-icon::after {
+  background: linear-gradient(
+    90deg,
+    currentColor 0 34%,
+    transparent 34% 66%,
+    currentColor 66% 100%
+  );
+  clip-path: none;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.78);
+}
+
+.play-btn.is-playing .transport-icon::before {
+  opacity: 0;
+  transform: translate(-57%, -50%) scale(0.78);
+}
+
+.play-btn.is-playing .transport-icon::after {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.play-btn:active .transport-icon {
+  transform: scale(0.88);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .play-btn .transport-icon,
+  .play-btn .transport-icon::before,
+  .play-btn .transport-icon::after {
+    transition: none;
+  }
+}

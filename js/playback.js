@@ -166,6 +166,7 @@ function setMainPlayButtonState(isPlaying) {
   ensureMainPlayButtonIcon(playButton);
   playButton.dataset.state = isPlaying ? 'pause' : 'play';
   playButton.setAttribute('aria-label', isPlaying ? 'Pause' : 'Play');
+  window.PlayerMotion?.syncPlaybackState(isPlaying);
 }
 
 window.setMainPlayButtonState = setMainPlayButtonState;
@@ -2367,8 +2368,11 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
     if (!availability.available) {
       const title = track && track.title ? track.title : 'Esta pista'
       const message = `${title} no está disponible sin conexión. Conéctate a internet para reproducirla.`
-      safeShowStatus(message, 'warning', 5000)
-      announceAccessibilityMessage(message, 'assertive')
+      if (window.PlayerStatusViews) window.PlayerStatusViews.showNetworkError()
+      else {
+        safeShowStatus(message, 'warning', 5000)
+        announceAccessibilityMessage(message, 'assertive')
+      }
       return false
     }
   }
@@ -2493,6 +2497,9 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
     isAlbumTrack: totalTracks > 1,
     albumId: identifier
   };
+  window.PlayerStatusViews?.clear()
+  window.PlayerMotion?.enterTrack();
+  window.updateCoopBadge?.(state.currentTrack);
   window.SEOStructuredData?.updateTrackSchema(state.currentTrack);
   window.CanonicalRouteManager?.setCanonicalUrl(
     state.currentTrack.title || state.currentTrack.name || state.currentTrack.trackId || state.currentTrack.id
@@ -3178,6 +3185,7 @@ function loadPlaybackQueue(context, items, startIndex = 0, options = {}) {
   if (!items || items.length === 0) {
     // No items to load into FIFO
     if (previousQueue.length && !options.silent) announcePlaybackQueue(state.playbackQueue)
+    window.PlayerStatusViews?.updateQueueEmpty()
     return;
   }
 
@@ -3217,6 +3225,7 @@ function loadPlaybackQueue(context, items, startIndex = 0, options = {}) {
   if (validItems.length === 0) {
     // No valid items to load into FIFO
     if (previousQueue.length && !options.silent) announcePlaybackQueue(state.playbackQueue)
+    window.PlayerStatusViews?.updateQueueEmpty()
     return;
   }
 
@@ -3291,6 +3300,7 @@ function loadPlaybackQueue(context, items, startIndex = 0, options = {}) {
     typeof window.OfflineStatusManager.updateQueueStatus === 'function') {
     window.OfflineStatusManager.updateQueueStatus()
   }
+  window.PlayerStatusViews?.updateQueueEmpty()
 }
 
 function regenerateQueueFromCurrentContext(currentTrackUrl) {
@@ -4302,9 +4312,7 @@ function setupListenTracking() {
     isTransitioning = true;
     window._resonateTrackTransitionInProgress = true;
 
-    try {
-      showStatus('Track error. Skipping...', 'error', 2000);
-    } catch {}
+    window.PlayerStatusViews?.showStreamingError(window.elements.audio.error)
 
     const advanceScheduled = scheduleAutoAdvance('audio-error', 0, () => {
       const currentContext = playbackManager.getCurrentContext();

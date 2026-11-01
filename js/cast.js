@@ -474,6 +474,7 @@
     if (fallbackTrack && fallbackTrack.track) {
       track = Object.assign({}, track || {}, fallbackTrack.track);
       if (window.state) window.state.currentTrack = track;
+      window.updateCoopBadge?.(track);
       updateLocalNowPlaying(track, fallbackTrack.identifier);
     }
 
@@ -954,6 +955,7 @@
 
       if (!window.state) window.state = {};
       window.state.currentTrack = Object.assign({}, window.state.currentTrack || {}, merged);
+      window.updateCoopBadge?.(window.state.currentTrack);
 
       return updateLocalNowPlaying(window.state.currentTrack, identifier);
     } catch (e) {

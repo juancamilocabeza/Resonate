@@ -1,0 +1,49 @@
+:root {
+  --color-bg-paper: #121316;
+  --color-surface: #1a1c23;
+  --color-text-main: #f0f2f5;
+  --color-accent-amber: #ff9e3b;
+  --color-coop-teal: #2bb6a3;
+
+  --color-text-muted: #a4a8b2;
+  --color-border: #343741;
+  --color-border-strong: #555965;
+
+  --font-display: "Iowan Old Style", "Baskerville", "Palatino Linotype",
+    "Book Antiqua", Georgia, serif;
+  --font-ui: "Avenir Next", "Helvetica Neue", "Segoe UI", sans-serif;
+
+  --text-size-caption: 0.75rem;
+  --text-size-control: 0.875rem;
+  --text-size-body: 1rem;
+  --text-size-track: clamp(1.5rem, 3vw, 2.25rem);
+  --text-size-artist: clamp(1.125rem, 2vw, 1.5rem);
+  --max-text-width: 75ch;
+
+  --space-gutter: clamp(1rem, 4vw, 2.5rem);
+  --space-inset-inline: clamp(0.75rem, 2vw, 1.25rem);
+  --space-block-start: clamp(1.5rem, 5vh, 3rem);
+  --space-block-end: clamp(2rem, 7vh, 4rem);
+  --space-stack-tight: 0.5rem;
+  --space-stack: 1rem;
+  --space-stack-loose: 1.75rem;
+
+  --border-width-hairline: 1px;
+  --border-width-rule: 2px;
+  --border-radius-control: 2px;
+  --border-radius-surface: 6px;
+}
+
+.bg-texture-grain {
+  background-color: var(--color-bg-paper);
+  background-image:
+    radial-gradient(
+      circle at 1px 1px,
+      rgb(240 242 245 / 0.045) 0.65px,
+      transparent 0.9px
+    ),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cg fill='%23f0f2f5' fill-opacity='.16'%3E%3Ccircle cx='12' cy='18' r='.65'/%3E%3Ccircle cx='49' cy='37' r='.55'/%3E%3Ccircle cx='91' cy='14' r='.7'/%3E%3Ccircle cx='136' cy='44' r='.55'/%3E%3Ccircle cx='28' cy='83' r='.6'/%3E%3Ccircle cx='73' cy='67' r='.55'/%3E%3Ccircle cx='119' cy='92' r='.7'/%3E%3Ccircle cx='153' cy='119' r='.55'/%3E%3Ccircle cx='52' cy='131' r='.65'/%3E%3Ccircle cx='96' cy='150' r='.55'/%3E%3C/g%3E%3C/svg%3E");
+  background-position: 0 0, 0 0;
+  background-repeat: repeat;
+  background-size: 5px 5px, 160px 160px;
+}
