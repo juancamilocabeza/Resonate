@@ -67,7 +67,26 @@
     }
 
     updateOpenGraph(track) {
-      if (!track || !window.document || !window.document.head) return;
+      if (!window.document || !window.document.head) return;
+
+      const twitterTags = ['card', 'title', 'description', 'image'];
+      const openGraphTags = [
+        'title',
+        'description',
+        'type',
+        'image',
+        'image:alt',
+        'image:width',
+        'image:height',
+        'audio',
+        'audio:type'
+      ];
+      if (!track) {
+        openGraphTags.forEach(key => this.setMeta('property', `og:${key}`, ''));
+        this.setMeta('property', 'music:duration', '');
+        twitterTags.forEach(key => this.setMeta('name', `twitter:${key}`, ''));
+        return;
+      }
 
       const title = normalizeString(track.title || track.name) || 'Track';
       const artist = normalizeString(track.creator || track.artist);
@@ -91,10 +110,10 @@
       this.setMeta('property', 'og:audio', audioUrl);
       this.setMeta('property', 'og:audio:type', audioUrl ? getAudioType(track, audioUrl) : '');
       this.setMeta('property', 'music:duration', duration);
-      this.setMeta('property', 'twitter:card', 'summary_large_image');
-      this.setMeta('property', 'twitter:title', displayTitle);
-      this.setMeta('property', 'twitter:description', description);
-      this.setMeta('property', 'twitter:image', image);
+      this.setMeta('name', 'twitter:card', 'summary_large_image');
+      this.setMeta('name', 'twitter:title', displayTitle);
+      this.setMeta('name', 'twitter:description', description);
+      this.setMeta('name', 'twitter:image', image);
     }
   }
 
