@@ -27,6 +27,8 @@
   <meta name="cast-app-id" content="855FC5BE" data-allow-production="true">
   <link rel="manifest" href="/manifest.json" />
   <link rel="preconnect" href="https://archive.org" crossorigin>
+  <link rel="preload" href="/assets/fonts/bodoni-moda-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/assets/fonts/instrument-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="css/resonate-bundle.css" as="style" />
   <link rel="stylesheet" href="css/resonate-bundle.css" />
   <link rel="stylesheet" href="styles/theme.css" />
@@ -265,24 +267,6 @@
               <span class="hint"></span>
               <img alt="Portada del álbum" itemprop="image" loading="eager" fetchpriority="high" hidden>
             </figure>
-            <div class="progress-section">
-              <div class="progress-bar"
-                   id="progress-bar"
-                   role="slider"
-                   aria-label="Playback position"
-                   aria-valuemin="0"
-                   aria-valuemax="100"
-                   aria-valuenow="0"
-                   aria-valuetext="0 segundos de 0 segundos"
-                   tabindex="0">
-                <time class="current-time" id="current-time" datetime="PT0S">0:00</time>
-                <div class="progress-buffered" id="progress-buffered"></div>
-                <div class="progress" id="progress"></div>
-                <div class="progress-thumb" id="progress-thumb" aria-hidden="true"></div>
-                <div class="progress-tooltip" id="progress-tooltip">0:00</div>
-                <time class="total-time" id="total-time" datetime="PT0S">0:00</time>
-              </div>
-            </div>
           </div>
           <div class="current-track-info">
             <div class="title-share-container">
@@ -305,7 +289,7 @@
                 </span>
               </span>
             </div>
-            <aside class="coop-badge" aria-label="Stream-to-own purchase progress">
+            <aside class="coop-badge" aria-label="Stream-to-own purchase progress" hidden>
               <div class="coop-badge__copy">
                 <span class="coop-badge__title">Stream-to-own</span>
                 <span class="coop-badge__status" id="coop-progress-label">Progress unavailable for this track</span>
@@ -313,6 +297,24 @@
               <div class="coop-badge__meter" aria-hidden="true">
                 <span class="coop-badge__fill" id="coop-progress-fill"></span>
               </div>
+            </div>
+          </div>
+          <div class="progress-section">
+            <div class="progress-bar"
+                 id="progress-bar"
+                 role="slider"
+                 aria-label="Playback position"
+                 aria-valuemin="0"
+                 aria-valuemax="100"
+                 aria-valuenow="0"
+                 aria-valuetext="0 segundos de 0 segundos"
+                 tabindex="0">
+              <time class="current-time" id="current-time" datetime="PT0S">0:00</time>
+              <div class="progress-buffered" id="progress-buffered"></div>
+              <div class="progress" id="progress"></div>
+              <div class="progress-thumb" id="progress-thumb" aria-hidden="true"></div>
+              <div class="progress-tooltip" id="progress-tooltip">0:00</div>
+              <time class="total-time" id="total-time" datetime="PT0S">0:00</time>
             </div>
           </div>
           <div class="controls">
