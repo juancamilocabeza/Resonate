@@ -322,17 +322,19 @@ window.elements = elements;
 
 // streamToOwnProgress is an optional percentage supplied by track metadata.
 window.updateCoopBadge = function updateCoopBadge(track) {
+  const badge = document.querySelector('.coop-badge');
   const label = document.getElementById('coop-progress-label');
   const fill = document.getElementById('coop-progress-fill');
   const progress = track && track.streamToOwnProgress;
-  if (!label || !fill) return;
+  if (!badge || !label || !fill) return;
 
   if (typeof progress !== 'number' || !Number.isFinite(progress) || progress < 0 || progress > 100) {
-    label.textContent = 'Progress unavailable for this track';
+    badge.hidden = true;
     fill.style.transform = 'scaleX(0)';
     return;
   }
 
+  badge.hidden = false;
   const roundedProgress = Math.round(progress);
   label.textContent = `${roundedProgress}% toward owning this track`;
   fill.style.transform = `scaleX(${roundedProgress / 100})`;

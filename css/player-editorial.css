@@ -8,7 +8,7 @@
   flex: 0 0 auto;
   width: clamp(200px, 76vw, 420px);
   aspect-ratio: 1;
-  margin: 0 auto 2.75rem;
+  margin: 0 auto var(--space-stack, 1rem);
 }
 
 .editorial-art-frame .art {
@@ -32,115 +32,6 @@
   border-radius: 0 !important;
 }
 
-.editorial-art-frame .progress-section {
-  position: absolute;
-  z-index: 2;
-  right: var(--space-inset-inline, 1rem);
-  bottom: -1.25rem;
-  left: var(--space-inset-inline, 1rem);
-  width: auto;
-  max-width: none;
-  min-height: 0;
-  margin: 0;
-  padding: 10px 0 28px;
-  overflow: visible;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-.editorial-art-frame .progress-section:hover,
-.editorial-art-frame .progress-section:active,
-.editorial-art-frame .progress-section.dragging {
-  background: transparent;
-  box-shadow: none;
-}
-
-.editorial-art-frame .progress-bar {
-  height: 3px;
-  overflow: visible;
-  border-radius: 0;
-  background: var(--color-border-strong, #555965);
-  transition: none;
-}
-
-.editorial-art-frame .progress-bar:hover,
-.editorial-art-frame .progress-bar:focus,
-.editorial-art-frame .progress-bar.focused {
-  height: 3px;
-}
-
-.editorial-art-frame .progress-bar::before {
-  position: absolute;
-  z-index: 1;
-  inset: -14px 0;
-  content: "";
-}
-
-.editorial-art-frame .progress-buffered {
-  border-radius: 0;
-  background: rgb(240 242 245 / 0.28);
-}
-
-.editorial-art-frame .progress {
-  border-radius: 0;
-  background: var(--color-accent-amber, #ff9e3b);
-  box-shadow: none;
-}
-
-.editorial-art-frame .progress-thumb::after {
-  left: -6px;
-  width: 12px;
-  height: 12px;
-  border: 2px solid var(--color-bg-paper, #121316);
-  border-radius: 50%;
-  background: var(--color-accent-amber, #ff9e3b);
-  box-shadow: 0 0 0 1px var(--color-accent-amber, #ff9e3b);
-}
-
-.editorial-art-frame .progress-bar:hover .progress-thumb::after,
-.editorial-art-frame .progress-bar:focus .progress-thumb::after,
-.editorial-art-frame .progress-bar.focused .progress-thumb::after {
-  transform: translate(-50%, -50%) scale(1.15);
-  box-shadow: 0 0 0 3px rgb(255 158 59 / 0.24);
-}
-
-.editorial-art-frame .progress-bar.dragging .progress-thumb::after,
-.editorial-art-frame .progress-bar:active .progress-thumb::after {
-  transform: translate(-50%, -50%) scale(1.35);
-  box-shadow: 0 0 0 4px rgb(255 158 59 / 0.3);
-}
-
-.editorial-art-frame .progress-tooltip {
-  border: 1px solid var(--color-border-strong, #555965);
-  border-radius: var(--border-radius-control, 2px);
-  background: var(--color-bg-paper, #121316);
-  box-shadow: none;
-  font-family: var(--font-ui, sans-serif);
-}
-
-.editorial-art-frame .progress-tooltip::after {
-  border-top-color: var(--color-bg-paper, #121316);
-}
-
-.editorial-art-frame .current-time,
-.editorial-art-frame .total-time {
-  top: calc(100% + 9px);
-  color: var(--color-text-muted, #a4a8b2);
-  font-family: var(--font-ui, sans-serif);
-  font-size: var(--text-size-caption, 0.75rem);
-  font-weight: 500;
-  letter-spacing: 0;
-}
-
-.editorial-art-frame .progress-bar:hover .current-time,
-.editorial-art-frame .progress-bar:hover .total-time,
-.editorial-art-frame .progress-bar:focus .current-time,
-.editorial-art-frame .progress-bar:focus .total-time {
-  color: var(--color-text-main, #f0f2f5);
-}
-
 .current-track-info {
   width: 100%;
   max-width: var(--max-text-width, 75ch);
@@ -156,24 +47,48 @@
 }
 
 .current-track-info .title {
+  display: block;
+  flex: 1 1 100%;
   width: auto;
   max-width: 100%;
+  min-width: 0;
   color: var(--color-text-main, #f0f2f5);
   font-family: var(--font-display, Georgia, serif);
   font-size: var(--text-size-track, clamp(1.5rem, 3vw, 2.25rem));
-  font-weight: 500;
+  font-weight: 400;
   letter-spacing: -0.025em;
   line-height: 1.08;
-  text-align: left;
+  text-align: center;
+  text-align-last: center;
+}
+
+.current-track-info .title .title-text {
+  display: inline-block;
+  color: inherit;
+  font-family: var(--font-display, Georgia, serif);
+  font-size: inherit;
+  font-weight: inherit;
+  text-align: center;
 }
 
 .current-track-info .creator {
+  display: block;
+  width: 100%;
   color: var(--color-text-muted, #a4a8b2);
   font-family: var(--font-ui, sans-serif);
   font-size: var(--text-size-artist, clamp(1.125rem, 2vw, 1.5rem));
   font-weight: 400;
   line-height: 1.35;
-  text-align: left;
+  text-align: center;
+  text-align-last: center;
+}
+
+.current-track-info .creator #creator {
+  color: inherit;
+  font-family: var(--font-ui, sans-serif);
+  font-size: inherit;
+  font-weight: inherit;
+  text-align: center;
 }
 
 .coop-badge {
@@ -188,6 +103,10 @@
   border-radius: var(--border-radius-control, 2px);
   background: var(--color-surface, #1a1c23);
   text-align: left;
+}
+
+.coop-badge[hidden] {
+  display: none;
 }
 
 .coop-badge__copy {
@@ -237,9 +156,10 @@
   .player-content {
     display: grid;
     grid-template-columns: minmax(0, 1.08fr) minmax(18rem, 0.92fr);
-    grid-template-rows: auto auto;
+    grid-template-rows: auto auto auto;
     grid-template-areas:
       "art info"
+      "art progress"
       "art controls";
     align-content: center;
     align-items: center;
@@ -252,7 +172,8 @@
   }
 
   .editorial-art-frame {
-    grid-area: art;
+    grid-column: 1;
+    grid-row: 1 / 4;
     width: min(100%, 520px);
     margin: 0;
     justify-self: end;
@@ -264,6 +185,12 @@
     margin: 0;
   }
 
+  .progress-section {
+    grid-area: progress;
+    align-self: center;
+    width: 100%;
+  }
+
   .main-player-section .controls {
     grid-area: controls;
     justify-content: flex-start;
@@ -273,15 +200,13 @@
 }
 
 @media (hover: none) and (pointer: coarse) {
-  .editorial-art-frame .progress-thumb::after {
+  .progress-thumb::after {
     opacity: 1;
     transform: translate(-50%, -50%) scale(1);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .editorial-art-frame .progress,
-  .editorial-art-frame .progress-thumb::after,
   .coop-badge__fill {
     transition: none;
   }
