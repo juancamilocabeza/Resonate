@@ -527,6 +527,11 @@ function isCacheableStaticResponse(url, response) {
   return true;
 }
 
+function isCacheRefreshRequest(request) {
+  const cacheControl = request.headers.get('cache-control') || '';
+  return request.cache === 'reload' || /(?:^|,)\s*no-cache(?:\s*(?:,|=|$))/i.test(cacheControl);
+}
+
 async function precacheStaticFiles() {
   const cache = await caches.open(CACHE_NAMES.STATIC);
   console.log('SW: Caching static files:', STATIC_FILES);
@@ -633,6 +638,37 @@ async function networkFirstNavigation(request) {
   }
 
   return offlineHtmlResponse('Offline', 'Unable to load app', 'Please check your connection and reload.');
+}
+
+async function networkFirstStaticAsset(request, url) {
+  let networkResponse = null;
+  try {
+    networkResponse = await fetch(request);
+    if (isCacheableStaticResponse(url, networkResponse)) {
+      try {
+        const cache = await caches.open(CACHE_NAMES.STATIC);
+        await cache.put(request, networkResponse.clone());
+      } catch (error) {
+        console.warn('SW: Failed to cache refreshed static asset:', request.url, error);
+      }
+      return networkResponse;
+    }
+  } catch (error) {
+    console.warn('SW: Static asset fetch failed; trying cached copy:', request.url, error);
+  }
+
+  try {
+    const cache = await caches.open(CACHE_NAMES.STATIC);
+    const cachedResponse = await cache.match(request);
+    if (cachedResponse && isCacheableStaticResponse(url, cachedResponse)) {
+      return cachedResponse;
+    }
+  } catch (error) {
+    console.warn('SW: Static asset cache fallback failed:', request.url, error);
+  }
+
+  if (networkResponse) return networkResponse;
+  return new Response('Service unavailable', { status: 503, headers: { 'Content-Type': 'text/plain' } });
 }
 
 async function cacheFirstStaticAsset(event, request, url) {
@@ -922,17 +958,24 @@ self.addEventListener('fetch', (event) => {
 
   event.respondWith(
     (async () => {
-      if (event.request.mode === 'navigate') {
+      if (event.request.mode === 'navigate' || event.request.destination === 'document') {
         return networkFirstNavigation(event.request);
       }
 
       // CACHE-FIRST strategy for our static assets
       if (isStaticAsset(url)) {
         const path = url.pathname;
+        if (isCacheRefreshRequest(event.request)) {
+          return networkFirstStaticAsset(event.request, url);
+        }
+
         const isAppShell = path === '/' || path.endsWith('.html') || path.endsWith('.js') || path.endsWith('.css');
         // Avoid background revalidation for frequently-requested assets (favicon/manifest/icons)
         // which otherwise show up as repeated downloads in DevTools.
-        if (path.endsWith('.js') || path.endsWith('.css')) {
+        if (path.endsWith('.css')) {
+          return networkFirstStaticAsset(event.request, url);
+        }
+        if (path.endsWith('.js')) {
           return cacheFirstStaticAsset(event, event.request, url);
         }
         return isAppShell ? cacheFirstWithBackgroundUpdate(event.request) : cacheFirst(event.request);

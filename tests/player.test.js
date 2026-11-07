@@ -919,6 +919,88 @@ test('Service worker serves cached audio byte ranges with partial content header
   assert.equal(networkRequests, 0);
 });
 
+test('Service worker refreshes navigations from network and updates the app shell cache', async () => {
+  let networkRequests = 0;
+  const harness = await createServiceWorkerHarness({
+    fetch: async () => {
+      networkRequests += 1;
+      return new Response('<!doctype html><title>Updated</title>', {
+        headers: { 'Content-Type': 'text/html' }
+      });
+    },
+    audioEntries: [['https://resonate.test/index.html', new Response('<title>Old</title>', {
+      headers: { 'Content-Type': 'text/html' }
+    })]]
+  });
+  const request = {
+    method: 'GET',
+    url: 'https://resonate.test/index.html',
+    mode: 'navigate',
+    destination: 'document',
+    cache: 'reload',
+    headers: new Headers()
+  };
+
+  const { response } = await harness.dispatch(request);
+  assert.match(await response.text(), /Updated/);
+  assert.equal(networkRequests, 1);
+  assert.match(await harness.audioCacheEntries.get(request.url).clone().text(), /Updated/);
+  assert.match(await harness.audioCacheEntries.get('/').clone().text(), /Updated/);
+});
+
+test('Service worker uses network-first CSS with a cached offline fallback', async () => {
+  const url = 'https://resonate.test/styles/theme.css';
+  let networkResponse = new Response('body { color: white; }', {
+    headers: { 'Content-Type': 'text/css' }
+  });
+  let networkRequests = 0;
+  const harness = await createServiceWorkerHarness({
+    fetch: async () => {
+      networkRequests += 1;
+      if (!networkResponse) throw new Error('Offline');
+      return networkResponse;
+    },
+    audioEntries: [[url, new Response('body { color: gray; }', {
+      headers: { 'Content-Type': 'text/css' }
+    })]]
+  });
+
+  const refreshed = await harness.dispatch(new Request(url));
+  assert.equal(await refreshed.response.text(), 'body { color: white; }');
+  assert.equal(networkRequests, 1);
+  assert.equal(await harness.audioCacheEntries.get(url).clone().text(), 'body { color: white; }');
+
+  networkResponse = null;
+  const offline = await harness.dispatch(new Request(url));
+  assert.equal(await offline.response.text(), 'body { color: white; }');
+  assert.equal(networkRequests, 2);
+});
+
+test('Service worker bypasses static cache for reload and no-cache JavaScript requests', async () => {
+  const urls = [
+    'https://resonate.test/js/reload.js',
+    'https://resonate.test/js/no-cache.js'
+  ];
+  const harness = await createServiceWorkerHarness({
+    fetch: async request => new Response(`fresh ${new URL(request.url).pathname}`, {
+      headers: { 'Content-Type': 'text/javascript' }
+    }),
+    audioEntries: urls.map(url => [url, new Response('stale', {
+      headers: { 'Content-Type': 'text/javascript' }
+    })])
+  });
+
+  const reload = await harness.dispatch(new Request(urls[0], { cache: 'reload' }));
+  assert.match(await reload.response.text(), /^fresh /);
+  const noCache = await harness.dispatch(new Request(urls[1], {
+    headers: { 'Cache-Control': 'no-cache' }
+  }));
+  assert.match(await noCache.response.text(), /^fresh /);
+  for (const url of urls) {
+    assert.match(await harness.audioCacheEntries.get(url).clone().text(), /^fresh /);
+  }
+});
+
 test('Service worker prioritizes continuous-queue audio over search precache', async () => {
   const url = 'https://archive.org/download/item/track.mp3';
   const harness = await createServiceWorkerHarness({
