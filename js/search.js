@@ -612,8 +612,18 @@ function debugSearch(event, details) {
 
 function setSearchActiveUI(isActive) {
   const els = getSearchElementsRef();
-  if (els && els.searchResults && els.searchResults.classList) {
-    els.searchResults.classList.toggle('active', Boolean(isActive));
+  const nextActive = Boolean(isActive);
+  const updateSearchPanel = () => {
+    if (els && els.searchResults && els.searchResults.classList) {
+      els.searchResults.classList.toggle('active', nextActive);
+    }
+  }
+  const wasActive = Boolean(els && els.searchResults && els.searchResults.classList &&
+    els.searchResults.classList.contains('active'))
+  if (wasActive !== nextActive && window.ResonateViewTransitions?.run) {
+    window.ResonateViewTransitions.run(updateSearchPanel)
+  } else {
+    updateSearchPanel()
   }
   // Mutually exclusive panels: opening search hides resontes
   try {
