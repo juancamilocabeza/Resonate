@@ -4,7 +4,24 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <style>
-    svg { max-width: 100%; height: auto; display: inline-block; }
+    html, body {
+      background-color: #121316 !important;
+      color: #f0f2f5 !important;
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, sans-serif;
+      overscroll-behavior-y: contain;
+    }
+    .app, .discovery-section { overscroll-behavior-y: contain; }
+    svg {
+      max-width: 32px;
+      max-height: 32px;
+      width: 100%;
+      height: auto;
+      display: inline-block;
+      box-sizing: border-box;
+    }
+    input { max-width: 100%; box-sizing: border-box; }
     .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
   </style>
   <title>Resonate</title>

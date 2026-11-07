@@ -59,6 +59,7 @@
 
 :where(html) {
   color-scheme: dark;
+  overscroll-behavior-y: contain;
 }
 
 :where(body) {
@@ -68,6 +69,12 @@
   font-family: var(--font-ui);
   font-size: var(--text-size-body);
   line-height: 1.5;
+  overscroll-behavior-y: contain;
+}
+
+.app,
+.discovery-section {
+  overscroll-behavior-y: contain;
 }
 
 :where(button, input, select, textarea) {
