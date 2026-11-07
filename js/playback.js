@@ -2497,6 +2497,15 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
     isAlbumTrack: totalTracks > 1,
     albumId: identifier
   };
+  if (typeof window.dispatchEvent === 'function') {
+    const EventConstructor = window.CustomEvent ||
+      (typeof CustomEvent === 'function' ? CustomEvent : null)
+    if (EventConstructor) {
+      window.dispatchEvent(new EventConstructor('resonate:track-changed', {
+        detail: { track: state.currentTrack }
+      }))
+    }
+  }
   window.PlayerStatusViews?.clear()
   window.PlayerMotion?.enterTrack();
   window.updateCoopBadge?.(state.currentTrack);
@@ -3178,6 +3187,18 @@ function announcePlaybackQueue (queue) {
   )
 }
 
+function dispatchPlaybackQueueUpdate () {
+  if (typeof window.dispatchEvent !== 'function') return
+  const EventConstructor = window.CustomEvent ||
+    (typeof CustomEvent === 'function' ? CustomEvent : null)
+  if (!EventConstructor) return
+  window.dispatchEvent(new EventConstructor('resonate:queue-updated', {
+    detail: {
+      count: Array.isArray(state.playbackQueue) ? state.playbackQueue.length : 0
+    }
+  }))
+}
+
 function loadPlaybackQueue(context, items, startIndex = 0, options = {}) {
   const previousQueue = Array.isArray(state.playbackQueue) ? state.playbackQueue.slice() : []
   state.playbackQueue = [];
@@ -3186,6 +3207,7 @@ function loadPlaybackQueue(context, items, startIndex = 0, options = {}) {
     // No items to load into FIFO
     if (previousQueue.length && !options.silent) announcePlaybackQueue(state.playbackQueue)
     window.PlayerStatusViews?.updateQueueEmpty()
+    dispatchPlaybackQueueUpdate()
     return;
   }
 
@@ -3226,6 +3248,7 @@ function loadPlaybackQueue(context, items, startIndex = 0, options = {}) {
     // No valid items to load into FIFO
     if (previousQueue.length && !options.silent) announcePlaybackQueue(state.playbackQueue)
     window.PlayerStatusViews?.updateQueueEmpty()
+    dispatchPlaybackQueueUpdate()
     return;
   }
 
@@ -3301,6 +3324,7 @@ function loadPlaybackQueue(context, items, startIndex = 0, options = {}) {
     window.OfflineStatusManager.updateQueueStatus()
   }
   window.PlayerStatusViews?.updateQueueEmpty()
+  dispatchPlaybackQueueUpdate()
 }
 
 function regenerateQueueFromCurrentContext(currentTrackUrl) {
@@ -3991,11 +4015,26 @@ function updateProgressVisual(progressPercent) {
   }
 }
 
+function requestPlaybackFrame(callback) {
+  if (typeof window.requestAnimationFrame === 'function') {
+    return window.requestAnimationFrame(callback);
+  }
+  return window.setTimeout(callback, 16);
+}
+
+function cancelPlaybackFrame(frameId) {
+  if (typeof window.cancelAnimationFrame === 'function') {
+    window.cancelAnimationFrame(frameId);
+  } else {
+    window.clearTimeout(frameId);
+  }
+}
+
 function updateProgressBar() {
   if (state.isSeeking || !window.elements.audio || !window.elements.audio.duration || !isFinite(window.elements.audio.duration)) return;
   if (progressUpdateFrame !== null) return;
 
-  progressUpdateFrame = window.requestAnimationFrame(() => {
+  progressUpdateFrame = requestPlaybackFrame(() => {
     progressUpdateFrame = null;
     const audio = window.elements.audio;
     if (state.isSeeking || !audio || !audio.duration || !isFinite(audio.duration)) return;
@@ -4377,6 +4416,7 @@ function setupProgressBarInteraction() {
   let activePointerId = null;
   let dragMetrics = null;
   let pendingDragClientX = null;
+  let pendingSeekTime = null;
   let dragFrame = null;
 
   // Dynamic offset calculation
@@ -4404,6 +4444,13 @@ function setupProgressBarInteraction() {
     }
   };
 
+  const formatTooltipTime = (seconds) => {
+    const totalSeconds = Math.max(0, Math.floor(Number(seconds) || 0));
+    const minutes = Math.floor(totalSeconds / 60);
+    const remainingSeconds = totalSeconds % 60;
+    return `${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`;
+  };
+
   const applyProgressOnDrag = (clientX) => {
     if (!dragMetrics || !window.elements.audio || !window.elements.progress || !window.elements.currentTime) return;
     const duration = window.elements.audio.duration;
@@ -4418,15 +4465,22 @@ function setupProgressBarInteraction() {
     window.elements.currentTime.textContent = formatTime(seekTime);
     window.elements.currentTime.dateTime = formatIsoDuration(seekTime);
     window.elements.totalTime.dateTime = formatIsoDuration(duration);
-    window.elements.audio.currentTime = seekTime;
+    pendingSeekTime = seekTime;
     window.elements.progressBar.setAttribute('aria-valuenow', Math.round(progressPercent));
     window.elements.progressBar.setAttribute('aria-valuetext',
       `${formatTime(seekTime)} de ${formatTime(duration)}`);
+    if (tooltip) {
+      tooltip.textContent = formatTooltipTime(seekTime);
+      tooltip.style.left = `${dragMetrics.offsetLeft + (clickPosition * dragMetrics.effectiveWidth)}px`;
+      tooltip.style.opacity = '1';
+      tooltip.style.visibility = 'visible';
+    }
+    return seekTime;
   };
 
   const flushPendingDrag = () => {
     if (dragFrame !== null) {
-      window.cancelAnimationFrame(dragFrame);
+      cancelPlaybackFrame(dragFrame);
       dragFrame = null;
     }
     if (pendingDragClientX !== null) {
@@ -4438,7 +4492,7 @@ function setupProgressBarInteraction() {
   const scheduleProgressOnDrag = (clientX) => {
     pendingDragClientX = clientX;
     if (dragFrame !== null) return;
-    dragFrame = window.requestAnimationFrame(() => {
+    dragFrame = requestPlaybackFrame(() => {
       dragFrame = null;
       if (pendingDragClientX === null) return;
       applyProgressOnDrag(pendingDragClientX);
@@ -4500,6 +4554,8 @@ function setupProgressBarInteraction() {
 
     if (e && typeof e.clientX === 'number') pendingDragClientX = e.clientX;
     flushPendingDrag();
+    const seekTime = pendingSeekTime;
+    pendingSeekTime = null;
     isDragging = false;
     state.isSeeking = false;
     activePointerId = null;
@@ -4509,6 +4565,13 @@ function setupProgressBarInteraction() {
     }
     const progressSection = resolveProgressSection();
     if (progressSection) progressSection.classList.remove('dragging');
+    if ((!e || e.type !== 'pointercancel') && Number.isFinite(seekTime)) {
+      window.elements.audio.currentTime = seekTime;
+      updateProgressBar();
+      triggerHaptic();
+    } else {
+      updateProgressBar();
+    }
     if (tooltip) {
       tooltip.style.opacity = '0';
       tooltip.style.visibility = 'hidden';
@@ -4538,16 +4601,20 @@ function setupProgressBarInteraction() {
     const hoverPosition = Math.max(0, Math.min(1, (clientX - (progressBarRect.left + offsetLeft)) / effectiveWidth));
     const hoverTime = hoverPosition * window.elements.audio.duration;
     
-    tooltip.textContent = formatTime(hoverTime);
+    tooltip.textContent = formatTooltipTime(hoverTime);
     tooltip.style.left = `${offsetLeft + (hoverPosition * effectiveWidth)}px`;
     tooltip.style.opacity = '1';
     tooltip.style.visibility = 'visible';
+    if (window.elements.progressThumb) {
+      window.elements.progressThumb.style.transform = `translate3d(${hoverPosition * 100}%, 0, 0)`;
+    }
   };
 
   const hideTooltip = () => {
     if (tooltip && !isDragging) {
       tooltip.style.opacity = '0';
       tooltip.style.visibility = 'hidden';
+      updateProgressBar();
     }
   };
 
@@ -4563,9 +4630,14 @@ function setupProgressBarInteraction() {
       offsetLeft,
       effectiveWidth
     };
-    applyProgressOnDrag(e.clientX);
+    const seekTime = applyProgressOnDrag(e.clientX);
     dragMetrics = null;
-    triggerHaptic();
+    pendingSeekTime = null;
+    if (Number.isFinite(seekTime)) {
+      window.elements.audio.currentTime = seekTime;
+      updateProgressBar();
+      triggerHaptic();
+    }
   };
 
   // Keyboard navigation
@@ -4616,14 +4688,15 @@ function setupProgressBarInteraction() {
   };
   const cleanupPointerEvents = () => {
     if (dragFrame !== null) {
-      window.cancelAnimationFrame(dragFrame);
+      cancelPlaybackFrame(dragFrame);
       dragFrame = null;
     }
     if (progressUpdateFrame !== null) {
-      window.cancelAnimationFrame(progressUpdateFrame);
+      cancelPlaybackFrame(progressUpdateFrame);
       progressUpdateFrame = null;
     }
     pendingDragClientX = null;
+    pendingSeekTime = null;
     dragMetrics = null;
     activePointerId = null;
     document.removeEventListener('pointermove', drag);
