@@ -1809,7 +1809,15 @@ test('Theme cycling follows Day, Night, Eco during daytime and persists each use
   const { context, localStorage } = await createSandbox({
     document,
     Date: MiddayDate,
-    getComputedStyle: () => ({ getPropertyValue: () => '' }),
+    getComputedStyle: () => ({
+      getPropertyValue: name => name === '--theme-bg'
+        ? ({
+            day: '#f8f9fa',
+            night: '#121316',
+            eco: '#000000'
+          })[root.getAttribute('data-theme')] || ''
+        : ''
+    }),
     matchMedia: () => ({ matches: true, addEventListener() {} })
   });
   await evaluateScript(context, 'js/theme.js');
@@ -1817,15 +1825,18 @@ test('Theme cycling follows Day, Night, Eco during daytime and persists each use
 
   assert.equal(context.ThemeManager.getCurrentTheme(), 'day');
   assert.equal(root.getAttribute('data-theme'), 'day');
+  assert.equal(metaTheme.getAttribute('content'), '#f8f9fa');
   themeToggle.dispatchEvent({ type: 'click' });
   assert.equal(root.getAttribute('data-theme'), 'night');
+  assert.equal(metaTheme.getAttribute('content'), '#121316');
   assert.equal(localStorage.getItem('resonate-theme'), 'night');
   themeToggle.dispatchEvent({ type: 'keydown', key: 'Enter' });
   assert.equal(root.getAttribute('data-theme'), 'night');
   themeToggle.dispatchEvent({ type: 'click' });
-  assert.equal(root.getAttribute('data-theme'), 'energy-saver');
-  assert.equal(localStorage.getItem('resonate-theme'), 'energy-saver');
-  assert.equal(themeToggle.dataset.theme, 'energy-saver');
+  assert.equal(root.getAttribute('data-theme'), 'eco');
+  assert.equal(metaTheme.getAttribute('content'), '#000000');
+  assert.equal(localStorage.getItem('resonate-theme'), 'eco');
+  assert.equal(themeToggle.dataset.theme, 'eco');
 });
 
 test('Theme manager stays usable without a toggle and cycles from the active theme', async () => {
@@ -1847,11 +1858,49 @@ test('Theme manager stays usable without a toggle and cycles from the active the
   assert.equal(root.getAttribute('data-theme'), 'night');
 
   context.ThemeManager.applyTheme('energy-saver');
+  assert.equal(root.getAttribute('data-theme'), 'eco');
   context.ThemeManager.cycleTheme();
 
   assert.equal(root.getAttribute('data-theme'), 'day');
   assert.equal(context.ThemeManager.getCurrentTheme(), 'day');
   assert.equal(storage.get('resonate-theme'), 'day');
+});
+
+test('Legacy energy-saver preference migrates to the eco theme', async () => {
+  const root = createMockElement();
+  const document = Object.assign(createEventTarget(), {
+    readyState: 'loading',
+    documentElement: root,
+    getElementById: () => null,
+    querySelector: () => null
+  });
+  const { context, storage } = await createSandbox({
+    document,
+    getComputedStyle: () => ({ getPropertyValue: () => '' })
+  });
+  storage.set('resonate-theme', 'energy-saver');
+
+  await evaluateScript(context, 'js/theme.js');
+  document.dispatchEvent({ type: 'DOMContentLoaded' });
+
+  assert.equal(root.getAttribute('data-theme'), 'eco');
+  assert.equal(context.ThemeManager.getSavedTheme(), 'eco');
+  assert.equal(storage.get('resonate-theme'), 'eco');
+});
+
+test('Theme CSS defines the dynamic palettes and theme-aware player and search surfaces', async () => {
+  const css = await readFile(new URL('styles/theme.css', projectRoot), 'utf8');
+  const html = await readFile(new URL('index.html', projectRoot), 'utf8');
+  assert.match(css, /:root,\s*\[data-theme="night"\]/);
+  assert.match(css, /\[data-theme="day"\]/);
+  assert.match(css, /\[data-theme="eco"\]/);
+  assert.match(css, /--theme-input-bg:\s*#edf0f4/);
+  assert.match(css, /--theme-player-bg:\s*#0a0a0a/);
+  assert.match(css, /\.search-input\s*\{[^}]*background-color:\s*var\(--theme-input-bg\)/s);
+  assert.match(css, /\.main-player-section\s*\{[^}]*background:\s*var\(--theme-player-bg\)/s);
+  assert.match(css, /\.main-player-section \.progress\s*\{[^}]*background:\s*var\(--theme-accent\)/s);
+  assert.match(html, /background-color:\s*var\(--theme-bg/);
+  assert.match(html, /color:\s*var\(--theme-text-primary/);
 });
 
 test('Production hosts skip the archive proxy unless explicitly enabled', async () => {

@@ -18,11 +18,12 @@
   });
 
   const THEMES = Object.freeze({
-    day: Object.freeze({ label: 'Day', icon: 'theme-sun', color: '#10b981' }),
-    night: Object.freeze({ label: 'Night', icon: 'theme-moon', color: '#3da9ff' }),
-    'energy-saver': Object.freeze({ label: 'Eco', icon: 'theme-leaf', color: '#7aa7b8' })
+    day: Object.freeze({ label: 'Day', icon: 'theme-sun' }),
+    night: Object.freeze({ label: 'Night', icon: 'theme-moon' }),
+    eco: Object.freeze({ label: 'Eco', icon: 'theme-leaf' })
   });
   const THEME_NAMES = Object.freeze(Object.keys(THEMES));
+  const LEGACY_THEME_NAMES = Object.freeze({ 'energy-saver': 'eco' });
 
   let activeTheme = null;
   let themeToggleEl = null;
@@ -30,17 +31,26 @@
   let autoThemeVisibilityListenerAdded = false;
 
   function isValidTheme(theme) {
-    return typeof theme === 'string' && Object.prototype.hasOwnProperty.call(THEMES, theme);
+    return typeof theme === 'string' &&
+      (Object.prototype.hasOwnProperty.call(THEMES, theme) ||
+        Object.prototype.hasOwnProperty.call(LEGACY_THEME_NAMES, theme));
   }
 
   function ensureValidTheme(theme) {
+    if (Object.prototype.hasOwnProperty.call(LEGACY_THEME_NAMES, theme)) {
+      return LEGACY_THEME_NAMES[theme];
+    }
     return isValidTheme(theme) ? theme : CONFIG.DEFAULT_THEME;
   }
 
   function getSavedTheme() {
     try {
       const savedTheme = localStorage.getItem(CONFIG.STORAGE_KEY);
-      return savedTheme === null ? null : ensureValidTheme(savedTheme);
+      if (savedTheme === null) return null;
+
+      const theme = ensureValidTheme(savedTheme);
+      if (theme !== savedTheme) saveTheme(theme);
+      return theme;
     } catch (error) {
       console.warn('[ThemeManager] Could not access localStorage:', error);
       return null;
@@ -56,6 +66,7 @@
       console.warn('[ThemeManager] Invalid theme:', theme);
       return false;
     }
+    theme = ensureValidTheme(theme);
 
     try {
       localStorage.setItem(CONFIG.STORAGE_KEY, theme);
@@ -88,19 +99,14 @@
     const meta = document.querySelector('meta[name="theme-color"]');
     if (!meta) return;
 
-    try {
-      const primary = getComputedStyle(document.documentElement)
-        .getPropertyValue('--primary')
-        .trim();
-      if (primary && (primary.startsWith('#') || primary.startsWith('rgb'))) {
-        meta.setAttribute('content', primary);
-        return;
-      }
-    } catch {
-      // Use the configured color if computed styles are unavailable.
+    const background = getComputedStyle(document.documentElement)
+      .getPropertyValue('--theme-bg')
+      .trim();
+    if (!background) {
+      console.warn(`[ThemeManager] Missing --theme-bg for theme: ${theme}`);
+      return;
     }
-
-    meta.setAttribute('content', THEMES[theme].color);
+    meta.setAttribute('content', background);
   }
 
   function updateTitleTicker() {

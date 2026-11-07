@@ -298,14 +298,14 @@
 
 /* ===== ENERGY-SAVER THEME OVERRIDES ===== */
 /* Exclude loader spinners from reduced-motion so they remain visible */
-[data-theme="energy-saver"] .loader-spinner {
+[data-theme="eco"] .loader-spinner {
   animation-duration: var(--loader-duration, 2s) !important;
 }
 
-[data-theme="energy-saver"] .loader {
+[data-theme="eco"] .loader {
   animation-duration: var(--loader-duration, 2s) !important;
 }
 
-[data-theme="energy-saver"] .search-status-spinner {
+[data-theme="eco"] .search-status-spinner {
   animation-duration: var(--loader-duration, 2s) !important;
 }

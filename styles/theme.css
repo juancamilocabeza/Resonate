@@ -21,16 +21,6 @@
 }
 
 :root {
-  --color-bg-paper: #121316;
-  --color-surface: #1a1c23;
-  --color-text-main: #f0f2f5;
-  --color-accent-amber: #ff9e3b;
-  --color-coop-teal: #2bb6a3;
-
-  --color-text-muted: #a4a8b2;
-  --color-border: rgba(240, 242, 245, 0.12);
-  --color-border-strong: rgba(240, 242, 245, 0.24);
-
   --font-display: "Bodoni Moda", Georgia, serif;
   --font-ui: "Instrument Sans", "Helvetica Neue", sans-serif;
 
@@ -57,8 +47,191 @@
   --border-radius-surface: 6px;
 }
 
-:where(html) {
+:root,
+[data-theme="night"],
+html:root[data-theme="night"] {
   color-scheme: dark;
+
+  --theme-bg: #121316;
+  --theme-surface: #1a1c23;
+  --theme-player-bg: #1a1c23;
+  --theme-player-border: rgba(255, 255, 255, 0.1);
+  --theme-text-primary: #f0f2f5;
+  --theme-text-secondary: #9aa0ac;
+  --theme-input-bg: #232630;
+  --theme-input-text: #f0f2f5;
+  --theme-input-border: rgba(255, 255, 255, 0.1);
+  --theme-accent: #2bb6a3;
+  --theme-play-bg: #ffffff;
+  --theme-play-icon: #121316;
+  --theme-play-shadow: rgba(43, 182, 163, 0.25);
+  --theme-btn-sec-bg: rgba(255, 255, 255, 0.08);
+  --theme-btn-sec-icon: #f0f2f5;
+  --theme-btn-sec-border: rgba(255, 255, 255, 0.12);
+  --theme-btn-active: #2bb6a3;
+  --theme-btn-active-bg: var(--theme-btn-active);
+  --theme-btn-active-icon: #121316;
+  --theme-seekbar-track: rgba(255, 255, 255, 0.28);
+  --theme-seekbar-thumb: #2bb6a3;
+  --theme-shadow-player: 0 20px 40px rgba(0, 0, 0, 0.3);
+
+  --color-bg-paper: var(--theme-bg);
+  --color-surface: var(--theme-surface);
+  --color-text-main: var(--theme-text-primary);
+  --color-text-muted: var(--theme-text-secondary);
+  --color-accent-amber: var(--theme-accent);
+  --color-coop-teal: var(--theme-accent);
+  --color-border: var(--theme-player-border);
+  --color-border-strong: rgba(255, 255, 255, 0.24);
+  --border-subtle: 1px solid var(--theme-player-border);
+  --border-strong: 1px solid var(--color-border-strong);
+
+  --bg: var(--theme-bg);
+  --bg-rgb: 18, 19, 22;
+  --fg: var(--theme-text-primary);
+  --muted: var(--theme-text-secondary);
+  --accent: var(--theme-accent);
+  --accent-alt: var(--theme-accent);
+  --accent-alt-rgb: 43, 182, 163;
+  --primary: var(--theme-accent);
+  --primary-text: var(--theme-text-primary);
+  --primary-rgb: 43, 182, 163;
+  --card: var(--theme-surface);
+  --surface-border: var(--theme-player-border);
+  --btn: var(--theme-btn-sec-bg);
+  --control-fg: var(--theme-text-primary);
+  --on-primary: var(--theme-play-icon);
+  --search-input-bg: var(--theme-input-bg);
+  --search-input-bg-focus: var(--theme-input-bg);
+  --search-input-fg: var(--theme-input-text);
+  --search-input-placeholder: var(--theme-text-secondary);
+  --surface-1: #2a2a2a;
+  --surface-2: #353535;
+}
+
+[data-theme="day"],
+html:root[data-theme="day"] {
+  color-scheme: light;
+
+  --theme-bg: #f8f9fa;
+  --theme-surface: #ffffff;
+  --theme-player-bg: #ffffff;
+  --theme-player-border: rgba(0, 0, 0, 0.08);
+  --theme-text-primary: #121316;
+  --theme-text-secondary: #5a606d;
+  --theme-input-bg: #edf0f4;
+  --theme-input-text: #121316;
+  --theme-input-border: rgba(0, 0, 0, 0.1);
+  --theme-accent: #0d8a76;
+  --theme-play-bg: #0d8a76;
+  --theme-play-icon: #ffffff;
+  --theme-play-shadow: rgba(13, 138, 118, 0.24);
+  --theme-btn-sec-bg: rgba(0, 0, 0, 0.05);
+  --theme-btn-sec-icon: #121316;
+  --theme-btn-sec-border: rgba(0, 0, 0, 0.08);
+  --theme-btn-active: #0d8a76;
+  --theme-btn-active-bg: var(--theme-btn-active);
+  --theme-btn-active-icon: #ffffff;
+  --theme-seekbar-track: rgba(18, 19, 22, 0.18);
+  --theme-seekbar-thumb: #0d8a76;
+  --theme-shadow-player: 0 16px 36px rgba(18, 19, 22, 0.12);
+
+  --color-bg-paper: var(--theme-bg);
+  --color-surface: var(--theme-surface);
+  --color-text-main: var(--theme-text-primary);
+  --color-text-muted: var(--theme-text-secondary);
+  --color-accent-amber: var(--theme-accent);
+  --color-coop-teal: var(--theme-accent);
+  --color-border: var(--theme-player-border);
+  --color-border-strong: rgba(0, 0, 0, 0.16);
+  --border-subtle: 1px solid var(--theme-player-border);
+  --border-strong: 1px solid var(--color-border-strong);
+
+  --bg: var(--theme-bg);
+  --bg-rgb: 248, 249, 250;
+  --fg: var(--theme-text-primary);
+  --muted: var(--theme-text-secondary);
+  --accent: var(--theme-accent);
+  --accent-alt: var(--theme-accent);
+  --accent-alt-rgb: 13, 138, 118;
+  --primary: var(--theme-accent);
+  --primary-text: var(--theme-text-primary);
+  --primary-rgb: 13, 138, 118;
+  --card: var(--theme-surface);
+  --surface-border: var(--theme-player-border);
+  --btn: var(--theme-btn-sec-bg);
+  --control-fg: var(--theme-text-primary);
+  --on-primary: var(--theme-play-icon);
+  --search-input-bg: var(--theme-input-bg);
+  --search-input-bg-focus: var(--theme-input-bg);
+  --search-input-fg: var(--theme-input-text);
+  --search-input-placeholder: var(--theme-text-secondary);
+  --surface-1: #f0f0f0;
+  --surface-2: #e4e4e4;
+}
+
+[data-theme="eco"],
+html:root[data-theme="eco"] {
+  color-scheme: dark;
+
+  --theme-bg: #000000;
+  --theme-surface: #0a0a0a;
+  --theme-player-bg: #0a0a0a;
+  --theme-player-border: #00ff88;
+  --theme-text-primary: #ffffff;
+  --theme-text-secondary: #00ff88;
+  --theme-input-bg: #111111;
+  --theme-input-text: #00ff88;
+  --theme-input-border: #00ff88;
+  --theme-accent: #00ff88;
+  --theme-play-bg: #00ff88;
+  --theme-play-icon: #000000;
+  --theme-play-shadow: rgba(0, 255, 136, 0.25);
+  --theme-btn-sec-bg: #111111;
+  --theme-btn-sec-icon: #00ff88;
+  --theme-btn-sec-border: #00ff88;
+  --theme-btn-active: #00ff88;
+  --theme-btn-active-bg: var(--theme-btn-active);
+  --theme-btn-active-icon: #000000;
+  --theme-seekbar-track: #00ff8840;
+  --theme-seekbar-thumb: #00ff88;
+  --theme-shadow-player: 0 0 0 1px rgba(0, 255, 136, 0.18);
+
+  --color-bg-paper: var(--theme-bg);
+  --color-surface: var(--theme-surface);
+  --color-text-main: var(--theme-text-primary);
+  --color-text-muted: var(--theme-text-secondary);
+  --color-accent-amber: var(--theme-accent);
+  --color-coop-teal: var(--theme-accent);
+  --color-border: var(--theme-player-border);
+  --color-border-strong: var(--theme-player-border);
+  --border-subtle: 1px solid var(--theme-player-border);
+  --border-strong: 1px solid var(--theme-player-border);
+
+  --bg: var(--theme-bg);
+  --bg-rgb: 0, 0, 0;
+  --fg: var(--theme-text-primary);
+  --muted: var(--theme-text-secondary);
+  --accent: var(--theme-accent);
+  --accent-alt: var(--theme-accent);
+  --accent-alt-rgb: 0, 255, 136;
+  --primary: var(--theme-accent);
+  --primary-text: var(--theme-text-primary);
+  --primary-rgb: 0, 255, 136;
+  --card: var(--theme-surface);
+  --surface-border: var(--theme-player-border);
+  --btn: var(--theme-btn-sec-bg);
+  --control-fg: var(--theme-text-primary);
+  --on-primary: var(--theme-play-icon);
+  --search-input-bg: var(--theme-input-bg);
+  --search-input-bg-focus: var(--theme-input-bg);
+  --search-input-fg: var(--theme-input-text);
+  --search-input-placeholder: var(--theme-text-secondary);
+  --surface-1: #141414;
+  --surface-2: #1e1e1e;
+}
+
+:where(html) {
   overscroll-behavior-y: contain;
 }
 
@@ -70,6 +243,12 @@
   font-size: var(--text-size-body);
   line-height: 1.5;
   overscroll-behavior-y: contain;
+  transition: background-color 300ms ease, color 300ms ease;
+}
+
+html,
+body {
+  background-color: var(--theme-bg);
 }
 
 .app,
@@ -79,6 +258,164 @@
 
 :where(button, input, select, textarea) {
   font: inherit;
+}
+
+.search-input {
+  background-color: var(--theme-input-bg);
+  border: 1px solid var(--theme-input-border);
+  color: var(--theme-input-text);
+  transition: background-color 300ms ease, color 300ms ease, border-color 300ms ease !important;
+}
+
+.search-input-icon {
+  color: var(--theme-text-secondary);
+}
+
+.search-input-icon svg {
+  stroke: currentColor;
+}
+
+#app-header,
+.header-controls {
+  color: var(--theme-text-primary);
+}
+
+#app-header {
+  background-color: var(--theme-bg);
+  border-color: var(--theme-player-border);
+}
+
+[data-theme] .header-resontes-count {
+  background: var(--theme-btn-active-bg);
+  border-color: var(--theme-btn-active-bg);
+  color: var(--theme-btn-active-icon);
+}
+
+.main-player-section {
+  background: var(--theme-player-bg);
+  border: 1px solid var(--theme-player-border);
+  box-shadow: var(--theme-shadow-player);
+  color: var(--theme-text-primary);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  transition: background-color 300ms ease, color 300ms ease, border-color 300ms ease !important;
+}
+
+.app.has-art-background .main-player-section {
+  background-color: var(--theme-player-bg);
+}
+
+.main-player-section .current-track-info .title,
+.main-player-section .current-track-info .title .title-text {
+  color: var(--theme-text-primary);
+}
+
+.main-player-section .current-track-info .creator,
+.main-player-section .current-time,
+.main-player-section .total-time {
+  color: var(--theme-text-secondary);
+}
+
+.main-player-section .progress-bar {
+  background:
+    linear-gradient(
+      to bottom,
+      transparent calc(50% - 3px),
+      var(--theme-seekbar-track) calc(50% - 3px),
+      var(--theme-seekbar-track) calc(50% + 3px),
+      transparent calc(50% + 3px)
+    );
+  transition: background-color 300ms ease, color 300ms ease, border-color 300ms ease !important;
+}
+
+.main-player-section .progress {
+  background: var(--theme-accent);
+  box-shadow: none;
+  transition: background-color 300ms ease, color 300ms ease, border-color 300ms ease;
+}
+
+.main-player-section .progress-thumb::after {
+  background: var(--theme-seekbar-thumb);
+  border: 2px solid var(--theme-player-bg);
+  box-shadow: none;
+}
+
+.main-player-section .progress-tooltip {
+  background: var(--theme-player-bg);
+  border-color: var(--theme-player-border);
+  color: var(--theme-text-primary);
+}
+
+.main-player-section .progress-tooltip::after {
+  background: var(--theme-player-bg);
+  border-color: var(--theme-player-border);
+}
+
+.main-player-section .controls > button:not(.play-btn) {
+  background: var(--theme-btn-sec-bg);
+  border: 1px solid var(--theme-btn-sec-border);
+  color: var(--theme-btn-sec-icon);
+  transition: background-color 300ms ease, color 300ms ease, border-color 300ms ease !important;
+}
+
+.main-player-section .controls > button.active,
+.main-player-section .controls > button[aria-pressed="true"] {
+  background: var(--theme-btn-active-bg);
+  border-color: var(--theme-btn-active-bg);
+  color: var(--theme-btn-active-icon);
+}
+
+.main-player-section .controls .play-btn,
+.main-player-section .controls .play-btn-favorite {
+  background: var(--theme-play-bg);
+  border: 0;
+  color: var(--theme-play-icon);
+  box-shadow: 0 4px 12px var(--theme-play-shadow);
+  transition: background-color 300ms ease, color 300ms ease, border-color 300ms ease !important;
+}
+
+.main-player-section .controls .play-btn:hover:not(:disabled),
+.main-player-section .controls .play-btn-favorite:hover:not(:disabled) {
+  background: var(--theme-play-bg);
+  box-shadow: 0 4px 12px var(--theme-play-shadow);
+}
+
+.expanded-player__panel {
+  background: var(--theme-player-bg);
+  border-color: var(--theme-player-border);
+  color: var(--theme-text-primary);
+  transition: background-color 300ms ease, color 300ms ease, border-color 300ms ease, transform 320ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.expanded-player__title,
+.expanded-player__seek time {
+  color: var(--theme-text-primary);
+}
+
+.expanded-player__artist,
+.expanded-player__seek {
+  color: var(--theme-text-secondary);
+}
+
+.expanded-player__seek input {
+  accent-color: var(--theme-accent);
+}
+
+.expanded-player__controls button:not(.expanded-player__play) {
+  background: var(--theme-btn-sec-bg);
+  border-color: var(--theme-btn-sec-border);
+  color: var(--theme-btn-sec-icon);
+  transition: background-color 300ms ease, color 300ms ease, border-color 300ms ease !important;
+}
+
+.expanded-player__controls .expanded-player__play {
+  background: var(--theme-play-bg);
+  border-color: var(--theme-play-bg);
+  color: var(--theme-play-icon);
+}
+
+button {
+  transition: background-color 300ms ease, color 300ms ease, border-color 300ms ease !important;
 }
 
 .bg-texture-grain {
@@ -93,4 +430,17 @@
   background-position: 0 0, 0 0;
   background-repeat: repeat;
   background-size: 5px 5px, 160px 160px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body,
+  html,
+  .search-input,
+  .main-player-section,
+  .main-player-section .progress-bar,
+  .main-player-section .controls > button,
+  .expanded-player__controls button,
+  button {
+    transition: none !important;
+  }
 }

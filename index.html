@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <style>
     html, body {
-      background-color: #121316 !important;
-      color: #f0f2f5 !important;
+      background-color: var(--theme-bg, #121316) !important;
+      color: var(--theme-text-primary, #f0f2f5) !important;
       margin: 0;
       padding: 0;
       font-family: system-ui, -apple-system, sans-serif;
@@ -39,7 +39,7 @@
   <meta name="twitter:title" content="Resonate">
   <meta name="twitter:description" content="Enjoy content freely from https://archive.org">
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="theme-color" id="meta-theme-color" content="#3da9ff">
+  <meta name="theme-color" id="meta-theme-color" content="#121316">
   <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
   <link rel="apple-touch-icon" href="/icons/maskable_icon_x192.png" />
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -52,12 +52,12 @@
   <link rel="preload" href="/assets/fonts/instrument-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="css/resonate-bundle.css" as="style" />
   <link rel="stylesheet" href="css/resonate-bundle.css" />
-  <link rel="stylesheet" href="styles/theme.css" />
   <link rel="stylesheet" href="css/player-editorial.css" />
   <link rel="stylesheet" href="css/player-motion.css" />
   <link rel="stylesheet" href="css/player-status-views.css" />
   <link rel="stylesheet" href="styles/patch-look-and-feel.css" />
   <link rel="stylesheet" href="css/player-immersion.css" />
+  <link rel="stylesheet" href="styles/theme.css" />
 </head>
 <body>
   <div class="app" id="app" data-nosnippet>

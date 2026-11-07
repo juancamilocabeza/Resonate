@@ -93,13 +93,13 @@ const Battery = (() => {
     if (isEcoMode && !charging) {
       // Solo cambiar a eco si no estamos cargando
       const savedTheme = themeManager?.getSavedTheme?.();
-      if (savedTheme !== 'energy-saver') {
+      if (savedTheme !== 'eco') {
         try {
           localStorage.setItem(ECO_OVERRIDE_PREV_THEME_KEY, savedTheme || 'night');
           localStorage.setItem(ECO_OVERRIDE_ACTIVE_KEY, '1');
         } catch {}
 
-        themeManager?.applyTheme?.('energy-saver');
+        themeManager?.applyTheme?.('eco');
         showBatteryNotification(level, true);
       }
     } else if (!isEcoMode && charging) {
@@ -146,7 +146,7 @@ const Battery = (() => {
 
     // Mostrar notificacion si existe el sistema
     if (window.ThemeManager?.showThemeNotification) {
-      window.ThemeManager.showThemeNotification('energy-saver');
+      window.ThemeManager.showThemeNotification('eco');
     }
   }
 

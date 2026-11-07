@@ -955,7 +955,7 @@ body.tracks-open #tracks-list-container .tlv2-list {
 }
 
 /* ===== MODO AHORRO DE ENERGÍA - Máximo ahorro con OLED puro ===== */
-[data-theme="energy-saver"] {
+[data-theme="eco"] {
   --bg: #000000;
   --fg: #c0c0c0;
   --muted: #959595;
@@ -1010,26 +1010,25 @@ body.tracks-open #tracks-list-container .tlv2-list {
   /* Browser chrome */
   color-scheme: dark;
 }
-[data-theme="energy-saver"] * {
+[data-theme="eco"] * {
   animation-duration: 0.05s !important;
-  transition-duration: 0.05s !important;
 }
 
 /* Excluir ticker de optimizaciones en modo eco para mantener legibilidad */
-[data-theme="energy-saver"] .title.ticker .title-text {
+[data-theme="eco"] .title.ticker .title-text {
   animation-duration: var(--list-ticker-duration, 20s) !important;
 }
 
-[data-theme="energy-saver"] .ticker-text.ticker {
+[data-theme="eco"] .ticker-text.ticker {
   animation-duration: var(--list-ticker-duration, 20s) !important;
 }
 
-[data-theme="energy-saver"] .no-results-icon {
+[data-theme="eco"] .no-results-icon {
   animation: none !important;
   transform: none !important;
 }
 
-[data-theme="energy-saver"] .art {
+[data-theme="eco"] .art {
   filter: brightness(0.7);
 }
 
@@ -5266,7 +5265,7 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
 }
 
 /* Mejorar visibilidad del botón eliminar en tema Eco */
-[data-theme="energy-saver"] .btn-tertiary {
+[data-theme="eco"] .btn-tertiary {
   opacity: 0.85;
 }
 
@@ -8255,15 +8254,15 @@ body.favorites-show-offline-chips .favorites-list-content .chip-offline {
 
 /* ===== ENERGY-SAVER THEME OVERRIDES ===== */
 /* Exclude loader spinners from reduced-motion so they remain visible */
-[data-theme="energy-saver"] .loader-spinner {
+[data-theme="eco"] .loader-spinner {
   animation-duration: var(--loader-duration, 2s) !important;
 }
 
-[data-theme="energy-saver"] .loader {
+[data-theme="eco"] .loader {
   animation-duration: var(--loader-duration, 2s) !important;
 }
 
-[data-theme="energy-saver"] .search-status-spinner {
+[data-theme="eco"] .search-status-spinner {
   animation-duration: var(--loader-duration, 2s) !important;
 }
 /**
