@@ -31,6 +31,13 @@ const CACHE_NAMES = {
   SEARCH: 'search-v17p14',
   COVERS: 'covers-v1'
 };
+const VERSIONED_CACHE_PREFIXES = ['resonate-v', 'static-v', 'metadata-v', 'search-v'];
+const CURRENT_VERSIONED_CACHE_NAMES = new Set([
+  CACHE_NAMES.APP,
+  CACHE_NAMES.STATIC,
+  CACHE_NAMES.METADATA,
+  CACHE_NAMES.SEARCH
+]);
 
 function deriveSwVersion() {
   try {
@@ -590,6 +597,81 @@ async function cacheFirstWithBackgroundUpdate(request) {
   return new Response('Service unavailable', { status: 503, headers: { 'Content-Type': 'text/plain' } });
 }
 
+async function networkFirstNavigation(request) {
+  const cache = await caches.open(CACHE_NAMES.STATIC);
+  let networkResponse = null;
+
+  try {
+    networkResponse = await fetch(request);
+  } catch (error) {
+    console.warn('SW: Navigation fetch failed; trying cached app shell:', error);
+  }
+
+  const url = getUrl(request);
+  if (networkResponse && url && isCacheableStaticResponse(url, networkResponse)) {
+    try {
+      await cache.put(request, networkResponse.clone());
+      if (url.pathname === '/' || url.pathname === '/index.html') {
+        await cache.put('/index.html', networkResponse.clone());
+        await cache.put('/', networkResponse.clone());
+      }
+    } catch (error) {
+      console.warn('SW: Failed to cache updated navigation:', error);
+    }
+    return networkResponse;
+  }
+
+  for (const candidate of [request, '/index.html', '/']) {
+    try {
+      const cachedResponse = await cache.match(candidate);
+      if (cachedResponse && isCacheableStaticResponse(getUrl(candidate) || new URL('/index.html', self.location.origin), cachedResponse)) {
+        return cachedResponse;
+      }
+    } catch (error) {
+      console.warn('SW: Navigation cache lookup failed:', error);
+    }
+  }
+
+  return offlineHtmlResponse('Offline', 'Unable to load app', 'Please check your connection and reload.');
+}
+
+async function cacheFirstStaticAsset(event, request, url) {
+  const cache = await caches.open(CACHE_NAMES.STATIC);
+  const isCssOrJs = url.pathname.endsWith('.css') || url.pathname.endsWith('.js');
+
+  try {
+    const cachedResponse = await cache.match(request);
+    if (cachedResponse && isCacheableStaticResponse(url, cachedResponse)) {
+      event.waitUntil(
+        fetch(request).then((networkResponse) => {
+          if (!isCacheableStaticResponse(url, networkResponse)) return;
+          return cache.put(request, networkResponse).catch((error) => {
+            console.warn('SW: Failed to update cached static asset:', request.url, error);
+          });
+        }).catch(() => {})
+      );
+      return cachedResponse;
+    }
+  } catch (cacheError) {
+    console.warn('SW: Static asset cache lookup failed:', request.url, cacheError);
+  }
+
+  try {
+    const networkResponse = await fetch(request);
+    if (isCacheableStaticResponse(url, networkResponse)) {
+      try {
+        await cache.put(request, networkResponse.clone());
+      } catch (error) {
+        console.warn('SW: Failed to cache fetched static asset:', request.url, error);
+      }
+    }
+    return networkResponse;
+  } catch (networkError) {
+    console.error(`SW: Failed to load ${isCssOrJs ? 'CSS/JS' : 'static'} asset:`, request.url, networkError);
+    return new Response('Service unavailable', { status: 503, headers: { 'Content-Type': 'text/plain' } });
+  }
+}
+
 async function cacheFirst(request) {
   try {
     const cachedResponse = await caches.match(request);
@@ -701,34 +783,27 @@ async function networkFirstExternal(request, url) {
 // Service Worker installation - more aggressive caching
 self.addEventListener('install', (event) => {
   console.log('SW: Installing service worker');
-  event.waitUntil(precacheStaticFiles());
-  // Mode B (prompt): do not activate automatically.
-  // The page will call SKIP_WAITING / SKIP_WAITING_WHEN_IDLE after the user approves.
+  event.waitUntil(Promise.all([
+    precacheStaticFiles(),
+    self.skipWaiting()
+  ]));
 });
 
 // Activation and cleanup of old caches
 self.addEventListener('activate', (event) => {
   console.log('SW: Activating service worker');
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      console.log('SW: Current caches:', cacheNames);
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (
-            cacheName !== CACHE_NAMES.APP &&
-            cacheName !== CACHE_NAMES.STATIC &&
-            cacheName !== CACHE_NAMES.METADATA &&
-            cacheName !== CACHE_NAMES.COVERS &&
-            cacheName !== CACHE_NAMES.SEARCH &&
-            cacheName !== AUDIO_CACHE_NAME &&
-            cacheName !== AUDIO_PRECACHE_NAME
-          ) {
-            console.log('SW: Deleting old cache:', cacheName);
-            return caches.delete(cacheName);
-          }
+    caches.keys().then((cacheNames) => Promise.all(
+      cacheNames
+        .filter((cacheName) =>
+          VERSIONED_CACHE_PREFIXES.some((prefix) => cacheName.startsWith(prefix)) &&
+          !CURRENT_VERSIONED_CACHE_NAMES.has(cacheName)
+        )
+        .map((cacheName) => {
+          console.log('SW: Deleting obsolete app cache:', cacheName);
+          return caches.delete(cacheName);
         })
-      );
-    }).then(() => {
+    )).then(() => {
       console.log('SW: Claiming clients');
       return self.clients.claim();
     })
@@ -847,12 +922,19 @@ self.addEventListener('fetch', (event) => {
 
   event.respondWith(
     (async () => {
+      if (event.request.mode === 'navigate') {
+        return networkFirstNavigation(event.request);
+      }
+
       // CACHE-FIRST strategy for our static assets
       if (isStaticAsset(url)) {
         const path = url.pathname;
         const isAppShell = path === '/' || path.endsWith('.html') || path.endsWith('.js') || path.endsWith('.css');
         // Avoid background revalidation for frequently-requested assets (favicon/manifest/icons)
         // which otherwise show up as repeated downloads in DevTools.
+        if (path.endsWith('.js') || path.endsWith('.css')) {
+          return cacheFirstStaticAsset(event, event.request, url);
+        }
         return isAppShell ? cacheFirstWithBackgroundUpdate(event.request) : cacheFirst(event.request);
       }
 
@@ -1054,9 +1136,12 @@ self.addEventListener('message', (event) => {
     return;
   }
 
-  // Allow clients to trigger safe activation once playback is idle
-  if (event.data.type === 'SKIP_WAITING_WHEN_IDLE') {
-    console.log('SW: Received safe skipWaiting signal');
+  if (
+    event.data.action === 'skipWaiting' ||
+    event.data.type === 'SKIP_WAITING_WHEN_IDLE' ||
+    event.data.type === 'SKIP_WAITING'
+  ) {
+    console.log('SW: Received skipWaiting signal');
     self.skipWaiting();
     return;
   }
@@ -1107,9 +1192,4 @@ self.addEventListener('message', (event) => {
     });
   }
 
-  // Support immediate activation from the page (skipWaiting)
-  if (event.data && event.data.type === 'SKIP_WAITING') {
-    console.log('SW: receiving SKIP_WAITING from client, executing skipWaiting()');
-    self.skipWaiting();
-  }
 });

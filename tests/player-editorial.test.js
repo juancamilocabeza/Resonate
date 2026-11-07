@@ -121,5 +121,16 @@ assert.match(html, /href="\/assets\/fonts\/instrument-sans-latin\.woff2" as="fon
 assert.match(serviceWorker, /'\/assets\/fonts\/bodoni-moda-latin\.woff2'/);
 assert.match(serviceWorker, /'\/assets\/fonts\/instrument-sans-latin\.woff2'/);
 assert.match(serviceWorker, /static-v17p14/);
+assert.match(html, /<style>\s*svg\s*\{\s*max-width:\s*100%;\s*height:\s*auto;\s*display:\s*inline-block;\s*\}/);
+assert.match(html, /\.sr-only\s*\{\s*position:\s*absolute;[^}]*clip:\s*rect\(0,0,0,0\);/);
+assert.match(serviceWorker, /self\.skipWaiting\(\)/);
+assert.match(serviceWorker, /event\.request\.mode === 'navigate'[\s\S]*?networkFirstNavigation\(event\.request\)/);
+assert.match(serviceWorker, /async function networkFirstNavigation\(request\)[\s\S]*?await fetch\(request\)[\s\S]*?cache\.match\(candidate\)/);
+assert.match(serviceWorker, /self\.clients\.claim\(\)/);
+assert.match(serviceWorker, /VERSIONED_CACHE_PREFIXES\.some\(\(prefix\) => cacheName\.startsWith\(prefix\)\)/);
+assert.match(serviceWorker, /async function cacheFirstStaticAsset\([\s\S]*?isCacheableStaticResponse\(url, cachedResponse\)[\s\S]*?await fetch\(request\)/);
+assert.match(serviceWorker, /event\.data\.action === 'skipWaiting'/);
+assert.match(ui, /navigator\.serviceWorker\.addEventListener\('controllerchange'/);
+assert.match(ui, /waitingWorker\.postMessage\(\{ action: 'skipWaiting' \}\)/);
 
 console.log('Player editorial tests passed');
