@@ -28,8 +28,8 @@
   --color-coop-teal: #2bb6a3;
 
   --color-text-muted: #a4a8b2;
-  --color-border: #343741;
-  --color-border-strong: #555965;
+  --color-border: rgba(240, 242, 245, 0.12);
+  --color-border-strong: rgba(240, 242, 245, 0.24);
 
   --font-display: "Bodoni Moda", Georgia, serif;
   --font-ui: "Instrument Sans", "Helvetica Neue", sans-serif;
@@ -51,8 +51,27 @@
 
   --border-width-hairline: 1px;
   --border-width-rule: 2px;
+  --border-subtle: 1px solid rgba(240, 242, 245, 0.12);
+  --border-strong: 1px solid rgba(240, 242, 245, 0.24);
   --border-radius-control: 2px;
   --border-radius-surface: 6px;
+}
+
+:where(html) {
+  color-scheme: dark;
+}
+
+:where(body) {
+  margin: 0;
+  background-color: var(--color-bg-paper);
+  color: var(--color-text-main);
+  font-family: var(--font-ui);
+  font-size: var(--text-size-body);
+  line-height: 1.5;
+}
+
+:where(button, input, select, textarea) {
+  font: inherit;
 }
 
 .bg-texture-grain {
