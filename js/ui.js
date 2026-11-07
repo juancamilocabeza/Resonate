@@ -2061,30 +2061,37 @@ function updateDescriptionUI(track) {
         const currentAlbumId = currentTrack.albumId || currentTrack.album_id || currentTrack.album_id_str || currentTrack.album_id_num || currentTrack.album_id_str_v2 || currentTrack.album_id_v2 || currentTrack.album_id_strict || currentTrack.album_id_fallback || currentTrack.album || currentTrack._albumId || savedAlbumId || (listFallbackFirst && (listFallbackFirst.albumId || listFallbackFirst.album || listFallbackFirst.id || listFallbackFirst.trackId));
         if (!currentAlbumId) return;
         const isVisible = elements.tracksListContainer.style.display === 'block';
-        if (isVisible) {
-          elements.tracksListContainer.style.display = 'none';
-          elements.toggleTracksBtn.classList.remove('active');
-          try { elements.tracksListContainer.classList.remove('tracks-inline'); } catch {}
-          try { document.body.classList.remove('tracks-open'); } catch {}
+        const updateTracksPanel = () => {
+          if (isVisible) {
+            elements.tracksListContainer.style.display = 'none';
+            elements.toggleTracksBtn.classList.remove('active');
+            try { elements.tracksListContainer.classList.remove('tracks-inline'); } catch {}
+            try { document.body.classList.remove('tracks-open'); } catch {}
+          } else {
+            elements.tracksListContainer.style.display = 'block';
+            elements.toggleTracksBtn.classList.add('active');
+            try { elements.tracksListContainer.classList.add('tracks-inline'); } catch {}
+            try { document.body.classList.add('tracks-open'); } catch {}
+
+            elements.tracksListContainer.dataset.currentAlbumId = String(currentAlbumId);
+            mountTracksPanelContent(currentAlbumId);
+
+            try {
+              if (typeof window.scheduleOverflowTickerUpdate === 'function') {
+                window.scheduleOverflowTickerUpdate();
+              }
+            } catch {}
+
+            try {
+              if (typeof window.requestViewportUpdate === 'function') window.requestViewportUpdate();
+              if (typeof window.setTracksPanelInsets === 'function') window.setTracksPanelInsets();
+            } catch {}
+          }
+        };
+        if (window.ResonateViewTransitions?.run) {
+          window.ResonateViewTransitions.run(updateTracksPanel);
         } else {
-          elements.tracksListContainer.style.display = 'block';
-          elements.toggleTracksBtn.classList.add('active');
-          try { elements.tracksListContainer.classList.add('tracks-inline'); } catch {}
-          try { document.body.classList.add('tracks-open'); } catch {}
-
-          elements.tracksListContainer.dataset.currentAlbumId = String(currentAlbumId);
-          mountTracksPanelContent(currentAlbumId);
-
-          try {
-            if (typeof window.scheduleOverflowTickerUpdate === 'function') {
-              window.scheduleOverflowTickerUpdate();
-            }
-          } catch {}
-
-          try {
-            if (typeof window.requestViewportUpdate === 'function') window.requestViewportUpdate();
-            if (typeof window.setTracksPanelInsets === 'function') window.setTracksPanelInsets();
-          } catch {}
+          updateTracksPanel();
         }
       });
     }
@@ -3464,9 +3471,27 @@ function showStatus(message, type = 'info', duration = null, priority = 'normal'
   return;
 }
 
+let artworkRequestVersion = 0;
+
+function dispatchPlayerUiEvent(eventName, detail) {
+  if (typeof window.dispatchEvent !== 'function') return;
+  const EventConstructor = window.CustomEvent ||
+    (typeof CustomEvent === 'function' ? CustomEvent : null);
+  if (EventConstructor) {
+    window.dispatchEvent(new EventConstructor(eventName, { detail }));
+  }
+}
+
 async function setArtwork(track, identifier) {
   if (!track || !elements.art) return;
 
+  const requestVersion = ++artworkRequestVersion;
+  const applyAmbientColors = (colors) => {
+    if (!colors) return;
+    document.documentElement.style.setProperty('--player-ambient-primary', colors.primary);
+    document.documentElement.style.setProperty('--player-ambient-secondary', colors.secondary);
+    dispatchPlayerUiEvent('resonate:ambient-colors', colors);
+  };
   // Clear existing artwork
   elements.art.innerHTML = '';
   const albumTitle = track.albumTitle || track.album || track.title || track.creator || 'album';
@@ -3488,9 +3513,22 @@ async function setArtwork(track, identifier) {
     if (coverUrl && safeIdentifier !== 'default') {
       elements.app.style.setProperty('--player-art-background', `url("${coverUrl}")`);
       elements.app.classList.add('has-art-background');
+
+      if (window.ColorExtractor && typeof window.ColorExtractor.extract === 'function') {
+        window.ColorExtractor.extract(coverUrl).then(colors => {
+          if (requestVersion !== artworkRequestVersion) return;
+          applyAmbientColors(colors);
+        }).catch(error => {
+          if (requestVersion === artworkRequestVersion) {
+            applyAmbientColors(window.ColorExtractor.getFallbackColors());
+          }
+          window.logger?.warn({ message: 'Could not extract album colors; using the ambient fallback', error }, 'UI');
+        });
+      }
     } else {
       elements.app.style.removeProperty('--player-art-background');
       elements.app.classList.remove('has-art-background');
+      applyAmbientColors(window.ColorExtractor?.getFallbackColors?.());
     }
   }
 
@@ -3506,7 +3544,11 @@ async function setArtwork(track, identifier) {
         fetchPriority: 'high',
         showFallback: false
       });
+      if (requestVersion !== artworkRequestVersion) return;
       elements.art.appendChild(prepareArtwork(img));
+      dispatchPlayerUiEvent('resonate:track-changed', {
+        track: window.state?.currentTrack || track
+      });
     } else if (coverUrl) {
       const img = prepareArtwork(new Image());
       img.style.width = '100%';
@@ -3515,10 +3557,15 @@ async function setArtwork(track, identifier) {
       img.style.borderRadius = '12px';
       img.decoding = 'async';
       img.src = coverUrl;
+      if (requestVersion !== artworkRequestVersion) return;
       elements.art.appendChild(img);
+      dispatchPlayerUiEvent('resonate:track-changed', {
+        track: window.state?.currentTrack || track
+      });
     }
   } catch (error) {
     window.logger?.warn({ message: 'Failed to load artwork', error }, 'UI');
+    if (requestVersion !== artworkRequestVersion) return;
     const fallbackUrl = `https://archive.org/services/img/${encodeURIComponent(safeIdentifier)}`;
     try {
       const img = prepareArtwork(new Image());
@@ -3529,6 +3576,9 @@ async function setArtwork(track, identifier) {
       img.decoding = 'async';
       img.src = fallbackUrl;
       elements.art.appendChild(img);
+      dispatchPlayerUiEvent('resonate:track-changed', {
+        track: window.state?.currentTrack || track
+      });
     } catch {}
   }
 }
@@ -7974,8 +8024,14 @@ class FavoritesToggle {
    * Alterna la visibilidad de la lista de favoritos
    */
   toggle() {
+    const wasVisible = this.isVisible;
     this.isVisible = !this.isVisible;
-    this.updateVisibility();
+    const updateVisibility = () => this.updateVisibility();
+    if (wasVisible !== this.isVisible && window.ResonateViewTransitions?.run) {
+      window.ResonateViewTransitions.run(updateVisibility);
+    } else {
+      updateVisibility();
+    }
     this.updateAriaAttributes();
 
     // Actualizar lista cuando se muestra
@@ -7991,7 +8047,12 @@ class FavoritesToggle {
   show() {
     if (this.isVisible) return;
     this.isVisible = true;
-    this.updateVisibility();
+    const updateVisibility = () => this.updateVisibility();
+    if (window.ResonateViewTransitions?.run) {
+      window.ResonateViewTransitions.run(updateVisibility);
+    } else {
+      updateVisibility();
+    }
     this.updateAriaAttributes();
     updateFavoritesList();
     try { if (typeof window.setResontesPanelInsets === 'function') window.setResontesPanelInsets(); } catch {}
@@ -8001,8 +8062,14 @@ class FavoritesToggle {
    * Oculta la lista de favoritos
    */
   hide() {
+    const wasVisible = this.isVisible;
     this.isVisible = false;
-    this.updateVisibility();
+    const updateVisibility = () => this.updateVisibility();
+    if (wasVisible && window.ResonateViewTransitions?.run) {
+      window.ResonateViewTransitions.run(updateVisibility);
+    } else {
+      updateVisibility();
+    }
     this.updateAriaAttributes();
   }
 

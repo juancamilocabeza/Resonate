@@ -4,6 +4,7 @@
     ? window.matchMedia('(prefers-reduced-motion: reduce)')
     : null
   const activeAnimations = new WeakMap()
+  let viewTransitionInFlight = false
 
   function animate(element, keyframes, options) {
     if (!element || typeof element.animate !== 'function') return
@@ -75,19 +76,66 @@
     ], { duration: 180, delay: 0, easing: 'cubic-bezier(0.2, 0.7, 0.2, 1)' })
   }
 
-  function initialize() {
-    const playButton = (window.elements && window.elements.playBtn) ||
-      document.getElementById('play-btn')
-    if (!playButton) return
-
-    playButton.addEventListener('pointerdown', pulsePlayButton)
-    playButton.addEventListener('keydown', event => {
-      if (!event.repeat && (event.key === 'Enter' || event.key === ' ')) pulsePlayButton()
-    })
-    syncPlaybackState(playButton.dataset.state === 'pause')
+  function pulseControl(element) {
+    if (!element || (reducedMotion && reducedMotion.matches)) return;
+    animate(element, [
+      { transform: 'scale(1)' },
+      { transform: 'scale(0.9)', offset: 0.45 },
+      { transform: 'scale(1)' }
+    ], { duration: 190, delay: 0, easing: 'cubic-bezier(0.2, 0.7, 0.2, 1)' });
   }
 
-  window.PlayerMotion = { enterTrack, syncPlaybackState }
+  function transitionViews(update) {
+    if (typeof update !== 'function') return;
+    if ((reducedMotion && reducedMotion.matches) ||
+      typeof document.startViewTransition !== 'function' ||
+      viewTransitionInFlight) {
+      update();
+      return;
+    }
+
+    try {
+      const transition = document.startViewTransition(update);
+      viewTransitionInFlight = true
+      transition.finished.then(() => {
+        viewTransitionInFlight = false
+      }, error => {
+        viewTransitionInFlight = false
+        if (window.logger && typeof window.logger.debug === 'function') {
+          window.logger.debug(`View transition ended without animation: ${error.message}`, 'UI')
+        }
+      });
+    } catch (error) {
+      viewTransitionInFlight = false
+      if (window.logger && typeof window.logger.warn === 'function') {
+        window.logger.warn(`View transition unavailable: ${error.message}`, 'UI');
+      }
+      update();
+    }
+  }
+
+  function initialize() {
+    const playButton = (window.elements && window.elements.playBtn) ||
+      document.getElementById('play-btn');
+
+    if (playButton) {
+      playButton.addEventListener('pointerdown', pulsePlayButton);
+      playButton.addEventListener('keydown', event => {
+        if (!event.repeat && (event.key === 'Enter' || event.key === ' ')) pulsePlayButton();
+      });
+      syncPlaybackState(playButton.dataset.state === 'pause');
+    }
+
+    if (typeof document.addEventListener === 'function') {
+      document.addEventListener('click', event => {
+        const control = event.target.closest('#favorite-btn, #shuffle-favorites-btn, #repeat-mode-btn, .expanded-player__controls button');
+        if (control) pulseControl(control);
+      });
+    }
+  }
+
+  window.PlayerMotion = { enterTrack, syncPlaybackState, pulseControl };
+  window.ResonateViewTransitions = { run: transitionViews };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initialize, { once: true })

@@ -1216,7 +1216,7 @@ test('Clicking the progress bar seeks to the selected position and updates ARIA 
   assert.equal(attributes['aria-valuetext'], '0:30 de 2:00');
 });
 
-test('Pointer dragging batches seek updates to one animation frame', async () => {
+test('Pointer dragging previews per frame and commits the seek on release', async () => {
   const { context, audio } = await createPlayer();
   const attributes = {};
   const progressBar = Object.assign(createEventTarget(), {
@@ -1263,7 +1263,7 @@ test('Pointer dragging batches seek updates to one animation frame', async () =>
   const [frameId, renderFrame] = frames.entries().next().value;
   frames.delete(frameId);
   renderFrame();
-  assert.equal(audio.currentTime, 84);
+  assert.equal(audio.currentTime, 0);
   assert.equal(progress.style.transform, 'scaleX(0.7)');
   assert.equal(progressThumb.style.transform, 'translate3d(70%, 0, 0)');
   assert.equal(attributes['aria-valuenow'], 70);
