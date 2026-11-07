@@ -11,8 +11,8 @@
     return document.documentElement.getAttribute('data-theme') || 'night';
   }
 
-  function isEnergySaverMode() {
-    return getActiveTheme() === 'energy-saver';
+  function isEcoMode() {
+    return getActiveTheme() === 'eco';
   }
 
   function calculateTickerDuration(textLength) {
@@ -20,7 +20,7 @@
     // - Normal modes (day/night): ~1.5 chars/second (comfortable reading speed)
     // - Energy-saver: ~0.8 chars/second (slower to save energy, click to toggle)
 
-    if (isEnergySaverMode()) {
+    if (isEcoMode()) {
       // Energy-saver: slower for battery saving, user can click to toggle
       const duration = Math.ceil(textLength * 1.2); // ~0.83 chars/sec
       return Math.max(20, duration); // Minimum 20s
@@ -117,7 +117,7 @@
         span.style.setProperty(
           'animation-duration',
           `${duration}s`,
-          isEnergySaverMode() ? 'important' : ''
+          isEcoMode() ? 'important' : ''
         );
 
         // Apply ticker immediately — the keyframe animation pauses at position 0
@@ -141,7 +141,7 @@
 
     titleEl.addEventListener('click', () => {
       const el = getTitleElement();
-      if (!isEnergySaverMode() || !el) return;
+      if (!isEcoMode() || !el) return;
 
       const overflowPx = parseFloat(el.style.getPropertyValue('--title-overflow') || '0');
       if (overflowPx <= 0) return;
