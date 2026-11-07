@@ -25,6 +25,30 @@
   border-left-color: var(--color-accent-amber, #ff9e3b);
 }
 
+.player-status-view--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: center;
+}
+
+.player-status-view--empty .player-status-view__title {
+  color: var(--color-text-muted, #a4a8b2);
+  font-family: var(--font-ui, sans-serif);
+  font-size: var(--text-size-control, 0.875rem);
+  font-weight: 500;
+}
+
+.player-status-view--empty .player-status-view__action {
+  width: auto;
+}
+
 .player-status-view__illustration {
   display: grid;
   place-items: center;
@@ -91,8 +115,8 @@
 }
 
 @media (max-width: 480px) {
-  .player-status-view__actions,
-  .player-status-view__action {
+  .player-status-view--error .player-status-view__actions,
+  .player-status-view--error .player-status-view__action {
     width: 100%;
   }
 }

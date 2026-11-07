@@ -3469,8 +3469,8 @@ async function setArtwork(track, identifier) {
 
   // Clear existing artwork
   elements.art.innerHTML = '';
-  const albumTitle = track.albumTitle || track.album || track.title || track.creator || 'álbum';
-  const altText = `Portada del álbum ${albumTitle}`;
+  const albumTitle = track.albumTitle || track.album || track.title || track.creator || 'album';
+  const altText = `Album cover: ${albumTitle}`;
   const prepareArtwork = (img) => {
     img.alt = altText;
     img.loading = 'eager';

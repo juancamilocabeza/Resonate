@@ -2,9 +2,9 @@
   'use strict'
 
   const PROFILES = {
-    broadband: { codec: 'opus', bitrate: 256, prefetchSeconds: 60, label: 'Alta calidad' },
-    fourG: { codec: 'opus', bitrate: 128, prefetchSeconds: 30, label: 'Calidad estándar' },
-    lowBandwidth: { codec: 'mp3', bitrate: 96, prefetchSeconds: 5, label: 'Ahorro de datos' }
+    broadband: { codec: 'opus', bitrate: 256, prefetchSeconds: 60, label: 'High quality' },
+    fourG: { codec: 'opus', bitrate: 128, prefetchSeconds: 30, label: 'Standard quality' },
+    lowBandwidth: { codec: 'mp3', bitrate: 96, prefetchSeconds: 5, label: 'Data saver' }
   }
 
   function sourceCodec (source) {

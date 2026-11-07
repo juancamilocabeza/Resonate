@@ -33,6 +33,7 @@ const controller = new context.window.AdaptiveStreamController({
 assert.equal(controller.state.codec, 'opus')
 assert.equal(controller.state.bitrate, 128)
 assert.equal(controller.state.prefetchSeconds, 30)
+assert.equal(controller.state.quality, 'Standard quality')
 assert.equal(events[0].name, 'network:state')
 
 connection.downlink = 8
@@ -53,6 +54,7 @@ listeners.get('change')()
 assert.equal(controller.state.codec, 'mp3')
 assert.equal(controller.state.bitrate, 96)
 assert.equal(controller.state.prefetchSeconds, 5)
+assert.equal(controller.state.quality, 'Data saver')
 assert.equal(controller.selectSource(variants).url, 'economy.mp3')
 assert.equal(stateChanges.length, 2)
 assert.equal(stateChanges[1].previous.effectiveType, '4g')
@@ -70,6 +72,7 @@ connection.downlink = 30
 listeners.get('change')()
 assert.equal(controller.state.bitrate, 256)
 assert.equal(controller.state.prefetchSeconds, 60)
+assert.equal(controller.state.quality, 'High quality')
 assert.equal(controller.selectSource(variants).url, 'high.opus')
 assert.equal(controller.selectSource({ url: 'only-ogg.ogg', sources: [] }).url, 'only-ogg.ogg')
 

@@ -60,9 +60,9 @@
   function showNetworkError () {
     showError(
       'network',
-      'Sin conexión a Internet',
-      'Escucha las canciones guardadas sin conexión en tu biblioteca.',
-      'Abrir mi biblioteca sin conexión',
+      "You're offline",
+      'Play downloaded tracks from your library.',
+      'Open library',
       openLibrary
     )
   }
@@ -74,20 +74,20 @@
     }
 
     const code = mediaError && mediaError.code
-    let message = 'Comprueba tu conexión e inténtalo de nuevo, o busca otra pista.'
+    let message = 'Check your connection or try another track.'
     if (code === 3) {
-      message = 'El archivo no se puede reproducir. Busca otra pista o vuelve a intentarlo.'
+      message = "This file can't be played. Try another track."
     } else if (code === 4) {
-      message = 'La fuente de audio no está disponible. Busca otra pista para seguir escuchando.'
+      message = 'Audio source unavailable. Try another track.'
     } else if (code === 2) {
-      message = 'La conexión se interrumpió durante la reproducción. Comprueba tu red e inténtalo de nuevo.'
+      message = 'Playback was interrupted. Check your connection.'
     }
 
     showError(
       'stream',
-      'No se pudo reproducir esta pista',
+      "Can't play this track",
       message,
-      'Volver a intentar',
+      'Try again',
       retryCurrentTrack
     )
   }
@@ -145,7 +145,7 @@
     }
 
     announce(
-      'Sin conexión a Internet. La pista actual seguirá reproduciéndose mientras esté disponible.',
+      "You're offline. The current track will keep playing while available.",
       'polite'
     )
   })

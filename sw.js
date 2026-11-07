@@ -25,10 +25,10 @@
 
 // sw.js - Enhanced Service Worker for audio, metadata, and cover image caching
 const CACHE_NAMES = {
-  APP: 'resonate-v17p12',
-  STATIC: 'static-v17p12',
-  METADATA: 'metadata-v17p12',
-  SEARCH: 'search-v17p12',
+  APP: 'resonate-v17p14',
+  STATIC: 'static-v17p14',
+  METADATA: 'metadata-v17p14',
+  SEARCH: 'search-v17p14',
   COVERS: 'covers-v1'
 };
 
@@ -69,6 +69,7 @@ const STATIC_FILES = [
   '/css/player-motion.css',
   '/css/player-status-views.css',
   '/styles/theme.css',
+  '/styles/patch-look-and-feel.css',
   '/assets/fonts/bodoni-moda-latin.woff2',
   '/assets/fonts/instrument-sans-latin.woff2',
   '/js/theme.js',
