@@ -3,13 +3,14 @@ import { readFile } from 'fs/promises';
 import vm from 'vm';
 
 const root = new URL('../', import.meta.url);
-const [html, css, theme, patch, serviceWorker, ui, displayFont, uiFont] = await Promise.all([
+const [html, css, theme, patch, serviceWorker, ui, immersion, displayFont, uiFont] = await Promise.all([
   readFile(new URL('index.html', root), 'utf8'),
   readFile(new URL('css/player-editorial.css', root), 'utf8'),
   readFile(new URL('styles/theme.css', root), 'utf8'),
   readFile(new URL('styles/patch-look-and-feel.css', root), 'utf8'),
   readFile(new URL('sw.js', root), 'utf8'),
   readFile(new URL('js/ui.js', root), 'utf8'),
+  readFile(new URL('css/player-immersion.css', root), 'utf8'),
   readFile(new URL('assets/fonts/bodoni-moda-latin.woff2', root)),
   readFile(new URL('assets/fonts/instrument-sans-latin.woff2', root))
 ]);
@@ -69,6 +70,13 @@ assert.ok(artFrameEnd > artFrameStart, 'Artwork frame should close before track 
 assert.ok(progressStart > trackInfoStart, 'Progress bar should follow track information');
 assert.ok(progressStart < controlsStart, 'Progress bar should precede playback controls');
 assert.doesNotMatch(html.slice(artFrameStart, artFrameEnd), /class="progress-section"/);
+for (const control of ['shuffle-favorites-btn', 'prev-btn', 'play-btn', 'next-btn', 'favorite-btn']) {
+  assert.match(html, new RegExp(`id="${control}"`), `Mobile player should include ${control}`);
+}
+assert.match(immersion, /"art info info"\s+"progress progress progress"\s+"controls controls controls"/);
+assert.match(immersion, /\.main-player-section \.controls > button:not\(\.play-btn\)\s*\{[^}]*display:\s*inline-flex;[^}]*width:\s*44px;[^}]*height:\s*44px;/s);
+assert.doesNotMatch(immersion, /\.main-player-section \.controls \.(?:shuffle-favorites-btn|prev-btn)[^{}]*\{[^}]*display:\s*none;/s);
+assert.doesNotMatch(immersion, /\.main-player-section \.controls #favorite-btn[^{}]*\{[^}]*display:\s*none;/s);
 
 assert.match(theme, /font-family:\s*"Bodoni Moda";/);
 assert.match(theme, /font-family:\s*"Instrument Sans";/);

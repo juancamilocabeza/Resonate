@@ -148,16 +148,59 @@
 
 .main-player-section .progress-section {
   grid-area: progress;
+  display: flex;
+  align-items: center;
   width: 100%;
   margin: 0;
   padding: 2px 0 0;
 }
 
 .main-player-section .progress-bar {
+  display: flex;
+  align-items: center;
   width: 100%;
+  min-width: 0;
+  height: 24px;
   min-height: 24px;
-  color: #f0f2f5;
+  background:
+    linear-gradient(
+      to bottom,
+      transparent calc(50% - 3px),
+      rgba(240, 242, 245, 0.4) calc(50% - 3px),
+      rgba(240, 242, 245, 0.4) calc(50% + 3px),
+      transparent calc(50% + 3px)
+    );
   touch-action: pan-y;
+}
+
+.main-player-section .progress-bar:hover {
+  height: 24px;
+}
+
+.main-player-section .progress-buffered,
+.main-player-section .progress {
+  top: 50%;
+  height: 6px;
+  margin-top: -3px;
+}
+
+.main-player-section .progress-thumb::after {
+  left: 0;
+  top: 50%;
+}
+
+.main-player-section .progress-bar.dragging .progress-thumb::after {
+  left: 0;
+}
+
+.main-player-section .current-time,
+.main-player-section .total-time {
+  display: inline-flex;
+  align-items: center;
+  color: rgba(240, 242, 245, 0.88);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
 .progress-tooltip {
@@ -210,19 +253,58 @@
   color: #f0f2f5;
 }
 
-.main-player-section .play-btn {
-  width: 42px;
-  height: 42px;
-  min-width: 42px;
-  min-height: 42px;
-  background: #e5e9e5;
+.main-player-section .controls .play-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  min-height: 48px;
+  border: 0;
+  background: #fff;
   color: #121b24;
+}
+
+.main-player-section .controls .next-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 1px solid rgba(240, 242, 245, 0.2);
+  background: rgba(240, 242, 245, 0.07);
+  color: #f0f2f5;
+}
+
+.main-player-section .controls .next-btn .control-icon {
+  fill: currentColor;
+  stroke: none;
 }
 
 .main-player-section .play-btn:focus-visible,
 .main-player-section .controls button:focus-visible {
   outline: 2px solid #83c8b2;
   outline-offset: 3px;
+}
+
+.main-player-section .controls > button {
+  box-sizing: border-box;
+  border-radius: 50%;
+  line-height: 1;
+  /* This stylesheet overrides the app-wide important button transition. */
+  transition: transform 100ms ease, opacity 100ms ease !important;
+}
+
+.main-player-section .controls > button:hover:not(:disabled) {
+  transform: none;
+}
+
+.main-player-section .controls > button:active:not(:disabled) {
+  transform: scale(0.96);
 }
 
 .expanded-player {
@@ -358,18 +440,26 @@ body.expanded-player-open {
 }
 
 .expanded-player__seek {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  display: flex;
   align-items: center;
   gap: 12px;
   width: min(100%, 480px);
   margin: 0 auto;
-  color: rgba(240, 242, 245, 0.72);
-  font-size: 0.78rem;
+  color: rgba(240, 242, 245, 0.88);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.expanded-player__seek time {
+  flex: 0 0 auto;
+  color: #f0f2f5;
 }
 
 .expanded-player__seek input {
+  display: block;
+  flex: 1 1 0;
   width: 100%;
+  min-width: 0;
   height: 24px;
   margin: 0;
   accent-color: #83c8b2;
@@ -385,26 +475,49 @@ body.expanded-player-open {
 }
 
 .expanded-player__controls button {
-  min-width: 46px;
-  min-height: 46px;
-  border: 1px solid rgba(240, 242, 245, 0.18);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid rgba(240, 242, 245, 0.22);
   border-radius: 50%;
-  background: rgba(240, 242, 245, 0.07);
+  background: rgba(240, 242, 245, 0.09);
   color: #f0f2f5;
   cursor: pointer;
-  transition: transform 180ms ease, background 180ms ease;
+  transition: transform 100ms ease, opacity 100ms ease, background 100ms ease !important;
 }
 
-.expanded-player__controls button:active {
-  transform: scale(0.92);
+.expanded-player__controls > button:hover:not(:disabled) {
+  transform: none;
+}
+
+.expanded-player__controls > button:active:not(:disabled) {
+  transform: scale(0.96);
 }
 
 .expanded-player__controls .expanded-player__play {
-  min-width: 58px;
-  min-height: 58px;
-  background: #e5e9e5;
+  min-width: 56px;
+  min-height: 56px;
+  border-color: #fff;
+  background: #fff;
   color: #121b24;
   font-weight: 600;
+}
+
+@media (hover: hover) {
+  .main-player-section .controls > button:hover:not(:disabled),
+  .expanded-player__controls > button:hover:not(:disabled) {
+    opacity: 0.84;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .main-player-section .controls > button,
+  .expanded-player__controls > button {
+    transition-duration: 0.01ms !important;
+  }
 }
 
 .player-queue {
@@ -550,8 +663,13 @@ body.expanded-player-open {
   }
 
   .main-player-section .player-content {
+    grid-template-areas:
+      "art info info"
+      "progress progress progress"
+      "controls controls controls";
     grid-template-columns: 44px minmax(0, 1fr) auto;
-    gap: 5px 9px;
+    grid-template-rows: minmax(44px, auto) auto auto;
+    gap: 4px 10px;
   }
 
   .main-player-section .editorial-art-frame {
@@ -560,24 +678,39 @@ body.expanded-player-open {
   }
 
   .main-player-section .controls {
-    gap: 2px;
+    justify-content: center;
+    gap: clamp(8px, 2.4vw, 14px);
+    width: 100%;
   }
 
-  .main-player-section .controls .shuffle-favorites-btn,
-  .main-player-section .controls .prev-btn,
-  .main-player-section .controls #favorite-btn {
-    display: none;
+  .main-player-section .controls > button:not(.play-btn) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+    border: 1px solid rgba(240, 242, 245, 0.2);
+    background: rgba(240, 242, 245, 0.07);
+    color: #f0f2f5;
   }
 
-  .main-player-section .play-btn {
-    width: 38px;
-    height: 38px;
-    min-width: 38px;
-    min-height: 38px;
+  .main-player-section .controls > .play-btn {
+    flex: 0 0 48px;
+  }
+
+  .main-player-section .controls .play-btn {
+    width: 48px;
+    height: 48px;
+    min-width: 48px;
+    min-height: 48px;
   }
 
   .main-player-section .progress-section {
-    padding-top: 0;
+    padding: 0;
   }
 
   .main-player-section .current-track-info .title,
@@ -587,6 +720,14 @@ body.expanded-player-open {
 
   .main-player-section .current-track-info .creator {
     font-size: 0.74rem;
+  }
+
+  .expanded-player__seek {
+    gap: 8px;
+  }
+
+  .expanded-player__seek input {
+    height: 32px;
   }
 
   .expanded-player {
@@ -627,6 +768,22 @@ body.expanded-player-open {
 
   .player-queue__item {
     min-height: 50px;
+  }
+}
+
+@media (max-width: 380px) {
+  .main-player-section .player-content {
+    grid-template-areas:
+      "art info info"
+      "progress progress progress"
+      "controls controls controls";
+    gap: 4px 9px;
+  }
+}
+
+@media (max-width: 300px) {
+  .main-player-section .controls {
+    gap: 4px;
   }
 }
 
