@@ -4,11 +4,18 @@ import vm from 'node:vm'
 
 const source = await readFile(new URL('../js/PlayerStatusViews.js', import.meta.url), 'utf8')
 const html = await readFile(new URL('../index.html', import.meta.url), 'utf8')
+const styles = await readFile(new URL('../css/player-status-views.css', import.meta.url), 'utf8')
 
 assert.match(html, /id="queue-empty-view" role="status" aria-live="polite"/)
 assert.match(html, /id="playback-error-view" role="alert" aria-live="assertive"/)
-assert.match(html, /Tu cola está en silencio/)
-assert.match(html, /Explora la búsqueda para descubrir música independiente/)
+assert.match(html, /player-status-view--empty[^>]*id="queue-empty-view"/)
+assert.match(html, /Nothing playing/)
+assert.match(html, /Search music/)
+assert.doesNotMatch(html, /Tu cola está en silencio|Explora la búsqueda|Explorar música/)
+const emptyViewMarkup = html.match(/<section class="player-status-view player-status-view--empty"[\s\S]*?<\/section>/)?.[0]
+assert.ok(emptyViewMarkup)
+assert.doesNotMatch(emptyViewMarkup, /player-status-view__illustration|player-status-view__message/)
+assert.match(styles, /\.player-status-view--empty\s*\{[^}]*border:\s*0;[^}]*background:\s*transparent;/s)
 
 function createHarness (online = true) {
   const elements = new Map()
@@ -101,12 +108,22 @@ function createHarness (online = true) {
   harness.context.PlayerStatusViews.showNetworkError()
   assert.equal(harness.errorView.hidden, false)
   assert.equal(harness.errorView.attributes.role, 'alert')
-  assert.match(harness.errorTitle.textContent, /Sin conexión a Internet/)
-  assert.match(harness.errorMessage.textContent, /canciones guardadas sin conexión/)
-  assert.match(harness.errorPrimary.textContent, /Abrir mi biblioteca/)
+  assert.equal(harness.errorTitle.textContent, "You're offline")
+  assert.equal(harness.errorMessage.textContent, 'Play downloaded tracks from your library.')
+  assert.equal(harness.errorPrimary.textContent, 'Open library')
   harness.errorPrimary.click()
   assert.equal(harness.libraryButton.clicks, 1)
   assert.equal(harness.announcements.length, 0)
+}
+
+{
+  const harness = createHarness(false)
+  harness.context.elements.audio.paused = false
+  harness.windowListeners.get('offline')()
+  assert.deepEqual(harness.announcements[0], {
+    message: "You're offline. The current track will keep playing while available.",
+    priority: 'polite'
+  })
 }
 
 {
@@ -115,7 +132,9 @@ function createHarness (online = true) {
   harness.context.state.currentTrack = { url: 'https://archive.org/track.mp3', id: 'track' }
   harness.context.playAudioTrackOptimized = async () => { retries += 1 }
   harness.context.PlayerStatusViews.showStreamingError({ code: 3 })
-  assert.match(harness.errorMessage.textContent, /archivo no se puede reproducir/)
+  assert.equal(harness.errorMessage.textContent, "This file can't be played. Try another track.")
+  assert.equal(harness.errorTitle.textContent, "Can't play this track")
+  assert.equal(harness.errorPrimary.textContent, 'Try again')
   harness.errorPrimary.click()
   await Promise.resolve()
   assert.equal(retries, 1)
@@ -126,9 +145,23 @@ function createHarness (online = true) {
 
 {
   const harness = createHarness()
-  harness.context.PlayerStatusViews.announce('La pista está lista.')
+  for (const [code, expected] of [
+    [2, 'Playback was interrupted. Check your connection.'],
+    [3, "This file can't be played. Try another track."],
+    [4, 'Audio source unavailable. Try another track.']
+  ]) {
+    harness.context.PlayerStatusViews.showStreamingError({ code })
+    assert.equal(harness.errorMessage.textContent, expected)
+    assert.equal(harness.errorTitle.textContent, "Can't play this track")
+    assert.equal(harness.errorPrimary.textContent, 'Try again')
+  }
+}
+
+{
+  const harness = createHarness()
+  harness.context.PlayerStatusViews.announce('Track is ready.')
   assert.deepEqual(harness.announcements[0], {
-    message: 'La pista está lista.',
+    message: 'Track is ready.',
     priority: 'polite'
   })
 }

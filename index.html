@@ -35,6 +35,7 @@
   <link rel="stylesheet" href="css/player-editorial.css" />
   <link rel="stylesheet" href="css/player-motion.css" />
   <link rel="stylesheet" href="css/player-status-views.css" />
+  <link rel="stylesheet" href="styles/patch-look-and-feel.css" />
 </head>
 <body>
   <div class="app" id="app" data-nosnippet>
@@ -235,17 +236,9 @@
 
       <div class="main-player-section">
       <div class="player-container">
-        <section class="player-status-view" id="queue-empty-view" role="status" aria-live="polite" aria-atomic="true" hidden>
-          <div class="player-status-view__illustration" aria-hidden="true">
-            <svg viewBox="0 0 96 64" fill="none" focusable="false">
-              <path d="M5 32h17l8-16 13 32 10-24 8 16h30" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-              <circle cx="5" cy="32" r="3" fill="currentColor"/>
-              <circle cx="91" cy="40" r="3" fill="currentColor"/>
-            </svg>
-          </div>
-          <h2 class="player-status-view__title">Tu cola está en silencio</h2>
-          <p class="player-status-view__message">Explora la búsqueda para descubrir música independiente.</p>
-          <button class="player-status-view__action" id="queue-empty-search" type="button">Explorar música</button>
+        <section class="player-status-view player-status-view--empty" id="queue-empty-view" role="status" aria-live="polite" aria-atomic="true" hidden>
+          <h2 class="player-status-view__title">Nothing playing</h2>
+          <button class="player-status-view__action" id="queue-empty-search" type="button">Search music</button>
         </section>
         <section class="player-status-view player-status-view--error" id="playback-error-view" role="alert" aria-live="assertive" aria-atomic="true" hidden>
           <div class="player-status-view__illustration" aria-hidden="true">
@@ -258,14 +251,14 @@
           <p class="player-status-view__message" id="playback-error-message"></p>
           <div class="player-status-view__actions">
             <button class="player-status-view__action" id="playback-error-primary" type="button"></button>
-            <button class="player-status-view__action player-status-view__action--quiet" id="playback-error-search" type="button">Buscar otra pista</button>
+            <button class="player-status-view__action player-status-view__action--quiet" id="playback-error-search" type="button">Search for another track</button>
           </div>
         </section>
         <article class="player-content" id="player-content" itemscope itemtype="https://schema.org/MusicRecording">
           <div class="editorial-art-frame">
             <figure class="art" id="art">
               <span class="hint"></span>
-              <img alt="Portada del álbum" itemprop="image" loading="eager" fetchpriority="high" hidden>
+              <img alt="Album cover" itemprop="image" loading="eager" fetchpriority="high" hidden>
             </figure>
           </div>
           <div class="current-track-info">

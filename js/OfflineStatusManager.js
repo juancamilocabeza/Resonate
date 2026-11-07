@@ -179,7 +179,7 @@
       } else if (offline && this.window.A11yAnnouncer &&
         typeof this.window.A11yAnnouncer.announce === 'function') {
         this.window.A11yAnnouncer.announce(
-          'Sin conexión. Solo se pueden reproducir pistas guardadas para uso sin conexión.',
+          "You're offline. Only downloaded tracks can play.",
           'assertive'
         )
       }

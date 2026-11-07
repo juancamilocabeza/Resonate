@@ -139,7 +139,7 @@ listeners.get('offline')()
 assert.equal(window.state.networkOnline, false)
 assert.equal(classes.has('o-50'), false)
 assert.equal(announcements[0].priority, 'assertive')
-assert.match(announcements[0].message, /Sin conexión/)
+assert.equal(announcements[0].message, "You're offline. Only downloaded tracks can play.")
 
 cacheEntries.set('continuous-queue-v1', null)
 cacheEntries.set('audio-precache-v1', null)

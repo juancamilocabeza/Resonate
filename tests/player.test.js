@@ -211,7 +211,7 @@ test('Main player markup uses semantic music headings, artwork, and time element
   assert.match(html, /<h1\b[^>]*id="title"[^>]*itemprop="name"/);
   assert.match(html, /<h2\b[^>]*itemprop="byArtist"/);
   assert.match(html, /<figure\b[^>]*class="art"[^>]*id="art"/);
-  assert.match(html, /<img\b[^>]*alt="Portada del álbum"[^>]*loading="eager"[^>]*fetchpriority="high"/);
+  assert.match(html, /<img\b[^>]*alt="Album cover"[^>]*loading="eager"[^>]*fetchpriority="high"/);
   assert.match(html, /<time\b[^>]*id="current-time"[^>]*datetime="PT0S"/);
   assert.match(html, /<time\b[^>]*id="total-time"[^>]*datetime="PT0S"/);
   const playerArticle = html.match(/<article class="player-content"[\s\S]*?<\/article>/)?.[0] || '';
@@ -1387,13 +1387,13 @@ test('The shuffle button interaction toggles the persisted mode and rebuilds the
   assert.equal(context.playbackStateManager.getShuffleMode(), true);
   assert.equal(context.localStorage.getItem('resonate_shuffle_enabled'), 'true');
   assert.equal(shuffleButton.classList.contains('active'), true);
-  assert.match(announcements[0].message, /Modo aleatorio activado/);
+  assert.match(announcements[0].message, /Shuffle is on/);
 
   context.toggleShuffleFavorites();
   assert.equal(state.shuffleFavorites, false);
   assert.equal(context.playbackStateManager.getShuffleMode(), false);
   assert.equal(shuffleButton.classList.contains('active'), false);
-  assert.match(announcements[1].message, /Modo aleatorio desactivado/);
+  assert.match(announcements[1].message, /Shuffle is off/);
 });
 
 test('Loading a changed continuous playback queue announces its size', async () => {
@@ -1406,7 +1406,7 @@ test('Loading a changed continuous playback queue announces its size', async () 
   ]);
 
   assert.equal(state.playbackQueue.length, 2);
-  assert.match(announcements[0].message, /Cola de reproducción continua actualizada: 2 pistas/);
+  assert.match(announcements[0].message, /Playback queue updated: 2 tracks/);
 
   context.loadPlaybackQueue('playlist', [
     { url: 'https://archive.org/one.mp3' },
@@ -1420,7 +1420,7 @@ test('Playback track announcements include the track and artist', async () => {
 
   context.announcePlaybackTrack({ title: 'A New Track', artist: 'An Artist' });
 
-  assert.equal(announcements[0].message, 'Reproduciendo: A New Track, An Artist');
+  assert.equal(announcements[0].message, 'Now playing: A New Track, An Artist');
 });
 
 test('Offline playback refuses tracks absent from offline caches and announces why', async () => {
@@ -1441,7 +1441,7 @@ test('Offline playback refuses tracks absent from offline caches and announces w
 
   assert.equal(result, false);
   assert.equal(audio.playCalls, 0);
-  assert.match(statuses[0][0], /no está disponible sin conexión/);
+  assert.match(statuses[0][0], /isn't available offline/);
   assert.equal(announcements[0].priority, 'assertive');
 });
 

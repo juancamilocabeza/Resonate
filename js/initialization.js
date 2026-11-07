@@ -1603,7 +1603,7 @@ function handleOfflineMode() {
       const audio = window.elements && window.elements.audio
       if (!audio || audio.paused) window.PlayerStatusViews?.showNetworkError()
       else window.PlayerStatusViews?.announce(
-        'Sin conexión a Internet. La pista actual seguirá reproduciéndose mientras esté disponible.',
+        "You're offline. The current track will keep playing while available.",
         'polite'
       )
       if (window.logger) window.logger.info('Offline mode indicators activated', 'SYSTEM');

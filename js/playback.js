@@ -2366,8 +2366,8 @@ async function playAudioTrackOptimized(track, identifier, trackIndex = 0, totalT
   if (isPlaybackOffline()) {
     const availability = await getOfflineTrackAvailability(track && track.url)
     if (!availability.available) {
-      const title = track && track.title ? track.title : 'Esta pista'
-      const message = `${title} no está disponible sin conexión. Conéctate a internet para reproducirla.`
+      const title = track && track.title ? track.title : 'This track'
+      const message = `${title} isn't available offline. Connect to the internet to play it.`
       if (window.PlayerStatusViews) window.PlayerStatusViews.showNetworkError()
       else {
         safeShowStatus(message, 'warning', 5000)
@@ -3163,18 +3163,18 @@ async function getOfflineTrackAvailability (trackUrl) {
 }
 
 function announcePlaybackTrack (track) {
-  const title = track && track.title ? track.title : 'Pista sin título'
+  const title = track && track.title ? track.title : 'Untitled track'
   const artist = track && (track.artist || track.creator)
-  announceAccessibilityMessage(`Reproduciendo: ${title}${artist ? `, ${artist}` : ''}`)
+  announceAccessibilityMessage(`Now playing: ${title}${artist ? `, ${artist}` : ''}`)
 }
 
 function announcePlaybackQueue (queue) {
   const count = queue.length
-  const tracksLabel = count === 1 ? 'pista' : 'pistas'
+  const tracksLabel = count === 1 ? 'track' : 'tracks'
   announceAccessibilityMessage(
     count
-      ? `Cola de reproducción continua actualizada: ${count} ${tracksLabel}.`
-      : 'La cola de reproducción está vacía.'
+      ? `Playback queue updated: ${count} ${tracksLabel}.`
+      : 'Playback queue is empty.'
   )
 }
 
@@ -4736,7 +4736,7 @@ function toggleShuffleFavorites() {
   if (state.shuffleFavorites) {
     // Activar modo aleatorio
     showStatus('Shuffle mode is now on', 'info', 2000);
-    announceAccessibilityMessage('Modo aleatorio activado. La reproducción continua sigue activa.');
+    announceAccessibilityMessage('Shuffle is on. Continuous playback is active.');
 
     // Anchor the persisted deck to the currently playing item (so Next is stable and has no repeats).
     try {
@@ -4755,7 +4755,7 @@ function toggleShuffleFavorites() {
   } else {
     // Desactivar modo aleatorio: volver a modo secuencial
     showStatus('Sequential mode. Shuffle is off', 'info', 2000);
-    announceAccessibilityMessage('Modo aleatorio desactivado. La reproducción continua sigue activa.');
+    announceAccessibilityMessage('Shuffle is off. Sequential playback is active.');
 
     if ((context === 'favorites' || context === 'album' || context === 'searchPlaylist') && items.length > 0) {
       // Rebuild FIFO starting after the current track (avoid immediate duplicate).
