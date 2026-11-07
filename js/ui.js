@@ -7570,19 +7570,43 @@ function ensureServiceWorkerControllerChangeReloadHandler() {
   window.__resonateSwControllerChangeHandlerInstalled = true;
 
   try {
+    let hadController = Boolean(navigator.serviceWorker.controller);
     navigator.serviceWorker.addEventListener('controllerchange', () => {
+      const hasController = Boolean(navigator.serviceWorker.controller);
+      let pending = false;
       try {
-        const pending = sessionStorage.getItem(SW_UPDATE_PENDING_RELOAD_KEY) === 'true';
-        if (!pending) return;
+        pending = sessionStorage.getItem(SW_UPDATE_PENDING_RELOAD_KEY) === 'true';
+      } catch {}
+
+      if (!pending && (!hadController || !hasController)) {
+        hadController = hasController;
+        return;
+      }
+
+      hadController = hasController;
+      if (!hasController) return;
+
+      try {
         sessionStorage.removeItem(SW_UPDATE_PENDING_RELOAD_KEY);
         sessionStorage.setItem(SW_UPDATE_RELOAD_MARKER_KEY, '1');
-        window.location.reload();
-      } catch {
-        // ignore
-      }
+      } catch {}
+      window.location.reload();
     });
   } catch {
     // ignore
+  }
+}
+
+function activateWaitingServiceWorker(registration) {
+  const waitingWorker = registration && registration.waiting;
+  if (!waitingWorker) return false;
+
+  try {
+    waitingWorker.postMessage({ action: 'skipWaiting' });
+    return true;
+  } catch (error) {
+    window.logger?.warn({ message: 'Failed to activate waiting Service Worker', error }, 'SYSTEM');
+    return false;
   }
 }
 
@@ -8436,6 +8460,8 @@ async function registerServiceWorker() {
   }
 
   if ('serviceWorker' in navigator) {
+    ensureServiceWorkerControllerChangeReloadHandler();
+
     try {
       const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
       window.logger?.info(`Service Worker registered with scope: ${registration.scope}`, 'SYSTEM');
@@ -8446,10 +8472,12 @@ async function registerServiceWorker() {
       // PWA-friendly update checks (focus/pageshow/visibility/periodic)
       ensureServiceWorkerUpdateCheckHandlers();
 
-      // If an update is already waiting, announce it.
+      // If an update is already waiting, activate it without requiring a restart.
       try {
-        await maybeAnnounceUpdateReady(registration);
-      } catch {}
+        activateWaitingServiceWorker(registration);
+      } catch (error) {
+        window.logger?.warn({ message: 'Failed to activate waiting Service Worker', error }, 'SYSTEM');
+      }
 
       // Also proactively check for updates on startup (throttled).
       try {
@@ -8465,7 +8493,7 @@ async function registerServiceWorker() {
             newWorker.addEventListener('statechange', () => {
               // When installed with an existing controller, it's waiting.
               if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                maybeAnnounceUpdateReady(registration);
+                activateWaitingServiceWorker(registration);
               }
             });
           } catch {
