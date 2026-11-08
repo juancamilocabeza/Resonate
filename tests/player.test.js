@@ -1123,20 +1123,21 @@ test('Service worker keeps search precache at or below 20 MB using Content-Lengt
   assert.equal(harness.audioPrecacheEntries.has(urls[80]), true);
 });
 
-test('Service worker caches a complete response after an uncached audio range request', async () => {
+test('Service worker does not fetch complete audio after an uncached range request', async () => {
   const url = 'https://archive.org/download/item/track.opus';
   const requests = [];
   const harness = await createServiceWorkerHarness({
     fetch: async request => {
       requests.push(request);
-      if (request.headers.has('Range')) {
+      if (request.headers.get('Range') === 'bytes=0-3') {
         return new Response('0123', {
           status: 206,
           headers: { 'Content-Range': 'bytes 0-3/10', 'Content-Type': 'audio/ogg' }
         });
       }
-      return new Response('0123456789', {
-        headers: { 'Content-Type': 'audio/ogg' }
+      return new Response('456789', {
+        status: 206,
+        headers: { 'Content-Range': 'bytes 4-9/10', 'Content-Type': 'audio/ogg' }
       });
     }
   });
@@ -1147,9 +1148,8 @@ test('Service worker caches a complete response after an uncached audio range re
   }));
   assert.equal(first.response.status, 206);
   await Promise.all(first.backgroundTasks);
-  assert.equal(requests.length, 2);
-  assert.equal(requests[1].headers.has('Range'), false);
-  assert.equal(await harness.audioCacheEntries.get(url).clone().text(), '0123456789');
+  assert.equal(requests.length, 1);
+  assert.equal(harness.audioCacheEntries.has(url), false);
 
   const second = await harness.dispatch(new Request(url, {
     mode: 'no-cors',

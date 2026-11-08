@@ -48,6 +48,44 @@ await buffers.playCurrent()
 // Call destroy() when the Web Audio player is disposed.
 ```
 
+## Clock-scheduled continuous playback
+
+The native-ES-module services in `src/services` provide an opt-in scheduler and
+adaptive prefetch path for Web Audio clients:
+
+```js
+import { GaplessAudioScheduler } from '../../src/services/GaplessAudioScheduler.js'
+import { SmartPrefetchEngine } from '../../src/services/SmartPrefetchEngine.js'
+import { MediaSessionAdapter } from '../../js/MediaSessionAdapter.js'
+
+const context = new AudioContext()
+const prefetchEngine = new SmartPrefetchEngine({ context })
+const scheduler = new GaplessAudioScheduler({
+  context,
+  prefetchEngine,
+  mediaSessionAdapter: new MediaSessionAdapter(),
+  getNextTrack: track => queue.getFollowingTrack(track)
+})
+
+await scheduler.play(currentTrack, { nextTrack })
+// Call scheduler.destroy() and context.close() when the player is disposed.
+```
+
+The scheduler checks queue progress without timer-based audio scheduling and
+starts a decoded next track at the outgoing buffer's exact `AudioContext` end
+time. Manual selections use a 100 ms equal-power ramp. `AudioNodeLifecycle`
+disconnects ended/replaced sources, clears their buffers, and resumes active
+contexts when the page is hidden and the browser has suspended them.
+
+On 4G/5G, Wi-Fi, or Ethernet, the prefetch engine decodes the complete next
+track and asks `sw.js` to cache the following track's first 256 KiB. On slow
+networks or with Data Saver enabled, it limits precaching to 256 KiB of the
+next track; that prefix is not a complete decodable track, so uninterrupted
+playback on a constrained connection still depends on the network completing
+the track before the current one ends. The service worker keeps those queue
+prefixes in `continuous-queue-v1` and search prefixes in the FIFO-limited
+`search-precache-v1` cache (20 MiB).
+
 ## Adaptive stream controller
 
 `AdaptiveStreamController` monitors the Network Information API, selects an
