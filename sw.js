@@ -146,7 +146,7 @@ function isStaticAsset(url) {
 }
 
 function isArchiveOrg(url) {
-  return url && url.hostname === 'archive.org';
+  return url && (url.hostname === 'archive.org' || url.hostname.endsWith('.archive.org'));
 }
 
 function isArchiveImageRequest(url) {
@@ -205,8 +205,79 @@ function getAudioContentType(response, url) {
 
 async function cacheFullAudioResponse(request, response) {
   if (!response || (response.status !== 200 && response.type !== 'opaque')) return;
+  const cachedResponse = response.clone();
   const cache = await caches.open(AUDIO_CACHE_NAME);
-  await cache.put(request.url, response.clone());
+  await cache.put(request.url, cachedResponse);
+}
+
+async function cacheAudioPrefix(url, cacheName, maxBytes = AUDIO_PRECACHE_CHUNK_SIZE) {
+  const parsedUrl = new URL(url);
+  if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+    throw new TypeError('Audio prefix URL must use HTTP or HTTPS');
+  }
+
+  const response = await fetch(parsedUrl.href, {
+    headers: { Range: `bytes=0-${maxBytes - 1}` },
+    credentials: 'omit'
+  });
+  if (!response || (response.status !== 206 && response.status !== 200)) {
+    throw new Error(`Audio prefix request failed with status ${response ? response.status : 'unknown'}`);
+  }
+
+  const contentRange = response.headers.get('Content-Range') || '';
+  const rangeMatch = /^bytes 0-(\d+)\/(\d+|\*)$/i.exec(contentRange);
+  if (response.status === 206 && !rangeMatch) {
+    throw new Error('Audio prefix response had an invalid Content-Range header');
+  }
+
+  let prefix;
+  if (response.body && typeof response.body.getReader === 'function') {
+    const reader = response.body.getReader();
+    const chunks = [];
+    let totalBytes = 0;
+    try {
+      while (totalBytes < maxBytes) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = value.subarray(0, maxBytes - totalBytes);
+        chunks.push(chunk);
+        totalBytes += chunk.byteLength;
+        if (chunk.byteLength < value.byteLength) {
+          await reader.cancel();
+          break;
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+
+    prefix = new Uint8Array(totalBytes);
+    let offset = 0;
+    for (const chunk of chunks) {
+      prefix.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+  } else {
+    prefix = new Uint8Array((await response.arrayBuffer()).slice(0, maxBytes));
+  }
+  if (!prefix.byteLength) return { url: parsedUrl.href, cached: false, reason: 'empty-prefix' };
+
+  const totalLength = rangeMatch ? rangeMatch[2] : '*';
+  const headers = new Headers(response.headers);
+  headers.delete('Content-Range');
+  headers.delete('Content-Encoding');
+  headers.set('Content-Length', String(prefix.byteLength));
+  headers.set('X-Audio-Precache-Partial', 'true');
+  headers.set('X-Audio-Precache-Content-Range', `bytes 0-${prefix.byteLength - 1}/${totalLength}`);
+
+  const cache = await caches.open(cacheName);
+  await cache.delete(parsedUrl.href);
+  await cache.put(parsedUrl.href, new Response(prefix, { status: 200, headers }));
+  if (cacheName === AUDIO_PRECACHE_NAME) {
+    await enforceFIFOQuota(AUDIO_PRECACHE_NAME, AUDIO_PRECACHE_MAX_BYTES);
+  }
+
+  return { url: parsedUrl.href, cached: true, bytes: prefix.byteLength };
 }
 
 function shouldSkipAudioPrecache() {
@@ -242,51 +313,16 @@ async function enforceFIFOQuota(cacheName, maxByteSize) {
 }
 
 async function precacheAudioUrl(url) {
-  let parsedUrl;
   try {
-    parsedUrl = new URL(url);
-  } catch {
-    return { url, cached: false, reason: 'invalid-url' };
+    return await cacheAudioPrefix(url, AUDIO_PRECACHE_NAME);
+  } catch (error) {
+    return {
+      url,
+      cached: false,
+      reason: 'request-failed',
+      message: error && error.message ? error.message : String(error)
+    };
   }
-  if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
-    return { url, cached: false, reason: 'unsupported-protocol' };
-  }
-
-  const response = await fetch(parsedUrl.href, {
-    headers: { Range: `bytes=0-${AUDIO_PRECACHE_CHUNK_SIZE - 1}` },
-    credentials: 'omit'
-  });
-  if (!response || response.status !== 206) {
-    return { url: parsedUrl.href, cached: false, reason: 'not-partial-content' };
-  }
-
-  const contentRange = response.headers.get('Content-Range') || '';
-  const rangeMatch = /^bytes 0-(\d+)\/(\d+|\*)$/i.exec(contentRange);
-  if (!rangeMatch) {
-    return { url: parsedUrl.href, cached: false, reason: 'invalid-content-range' };
-  }
-
-  const body = await response.arrayBuffer();
-  const chunk = body.slice(0, AUDIO_PRECACHE_CHUNK_SIZE);
-  if (!chunk.byteLength) {
-    return { url: parsedUrl.href, cached: false, reason: 'empty-partial-content' };
-  }
-
-  const totalLength = rangeMatch[2];
-  const cachedRange = `bytes 0-${chunk.byteLength - 1}/${totalLength}`;
-  const headers = new Headers(response.headers);
-  headers.delete('Content-Range');
-  headers.delete('Content-Encoding');
-  headers.set('Content-Length', String(chunk.byteLength));
-  headers.set('X-Audio-Precache-Partial', 'true');
-  headers.set('X-Audio-Precache-Content-Range', cachedRange);
-
-  const cache = await caches.open(AUDIO_PRECACHE_NAME);
-  await cache.delete(parsedUrl.href);
-  await cache.put(parsedUrl.href, new Response(chunk, { status: 200, headers }));
-  await enforceFIFOQuota(AUDIO_PRECACHE_NAME, AUDIO_PRECACHE_MAX_BYTES);
-
-  return { url: parsedUrl.href, cached: true, bytes: chunk.byteLength };
 }
 
 function precacheTopAudio(urls) {
@@ -315,12 +351,41 @@ function precacheTopAudio(urls) {
   return work;
 }
 
-async function fetchAndCacheFullAudio(request) {
-  const headers = new Headers(request.headers);
-  headers.delete('Range');
-  const fullRequest = new Request(request, { headers });
-  const response = await fetch(fullRequest);
-  await cacheFullAudioResponse(request, response);
+async function responseFromCachedPrefix(response, rangeHeader, url) {
+  if (!response || !rangeHeader ||
+    response.headers.get('X-Audio-Precache-Partial') !== 'true') return null;
+
+  const cachedRange = response.headers.get('X-Audio-Precache-Content-Range') || '';
+  const match = /^bytes 0-(\d+)\/(\d+|\*)$/i.exec(cachedRange);
+  if (!match) return null;
+  const bytes = await response.arrayBuffer();
+  const knownLength = match[2] !== '*'
+  const totalLength = knownLength ? Number(match[2]) : bytes.byteLength;
+  const range = parseByteRange(rangeHeader, totalLength);
+  if (!range) return null;
+  if (range.unsatisfiable) {
+    if (!knownLength) return null;
+    return new Response(null, {
+      status: 416,
+      headers: {
+        'Accept-Ranges': 'bytes',
+        'Content-Range': `bytes */${match[2]}`
+      }
+    });
+  }
+  if (range.start !== 0 || !bytes.byteLength) return null;
+
+  const end = Math.min(range.end, bytes.byteLength - 1);
+  const body = bytes.slice(0, end + 1);
+  return new Response(body, {
+    status: 206,
+    headers: {
+      'Accept-Ranges': 'bytes',
+      'Content-Length': String(body.byteLength),
+      'Content-Range': `bytes 0-${end}/${match[2]}`,
+      'Content-Type': getAudioContentType(response, url)
+    }
+  });
 }
 
 async function handleAudioRequest(event, request, url) {
@@ -331,8 +396,12 @@ async function handleAudioRequest(event, request, url) {
     const cache = await caches.open(AUDIO_CACHE_NAME);
     cachedResponse = await cache.match(request.url);
     if (cachedResponse) {
-      if (!rangeHeader) return cachedResponse;
-      if (cachedResponse.type !== 'opaque' && cachedResponse.status === 200) {
+      if (cachedResponse.headers.get('X-Audio-Precache-Partial') === 'true') {
+        const partialResponse = await responseFromCachedPrefix(cachedResponse, rangeHeader, url);
+        if (partialResponse) return partialResponse;
+      } else if (!rangeHeader) {
+        return cachedResponse;
+      } else if (cachedResponse.type !== 'opaque' && cachedResponse.status === 200) {
         const buffer = await cachedResponse.arrayBuffer();
         const range = parseByteRange(rangeHeader, buffer.byteLength);
         if (range && range.unsatisfiable) {
@@ -363,28 +432,11 @@ async function handleAudioRequest(event, request, url) {
     }
 
     if (rangeHeader) {
-      const precache = await caches.open(AUDIO_PRECACHE_NAME);
-      const partialResponse = await precache.match(request.url);
-      const partialRange = partialResponse && partialResponse.headers.get('X-Audio-Precache-Content-Range');
-      const partialMatch = /^bytes 0-(\d+)\/(\d+|\*)$/i.exec(partialRange || '');
-      if (partialResponse && partialMatch) {
-        const range = parseByteRange(rangeHeader, Number(partialMatch[2]) || Number.MAX_SAFE_INTEGER);
-        if (range && !range.unsatisfiable && range.start === 0) {
-          const buffer = await partialResponse.arrayBuffer();
-          const end = Math.min(range.end, buffer.byteLength - 1);
-          if (end >= 0) {
-            const body = buffer.slice(0, end + 1);
-            return new Response(body, {
-              status: 206,
-              headers: {
-                'Accept-Ranges': 'bytes',
-                'Content-Length': String(body.byteLength),
-                'Content-Range': `bytes 0-${end}/${partialMatch[2]}`,
-                'Content-Type': getAudioContentType(partialResponse, url)
-              }
-            });
-          }
-        }
+      for (const cacheName of [AUDIO_CACHE_NAME, AUDIO_PRECACHE_NAME]) {
+        const partialCache = await caches.open(cacheName);
+        const partialResponse = await partialCache.match(request.url);
+        const response = await responseFromCachedPrefix(partialResponse, rangeHeader, url);
+        if (response) return response;
       }
     }
   } catch (error) {
@@ -393,15 +445,7 @@ async function handleAudioRequest(event, request, url) {
 
   const networkResponse = await fetch(request);
 
-  // A range response is not a complete audio file. Fetch the full resource in
-  // the background so a later offline range request can be served from cache.
-  if (rangeHeader && networkResponse.status !== 200) {
-    event.waitUntil(
-      fetchAndCacheFullAudio(request).catch((error) => {
-        console.warn('SW: Failed to cache full audio response:', request.url, error);
-      })
-    );
-  } else if (networkResponse.status === 200 || networkResponse.type === 'opaque') {
+  if (networkResponse.status === 200 || networkResponse.type === 'opaque') {
     event.waitUntil(
       cacheFullAudioResponse(request, networkResponse).catch((error) => {
         console.warn('SW: Failed to cache audio response:', request.url, error);
@@ -410,6 +454,31 @@ async function handleAudioRequest(event, request, url) {
   }
 
   return networkResponse;
+}
+
+async function precacheAudioPipeline(data) {
+  const maxBytes = Number.isSafeInteger(data.maxBytes) && data.maxBytes > 0
+    ? Math.min(data.maxBytes, AUDIO_PRECACHE_CHUNK_SIZE)
+    : AUDIO_PRECACHE_CHUNK_SIZE;
+  const results = [];
+
+  for (const [url, cacheName] of [
+    [data.queueUrl, AUDIO_CACHE_NAME],
+    [data.searchUrl, AUDIO_PRECACHE_NAME]
+  ]) {
+    if (!url) continue;
+    try {
+      results.push(await cacheAudioPrefix(url, cacheName, maxBytes));
+    } catch (error) {
+      results.push({
+        url,
+        cached: false,
+        reason: 'request-failed',
+        message: error && error.message ? error.message : String(error)
+      });
+    }
+  }
+  return { skipped: false, results };
 }
 
 function isMetadataRequest(url) {
@@ -857,8 +926,6 @@ self.addEventListener('fetch', (event) => {
   if (!url) return;
   const audioRequest = isAudioRequest(event.request, url);
 
-  // Archive.org file hosts may not allow CORS. Let script fetches reach the
-  // browser directly; native media requests can still use the audio handler.
   if (audioRequest && isArchiveOrg(url) && event.request.mode === 'cors') {
     return;
   }
@@ -1199,6 +1266,28 @@ self.addEventListener('message', (event) => {
       error => {
         const message = {
           type: 'PRECACHE_AUDIO_RESULT',
+          skipped: false,
+          results: [],
+          error: error && error.message ? error.message : String(error)
+        };
+        if (event.ports && event.ports[0]) event.ports[0].postMessage(message);
+        else if (event.source && typeof event.source.postMessage === 'function') event.source.postMessage(message);
+      }
+    );
+    if (typeof event.waitUntil === 'function') event.waitUntil(operation);
+    return;
+  }
+
+  if (event.data.type === 'PRECACHE_AUDIO_PIPELINE') {
+    const operation = precacheAudioPipeline(event.data).then(
+      result => {
+        const message = { type: 'PRECACHE_AUDIO_PIPELINE_RESULT', ...result };
+        if (event.ports && event.ports[0]) event.ports[0].postMessage(message);
+        else if (event.source && typeof event.source.postMessage === 'function') event.source.postMessage(message);
+      },
+      error => {
+        const message = {
+          type: 'PRECACHE_AUDIO_PIPELINE_RESULT',
           skipped: false,
           results: [],
           error: error && error.message ? error.message : String(error)
